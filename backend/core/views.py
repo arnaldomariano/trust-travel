@@ -1,11 +1,13 @@
 from rest_framework import generics
 from .models import Destination, Place, Experience
-from .serializers import DestinationSerializer, PlaceSerializer, ExperienceSerializer
-
+from .serializers import DestinationSerializer, PlaceSerializer, ExperienceSerializer, UserRegisterSerializer
 from rest_framework.generics import RetrieveAPIView
 from .models import Place
 from .serializers import PlaceSerializer
-
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 class PlaceDetailView(RetrieveAPIView):
     queryset = Place.objects.all()
@@ -25,6 +27,10 @@ class PlaceListView(generics.ListAPIView):
 class ExperienceListView(generics.ListCreateAPIView):
     queryset = Experience.objects.all()
     serializer_class = ExperienceSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class DestinationPlacesListView(generics.ListAPIView):
@@ -40,3 +46,15 @@ class PlaceExperiencesListView(generics.ListAPIView):
     def get_queryset(self):
         place_id = self.kwargs["place_id"]
         return Experience.objects.filter(place_id=place_id)
+
+class UserRegisterView(generics.CreateAPIView):
+    serializer_class = UserRegisterSerializer
+
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({
+            "id": request.user.id,
+            "username": request.user.username
+        })

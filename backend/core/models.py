@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 
 class Destination(models.Model):
@@ -24,6 +25,7 @@ class Place(models.Model):
         return self.name
 
 class Experience(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     place = models.ForeignKey(Place, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
     comment = models.TextField()

@@ -1,25 +1,44 @@
-from .models import Destination, Place, Experience
-from .serializers import DestinationSerializer, PlaceSerializer, ExperienceSerializer, UserRegisterSerializer
-from rest_framework.generics import RetrieveAPIView
-from .models import Place
-from .serializers import PlaceSerializer
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
-from rest_framework.views import APIView
-from rest_framework import generics, permissions
-from rest_framework.exceptions import PermissionDenied
-from .models import Experience, Friendship, ExperienceReply
-from .serializers import ExperienceReplySerializer
-from rest_framework.generics import ListAPIView
-from .models import Friendship, Update, Profile
-from .serializers import UpdateSerializer
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
+# ============================================================
+# CLEAN VIEWS FILE — Trust Travel
+# ============================================================
+
 from django.contrib.auth.models import User
+from django.db.models import Q
+
+from rest_framework import generics, permissions
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.exceptions import PermissionDenied
+
+from .models import (
+    Destination,
+    Place,
+    Experience,
+    Friendship,
+    ExperienceReply,
+    Update,
+    Profile,
+)
+
+from .serializers import (
+    DestinationSerializer,
+    PlaceSerializer,
+    ExperienceSerializer,
+    UserRegisterSerializer,
+    ExperienceReplySerializer,
+)
+
+
+# ============================================================
+# USER INFO
+# ============================================================
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me(request):
+    """Return basic info about logged user"""
     profile = getattr(request.user, "profile", None)
 
     return Response({
@@ -28,20 +47,54 @@ def me(request):
         "country_code": profile.country_code if profile else None,
     })
 
+
+# ============================================================
+# UPDATE FEED
+# ============================================================
+
 class UpdateListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
 
-        # 👥 amigos
-        friends = set(
+        print("LOGGED USER:", request.user.username)
+
+        # --------------------------------------------------------
+        # Bidirectional friendship (real trust network)
+        # --------------------------------------------------------
+        outgoing = set(
             Friendship.objects.filter(
                 from_user=user,
                 status="accepted"
             ).values_list("to_user", flat=True)
         )
 
+        incoming = set(
+            Friendship.objects.filter(
+                to_user=user,
+                status="accepted"
+            ).values_list("from_user", flat=True)
+        )
+
+        # Strict trust network (bidirectional only)
+        forward_ids = set(
+            Friendship.objects.filter(
+                from_user=user,
+                status="accepted"
+            ).values_list("to_user", flat=True)
+        )
+
+        backward_ids = set(
+            Friendship.objects.filter(
+                to_user=user,
+                status="accepted"
+            ).values_list("from_user", flat=True)
+        )
+
+        friends = forward_ids & backward_ids
+
+        # Pending requests sent
         sent_requests = set(
             Friendship.objects.filter(
                 from_user=user,
@@ -49,24 +102,31 @@ class UpdateListView(APIView):
             ).values_list("to_user", flat=True)
         )
 
-        # 🟢 updates da rede
+        # --------------------------------------------------------
+        # Query optimization (avoid N+1 problem)
+        # --------------------------------------------------------
         network_updates = Update.objects.filter(
             user__in=friends
-        ).order_by("-created_at")
+        ).select_related("user__profile", "place").order_by("-created_at")
 
-        # ⚪ outros updates
         other_updates = Update.objects.exclude(
             user__in=friends
-        ).order_by("-created_at")
+        ).exclude(
+            user=user
+        ).select_related("user__profile", "place").order_by("-created_at")
 
-        # 👤 requests recebidos (PONTO CHAVE)
-        requests = Friendship.objects.filter(
+        # Incoming friend requests
+        requests_qs = Friendship.objects.filter(
             to_user=user,
             status="pending"
-        ).select_related("from_user")
+        ).select_related("from_user__profile")
 
+        # --------------------------------------------------------
+        # SERIALIZERS
+        # --------------------------------------------------------
         def serialize_updates(qs):
             result = []
+
             for u in qs:
                 profile = getattr(u.user, "profile", None)
 
@@ -79,8 +139,6 @@ class UpdateListView(APIView):
                     "username": u.user.username,
                     "place": u.place.name,
                     "created_at": u.created_at,
-
-                    # 👇 NOVO
                     "is_friend": u.user.id in friends,
                     "request_sent": u.user.id in sent_requests,
                 })
@@ -89,6 +147,7 @@ class UpdateListView(APIView):
 
         def serialize_requests(qs):
             result = []
+
             for r in qs:
                 profile = getattr(r.from_user, "profile", None)
 
@@ -97,29 +156,29 @@ class UpdateListView(APIView):
                     "from_user": profile.public_code if profile and profile.public_code else r.from_user.username,
                     "username": r.from_user.username,
                 })
+
             return result
 
         return Response({
             "network": serialize_updates(network_updates),
             "others": serialize_updates(other_updates),
-            "requests": serialize_requests(requests),  # 👈 NOVO
+            "requests": serialize_requests(requests_qs),
         })
 
     def post(self, request):
+        """Create a new update"""
         place_id = request.data.get("place")
         text = request.data.get("text")
         update_type = request.data.get("type")
         category = request.data.get("category")
 
+        # Validation
         if not place_id:
             return Response({"detail": "place is required"}, status=400)
-
         if not text:
             return Response({"detail": "text is required"}, status=400)
-
         if not update_type:
             return Response({"detail": "type is required"}, status=400)
-
         if not category:
             return Response({"detail": "category is required"}, status=400)
 
@@ -136,25 +195,107 @@ class UpdateListView(APIView):
             text=text,
         )
 
-        profile = getattr(update.user, "profile", None)
-
         profile = getattr(request.user, "profile", None)
 
-        return Response(
-            {
-                "id": update.id,
-                "type": update.type,
-                "category": update.category,
-                "text": update.text,
-                "user": profile.public_code if profile and profile.public_code else request.user.username,
-                "username": request.user.username,
-                "place": update.place.name,
-                "created_at": update.created_at,
-            },
-            status=201
+        return Response({
+            "id": update.id,
+            "type": update.type,
+            "category": update.category,
+            "text": update.text,
+            "user": profile.public_code if profile else request.user.username,
+            "username": request.user.username,
+            "place": update.place.name,
+            "created_at": update.created_at,
+        }, status=201)
+
+# ============================================================
+# CONNECTIONS LIST
+# ============================================================
+
+class ConnectionsListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        pending_received = Friendship.objects.filter(
+            to_user=user,
+            status="pending"
+        ).select_related("from_user__profile")
+
+        pending_sent = Friendship.objects.filter(
+            from_user=user,
+            status="pending"
+        ).select_related("to_user__profile")
+
+        # Strict trust network: bidirectional accepted only
+        forward_ids = set(
+            Friendship.objects.filter(
+                from_user=user,
+                status="accepted"
+            ).values_list("to_user", flat=True)
         )
 
-class PlaceDetailView(RetrieveAPIView):
+        backward_ids = set(
+            Friendship.objects.filter(
+                to_user=user,
+                status="accepted"
+            ).values_list("from_user", flat=True)
+        )
+
+        friend_ids = forward_ids & backward_ids
+
+        friends_qs = User.objects.filter(id__in=friend_ids).select_related("profile")
+
+        friends = []
+        for u in friends_qs:
+            profile = getattr(u, "profile", None)
+
+            friends.append({
+                "id": u.id,
+                "username": u.username,
+                "public_code": profile.public_code if profile else None,
+            })
+
+        def serialize_received(qs):
+            result = []
+            for f in qs:
+                sender = f.from_user
+                profile = getattr(sender, "profile", None)
+
+                result.append({
+                    "request_id": f.id,
+                    "id": sender.id,
+                    "username": sender.username,
+                    "public_code": profile.public_code if profile else None,
+                })
+            return result
+
+        def serialize_sent(qs):
+            result = []
+            for f in qs:
+                receiver = f.to_user
+                profile = getattr(receiver, "profile", None)
+
+                result.append({
+                    "request_id": f.id,
+                    "id": receiver.id,
+                    "username": receiver.username,
+                    "public_code": profile.public_code if profile else None,
+                })
+            return result
+
+        return Response({
+            "friends": friends,
+            "pending_received": serialize_received(pending_received),
+            "pending_sent": serialize_sent(pending_sent),
+        })
+
+# ============================================================
+# CORE LIST VIEWS
+# ============================================================
+
+class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
 
@@ -175,30 +316,36 @@ class ExperienceListView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_serializer_context(self):
-        return {"request": self.request}  # 👈 ESSA LINHA É A CHAVE
+        return {"request": self.request}
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
 
 class DestinationPlacesListView(generics.ListAPIView):
     serializer_class = PlaceSerializer
 
     def get_queryset(self):
-        destination_id = self.kwargs["destination_id"]
-        return Place.objects.filter(destination_id=destination_id)
+        return Place.objects.filter(destination_id=self.kwargs["destination_id"])
+
 
 class PlaceExperiencesListView(generics.ListAPIView):
     serializer_class = ExperienceSerializer
 
     def get_queryset(self):
-        place_id = self.kwargs["place_id"]
-        return Experience.objects.filter(place_id=place_id)
+        return Experience.objects.filter(place_id=self.kwargs["place_id"])
 
     def get_serializer_context(self):
-        return {"request": self.request}  # 👈 ADICIONE AQUI TAMBÉM
+        return {"request": self.request}
+
+
+# ============================================================
+# AUTH
+# ============================================================
 
 class UserRegisterView(generics.CreateAPIView):
     serializer_class = UserRegisterSerializer
+
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -212,17 +359,23 @@ class MeView(APIView):
             "public_code": profile.public_code if profile else None,
             "country_code": profile.country_code if profile else None,
         })
+
+
+# ============================================================
+# EXPERIENCE REPLIES
+# ============================================================
+
 class ExperienceReplyListCreateView(generics.ListCreateAPIView):
     serializer_class = ExperienceReplySerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        experience_id = self.kwargs["experience_id"]
-        return ExperienceReply.objects.filter(experience_id=experience_id).order_by("created_at")
+        return ExperienceReply.objects.filter(
+            experience_id=self.kwargs["experience_id"]
+        ).order_by("created_at")
 
     def perform_create(self, serializer):
-        experience_id = self.kwargs["experience_id"]
-        experience = Experience.objects.get(id=experience_id)
+        experience = Experience.objects.get(id=self.kwargs["experience_id"])
 
         author = experience.user
         requester = self.request.user
@@ -230,32 +383,38 @@ class ExperienceReplyListCreateView(generics.ListCreateAPIView):
         if author is None:
             raise PermissionDenied("This comment has no author.")
 
-        # ✔️ Pode responder a si mesmo
+        # Self-reply allowed
         is_self = requester == author
 
-        # ✔️ Amizade precisa ser nos dois sentidos
+        # Bidirectional friendship required
         forward = Friendship.objects.filter(
             from_user=requester,
-            to_user=author
+            to_user=author,
+            status="accepted"
         ).exists()
 
         backward = Friendship.objects.filter(
             from_user=author,
-            to_user=requester
+            to_user=requester,
+            status="accepted"
         ).exists()
 
         in_network = forward and backward
 
         if not (is_self or in_network):
             raise PermissionDenied(
-                "You can only reply to your own or trusted users' comments."
+                "You can only reply to trusted users."
             )
 
         serializer.save(user=requester, experience=experience)
 
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
+
+# ============================================================
+# FRIENDSHIP SYSTEM
+# ============================================================
+
+from django.utils import timezone
+from datetime import timedelta
 
 class SendFriendRequestView(APIView):
     permission_classes = [IsAuthenticated]
@@ -275,13 +434,78 @@ class SendFriendRequestView(APIView):
         if to_user == request.user:
             return Response({"detail": "You cannot add yourself"}, status=400)
 
-        exists = Friendship.objects.filter(
+        existing = Friendship.objects.filter(
             from_user=request.user,
             to_user=to_user
-        ).exists()
+        ).first()
 
-        if exists:
-            return Response({"detail": "Request already sent"}, status=400)
+        reverse = Friendship.objects.filter(
+            from_user=to_user,
+            to_user=request.user
+        ).first()
+
+        # 🔄 reverse relationship (you were the receiver before)
+        if reverse:
+            if reverse.status == "pending":
+                return Response({
+                    "detail": "This user has already sent you a request. Check your requests.",
+                    "context": "reverse_pending"
+                }, status=400)
+
+            if reverse.status == "accepted":
+                return Response({
+                    "detail": "You are already connected.",
+                    "context": "already_connected"
+                }, status=400)
+
+            if reverse.status == "rejected":
+                Friendship.objects.create(
+                    from_user=request.user,
+                    to_user=to_user,
+                    status="pending"
+                )
+
+                return Response({
+                    "detail": "Request sent. This user previously declined your connection.",
+                    "context": "reverse_rejected"
+                }, status=201)
+
+        from django.utils import timezone
+        from datetime import timedelta
+
+        if existing:
+            if existing.status == "accepted":
+                return Response({"detail": "You are already connected"}, status=400)
+
+            if existing.status == "pending":
+                return Response({"detail": "Request already sent"}, status=400)
+
+            if existing.status == "rejected":
+                cooldown = timedelta(days=2)
+
+                if timezone.now() - existing.created_at < cooldown:
+                    remaining = cooldown - (timezone.now() - existing.created_at)
+
+                    hours = remaining.seconds // 3600
+                    days = remaining.days
+
+                    time_msg = ""
+                    if days > 0:
+                        time_msg += f"{days} day(s) "
+                    if hours > 0:
+                        time_msg += f"{hours} hour(s)"
+
+                    return Response(
+                        {"detail": f"Please wait {time_msg.strip()} before sending another request"},
+                        status=400
+                    )
+
+                # ✅ allowed after cooldown
+                existing.status = "pending"
+                existing.created_at = timezone.now()
+                existing.save()
+
+                return Response({"detail": "Friend request sent"}, status=200)
 
         Friendship.objects.create(
             from_user=request.user,
@@ -290,6 +514,7 @@ class SendFriendRequestView(APIView):
         )
 
         return Response({"detail": "Friend request sent"}, status=201)
+
 
 class AcceptFriendRequestView(APIView):
     permission_classes = [IsAuthenticated]
@@ -309,22 +534,38 @@ class AcceptFriendRequestView(APIView):
         except Friendship.DoesNotExist:
             return Response({"detail": "Request not found"}, status=404)
 
+        # Accept original request
         friendship.status = "accepted"
         friendship.save()
 
-        return Response({"detail": "Friend request accepted"})
+        # 🔥 CREATE REVERSE RELATION (CRITICAL)
+        reverse_exists = Friendship.objects.filter(
+            from_user=request.user,
+            to_user=friendship.from_user
+        ).exists()
 
-from rest_framework.response import Response
+        if not reverse_exists:
+            Friendship.objects.create(
+                from_user=request.user,
+                to_user=friendship.from_user,
+                status="accepted"
+            )
+
+        return Response({"detail": "Friend request accepted"})
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def reject_friend_request(request):
     request_id = request.data.get("request_id")
 
+    if not request_id:
+        return Response({"detail": "request_id is required"}, status=400)
+
     try:
         friendship = Friendship.objects.get(
             id=request_id,
-            to_user=request.user
+            to_user=request.user,
+            status="pending"
         )
 
         friendship.status = "rejected"

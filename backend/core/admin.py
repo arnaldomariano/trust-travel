@@ -1,6 +1,10 @@
 from django.contrib import admin
 from .models import Destination, Place, Experience
 from .models import Friendship
+from .models import ExperienceReply
+from .models import Update
+
+admin.site.register(Update)
 
 @admin.register(Destination)
 class DestinationAdmin(admin.ModelAdmin):
@@ -10,3 +14,4 @@ class DestinationAdmin(admin.ModelAdmin):
 admin.site.register(Place)
 admin.site.register(Experience)
 admin.site.register(Friendship)
+admin.site.register(ExperienceReply)

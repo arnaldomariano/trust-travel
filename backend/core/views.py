@@ -47,6 +47,28 @@ def me(request):
         "country_code": profile.country_code if profile else None,
     })
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cancel_friend_request(request):
+    request_id = request.data.get("request_id")
+
+    if not request_id:
+        return Response({"detail": "request_id is required"}, status=400)
+
+    try:
+        friendship = Friendship.objects.get(
+            id=request_id,
+            from_user=request.user,
+            status="pending"
+        )
+
+        friendship.delete()
+
+        return Response({"detail": "Request canceled"})
+
+    except Friendship.DoesNotExist:
+        return Response({"detail": "Request not found"}, status=404)
+
 
 # ============================================================
 # UPDATE FEED
@@ -130,6 +152,8 @@ class UpdateListView(APIView):
             for u in qs:
                 profile = getattr(u.user, "profile", None)
 
+                is_friend = u.user.id in friends
+
                 result.append({
                     "id": u.id,
                     "type": u.type,
@@ -139,8 +163,11 @@ class UpdateListView(APIView):
                     "username": u.user.username,
                     "place": u.place.name,
                     "created_at": u.created_at,
-                    "is_friend": u.user.id in friends,
+                    "is_friend": is_friend,
                     "request_sent": u.user.id in sent_requests,
+
+                    # 🔥 NOVO CAMPO (IMPORTANTE)
+                    "priority": 1 if is_friend else 2,
                 })
 
             return result
@@ -251,10 +278,17 @@ class ConnectionsListView(APIView):
         for u in friends_qs:
             profile = getattr(u, "profile", None)
 
+            friendship = Friendship.objects.filter(
+                from_user=user,
+                to_user=u,
+                status="accepted"
+            ).first()
+
             friends.append({
                 "id": u.id,
                 "username": u.username,
                 "public_code": profile.public_code if profile else None,
+                "trusted_since": friendship.created_at if friendship else None,
             })
 
         def serialize_received(qs):

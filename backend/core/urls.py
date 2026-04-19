@@ -15,6 +15,7 @@ from .views import (
     SendFriendRequestView,
     AcceptFriendRequestView,
     reject_friend_request,
+    cancel_friend_request,  # 🔥 AQUI
 )
 
 from core.views import (
@@ -50,5 +51,6 @@ urlpatterns = [
 
     path("friends/send/", SendFriendRequestView.as_view(), name="friend-send"),
     path("friends/accept/", AcceptFriendRequestView.as_view(), name="friend-accept"),
-    path("friends/reject/", reject_friend_request, name="friend-reject"),
+    path("friends/reject/", reject_friend_request),
+    path("friends/cancel/", cancel_friend_request),  # 🔥 ESSA LINHA
 ]

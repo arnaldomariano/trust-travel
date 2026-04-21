@@ -24,11 +24,6 @@ from core.views import (
     reject_friend_request,
 )
 
-urlpatterns = [
-    path("connections/", ConnectionsListView.as_view()),
-    path("connections/accept/", AcceptFriendRequestView.as_view()),
-    path("connections/reject/", reject_friend_request),
-]
 
 urlpatterns = [
     path("destinations/", DestinationListView.as_view(), name="destination-list"),

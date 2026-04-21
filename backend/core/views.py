@@ -394,6 +394,30 @@ class MeView(APIView):
             "country_code": profile.country_code if profile else None,
         })
 
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+
+        if response.status_code == 200:
+            access = response.data.get("access")
+
+            response.set_cookie(
+                key="access",
+                value=access,
+                httponly=True,
+                secure=False,  # True em produção
+                samesite="Lax",
+                path="/",
+            )
+
+            # remove token do body
+            response.data = {"message": "Login successful"}
+
+        return response
+
 
 # ============================================================
 # EXPERIENCE REPLIES

@@ -1,9 +1,4 @@
-# ============================================================
-# CLEAN VIEWS FILE — Trust Travel
-# ============================================================
-
 from django.contrib.auth.models import User
-from django.db.models import Q
 
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
@@ -11,6 +6,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.exceptions import PermissionDenied
+
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import (
     Destination,
@@ -30,44 +27,142 @@ from .serializers import (
     ExperienceReplySerializer,
 )
 
+from .authentication import CookieJWTAuthentication
+
 
 # ============================================================
-# USER INFO
+# AUTH / USER
 # ============================================================
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def me(request):
-    """Return basic info about logged user"""
-    profile = getattr(request.user, "profile", None)
+class MeView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
-    return Response({
-        "username": request.user.username,
-        "public_code": profile.public_code if profile else None,
-        "country_code": profile.country_code if profile else None,
-    })
+    def get(self, request):
+        profile = getattr(request.user, "profile", None)
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def cancel_friend_request(request):
-    request_id = request.data.get("request_id")
+        return Response({
+            "username": request.user.username,
+            "public_code": profile.public_code if profile else None,
+            "country_code": profile.country_code if profile else None,
+        })
 
-    if not request_id:
-        return Response({"detail": "request_id is required"}, status=400)
 
-    try:
-        friendship = Friendship.objects.get(
-            id=request_id,
-            from_user=request.user,
-            status="pending"
-        )
+class UserRegisterView(generics.CreateAPIView):
+    serializer_class = UserRegisterSerializer
 
-        friendship.delete()
 
-        return Response({"detail": "Request canceled"})
+class CustomTokenObtainPairView(TokenObtainPairView):
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
 
-    except Friendship.DoesNotExist:
-        return Response({"detail": "Request not found"}, status=404)
+        if response.status_code == 200:
+            access = response.data.get("access")
+
+            response.set_cookie(
+                key="access",
+                value=access,
+                httponly=True,
+                secure=False,   # em produção: True com HTTPS
+                samesite="Lax",
+                path="/",
+            )
+
+            response.data = {"message": "Login successful"}
+
+        return response
+
+
+# ============================================================
+# CORE LIST VIEWS
+# ============================================================
+
+class DestinationListView(generics.ListAPIView):
+    queryset = Destination.objects.all()
+    serializer_class = DestinationSerializer
+
+
+class PlaceListView(generics.ListAPIView):
+    queryset = Place.objects.all()
+    serializer_class = PlaceSerializer
+
+
+class PlaceDetailView(generics.RetrieveAPIView):
+    queryset = Place.objects.all()
+    serializer_class = PlaceSerializer
+
+
+class DestinationPlacesListView(generics.ListAPIView):
+    serializer_class = PlaceSerializer
+
+    def get_queryset(self):
+        return Place.objects.filter(destination_id=self.kwargs["destination_id"])
+
+
+class ExperienceListView(generics.ListCreateAPIView):
+    queryset = Experience.objects.all()
+    serializer_class = ExperienceSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class PlaceExperiencesListView(generics.ListAPIView):
+    serializer_class = ExperienceSerializer
+
+    def get_queryset(self):
+        return Experience.objects.filter(place_id=self.kwargs["place_id"])
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+# ============================================================
+# EXPERIENCE REPLIES
+# ============================================================
+
+class ExperienceReplyListCreateView(generics.ListCreateAPIView):
+    serializer_class = ExperienceReplySerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        return ExperienceReply.objects.filter(
+            experience_id=self.kwargs["experience_id"]
+        ).order_by("created_at")
+
+    def perform_create(self, serializer):
+        experience = Experience.objects.get(id=self.kwargs["experience_id"])
+
+        author = experience.user
+        requester = self.request.user
+
+        if author is None:
+            raise PermissionDenied("This comment has no author.")
+
+        is_self = requester == author
+
+        forward = Friendship.objects.filter(
+            from_user=requester,
+            to_user=author,
+            status="accepted"
+        ).exists()
+
+        backward = Friendship.objects.filter(
+            from_user=author,
+            to_user=requester,
+            status="accepted"
+        ).exists()
+
+        in_network = forward and backward
+
+        if not (is_self or in_network):
+            raise PermissionDenied("You can only reply to trusted users.")
+
+        serializer.save(user=requester, experience=experience)
 
 
 # ============================================================
@@ -75,31 +170,12 @@ def cancel_friend_request(request):
 # ============================================================
 
 class UpdateListView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
 
-        print("LOGGED USER:", request.user.username)
-
-        # --------------------------------------------------------
-        # Bidirectional friendship (real trust network)
-        # --------------------------------------------------------
-        outgoing = set(
-            Friendship.objects.filter(
-                from_user=user,
-                status="accepted"
-            ).values_list("to_user", flat=True)
-        )
-
-        incoming = set(
-            Friendship.objects.filter(
-                to_user=user,
-                status="accepted"
-            ).values_list("from_user", flat=True)
-        )
-
-        # Strict trust network (bidirectional only)
         forward_ids = set(
             Friendship.objects.filter(
                 from_user=user,
@@ -116,7 +192,6 @@ class UpdateListView(APIView):
 
         friends = forward_ids & backward_ids
 
-        # Pending requests sent
         sent_requests = set(
             Friendship.objects.filter(
                 from_user=user,
@@ -124,9 +199,6 @@ class UpdateListView(APIView):
             ).values_list("to_user", flat=True)
         )
 
-        # --------------------------------------------------------
-        # Query optimization (avoid N+1 problem)
-        # --------------------------------------------------------
         network_updates = Update.objects.filter(
             user__in=friends
         ).select_related("user__profile", "place").order_by("-created_at")
@@ -137,22 +209,15 @@ class UpdateListView(APIView):
             user=user
         ).select_related("user__profile", "place").order_by("-created_at")
 
-        # Incoming friend requests
         requests_qs = Friendship.objects.filter(
             to_user=user,
             status="pending"
         ).select_related("from_user__profile")
 
-        # --------------------------------------------------------
-        # SERIALIZERS
-        # --------------------------------------------------------
         def serialize_updates(qs):
             result = []
-
             for u in qs:
                 profile = getattr(u.user, "profile", None)
-
-                is_friend = u.user.id in friends
 
                 result.append({
                     "id": u.id,
@@ -163,18 +228,14 @@ class UpdateListView(APIView):
                     "username": u.user.username,
                     "place": u.place.name,
                     "created_at": u.created_at,
-                    "is_friend": is_friend,
+                    "is_friend": u.user.id in friends,
                     "request_sent": u.user.id in sent_requests,
-
-                    # 🔥 NOVO CAMPO (IMPORTANTE)
-                    "priority": 1 if is_friend else 2,
+                    "priority": 1 if u.user.id in friends else 2,
                 })
-
             return result
 
         def serialize_requests(qs):
             result = []
-
             for r in qs:
                 profile = getattr(r.from_user, "profile", None)
 
@@ -183,7 +244,6 @@ class UpdateListView(APIView):
                     "from_user": profile.public_code if profile and profile.public_code else r.from_user.username,
                     "username": r.from_user.username,
                 })
-
             return result
 
         return Response({
@@ -193,21 +253,13 @@ class UpdateListView(APIView):
         })
 
     def post(self, request):
-        """Create a new update"""
         place_id = request.data.get("place")
         text = request.data.get("text")
         update_type = request.data.get("type")
         category = request.data.get("category")
 
-        # Validation
-        if not place_id:
-            return Response({"detail": "place is required"}, status=400)
-        if not text:
-            return Response({"detail": "text is required"}, status=400)
-        if not update_type:
-            return Response({"detail": "type is required"}, status=400)
-        if not category:
-            return Response({"detail": "category is required"}, status=400)
+        if not all([place_id, text, update_type, category]):
+            return Response({"detail": "Missing fields"}, status=400)
 
         try:
             place = Place.objects.get(id=place_id)
@@ -235,11 +287,13 @@ class UpdateListView(APIView):
             "created_at": update.created_at,
         }, status=201)
 
+
 # ============================================================
-# CONNECTIONS LIST
+# CONNECTIONS
 # ============================================================
 
 class ConnectionsListView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -255,7 +309,6 @@ class ConnectionsListView(APIView):
             status="pending"
         ).select_related("to_user__profile")
 
-        # Strict trust network: bidirectional accepted only
         forward_ids = set(
             Friendship.objects.filter(
                 from_user=user,
@@ -271,24 +324,16 @@ class ConnectionsListView(APIView):
         )
 
         friend_ids = forward_ids & backward_ids
-
         friends_qs = User.objects.filter(id__in=friend_ids).select_related("profile")
 
         friends = []
         for u in friends_qs:
             profile = getattr(u, "profile", None)
 
-            friendship = Friendship.objects.filter(
-                from_user=user,
-                to_user=u,
-                status="accepted"
-            ).first()
-
             friends.append({
                 "id": u.id,
                 "username": u.username,
                 "public_code": profile.public_code if profile else None,
-                "trusted_since": friendship.created_at if friendship else None,
             })
 
         def serialize_received(qs):
@@ -325,156 +370,13 @@ class ConnectionsListView(APIView):
             "pending_sent": serialize_sent(pending_sent),
         })
 
-# ============================================================
-# CORE LIST VIEWS
-# ============================================================
-
-class PlaceDetailView(generics.RetrieveAPIView):
-    queryset = Place.objects.all()
-    serializer_class = PlaceSerializer
-
-
-class DestinationListView(generics.ListAPIView):
-    queryset = Destination.objects.all()
-    serializer_class = DestinationSerializer
-
-
-class PlaceListView(generics.ListAPIView):
-    queryset = Place.objects.all()
-    serializer_class = PlaceSerializer
-
-
-class ExperienceListView(generics.ListCreateAPIView):
-    queryset = Experience.objects.all()
-    serializer_class = ExperienceSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-    def get_serializer_context(self):
-        return {"request": self.request}
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-
-class DestinationPlacesListView(generics.ListAPIView):
-    serializer_class = PlaceSerializer
-
-    def get_queryset(self):
-        return Place.objects.filter(destination_id=self.kwargs["destination_id"])
-
-
-class PlaceExperiencesListView(generics.ListAPIView):
-    serializer_class = ExperienceSerializer
-
-    def get_queryset(self):
-        return Experience.objects.filter(place_id=self.kwargs["place_id"])
-
-    def get_serializer_context(self):
-        return {"request": self.request}
-
 
 # ============================================================
-# AUTH
+# FRIENDSHIP ACTIONS
 # ============================================================
-
-class UserRegisterView(generics.CreateAPIView):
-    serializer_class = UserRegisterSerializer
-
-
-class MeView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        profile = getattr(request.user, "profile", None)
-
-        return Response({
-            "id": request.user.id,
-            "username": request.user.username,
-            "public_code": profile.public_code if profile else None,
-            "country_code": profile.country_code if profile else None,
-        })
-
-from rest_framework_simplejwt.views import TokenObtainPairView
-
-
-class CustomTokenObtainPairView(TokenObtainPairView):
-    def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-
-        if response.status_code == 200:
-            access = response.data.get("access")
-
-            response.set_cookie(
-                key="access",
-                value=access,
-                httponly=True,
-                secure=False,  # True em produção
-                samesite="Lax",
-                path="/",
-            )
-
-            # remove token do body
-            response.data = {"message": "Login successful"}
-
-        return response
-
-
-# ============================================================
-# EXPERIENCE REPLIES
-# ============================================================
-
-class ExperienceReplyListCreateView(generics.ListCreateAPIView):
-    serializer_class = ExperienceReplySerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-
-    def get_queryset(self):
-        return ExperienceReply.objects.filter(
-            experience_id=self.kwargs["experience_id"]
-        ).order_by("created_at")
-
-    def perform_create(self, serializer):
-        experience = Experience.objects.get(id=self.kwargs["experience_id"])
-
-        author = experience.user
-        requester = self.request.user
-
-        if author is None:
-            raise PermissionDenied("This comment has no author.")
-
-        # Self-reply allowed
-        is_self = requester == author
-
-        # Bidirectional friendship required
-        forward = Friendship.objects.filter(
-            from_user=requester,
-            to_user=author,
-            status="accepted"
-        ).exists()
-
-        backward = Friendship.objects.filter(
-            from_user=author,
-            to_user=requester,
-            status="accepted"
-        ).exists()
-
-        in_network = forward and backward
-
-        if not (is_self or in_network):
-            raise PermissionDenied(
-                "You can only reply to trusted users."
-            )
-
-        serializer.save(user=requester, experience=experience)
-
-
-# ============================================================
-# FRIENDSHIP SYSTEM
-# ============================================================
-
-from django.utils import timezone
-from datetime import timedelta
 
 class SendFriendRequestView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -502,7 +404,6 @@ class SendFriendRequestView(APIView):
             to_user=request.user
         ).first()
 
-        # 🔄 reverse relationship (you were the receiver before)
         if reverse:
             if reverse.status == "pending":
                 return Response({
@@ -522,14 +423,10 @@ class SendFriendRequestView(APIView):
                     to_user=to_user,
                     status="pending"
                 )
-
                 return Response({
                     "detail": "Request sent. This user previously declined your connection.",
                     "context": "reverse_rejected"
                 }, status=201)
-
-        from django.utils import timezone
-        from datetime import timedelta
 
         if existing:
             if existing.status == "accepted":
@@ -539,30 +436,8 @@ class SendFriendRequestView(APIView):
                 return Response({"detail": "Request already sent"}, status=400)
 
             if existing.status == "rejected":
-                cooldown = timedelta(days=2)
-
-                if timezone.now() - existing.created_at < cooldown:
-                    remaining = cooldown - (timezone.now() - existing.created_at)
-
-                    hours = remaining.seconds // 3600
-                    days = remaining.days
-
-                    time_msg = ""
-                    if days > 0:
-                        time_msg += f"{days} day(s) "
-                    if hours > 0:
-                        time_msg += f"{hours} hour(s)"
-
-                    return Response(
-                        {"detail": f"Please wait {time_msg.strip()} before sending another request"},
-                        status=400
-                    )
-
-                # ✅ allowed after cooldown
                 existing.status = "pending"
-                existing.created_at = timezone.now()
                 existing.save()
-
                 return Response({"detail": "Friend request sent"}, status=200)
 
         Friendship.objects.create(
@@ -575,6 +450,7 @@ class SendFriendRequestView(APIView):
 
 
 class AcceptFriendRequestView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -592,11 +468,9 @@ class AcceptFriendRequestView(APIView):
         except Friendship.DoesNotExist:
             return Response({"detail": "Request not found"}, status=404)
 
-        # Accept original request
         friendship.status = "accepted"
         friendship.save()
 
-        # 🔥 CREATE REVERSE RELATION (CRITICAL)
         reverse_exists = Friendship.objects.filter(
             from_user=request.user,
             to_user=friendship.from_user
@@ -610,6 +484,7 @@ class AcceptFriendRequestView(APIView):
             )
 
         return Response({"detail": "Friend request accepted"})
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -630,6 +505,28 @@ def reject_friend_request(request):
         friendship.save()
 
         return Response({"detail": "Friend request rejected"})
+
+    except Friendship.DoesNotExist:
+        return Response({"detail": "Request not found"}, status=404)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cancel_friend_request(request):
+    request_id = request.data.get("request_id")
+
+    if not request_id:
+        return Response({"detail": "request_id is required"}, status=400)
+
+    try:
+        friendship = Friendship.objects.get(
+            id=request_id,
+            from_user=request.user,
+            status="pending"
+        )
+
+        friendship.delete()
+        return Response({"detail": "Request canceled"})
 
     except Friendship.DoesNotExist:
         return Response({"detail": "Request not found"}, status=404)

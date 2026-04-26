@@ -9,6 +9,7 @@ from .views import (
     PlaceDetailView,
     UserRegisterView,
     MeView,
+    ProfileView,
     ExperienceReplyListCreateView,
     UpdateListView,
     ConnectionsListView,
@@ -16,7 +17,11 @@ from .views import (
     AcceptFriendRequestView,
     reject_friend_request,
     cancel_friend_request,
+    LogoutView,
+    MarkUserSeenView,
+    remove_friend,
 )
+
 
 urlpatterns = [
     path("destinations/", DestinationListView.as_view()),
@@ -37,4 +42,9 @@ urlpatterns = [
     path("friends/accept/", AcceptFriendRequestView.as_view()),
     path("friends/reject/", reject_friend_request),
     path("friends/cancel/", cancel_friend_request),
+    path("logout/", LogoutView.as_view()),
+    path("feed/seen/", MarkUserSeenView.as_view()),
+    path("friends/remove/", remove_friend),
+    path("me/", MeView.as_view()),
+    path("profile/", ProfileView.as_view()),
 ]

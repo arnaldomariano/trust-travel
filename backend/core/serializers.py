@@ -1,8 +1,8 @@
 from django.contrib.auth.models import User
-from rest_framework import serializers
 from .models import Destination, Place, Experience, ExperienceReply, Friendship, Profile
 from rest_framework import serializers
 from .models import Update
+
 
 class UpdateSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.username", read_only=True)
@@ -180,3 +180,34 @@ class ExperienceReplySerializer(serializers.ModelSerializer):
         if obj.experience and obj.experience.user:
             return obj.experience.user.username
         return None
+
+class ProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            "username",
+            "display_name",
+            "country_code",
+            "public_code",
+            "avatar",
+            "avatar_url",
+        ]
+        read_only_fields = [
+            "username",
+            "public_code",
+            "avatar_url",
+        ]
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+
+        if not obj.avatar:
+            return None
+
+        if request:
+            return request.build_absolute_uri(obj.avatar.url)
+
+        return obj.avatar.url

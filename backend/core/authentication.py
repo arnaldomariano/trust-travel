@@ -18,7 +18,11 @@ class CookieJWTAuthentication(JWTAuthentication):
         if raw_token is None:
             return None
 
-        validated_token = self.get_validated_token(raw_token)
-        user = self.get_user(validated_token)
+        from rest_framework.exceptions import AuthenticationFailed
 
-        return (user, validated_token)
+        try:
+            validated_token = self.get_validated_token(raw_token)
+        except Exception:
+            raise AuthenticationFailed("Token invalid or expired")
+
+        return self.get_user(validated_token), validated_token

@@ -29,6 +29,10 @@ class Profile(models.Model):
     public_code = models.CharField(max_length=6, unique=True, blank=True)
     display_name = models.CharField(max_length=100, blank=True)
 
+    # User avatar/photo.
+    # This should only be exposed to trusted connections in the frontend/API logic.
+    avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
+
     def save(self, *args, **kwargs):
         if not self.public_code:
             self.public_code = generate_public_code(self.country_code)
@@ -171,3 +175,19 @@ class ExperienceReply(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.experience}"
+
+    # ============================================================
+    # FEED STATE
+    # ============================================================
+
+class FeedState(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    target_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="feed_seen_by"
+    )
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("user", "target_user")

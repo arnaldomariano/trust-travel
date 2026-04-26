@@ -1,0 +1,23 @@
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Django / local database
+*.sqlite3
+db.sqlite3
+
+# User uploaded media
+backend/media/
+
+# Environment files
+.env
+.venv/
+venv/
+
+# Next.js
+.next/
+node_modules/
+
+# macOS
+.DS_Store

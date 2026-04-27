@@ -45,11 +45,16 @@ class MeView(APIView):
     def get(self, request):
         profile = getattr(request.user, "profile", None)
 
+        avatar_url = None
+        if profile and profile.avatar:
+            avatar_url = request.build_absolute_uri(profile.avatar.url)
+
         return Response({
             "username": request.user.username,
             "display_name": profile.display_name if profile else "",
             "public_code": profile.public_code if profile else None,
             "country_code": profile.country_code if profile else None,
+            "avatar_url": avatar_url,
         })
 
 class ProfileView(APIView):

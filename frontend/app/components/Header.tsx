@@ -2,15 +2,16 @@
 
 /* ===================== Imports ===================== */
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAuth } from "../providers/AuthProvider";
+import { getInitials, getColorFromName } from "../lib/avatar";
 /* ===================== End Imports ===================== */
 
 
 export default function Header() {
+
   /* ===================== Hooks ===================== */
-  const router = useRouter();
-  const { username, isLoggedIn, loading, logout } = useAuth();
+const { username, displayName, avatarUrl, isLoggedIn, loading, logout } = useAuth();
+
   /* ===================== End Hooks ===================== */
 
 
@@ -50,9 +51,16 @@ export default function Header() {
           <span style={{ color: "#666" }}>Loading...</span>
         ) : isLoggedIn ? (
         <>
-          <span style={{ color: "#444" }}>
-            👤 <strong>{username}</strong>
-          </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <HeaderAvatar
+                name={displayName || username || "User"}
+                avatarUrl={avatarUrl}
+              />
+
+              <strong style={{ color: "#444" }}>
+                {displayName || username}
+              </strong>
+            </div>
 
           <Link
             href="/profile"
@@ -100,4 +108,47 @@ export default function Header() {
     </header>
   );
   /* ===================== End Render ===================== */
+}
+
+function HeaderAvatar({
+  name,
+  avatarUrl,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+}) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        style={{
+          width: "32px",
+          height: "32px",
+          borderRadius: "50%",
+          objectFit: "cover",
+          border: "1px solid #eee",
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: "32px",
+        height: "32px",
+        borderRadius: "50%",
+        background: getColorFromName(name),
+        color: "white",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: "bold",
+        fontSize: "12px",
+      }}
+    >
+      {getInitials(name)}
+    </div>
+  );
 }

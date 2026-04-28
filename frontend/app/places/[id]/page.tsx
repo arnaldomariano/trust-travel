@@ -4,17 +4,21 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
+import { API_URL } from "../../lib/api";
 export default function PlacePage() {
   const params = useParams();
-  const id = params.id;
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [experiences, setExperiences] = useState<any[]>([]);
+  const [updates, setUpdates] = useState<any[]>([]);
+  const [filter, setFilter] = useState<"all" | "experience" | "update">("all");
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showRatings, setShowRatings] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const rating5 = experiences.filter((e) => e.rating === 5).length;
@@ -31,7 +35,7 @@ export default function PlacePage() {
   useEffect(() => {
     if (!id) return;
 
-    fetch(`http://127.0.0.1:8000/api/places/${id}/experiences/`)
+    fetch(`${API_URL}/api/places/${id}/experiences/`)
       .then((res) => res.json())
       .then((data) => {
         const sorted = [...data].sort(
@@ -42,12 +46,40 @@ export default function PlacePage() {
       })
       .catch((err) => console.error(err));
 
-    fetch(`http://127.0.0.1:8000/api/places/${id}/`)
+fetch(`${API_URL}/api/places/${id}/updates/`, {
+  credentials: "include",
+})
+
+.then(async (res) => {
+  const data = await res.json();
+  return data;
+})
+
+  .then((data) => {
+    const list = Array.isArray(data)
+      ? data
+      : Array.isArray(data.results)
+      ? data.results
+      : Array.isArray(data.data)
+      ? data.data
+      : [];
+
+
+    const sorted = [...list].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    setUpdates(sorted);
+  })
+  .catch((err) => console.error("UPDATES ERROR:", err));
+
+    fetch(`${API_URL}/api/places/${id}/`)
       .then((res) => res.json())
       .then((data) => {
         setPlace(data);
 
-        fetch("http://127.0.0.1:8000/api/destinations/")
+        fetch(`${API_URL}/api/destinations/`)
           .then((res) => res.json())
           .then((destinations) => {
             const foundDestination = destinations.find(
@@ -78,7 +110,7 @@ export default function PlacePage() {
     setSubmitting(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/experiences/", {
+      const response = await fetch(`${API_URL}/api/experiences/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -139,6 +171,19 @@ export default function PlacePage() {
     1
   );
 
+    const combinedFeed = [
+      ...experiences.map((e) => ({ ...e, content_type: "experience" })),
+      ...updates.map((u) => ({ ...u, content_type: "update" })),
+    ].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    const filteredFeed = combinedFeed.filter((item) => {
+      if (filter === "all") return true;
+      return item.content_type === filter;
+    });
+
   return (
     <main style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "900px", margin: "0 auto" }}>
       <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
@@ -154,168 +199,195 @@ export default function PlacePage() {
         </Link>{" "}
         / <span>{place?.name}</span>
       </div>
+        <h1>Activity in {place?.name}</h1>
 
-      <h1 style={{ fontSize: "32px", marginBottom: "30px" }}>
-          Experiences about {place?.name}
-        </h1>
-
-      <div style={{ marginBottom: "24px" }}>
-        <div style={{ color: "#111", fontSize: "20px", fontWeight: "600" }}>
-          {ratedExperiences.length
-            ? `${"★".repeat(roundedStars)}${"☆".repeat(5 - roundedStars)}`
-            : "No ratings yet"}
-        </div>
-
-        <div style={{ marginTop: "6px", color: "#777", fontSize: "14px" }}>
-          {averageRating
-            ? `${averageRating} average rating`
-            : "No rating provided yet"}{" "}
-          • {experiences.length} experience{experiences.length === 1 ? "" : "s"} shared
-        </div>
-      </div>
-
-        <div
-          style={{
-            marginBottom: "30px",
-            padding: "18px",
-            border: "1px solid #eee",
-            borderRadius: "12px",
-            backgroundColor: "white",
-            maxWidth: "520px",
-          }}
-        >
-
-          <div style={{ display: "grid", gap: "10px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-              <span>★★★★★</span>
-              <span>{rating5}</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-              <span>★★★★☆</span>
-              <span>{rating4}</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-              <span>★★★☆☆</span>
-              <span>{rating3}</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-              <span>★★☆☆☆</span>
-              <span>{rating2}</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-              <span>★☆☆☆☆</span>
-              <span>{rating1}</span>
-            </div>
+        <div style={{ marginBottom: "24px" }}>
+          <div style={{ marginTop: "6px", color: "#777", fontSize: "14px" }}>
+            {experiences.length} experience{experiences.length === 1 ? "" : "s"} shared
           </div>
-        </div>
 
-      <div
-        style={{
-          marginBottom: "32px",
-          padding: "20px",
-          border: "1px solid #e5e5e5",
-          borderRadius: "12px",
-          backgroundColor: "white",
-          maxWidth: "650px",
-        }}
-      >
-        <h2 style={{ marginTop: 0, marginBottom: "18px", fontSize: "20px" }}>
-          Ratings breakdown
-        </h2>
-
-        {[5, 4, 3, 2, 1].map((stars) => {
-          const count = ratingCount(stars);
-          const widthPercent = `${(count / maxCount) * 100}%`;
-
-          return (
-            <div
-              key={stars}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "36px 1fr 28px",
-                alignItems: "center",
-                gap: "12px",
-                marginBottom: "10px",
-              }}
-            >
-              <div style={{ color: "#555", fontSize: "14px" }}>{stars}★</div>
-
-              <div
-                style={{
-                  height: "10px",
-                  backgroundColor: "#f1f1f1",
-                  borderRadius: "999px",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: widthPercent,
-                    height: "100%",
-                    backgroundColor: "#111",
-                    borderRadius: "999px",
-                  }}
-                />
-              </div>
-
-              <div style={{ color: "#777", fontSize: "14px" }}>{count}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "30px" }}>
-        <Link
-          href={`/places/${id}/experiences`}
-          style={{
-            padding: "10px 16px",
-            backgroundColor: "#f5f5f5",
-            color: "#111",
-            borderRadius: "8px",
-            textDecoration: "none",
-            fontSize: "14px",
-            border: "1px solid #ddd",
-          }}
-        >
-          View experiences
-        </Link>
-
-        {isLoggedIn ? (
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => setShowRatings(!showRatings)}
             style={{
-              padding: "10px 16px",
-              backgroundColor: "#111",
-              color: "white",
-              border: "none",
+              marginTop: "12px",
+              padding: "8px 14px",
               borderRadius: "8px",
+              border: "1px solid #ddd",
+              backgroundColor: "#f5f5f5",
+              color: "#111",
               cursor: "pointer",
               fontSize: "14px",
             }}
           >
-            {showForm ? "Close form" : "✍️ Share your experience"}
+            {showRatings ? "Hide ratings" : "Show ratings"}
           </button>
-        ) : (
+        </div>
+
+        {showRatings && (
+          <>
+            <div
+              style={{
+                marginBottom: "30px",
+                padding: "18px",
+                border: "1px solid #eee",
+                borderRadius: "12px",
+                backgroundColor: "white",
+                maxWidth: "520px",
+              }}
+            >
+              <div style={{ display: "grid", gap: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+                  <span>★★★★★</span>
+                  <span>{rating5}</span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+                  <span>★★★★☆</span>
+                  <span>{rating4}</span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+                  <span>★★★☆☆</span>
+                  <span>{rating3}</span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+                  <span>★★☆☆☆</span>
+                  <span>{rating2}</span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+                  <span>★☆☆☆☆</span>
+                  <span>{rating1}</span>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginBottom: "32px",
+                padding: "20px",
+                border: "1px solid #e5e5e5",
+                borderRadius: "12px",
+                backgroundColor: "white",
+                maxWidth: "650px",
+              }}
+            >
+              <h2 style={{ marginTop: 0, marginBottom: "18px", fontSize: "20px" }}>
+                Ratings breakdown
+              </h2>
+
+              {[5, 4, 3, 2, 1].map((stars) => {
+                const count = ratingCount(stars);
+                const widthPercent = `${(count / maxCount) * 100}%`;
+
+                return (
+                  <div
+                    key={stars}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "36px 1fr 28px",
+                      alignItems: "center",
+                      gap: "12px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <div style={{ color: "#555", fontSize: "14px" }}>{stars}★</div>
+
+                    <div
+                      style={{
+                        height: "10px",
+                        backgroundColor: "#f1f1f1",
+                        borderRadius: "999px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: widthPercent,
+                          height: "100%",
+                          backgroundColor: "#111",
+                          borderRadius: "999px",
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ color: "#777", fontSize: "14px" }}>{count}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "30px" }}>
           <Link
-            href={`/login?next=/places/${id}`}
+            href={`/places/${id}/experiences`}
             style={{
               padding: "10px 16px",
-              backgroundColor: "#111",
-              color: "white",
+              backgroundColor: "#f5f5f5",
+              color: "#111",
               borderRadius: "8px",
               textDecoration: "none",
               fontSize: "14px",
+              border: "1px solid #ddd",
             }}
           >
-            Login to share your experience
+            View experiences
           </Link>
-        )}
-      </div>
 
+          {isLoggedIn ? (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              style={{
+                padding: "10px 16px",
+                backgroundColor: "#111",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
+            >
+              {showForm ? "Close form" : "✍️ Share your experience"}
+            </button>
+          ) : (
+            <Link
+              href={`/login?next=/places/${id}`}
+              style={{
+                padding: "10px 16px",
+                backgroundColor: "#111",
+                color: "white",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontSize: "14px",
+              }}
+            >
+              Login to share your experience
+            </Link>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
+          {["all", "experience", "update"].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f as any)}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                border: "1px solid #ddd",
+                backgroundColor: filter === f ? "#111" : "#f5f5f5",
+                color: filter === f ? "white" : "#111",
+                cursor: "pointer",
+              }}
+            >
+              {f === "all" && "All"}
+              {f === "experience" && "Experiences"}
+              {f === "update" && "Events & Info"}
+            </button>
+          ))}
+        </div>
       {showForm && isLoggedIn && (
         <form
           onSubmit={handleSubmit}
@@ -392,6 +464,108 @@ export default function PlacePage() {
           </button>
         </form>
       )}
+
+        <h2 style={{ marginBottom: "20px" }}>Activity</h2>
+
+        {filteredFeed.length === 0 ? (
+          <div
+            style={{
+              padding: "16px",
+              border: "1px solid #eee",
+              borderRadius: "10px",
+              backgroundColor: "white",
+              color: "#777",
+              fontSize: "14px",
+            }}
+          >
+            No activity found for this filter yet.
+          </div>
+        ) : (
+          filteredFeed.map((item) => {
+            const isExperience = item.content_type === "experience";
+
+            const label = isExperience
+              ? "Review"
+              : item.type === "event"
+              ? "Event"
+              : item.type === "alert"
+              ? "Alert"
+              : "Info";
+
+            const icon = isExperience
+              ? "⭐"
+              : item.type === "event"
+              ? "🎭"
+              : item.type === "alert"
+              ? "⚠️"
+              : "ℹ️";
+
+            return (
+              <div
+                key={`${item.content_type}-${item.id}`}
+                style={{
+                  padding: "18px",
+                  marginBottom: "14px",
+                  border: "1px solid #eee",
+                  borderRadius: "14px",
+                  backgroundColor: "white",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    alignItems: "center",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <div style={{ fontSize: "13px", color: "#777" }}>
+                    {icon} {label}
+                  </div>
+
+                  {item.category && (
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#555",
+                        backgroundColor: "#f5f5f5",
+                        border: "1px solid #eee",
+                        borderRadius: "999px",
+                        padding: "4px 8px",
+                      }}
+                    >
+                      {item.category}
+                    </div>
+                  )}
+                </div>
+
+                {isExperience ? (
+                  <>
+                    <div style={{ fontWeight: "500", lineHeight: "1.5" }}>
+                      {item.comment}
+                    </div>
+
+                    <div style={{ marginTop: "8px", color: "#777", fontSize: "13px" }}>
+                      Rating: {"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontWeight: "500", lineHeight: "1.5" }}>
+                      {item.text}
+                    </div>
+
+                    <div style={{ marginTop: "8px", color: "#777", fontSize: "13px" }}>
+                      Shared by {item.display_name || item.username || item.user}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })
+        )}
     </main>
   );
 }

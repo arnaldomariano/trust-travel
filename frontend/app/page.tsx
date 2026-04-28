@@ -451,6 +451,17 @@ function EmptyFeedCard({
       ? "Share practical information, a local detail, or a small tip that could help another traveler."
       : "Share a place you visited recently, a restaurant you liked, an event you heard about, or invite trusted friends to build your network.";
 
+ const actionLabel =
+  activeFilter === "event"
+    ? "Post an event"
+    : activeFilter === "alert"
+    ? "Post an alert"
+    : activeFilter === "experience"
+    ? "Share an experience"
+    : activeFilter === "info"
+    ? "Post a tip"
+    : "Start posting";
+
   return (
     <section style={emptyCard}>
       <div style={emptyIcon}>✈️</div>
@@ -466,7 +477,7 @@ function EmptyFeedCard({
 
       <div style={emptyActions}>
         <button onClick={() => router.push("/create")} style={primaryButton}>
-          Post a tip
+          {actionLabel}
         </button>
 
         <button

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { labels } from "../../lib/labels";
 
+import { API_URL } from "../../lib/api";
 export default function EventPage() {
 
   const t = labels.en;
@@ -27,7 +28,7 @@ export default function EventPage() {
       return;
     }
 
-    fetch("http://127.0.0.1:8000/api/updates/", {
+    fetch(`${API_URL}/api/updates/`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

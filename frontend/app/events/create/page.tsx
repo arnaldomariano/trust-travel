@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { API_URL } from "../../lib/api";
 export default function CreateEventPage() {
   const router = useRouter();
 
@@ -17,7 +18,7 @@ export default function CreateEventPage() {
     const token = localStorage.getItem("access");
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/updates/", {
+      const res = await fetch(`${API_URL}/api/updates/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

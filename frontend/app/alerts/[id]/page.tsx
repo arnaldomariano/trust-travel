@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { API_URL } from "../../lib/api";
 export default function AlertPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -11,7 +12,7 @@ export default function AlertPage() {
   useEffect(() => {
     const token = localStorage.getItem("access");
 
-    fetch("http://127.0.0.1:8000/api/updates/", {
+    fetch(`${API_URL}/api/updates/`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { API_URL } from "../../../lib/api";
 export default function ExperiencesPage() {
   const params = useParams();
   const id = params.id;
@@ -190,7 +191,7 @@ export default function ExperiencesPage() {
       experiencesList.map(async (experience: any) => {
         try {
           let res = await fetch(
-            `http://127.0.0.1:8000/api/experiences/${experience.id}/replies/`,
+            `${API_URL}/api/experiences/${experience.id}/replies/`,
             {
               headers: token
                 ? {
@@ -202,7 +203,7 @@ export default function ExperiencesPage() {
 
           if (!res.ok) {
             res = await fetch(
-              `http://127.0.0.1:8000/api/experiences/${experience.id}/replies/`
+              `${API_URL}/api/experiences/${experience.id}/replies/`
             );
           }
 
@@ -238,7 +239,7 @@ export default function ExperiencesPage() {
       }
 
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/me/", {
+        const res = await fetch(`${API_URL}/api/me/`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -267,7 +268,7 @@ export default function ExperiencesPage() {
     const loadExperiences = async () => {
       try {
         let res = await fetch(
-          `http://127.0.0.1:8000/api/places/${id}/experiences/`,
+          `${API_URL}/api/places/${id}/experiences/`,
           {
             headers: token
               ? {
@@ -279,7 +280,7 @@ export default function ExperiencesPage() {
 
         if (!res.ok) {
           res = await fetch(
-            `http://127.0.0.1:8000/api/places/${id}/experiences/`
+            `${API_URL}/api/places/${id}/experiences/`
           );
         }
 
@@ -300,11 +301,11 @@ export default function ExperiencesPage() {
 
     const loadPlace = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/places/${id}/`);
+        const res = await fetch(`${API_URL}/api/places/${id}/`);
         const data = await res.json();
         setPlace(data);
 
-        const destRes = await fetch("http://127.0.0.1:8000/api/destinations/");
+        const destRes = await fetch(`${API_URL}/api/destinations/`);
         const destinations = await destRes.json();
 
         const foundDestination = destinations.find(
@@ -352,7 +353,7 @@ export default function ExperiencesPage() {
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/api/experiences/${experienceId}/replies/`,
+        `${API_URL}/api/experiences/${experienceId}/replies/`,
         {
           method: "POST",
           headers: {

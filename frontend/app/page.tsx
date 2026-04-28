@@ -267,25 +267,29 @@ export default function HomePage() {
   // =========================
   // Render feed
   // =========================
-  const renderFeed = () => {
-    return (
-      <>
-        {trusted.length > 0 && (
-          <>
-            <h2 style={{ marginTop: "30px" }}>Trusted Network</h2>
-            <section style={grid}>{trusted.map(renderCard)}</section>
-          </>
-        )}
+    const renderFeed = () => {
+      if (filteredEntries.length === 0) {
+        return <EmptyFeedCard activeFilter={activeFilter} router={router} />;
+      }
 
-        {explore.length > 0 && (
-          <>
-            <h2 style={{ marginTop: "30px" }}>Explore</h2>
-            <section style={grid}>{explore.map(renderCard)}</section>
-          </>
-        )}
-      </>
-    );
-  };
+      return (
+        <>
+          {trusted.length > 0 && (
+            <>
+              <h2 style={{ marginTop: "30px" }}>Trusted Network</h2>
+              <section style={grid}>{trusted.map(renderCard)}</section>
+            </>
+          )}
+
+          {explore.length > 0 && (
+            <>
+              <h2 style={{ marginTop: "30px" }}>Explore</h2>
+              <section style={grid}>{explore.map(renderCard)}</section>
+            </>
+          )}
+        </>
+      );
+    };
 
   return (
     <main style={{ maxWidth: "900px", margin: "0 auto", padding: "40px" }}>
@@ -418,6 +422,65 @@ const Avatar = ({
   );
 };
 
+function EmptyFeedCard({
+  activeFilter,
+  router,
+}: {
+  activeFilter: string;
+  router: any;
+}) {
+  const title =
+    activeFilter === "event"
+      ? "Be the first to share an event"
+      : activeFilter === "alert"
+      ? "Help travelers stay aware"
+      : activeFilter === "experience"
+      ? "Start with a recent experience"
+      : activeFilter === "info"
+      ? "Share a useful local tip"
+      : "Start your trusted travel network";
+
+  const message =
+    activeFilter === "event"
+      ? "Know about a concert, festival, exhibition, or local gathering? Share it with people who may be planning a trip."
+      : activeFilter === "alert"
+      ? "If you know something travelers should be aware of, share it as an alert."
+      : activeFilter === "experience"
+      ? "Visited a beach, restaurant, museum, hotel, or city recently? Your comment could help someone decide."
+      : activeFilter === "info"
+      ? "Share practical information, a local detail, or a small tip that could help another traveler."
+      : "Share a place you visited recently, a restaurant you liked, an event you heard about, or invite trusted friends to build your network.";
+
+  return (
+    <section style={emptyCard}>
+      <div style={emptyIcon}>✈️</div>
+
+      <h2 style={emptyTitle}>{title}</h2>
+
+      <p style={emptyMessage}>{message}</p>
+
+      <p style={emptyFutureNote}>
+        Later, Trust Travel can also help you create posts from travel photos,
+        using details like date and location only with your permission.
+      </p>
+
+      <div style={emptyActions}>
+        <button onClick={() => router.push("/create")} style={primaryButton}>
+          Post a tip
+        </button>
+
+        <button
+          onClick={() => router.push("/connections")}
+          style={secondaryButton}
+        >
+          Invite a friend
+        </button>
+      </div>
+    </section>
+  );
+}
+
+
 // =========================
 // Styles
 // =========================
@@ -449,10 +512,20 @@ const primaryButton = {
   cursor: "pointer",
 };
 
+const secondaryButton = {
+  padding: "8px 12px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "black",
+  cursor: "pointer",
+};
+
 const muted = {
   fontSize: "12px",
   color: "#666",
 };
+
 
 const filterButton = (active: boolean) => ({
   padding: "8px 12px",
@@ -462,3 +535,42 @@ const filterButton = (active: boolean) => ({
   color: active ? "white" : "black",
   cursor: "pointer",
 });
+
+const emptyCard = {
+  marginTop: "36px",
+  padding: "28px",
+  borderRadius: "18px",
+  border: "1px solid #eee",
+  background: "white",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+  maxWidth: "680px",
+};
+
+const emptyIcon = {
+  fontSize: "34px",
+  marginBottom: "12px",
+};
+
+const emptyTitle = {
+  margin: "0 0 10px 0",
+  fontSize: "24px",
+};
+
+const emptyMessage = {
+  color: "#555",
+  lineHeight: 1.6,
+  marginBottom: "14px",
+};
+
+const emptyFutureNote = {
+  color: "#777",
+  fontSize: "13px",
+  lineHeight: 1.5,
+  marginBottom: "20px",
+};
+
+const emptyActions = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+};

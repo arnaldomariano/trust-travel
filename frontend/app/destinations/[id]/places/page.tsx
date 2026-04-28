@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
+import { API_URL } from "../../../lib/api";
 export default function AllPlacesPage() {
   const params = useParams();
   const id = params.id;
@@ -15,12 +16,12 @@ export default function AllPlacesPage() {
   useEffect(() => {
     if (!id) return;
 
-    fetch(`http://127.0.0.1:8000/api/destinations/${id}/places/`)
+    fetch(`${API_URL}/api/destinations/${id}/places/`)
       .then((res) => res.json())
       .then((data) => setPlaces(data))
       .catch((err) => console.error(err));
 
-    fetch("http://127.0.0.1:8000/api/destinations/")
+    fetch(`${API_URL}/api/destinations/`)
       .then((res) => res.json())
       .then((data) => {
         const foundDestination = data.find((d: any) => d.id === Number(id));

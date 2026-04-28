@@ -1,5 +1,6 @@
 "use client";
 
+import { API_URL } from "../lib/api";
 /* ===================== Imports ===================== */
 import { useAuth } from "../providers/AuthProvider";
 import { useEffect, useState, useRef } from "react";
@@ -38,7 +39,7 @@ export default function MapView({ lat, lng, onSelectPlace }: any) {
   /* ===================== End Hooks ===================== */
 /* ===================== Data Fetch ===================== */
 useEffect(() => {
-  fetch("http://127.0.0.1:8000/api/places/")
+  fetch(`${API_URL}/api/places/`)
     .then((res) => res.json())
     .then((data) => {
 

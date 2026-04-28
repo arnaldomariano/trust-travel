@@ -7,7 +7,7 @@ import Link from "next/link";
 import { API_URL } from "../../../lib/api";
 export default function AllPlacesPage() {
   const params = useParams();
-  const id = params.id;
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [places, setPlaces] = useState<any[]>([]);
   const [destination, setDestination] = useState<any>(null);
@@ -30,13 +30,15 @@ export default function AllPlacesPage() {
       .catch((err) => console.error(err));
   }, [id]);
 
-  const sortedPlaces = [...places].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+    const sortedPlaces = [...places].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "")
+    );
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const filteredPlaces = sortedPlaces.filter((p) =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      (p.name || "").toLowerCase().includes(normalizedSearch)
+    );
 
   return (
     <main style={{ padding: "40px", fontFamily: "sans-serif" }}>
@@ -90,20 +92,61 @@ export default function AllPlacesPage() {
         </div>
 
       {filteredPlaces.length === 0 && (
-        <div style={{ color: "#777", fontSize: "14px", marginTop: "10px" }}>
-          No places found.
-        </div>
-      )}
+          <div
+            style={{
+              marginTop: "10px",
+              marginBottom: "24px",
+              padding: "18px",
+              border: "1px solid #eee",
+              borderRadius: "12px",
+              background: "white",
+              color: "#555",
+              maxWidth: "520px",
+              lineHeight: 1.5,
+            }}
+          >
+            {searchTerm.trim() ? (
+              <>
+                <strong>No places found for “{searchTerm.trim()}”.</strong>
+                <p style={{ margin: "8px 0 14px 0" }}>
+                  Soon you’ll be able to create this place and share your experience.
+                </p>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-          gap: "16px",
-          maxWidth: "900px",
-        }}
-      >
-        {filteredPlaces.map((p) => (
+                <button
+                  disabled
+                  style={{
+                    padding: "9px 14px",
+                    borderRadius: "10px",
+                    border: "1px solid #ddd",
+                    background: "#f5f5f5",
+                    color: "#777",
+                    cursor: "not-allowed",
+                  }}
+                >
+                  Create this place soon
+                </button>
+              </>
+            ) : (
+              <>
+                <strong>No places available yet.</strong>
+                <p style={{ margin: "8px 0 0 0" }}>
+                  Place creation will be available soon.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {filteredPlaces.length > 0 && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+              gap: "16px",
+              maxWidth: "900px",
+            }}
+          >
+            {filteredPlaces.map((p) => (
           <Link
             key={p.id}
             href={`/places/${p.id}`}
@@ -144,8 +187,9 @@ export default function AllPlacesPage() {
               </div>
             </div>
           </Link>
-        ))}
-      </div>
+           ))}
+        </div>
+        )}
     </main>
   );
 }

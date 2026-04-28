@@ -20,6 +20,8 @@ from .views import (
     LogoutView,
     MarkUserSeenView,
     remove_friend,
+    MyUpdatesView,
+    PlaceUpdatesListView,
 )
 
 
@@ -28,6 +30,7 @@ urlpatterns = [
     path("places/", PlaceListView.as_view()),
     path("places/<int:pk>/", PlaceDetailView.as_view()),
     path("experiences/", ExperienceListView.as_view()),
+    path("places/<int:place_id>/updates/", PlaceUpdatesListView.as_view()),
     path("destinations/<int:destination_id>/places/", DestinationPlacesListView.as_view()),
     path("places/<int:place_id>/experiences/", PlaceExperiencesListView.as_view()),
 
@@ -47,4 +50,5 @@ urlpatterns = [
     path("friends/remove/", remove_friend),
     path("me/", MeView.as_view()),
     path("profile/", ProfileView.as_view()),
+    path("my-updates/", MyUpdatesView.as_view(), name="my-updates"),
 ]

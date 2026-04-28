@@ -643,3 +643,65 @@ class MarkUserSeenView(APIView):
         state.save()
 
         return Response({"status": "ok"})
+
+# ============================================================
+# MY UPDATES / MY POSTS
+# ============================================================
+
+class PlaceUpdatesListView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, place_id):
+        updates = Update.objects.filter(
+            place_id=place_id
+        ).select_related(
+            "user__profile",
+            "place"
+        ).order_by("-created_at")
+
+        result = []
+
+        for update in updates:
+            profile = getattr(update.user, "profile", None)
+
+            result.append({
+                "id": update.id,
+                "type": update.type,
+                "category": update.category,
+                "text": update.text,
+                "place": update.place.name,
+                "place_id": update.place.id,
+                "user": profile.public_code if profile else update.user.username,
+                "username": update.user.username,
+                "display_name": profile.display_name if profile else "",
+                "created_at": update.created_at,
+            })
+
+        return Response(result)
+
+class MyUpdatesView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        updates = Update.objects.filter(
+            user=request.user
+        ).select_related(
+            "place"
+        ).order_by("-created_at")
+
+        result = []
+
+        for update in updates:
+            result.append({
+                "id": update.id,
+                "type": update.type,
+                "category": update.category,
+                "text": update.text,
+                "place": update.place.name,
+                "place_id": update.place.id,
+                "created_at": update.created_at,
+            })
+
+        return Response(result)

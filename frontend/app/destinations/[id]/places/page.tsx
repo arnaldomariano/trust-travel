@@ -54,13 +54,13 @@ export default function AllPlacesPage() {
         / <span>All places</span>
       </div>
 
-      <h1 style={{ fontSize: "36px", marginBottom: "10px" }}>
-        All places in {destination?.name}
-      </h1>
+        <h1 style={{ fontSize: "36px", marginBottom: "10px" }}>
+          Choose a place in {destination?.name}
+        </h1>
 
-      <p style={{ marginBottom: "24px", color: "#666", fontSize: "16px" }}>
-        Browse all places alphabetically.
-      </p>
+        <p style={{ marginBottom: "30px", color: "#666", fontSize: "16px" }}>
+          Select the place you want to review or share an experience about.
+        </p>
 
       <div style={{ marginBottom: "24px", maxWidth: "420px" }}>
         <input
@@ -77,6 +77,17 @@ export default function AllPlacesPage() {
           }}
         />
       </div>
+
+        <div
+          style={{
+            marginBottom: "24px",
+            color: "#666",
+            fontSize: "14px",
+            lineHeight: 1.5,
+          }}
+        >
+          Can’t find the place? Place creation will be available soon.
+        </div>
 
       {filteredPlaces.length === 0 && (
         <div style={{ color: "#777", fontSize: "14px", marginTop: "10px" }}>

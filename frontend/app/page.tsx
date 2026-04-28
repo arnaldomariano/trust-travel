@@ -462,6 +462,15 @@ function EmptyFeedCard({
     ? "Post a tip"
     : "Start posting";
 
+  const handlePrimaryAction = () => {
+      if (activeFilter === "experience") {
+        router.push("/destinations");
+        return;
+      }
+
+      router.push("/create");
+    };
+
   return (
     <section style={emptyCard}>
       <div style={emptyIcon}>✈️</div>
@@ -476,7 +485,7 @@ function EmptyFeedCard({
       </p>
 
       <div style={emptyActions}>
-        <button onClick={() => router.push("/create")} style={primaryButton}>
+        <button onClick={handlePrimaryAction} style={primaryButton}>
           {actionLabel}
         </button>
 

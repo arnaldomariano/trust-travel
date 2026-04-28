@@ -16,6 +16,7 @@ export default function HomePage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [openUser, setOpenUser] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
 
   // =========================
   // Redirect anonymous users
@@ -335,10 +336,52 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Post button */}
-        <button onClick={() => router.push("/create")} style={primaryButton}>
-          Post
-        </button>
+        {/* Create / Share menu */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowCreateMenu((prev) => !prev)}
+            style={primaryButton}
+          >
+            Create / Share
+          </button>
+
+          {showCreateMenu && (
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "44px",
+                minWidth: "220px",
+                padding: "8px",
+                border: "1px solid #eee",
+                borderRadius: "12px",
+                background: "white",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                zIndex: 10,
+              }}
+            >
+              <button
+                onClick={() => {
+                  setShowCreateMenu(false);
+                  router.push("/create");
+                }}
+                style={menuItemButton}
+              >
+                Post tip, event or alert
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowCreateMenu(false);
+                  router.push("/destinations");
+                }}
+                style={menuItemButton}
+              >
+                Share an experience
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Feed content */}
@@ -593,4 +636,16 @@ const emptyActions = {
   display: "flex",
   gap: "10px",
   flexWrap: "wrap" as const,
+};
+
+const menuItemButton = {
+  width: "100%",
+  padding: "10px 12px",
+  border: "none",
+  borderRadius: "8px",
+  background: "white",
+  color: "black",
+  textAlign: "left" as const,
+  cursor: "pointer",
+  fontSize: "14px",
 };

@@ -27,10 +27,22 @@ export default function PlacePage() {
   const rating2 = experiences.filter((e) => e.rating === 2).length;
   const rating1 = experiences.filter((e) => e.rating === 1).length;
 
-  useEffect(() => {
-    const token = localStorage.getItem("access");
-    setIsLoggedIn(!!token);
-  }, []);
+useEffect(() => {
+  const checkLogin = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/me/`, {
+        credentials: "include",
+      });
+
+      setIsLoggedIn(res.ok);
+    } catch (error) {
+      console.error("Login check failed:", error);
+      setIsLoggedIn(false);
+    }
+  };
+
+  checkLogin();
+}, []);
 
   useEffect(() => {
     if (!id) return;
@@ -112,12 +124,11 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     try {
       const response = await fetch(`${API_URL}/api/experiences/`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          title: place?.name,
           comment,
           rating: rating,
           place: Number(id),

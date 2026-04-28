@@ -66,12 +66,25 @@ class Destination(models.Model):
 
 
 # ===================== Place =====================
+
 class Place(models.Model):
     destination = models.ForeignKey(Destination, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     city = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True)
     image_url = models.URLField(blank=True)
+
+    # User who first added this place to Trust Travel.
+    # This keeps one global place, but preserves community/origin context for future filters.
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_places",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name

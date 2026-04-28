@@ -31,10 +31,21 @@ class DestinationSerializer(serializers.ModelSerializer):
 class PlaceSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
     reviews_count = serializers.SerializerMethodField()
+    created_by_username = serializers.CharField(
+        source="created_by.username",
+        read_only=True
+    )
 
     class Meta:
         model = Place
         fields = "__all__"
+        read_only_fields = [
+            "created_by",
+            "created_at",
+            "created_by_username",
+            "average_rating",
+            "reviews_count",
+        ]
 
     def get_average_rating(self, obj):
         ratings = obj.experience_set.exclude(rating__isnull=True).values_list("rating", flat=True)

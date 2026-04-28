@@ -126,10 +126,58 @@ class DestinationListView(generics.ListAPIView):
     serializer_class = DestinationSerializer
 
 
-class PlaceListView(generics.ListAPIView):
+class PlaceListView(generics.ListCreateAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+class CreateBasicPlaceView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        name = (request.data.get("name") or "").strip()
+        city = (request.data.get("city") or "").strip()
+        country = (request.data.get("country") or "").strip()
+
+        if not name:
+            return Response({"detail": "Place name is required."}, status=400)
+
+        destination_name = city or name
+
+        destination, _ = Destination.objects.get_or_create(
+            name__iexact=destination_name,
+            defaults={
+                "name": destination_name,
+                "country": country,
+                "city": city,
+            },
+        )
+
+        existing_place = Place.objects.filter(
+            name__iexact=name,
+            destination=destination,
+        ).first()
+
+        if existing_place:
+            serializer = PlaceSerializer(
+                existing_place,
+                context={"request": request}
+            )
+            return Response(serializer.data, status=200)
+
+        place = Place.objects.create(
+            destination=destination,
+            name=name,
+            city=city,
+            created_by=request.user,
+        )
+
+        serializer = PlaceSerializer(place, context={"request": request})
+        return Response(serializer.data, status=201)
 
 class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
@@ -152,7 +200,15 @@ class ExperienceListView(generics.ListCreateAPIView):
         return {"request": self.request}
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        experience = serializer.save(user=self.request.user)
+
+        Update.objects.create(
+            user=self.request.user,
+            place=experience.place,
+            type="experience",
+            category="tourism",
+            text=experience.comment,
+        )
 
 
 class PlaceExperiencesListView(generics.ListAPIView):

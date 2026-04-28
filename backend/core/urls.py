@@ -22,12 +22,14 @@ from .views import (
     remove_friend,
     MyUpdatesView,
     PlaceUpdatesListView,
+    CreateBasicPlaceView,
 )
 
 
 urlpatterns = [
     path("destinations/", DestinationListView.as_view()),
     path("places/", PlaceListView.as_view()),
+    path("places/create-basic/", CreateBasicPlaceView.as_view()),
     path("places/<int:pk>/", PlaceDetailView.as_view()),
     path("experiences/", ExperienceListView.as_view()),
     path("places/<int:place_id>/updates/", PlaceUpdatesListView.as_view()),

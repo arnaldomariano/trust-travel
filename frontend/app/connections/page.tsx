@@ -9,6 +9,7 @@ export default function ConnectionsPage() {
   const [received, setReceived] = useState<any[]>([]);
   const [sent, setSent] = useState<any[]>([]);
   const [searchCode, setSearchCode] = useState("");
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
 
   // =========================
   // Load connections
@@ -72,7 +73,10 @@ export default function ConnectionsPage() {
   // =========================
   // Accept request
   // =========================
-  const acceptRequest = async (id: number) => {
+const acceptRequest = async (id: number) => {
+  setActionLoading(id);
+
+  try {
     const res = await fetch(`${API_URL}/api/friends/accept/`, {
       method: "POST",
       credentials: "include",
@@ -92,12 +96,17 @@ export default function ConnectionsPage() {
     setReceived((prev) => prev.filter((r) => r.request_id !== id));
     await loadConnections();
     window.dispatchEvent(new Event("connectionsUpdated"));
-  };
-
+  } finally {
+    setActionLoading(null);
+  }
+};
   // =========================
   // Reject request
   // =========================
-  const rejectRequest = async (id: number) => {
+const rejectRequest = async (id: number) => {
+  setActionLoading(id);
+
+  try {
     const res = await fetch(`${API_URL}/api/friends/reject/`, {
       method: "POST",
       credentials: "include",
@@ -117,12 +126,17 @@ export default function ConnectionsPage() {
     setReceived((prev) => prev.filter((r) => r.request_id !== id));
     await loadConnections();
     window.dispatchEvent(new Event("connectionsUpdated"));
-  };
-
+  } finally {
+    setActionLoading(null);
+  }
+};
   // =========================
   // Cancel sent request
   // =========================
-  const cancelRequest = async (id: number) => {
+const cancelRequest = async (id: number) => {
+  setActionLoading(id);
+
+  try {
     const res = await fetch(`${API_URL}/api/friends/cancel/`, {
       method: "POST",
       credentials: "include",
@@ -142,33 +156,41 @@ export default function ConnectionsPage() {
     setSent((prev) => prev.filter((s) => s.request_id !== id));
     await loadConnections();
     window.dispatchEvent(new Event("connectionsUpdated"));
-  };
+  } finally {
+    setActionLoading(null);
+  }
+};
 
   // =========================
   // Remove friend
   // =========================
-  const removeFriend = async (userId: number) => {
-    const res = await fetch(`${API_URL}/api/friends/remove/`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ user_id: userId }),
-    });
+    const removeFriend = async (userId: number) => {
+      setActionLoading(userId);
 
-    const data = await res.json();
+      try {
+        const res = await fetch(`${API_URL}/api/friends/remove/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ user_id: userId }),
+        });
 
-    if (!res.ok) {
-      alert(data.detail || "Error removing friend");
-      return;
-    }
+        const data = await res.json();
 
-    setFriends((prev) => prev.filter((f) => f.id !== userId));
-    await loadConnections();
-    window.dispatchEvent(new Event("connectionsUpdated"));
-  };
+        if (!res.ok) {
+          alert(data.detail || "Error removing friend");
+          return;
+        }
 
+        setFriends((prev) => prev.filter((f) => f.id !== userId));
+        await loadConnections();
+        window.dispatchEvent(new Event("connectionsUpdated"));
+      } finally {
+        setActionLoading(null);
+      }
+    };
   return (
     <main style={page}>
       <h1 style={title}>Connections</h1>
@@ -206,9 +228,10 @@ export default function ConnectionsPage() {
               actions={
                 <button
                   style={secondaryButton}
+                  disabled={actionLoading === friend.id}
                   onClick={() => removeFriend(friend.id)}
                 >
-                  Remove
+                  {actionLoading === friend.id ? "Removing..." : "Remove"}
                 </button>
               }
             />
@@ -231,19 +254,20 @@ export default function ConnectionsPage() {
               status="Wants to connect"
               actions={
                 <div style={actionGroup}>
-                  <button
-                    style={primaryButton}
-                    onClick={() => acceptRequest(request.request_id)}
-                  >
-                    Accept
-                  </button>
-
-                  <button
-                    style={secondaryButton}
-                    onClick={() => rejectRequest(request.request_id)}
-                  >
-                    Reject
-                  </button>
+                <button
+                  style={primaryButton}
+                  disabled={actionLoading === request.request_id}
+                  onClick={() => acceptRequest(request.request_id)}
+                >
+                  {actionLoading === request.request_id ? "Accepting..." : "Accept"}
+                </button>
+                <button
+                  style={secondaryButton}
+                  disabled={actionLoading === request.request_id}
+                  onClick={() => rejectRequest(request.request_id)}
+                >
+                  {actionLoading === request.request_id ? "Rejecting..." : "Reject"}
+                </button>
                 </div>
               }
             />
@@ -267,9 +291,10 @@ export default function ConnectionsPage() {
               actions={
                 <button
                   style={secondaryButton}
+                  disabled={actionLoading === request.request_id}
                   onClick={() => cancelRequest(request.request_id)}
                 >
-                  Cancel
+                  {actionLoading === request.request_id ? "Canceling..." : "Cancel"}
                 </button>
               }
             />

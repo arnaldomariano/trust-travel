@@ -62,6 +62,19 @@ const { username, displayName, avatarUrl, isLoggedIn, loading, logout } = useAut
               </strong>
             </div>
 
+            <Link
+              href="/my-posts"
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                textDecoration: "none",
+                border: "1px solid #ddd",
+                color: "black",
+              }}
+            >
+              My Posts
+            </Link>
+
           <Link
             href="/profile"
             style={{

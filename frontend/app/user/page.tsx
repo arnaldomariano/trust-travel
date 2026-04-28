@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { API_URL } from "../lib/api";
 export default function UserPage() {
   const params = useParams();
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function UserPage() {
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/updates/", {
+        const res = await fetch(`${API_URL}/api/updates/`, {
           credentials: "include",
         });
 

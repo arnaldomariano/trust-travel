@@ -209,7 +209,15 @@ export default function HomePage() {
               height: "100%",
               backfaceVisibility: "hidden",
             }}
-          >
+
+                >
+                {newCount > 0 && (
+              <div style={trustBadge}>
+                T
+              </div>
+
+            )}
+
             <Avatar
               name={displayName}
               avatarUrl={avatarUrl}
@@ -220,8 +228,9 @@ export default function HomePage() {
 
             {lastUpdate.is_friend && <span style={muted}>{displayCode}</span>}
 
-            <span style={muted}>{newCount > 0 ? `${newCount} new` : ""}</span>
+            <span style={muted}>{newCount > 0 ? "New activity" : ""}</span>
           </div>
+
 
           {/* Back */}
           <div
@@ -256,7 +265,16 @@ export default function HomePage() {
                   router.push(`/places/${item.place_id}`);
                 }}
               >
-                <strong>{item.type}</strong> — {item.place}
+                <strong>
+              {item.type === "experience"
+                ? "⭐ Experience"
+                : item.type === "event"
+                ? "🎭 Event"
+                : item.type === "alert"
+                ? "⚠️ Alert"
+                : "ℹ️ Info"}
+            </strong>{" "}
+            — {item.place}
               </div>
             ))}
           </div>
@@ -648,4 +666,23 @@ const menuItemButton = {
   textAlign: "left" as const,
   cursor: "pointer",
   fontSize: "14px",
+};
+
+const trustBadge = {
+  position: "absolute" as const,
+  top: "12px",
+  right: "12px",
+  width: "22px",
+  height: "22px",
+  borderRadius: "50%",
+  background: "white",
+  color: "#111",
+  border: "1px solid #ddd",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "11px",
+  fontWeight: "bold",
+  boxShadow: "0 0 10px rgba(0,0,0,0.12)",
+  zIndex: 2,
 };

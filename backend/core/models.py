@@ -204,3 +204,24 @@ class FeedState(models.Model):
 
     class Meta:
         unique_together = ("user", "target_user")
+
+class SeenUpdate(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="seen_updates"
+    )
+
+    update = models.ForeignKey(
+        Update,
+        on_delete=models.CASCADE,
+        related_name="seen_by"
+    )
+
+    seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "update")
+
+    def __str__(self):
+        return f"{self.user} seen update {self.update_id}"

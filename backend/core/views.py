@@ -20,6 +20,7 @@ from .models import (
     Update,
     Profile,
     FeedState,
+    SeenUpdate,
 )
 
 from .serializers import (
@@ -314,10 +315,9 @@ class UpdateListView(APIView):
             status="pending"
         ).select_related("from_user__profile")
 
-        seen_map = {
-            s.target_user_id: s.last_seen_at
-            for s in FeedState.objects.filter(user=user)
-        }
+        seen_update_ids = set(
+            SeenUpdate.objects.filter(user=user).values_list("update_id", flat=True)
+        )
 
         def serialize_updates(qs):
             result = []
@@ -327,7 +327,6 @@ class UpdateListView(APIView):
                     continue
 
                 profile = getattr(u.user, "profile", None)
-                last_seen = seen_map.get(u.user.id)
 
                 avatar_url = None
 
@@ -347,7 +346,7 @@ class UpdateListView(APIView):
                     "place_id": u.place.id,
                     "user_id": u.user.id,
                     "created_at": u.created_at,
-                    "is_new": (last_seen is None) or (u.created_at > last_seen),
+                    "is_new": u.id not in seen_update_ids,
                     "is_friend": u.user.id in friends,
                     "request_sent": u.user.id in sent_requests,
                     "priority": 1 if u.user.id in friends else 2,
@@ -697,6 +696,28 @@ class MarkUserSeenView(APIView):
 
         state.last_seen_at = timezone.now()
         state.save()
+
+        return Response({"status": "ok"})
+
+class MarkUpdateSeenView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        update_id = request.data.get("update_id")
+
+        if not update_id:
+            return Response({"detail": "update_id required"}, status=400)
+
+        try:
+            update = Update.objects.get(id=update_id)
+        except Update.DoesNotExist:
+            return Response({"detail": "Update not found"}, status=404)
+
+        SeenUpdate.objects.get_or_create(
+            user=request.user,
+            update=update,
+        )
 
         return Response({"status": "ok"})
 

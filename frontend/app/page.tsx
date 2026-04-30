@@ -143,24 +143,24 @@ export default function HomePage() {
   // =========================
   // Mark user updates as seen
   // =========================
-  const markUserAsSeen = async (targetUserId: number) => {
-    setUpdates((prev) =>
-      prev.map((u: any) =>
-        u.user_id === targetUserId ? { ...u, is_new: false } : u
-      )
-    );
+    const markUpdateAsSeen = async (updateId: number) => {
+      setUpdates((prev) =>
+        prev.map((u: any) =>
+          u.id === updateId ? { ...u, is_new: false } : u
+        )
+      );
 
-    await fetch(`${API_URL}/api/feed/seen/`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        user_id: targetUserId,
-      }),
-    });
-  };
+      await fetch(`${API_URL}/api/feed/updates/seen/`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          update_id: updateId,
+        }),
+      });
+    };
 
   // =========================
   // Render user card
@@ -260,21 +260,30 @@ export default function HomePage() {
                 onClick={async (e) => {
                   e.stopPropagation();
 
-                  await markUserAsSeen(entry.lastUpdate.user_id);
+                  await markUpdateAsSeen(item.id);
 
                   router.push(`/places/${item.place_id}`);
                 }}
               >
                 <strong>
-              {item.type === "experience"
-                ? "⭐ Experience"
-                : item.type === "event"
-                ? "🎭 Event"
-                : item.type === "alert"
-                ? "⚠️ Alert"
-                : "ℹ️ Info"}
-            </strong>{" "}
-            — {item.place}
+                  {item.is_new
+                    ? item.type === "experience"
+                      ? "⭐ "
+                      : item.type === "event"
+                      ? "🎭 "
+                      : item.type === "alert"
+                      ? "⚠️ "
+                      : "ℹ️ "
+                    : ""}
+                  {item.type === "experience"
+                    ? "Experience"
+                    : item.type === "event"
+                    ? "Event"
+                    : item.type === "alert"
+                    ? "Alert"
+                    : "Info"}
+                </strong>{" "}
+                — {item.place}
               </div>
             ))}
           </div>

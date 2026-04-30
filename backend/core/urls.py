@@ -23,6 +23,7 @@ from .views import (
     MyUpdatesView,
     PlaceUpdatesListView,
     CreateBasicPlaceView,
+    MarkUpdateSeenView,
 )
 
 
@@ -49,8 +50,10 @@ urlpatterns = [
     path("friends/cancel/", cancel_friend_request),
     path("logout/", LogoutView.as_view()),
     path("feed/seen/", MarkUserSeenView.as_view()),
+    path("feed/updates/seen/", MarkUpdateSeenView.as_view()),
     path("friends/remove/", remove_friend),
     path("me/", MeView.as_view()),
     path("profile/", ProfileView.as_view()),
     path("my-updates/", MyUpdatesView.as_view(), name="my-updates"),
+
 ]

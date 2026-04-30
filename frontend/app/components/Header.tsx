@@ -127,22 +127,23 @@ const [menuOpen, setMenuOpen] = useState(false);
                   </MenuLink>
 
                   <button
-                    onClick={handleLogout}
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      border: "none",
-                      borderRadius: "10px",
-                      background: "black",
-                      color: "white",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontSize: "14px",
-                      marginTop: "8px",
-                    }}
-                  >
-                    Logout
-                  </button>
+                      onClick={handleLogout}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        border: "none",
+                        borderRadius: "10px",
+                        background: "white",
+                        color: "black",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        fontSize: "14px",
+                        marginTop: "8px",
+                        borderTop: "1px solid #eee",
+                      }}
+                    >
+                      Logout
+                    </button>
                 </div>
               )}
             </div>

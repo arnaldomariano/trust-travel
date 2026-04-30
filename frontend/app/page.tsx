@@ -162,6 +162,17 @@ export default function HomePage() {
       });
     };
 
+    const formatActivityDate = (dateString: string) => {
+      if (!dateString) return "";
+
+      const date = new Date(dateString);
+
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+    };
+
   // =========================
   // Render user card
   // =========================
@@ -208,14 +219,13 @@ export default function HomePage() {
               width: "100%",
               height: "100%",
               backfaceVisibility: "hidden",
-            }}
 
-                >
-                {newCount > 0 && (
+            }}
+          >
+            {newCount > 0 && (
               <div style={trustBadge}>
                 T
               </div>
-
             )}
 
             <Avatar
@@ -265,25 +275,31 @@ export default function HomePage() {
                   router.push(`/places/${item.place_id}`);
                 }}
               >
-                <strong>
-                  {item.is_new
-                    ? item.type === "experience"
-                      ? "⭐ "
+                <div>
+                  <strong>
+                    {item.is_new
+                      ? item.type === "experience"
+                        ? "⭐ "
+                        : item.type === "event"
+                        ? "🎭 "
+                        : item.type === "alert"
+                        ? "⚠️ "
+                        : "ℹ️ "
+                      : ""}
+                    {item.type === "experience"
+                      ? "Experience"
                       : item.type === "event"
-                      ? "🎭 "
+                      ? "Event"
                       : item.type === "alert"
-                      ? "⚠️ "
-                      : "ℹ️ "
-                    : ""}
-                  {item.type === "experience"
-                    ? "Experience"
-                    : item.type === "event"
-                    ? "Event"
-                    : item.type === "alert"
-                    ? "Alert"
-                    : "Info"}
-                </strong>{" "}
-                — {item.place}
+                      ? "Alert"
+                      : "Info"}{" "}
+                    — {item.place}
+                  </strong>
+
+                  <div style={{ marginTop: "4px", color: "#777", fontSize: "11px" }}>
+                    {formatActivityDate(item.created_at)}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -291,6 +307,7 @@ export default function HomePage() {
       </div>
     );
   };
+
 
   // =========================
   // Render feed

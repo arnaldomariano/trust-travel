@@ -1,6 +1,7 @@
 "use client";
 
 /* ===================== Imports ===================== */
+import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../providers/AuthProvider";
 import { getInitials, getColorFromName } from "../lib/avatar";
@@ -11,12 +12,14 @@ export default function Header() {
 
   /* ===================== Hooks ===================== */
 const { username, displayName, avatarUrl, isLoggedIn, loading, logout } = useAuth();
+const [menuOpen, setMenuOpen] = useState(false);
 
   /* ===================== End Hooks ===================== */
 
 
   /* ===================== Handle Logout ===================== */
     const handleLogout = () => {
+      setMenuOpen(false);
       logout();
     };
   /* ===================== End Handle Logout ===================== */
@@ -50,59 +53,99 @@ const { username, displayName, avatarUrl, isLoggedIn, loading, logout } = useAut
         {loading ? (
           <span style={{ color: "#666" }}>Loading...</span>
         ) : isLoggedIn ? (
-        <>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <HeaderAvatar
-                name={displayName || username || "User"}
-                avatarUrl={avatarUrl}
-              />
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setMenuOpen((prev) => !prev)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  padding: "6px 8px",
+                  borderRadius: "999px",
+                }}
+              >
+                <HeaderAvatar
+                  name={displayName || username || "User"}
+                  avatarUrl={avatarUrl}
+                />
 
-              <strong style={{ color: "#444" }}>
-                {displayName || username}
-              </strong>
+                <strong style={{ color: "#444" }}>
+                  {displayName || username}
+                </strong>
+
+                <span style={{ color: "#666", fontSize: "12px" }}>▾</span>
+              </button>
+
+              {menuOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "48px",
+                    width: "240px",
+                    padding: "10px",
+                    border: "1px solid #eee",
+                    borderRadius: "16px",
+                    background: "white",
+                    boxShadow: "0 12px 28px rgba(0,0,0,0.14)",
+                    zIndex: 50,
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "10px 10px 12px 10px",
+                      borderBottom: "1px solid #eee",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    <strong style={{ display: "block" }}>
+                      {displayName || username}
+                    </strong>
+
+                    <span style={{ color: "#666", fontSize: "13px" }}>
+                      Trust Travel account
+                    </span>
+                  </div>
+
+                  <MenuLink href="/destinations" onClick={() => setMenuOpen(false)}>
+                    Create / Share
+                  </MenuLink>
+
+                  <MenuLink href="/my-posts" onClick={() => setMenuOpen(false)}>
+                    My Posts
+                  </MenuLink>
+
+                  <MenuLink href="/profile" onClick={() => setMenuOpen(false)}>
+                    Profile
+                  </MenuLink>
+
+                  <MenuLink href="/connections" onClick={() => setMenuOpen(false)}>
+                    Connections
+                  </MenuLink>
+
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "none",
+                      borderRadius: "10px",
+                      background: "black",
+                      color: "white",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontSize: "14px",
+                      marginTop: "8px",
+                    }}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
-
-            <Link
-              href="/my-posts"
-              style={{
-                padding: "8px 14px",
-                borderRadius: "8px",
-                textDecoration: "none",
-                border: "1px solid #ddd",
-                color: "black",
-              }}
-            >
-              My Posts
-            </Link>
-
-          <Link
-            href="/profile"
-            style={{
-              padding: "8px 14px",
-              borderRadius: "8px",
-              textDecoration: "none",
-              border: "1px solid #ddd",
-              color: "black",
-              background: "white",
-            }}
-          >
-            Profile
-          </Link>
-
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: "8px 14px",
-              borderRadius: "8px",
-              border: "none",
-              background: "black",
-              color: "white",
-              cursor: "pointer",
-            }}
-          >
-            Logout
-          </button>
-        </>
         ) : (
           <Link
             href="/login"
@@ -122,6 +165,34 @@ const { username, displayName, avatarUrl, isLoggedIn, loading, logout } = useAut
   );
   /* ===================== End Render ===================== */
 }
+
+function MenuLink({
+  href,
+  children,
+  onClick,
+}: {
+  href: string;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      style={{
+        display: "block",
+        padding: "10px 12px",
+        borderRadius: "10px",
+        textDecoration: "none",
+        color: "black",
+        fontSize: "14px",
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+
 
 function HeaderAvatar({
   name,

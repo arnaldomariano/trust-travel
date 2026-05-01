@@ -1,7 +1,7 @@
 "use client";
 
 /* ===================== Imports ===================== */
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useAuth } from "../providers/AuthProvider";
 import { getInitials, getColorFromName } from "../lib/avatar";
@@ -13,6 +13,7 @@ export default function Header() {
   /* ===================== Hooks ===================== */
 const { username, displayName, avatarUrl, isLoggedIn, loading, logout } = useAuth();
 const [menuOpen, setMenuOpen] = useState(false);
+const menuRef = useRef<HTMLDivElement | null>(null);
 
   /* ===================== End Hooks ===================== */
 
@@ -23,7 +24,24 @@ const [menuOpen, setMenuOpen] = useState(false);
       logout();
     };
   /* ===================== End Handle Logout ===================== */
+useEffect(() => {
+  if (!menuOpen) return;
 
+  const handleClickOutside = (event: MouseEvent) => {
+    if (
+      menuRef.current &&
+      !menuRef.current.contains(event.target as Node)
+    ) {
+      setMenuOpen(false);
+    }
+  };
+
+  document.addEventListener("mousedown", handleClickOutside);
+
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, [menuOpen]);
 
   /* ===================== Render ===================== */
   return (
@@ -53,7 +71,7 @@ const [menuOpen, setMenuOpen] = useState(false);
         {loading ? (
           <span style={{ color: "#666" }}>Loading...</span>
         ) : isLoggedIn ? (
-            <div style={{ position: "relative" }}>
+            <div ref={menuRef} style={{ position: "relative" }}>
               <button
                 onClick={() => setMenuOpen((prev) => !prev)}
                 style={{

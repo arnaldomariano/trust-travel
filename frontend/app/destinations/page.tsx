@@ -9,18 +9,22 @@ import { API_URL } from "../lib/api";
 export default function DestinationsPage() {
   const router = useRouter();
 
-    const [places, setPlaces] = useState<any[]>([]);
-    const [destinations, setDestinations] = useState<any[]>([]);
-    const [creatingPlace, setCreatingPlace] = useState(false);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [loading, setLoading] = useState(true);
+  const [places, setPlaces] = useState<any[]>([]);
+  const [destinations, setDestinations] = useState<any[]>([]);
+  const [creatingPlace, setCreatingPlace] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
 
-    const [selectedPlace, setSelectedPlace] = useState<any>(null);
-    const [comment, setComment] = useState("");
-    const [rating, setRating] = useState<number | null>(null);
-    const [submittingExperience, setSubmittingExperience] = useState(false);
-    const [experienceShared, setExperienceShared] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<any>(null);
+  const [comment, setComment] = useState("");
+  const [rating, setRating] = useState<number | null>(null);
+  const [submittingExperience, setSubmittingExperience] = useState(false);
+  const [experienceShared, setExperienceShared] = useState(false);
+  const [sharedExperience, setSharedExperience] = useState<any>(null);
 
+  // =========================
+  // Load places and destinations
+  // =========================
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -49,6 +53,9 @@ export default function DestinationsPage() {
     loadData();
   }, []);
 
+  // =========================
+  // Destination lookup map
+  // =========================
   const destinationNameById = useMemo(() => {
     const map: Record<number, string> = {};
 
@@ -59,6 +66,9 @@ export default function DestinationsPage() {
     return map;
   }, [destinations]);
 
+  // =========================
+  // Search and filtering
+  // =========================
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const filteredPlaces = places
@@ -74,95 +84,130 @@ export default function DestinationsPage() {
 
   const canCreatePlace = !!searchTerm.trim();
 
-const handleCreatePlace = async () => {
-  if (!canCreatePlace) return;
+  // =========================
+  // Create a basic place
+  // =========================
+  const handleCreatePlace = async () => {
+    if (!canCreatePlace) return;
 
-  setCreatingPlace(true);
+    setCreatingPlace(true);
 
-  try {
-    const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: searchTerm.trim(),
-        city: searchTerm.trim(),
-      }),
-    });
+    try {
+      const res = await fetch(`${API_URL}/api/places/create-basic/`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: searchTerm.trim(),
+          city: searchTerm.trim(),
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      alert(data.detail || "Error creating place.");
-      return;
+      if (!res.ok) {
+        alert(data.detail || "Error creating place.");
+        return;
+      }
+
+      setSelectedPlace(data);
+      setExperienceShared(false);
+      setSharedExperience(null);
+    } catch (error) {
+      console.error("Create basic place failed:", error);
+      alert("Error creating place.");
+    } finally {
+      setCreatingPlace(false);
     }
+  };
 
-    setSelectedPlace(data);
+  // =========================
+  // Select an existing place
+  // =========================
+  const handleSelectExistingPlace = (place: any) => {
+    setSelectedPlace(place);
     setExperienceShared(false);
-  } catch (error) {
-    console.error("Create basic place failed:", error);
-    alert("Error creating place.");
-  } finally {
-    setCreatingPlace(false);
-  }
-};
+    setSharedExperience(null);
+  };
 
-const handleSelectExistingPlace = (place: any) => {
-  setSelectedPlace(place);
-  setExperienceShared(false);
-};
-
-const handleSubmitExperience = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  if (!selectedPlace) return;
-
-  if (!rating) {
-    alert("Please select a rating.");
-    return;
-  }
-
-  if (!comment.trim()) {
-    alert("Please write your experience.");
-    return;
-  }
-
-  setSubmittingExperience(true);
-
-  try {
-    const res = await fetch(`${API_URL}/api/experiences/`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        place: selectedPlace.id,
-        rating,
-        comment: comment.trim(),
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      console.error("Experience error:", data);
-      alert(data.detail || "Error sharing experience.");
-      return;
-    }
-
+  // =========================
+  // Change selected place
+  // =========================
+  const handleChangePlace = () => {
+    setSelectedPlace(null);
     setComment("");
     setRating(null);
-    setExperienceShared(true);
-  } catch (error) {
-    console.error("Share experience failed:", error);
-    alert("Error sharing experience.");
-  } finally {
-    setSubmittingExperience(false);
-  }
-};
+    setExperienceShared(false);
+    setSharedExperience(null);
+  };
+
+  // =========================
+  // Reset share flow
+  // =========================
+  const resetShareFlow = () => {
+    setSelectedPlace(null);
+    setSearchTerm("");
+    setComment("");
+    setRating(null);
+    setExperienceShared(false);
+    setSharedExperience(null);
+  };
+
+  // =========================
+  // Submit experience
+  // =========================
+  const handleSubmitExperience = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedPlace) return;
+
+    if (!rating) {
+      alert("Please select a rating.");
+      return;
+    }
+
+    if (!comment.trim()) {
+      alert("Please write your experience.");
+      return;
+    }
+
+    setSubmittingExperience(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/experiences/`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          place: selectedPlace.id,
+          rating,
+          comment: comment.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Experience error:", data);
+        alert(data.detail || "Error sharing experience.");
+        return;
+      }
+
+      setSharedExperience(data);
+      setComment("");
+      setRating(null);
+      setExperienceShared(true);
+    } catch (error) {
+      console.error("Share experience failed:", error);
+      alert("Error sharing experience.");
+    } finally {
+      setSubmittingExperience(false);
+    }
+  };
 
   return (
     <main style={{ maxWidth: "800px", margin: "0 auto", padding: "40px" }}>
@@ -208,145 +253,217 @@ const handleSubmitExperience = async (e: React.FormEvent) => {
             We found existing places. Choose one to share your experience:
           </p>
 
-        {filteredPlaces.map((place) => (
-          <button
-            key={place.id}
-            onClick={() => handleSelectExistingPlace(place)}
-            style={{
-              padding: "18px",
-              border: "1px solid #eee",
-              borderRadius: "14px",
-              background: selectedPlace?.id === place.id ? "#f5f5f5" : "white",
-              color: "black",
-              textAlign: "left",
-              cursor: "pointer",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-            }}
-          >
-            <strong>{place.name}</strong>
+          {filteredPlaces.map((place) => (
+            <button
+              key={place.id}
+              onClick={() => handleSelectExistingPlace(place)}
+              style={{
+                padding: "18px",
+                border: "1px solid #eee",
+                borderRadius: "14px",
+                background:
+                  selectedPlace?.id === place.id ? "#f5f5f5" : "white",
+                color: "black",
+                textAlign: "left",
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              }}
+            >
+              <strong>{place.name}</strong>
 
-            <div style={{ marginTop: "6px", color: "#666", fontSize: "14px" }}>
-              {destinationNameById[place.destination] || place.city || "Place"}
-            </div>
+              <div
+                style={{
+                  marginTop: "6px",
+                  color: "#666",
+                  fontSize: "14px",
+                }}
+              >
+                {destinationNameById[place.destination] ||
+                  place.city ||
+                  "Place"}
+              </div>
 
-            <div style={{ marginTop: "10px", fontSize: "14px" }}>
-              Share your experience here →
-            </div>
-          </button>
-        ))}
+              <div style={{ marginTop: "10px", fontSize: "14px" }}>
+                Share your experience here →
+              </div>
+            </button>
+          ))}
         </section>
       ) : (
         <section style={helperCard}>
           <strong>No place found for “{searchTerm.trim()}”.</strong>
 
-          <p style={{ margin: "10px 0 16px 0", color: "#666", lineHeight: 1.5 }}>
+          <p
+            style={{
+              margin: "10px 0 16px 0",
+              color: "#666",
+              lineHeight: 1.5,
+            }}
+          >
             You can create this place and then share your experience there.
           </p>
 
           <button
-          onClick={handleCreatePlace}
-          disabled={!canCreatePlace || creatingPlace}
-          style={{
-            padding: "10px 14px",
-            borderRadius: "10px",
-            border: "none",
-            background: "black",
-            color: "white",
-            cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
-            opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
-          }}
-        >
-          {creatingPlace ? "Creating..." : "Create this place"}
-        </button>
+            onClick={handleCreatePlace}
+            disabled={!canCreatePlace || creatingPlace}
+            style={{
+              padding: "10px 14px",
+              borderRadius: "10px",
+              border: "none",
+              background: "black",
+              color: "white",
+              cursor:
+                canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
+              opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
+            }}
+          >
+            {creatingPlace ? "Creating..." : "Create this place"}
+          </button>
         </section>
       )}
 
       {selectedPlace && (
-      <section
-        style={{
-          marginTop: "28px",
-          padding: "22px",
-          border: "1px solid #eee",
-          borderRadius: "16px",
-          background: "white",
-          maxWidth: "620px",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>
-          Share your experience about {selectedPlace.name}
-        </h2>
+        <section
+          style={{
+            marginTop: "28px",
+            padding: "22px",
+            border: "1px solid #eee",
+            borderRadius: "16px",
+            background: "white",
+            maxWidth: "620px",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>
+            Share your experience about {selectedPlace.name}
+          </h2>
 
-        {experienceShared ? (
-          <div>
-            <p style={{ color: "#555", lineHeight: 1.5 }}>
-              Your experience was shared successfully.
-            </p>
-
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <button
-                onClick={() => router.push(`/places/${selectedPlace.id}`)}
-                style={primaryButton}
-              >
-                View place page
-              </button>
-
-              <button onClick={() => router.push("/")} style={secondaryButton}>
-                Back to feed
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmitExperience} style={{ display: "grid", gap: "14px" }}>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Write your experience..."
-              rows={4}
-              style={input}
-            />
-
-            <input
-              type="number"
-              min="1"
-              max="5"
-              value={rating ?? ""}
-              onChange={(e) => {
-                const value = e.target.value;
-
-                if (!value) {
-                  setRating(null);
-                  return;
-                }
-
-                const numeric = Number(value);
-
-                if (numeric >= 1 && numeric <= 5) {
-                  setRating(numeric);
-                }
-              }}
-              placeholder="Rating from 1 to 5"
-              style={input}
-            />
-
+          {!experienceShared && (
             <button
-              type="submit"
-              disabled={submittingExperience || !rating || !comment.trim()}
+              onClick={handleChangePlace}
               style={{
-                ...primaryButton,
-                opacity: submittingExperience || !rating || !comment.trim() ? 0.5 : 1,
-                cursor:
-                  submittingExperience || !rating || !comment.trim()
-                    ? "not-allowed"
-                    : "pointer",
+                ...secondaryButton,
+                marginBottom: "16px",
               }}
             >
-              {submittingExperience ? "Sharing..." : "Share experience"}
+              Change place
             </button>
-          </form>
-        )}
-      </section>
-    )}
+          )}
 
+          {experienceShared ? (
+            <div>
+              <p style={{ color: "#555", lineHeight: 1.5 }}>
+                Your experience was shared successfully.
+              </p>
+
+              {sharedExperience && (
+                <div style={previewCard}>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      color: "#777",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Published experience
+                  </div>
+
+                  <div style={{ fontWeight: 500, lineHeight: 1.5 }}>
+                    {sharedExperience.comment}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      color: "#777",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Rating: {"★".repeat(sharedExperience.rating)}
+                    {"☆".repeat(5 - sharedExperience.rating)}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  onClick={() =>
+                    router.push(`/places/${selectedPlace.id}/experiences`)
+                  }
+                  style={primaryButton}
+                >
+                  View experiences
+                </button>
+
+                <button onClick={handleChangePlace} style={secondaryButton}>
+                  Share another experience
+                </button>
+
+                <button onClick={() => router.push("/")} style={secondaryButton}>
+                  Back to feed
+                </button>
+
+                <button onClick={resetShareFlow} style={secondaryButton}>
+                  Start over
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleSubmitExperience}
+              style={{ display: "grid", gap: "14px" }}
+            >
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Write your experience..."
+                rows={4}
+                style={input}
+              />
+
+              <input
+                type="number"
+                min="1"
+                max="5"
+                value={rating ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+
+                  if (!value) {
+                    setRating(null);
+                    return;
+                  }
+
+                  const numeric = Number(value);
+
+                  if (numeric >= 1 && numeric <= 5) {
+                    setRating(numeric);
+                  }
+                }}
+                placeholder="Rating from 1 to 5"
+                style={input}
+              />
+
+              <button
+                type="submit"
+                disabled={submittingExperience || !rating || !comment.trim()}
+                style={{
+                  ...primaryButton,
+                  opacity:
+                    submittingExperience || !rating || !comment.trim()
+                      ? 0.5
+                      : 1,
+                  cursor:
+                    submittingExperience || !rating || !comment.trim()
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {submittingExperience ? "Sharing..." : "Share experience"}
+              </button>
+            </form>
+          )}
+        </section>
+      )}
     </main>
   );
 }
@@ -384,4 +501,12 @@ const secondaryButton = {
   background: "white",
   color: "black",
   cursor: "pointer",
+};
+
+const previewCard = {
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  marginBottom: "16px",
 };

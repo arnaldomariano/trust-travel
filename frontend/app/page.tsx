@@ -143,24 +143,28 @@ export default function HomePage() {
   // =========================
   // Mark user updates as seen
   // =========================
-    const markUpdateAsSeen = async (updateId: number) => {
-      setUpdates((prev) =>
-        prev.map((u: any) =>
-          u.id === updateId ? { ...u, is_new: false } : u
-        )
-      );
+     const markUpdateAsSeen = (updateId: number) => {
+          // Update the UI immediately.
+          setUpdates((prev) =>
+            prev.map((u: any) =>
+              u.id === updateId ? { ...u, is_new: false } : u
+            )
+          );
 
-      await fetch(`${API_URL}/api/feed/updates/seen/`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          update_id: updateId,
-        }),
-      });
-    };
+          // Persist the seen state in the backend without blocking navigation.
+          fetch(`${API_URL}/api/feed/updates/seen/`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              update_id: updateId,
+            }),
+          }).catch((error) => {
+            console.error("Failed to mark update as seen:", error);
+          });
+        };
 
     const formatActivityDate = (dateString: string) => {
       if (!dateString) return "";
@@ -242,59 +246,69 @@ export default function HomePage() {
           </div>
 
 
-          {/* Back */}
-          <div
-            style={{
-              ...card,
-              position: "absolute",
-              width: "100%",
-              height: "100%",
-              transform: "rotateY(180deg)",
-              backfaceVisibility: "hidden",
-              overflowY: "auto",
-              justifyContent: "center",
-              textAlign: "center",
-            }}
-          >
+            {/* Back */}
+            <div
+              style={{
+                ...card,
+                position: "absolute",
+                width: "100%",
+                height: "100%",
+                transform: "rotateY(180deg)",
+                backfaceVisibility: "hidden",
+                overflowY: "auto",
+                justifyContent: "flex-start",
+                textAlign: "center",
+                paddingTop: "18px",
+                paddingBottom: "18px",
+              }}
+            >
             {entry.items.slice(0, 5).map((item: any) => (
               <div
                 key={item.id}
                 style={{
                   width: "100%",
-                  padding: "6px 0",
+                  padding: "10px 0",
                   borderBottom: "1px solid #eee",
                   fontSize: "12px",
                   cursor: "pointer",
                   textAlign: "center",
+                  flexShrink: 0,
                 }}
-                onClick={async (e) => {
+
+                onClick={(e) => {
                   e.stopPropagation();
 
-                  await markUpdateAsSeen(item.id);
-
+                  markUpdateAsSeen(item.id);
                   router.push(`/places/${item.place_id}`);
                 }}
+
               >
                 <div>
-                  <strong>
-                    {item.is_new
-                      ? item.type === "experience"
-                        ? "⭐ "
+                    <strong>
+                      {item.is_new
+                        ? item.type === "experience"
+                          ? "⭐ "
+                          : item.type === "event"
+                          ? "🎭 "
+                          : item.type === "alert"
+                          ? "⚠️ "
+                          : "ℹ️ "
+                        : ""}
+
+                      {item.type === "experience"
+                        ? item.text || "Experience"
                         : item.type === "event"
-                        ? "🎭 "
+                        ? `Event — ${item.place}`
                         : item.type === "alert"
-                        ? "⚠️ "
-                        : "ℹ️ "
-                      : ""}
-                    {item.type === "experience"
-                      ? "Experience"
-                      : item.type === "event"
-                      ? "Event"
-                      : item.type === "alert"
-                      ? "Alert"
-                      : "Info"}{" "}
-                    — {item.place}
-                  </strong>
+                        ? `Alert — ${item.place}`
+                        : `Info — ${item.place}`}
+                    </strong>
+
+                    {item.type === "experience" && (
+                      <div style={{ marginTop: "3px", color: "#666", fontSize: "11px" }}>
+                        {item.place}
+                      </div>
+                    )}
 
                   <div style={{ marginTop: "4px", color: "#777", fontSize: "11px" }}>
                     {formatActivityDate(item.created_at)}

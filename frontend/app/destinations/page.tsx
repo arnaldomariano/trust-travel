@@ -16,6 +16,7 @@ export default function DestinationsPage() {
   const [loading, setLoading] = useState(true);
 
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
+  const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState<number | null>(null);
   const [submittingExperience, setSubmittingExperience] = useState(false);
@@ -137,6 +138,7 @@ export default function DestinationsPage() {
   // =========================
   const handleChangePlace = () => {
     setSelectedPlace(null);
+    setTitle("");
     setComment("");
     setRating(null);
     setExperienceShared(false);
@@ -149,6 +151,7 @@ export default function DestinationsPage() {
   const resetShareFlow = () => {
     setSelectedPlace(null);
     setSearchTerm("");
+    setTitle("");
     setComment("");
     setRating(null);
     setExperienceShared(false);
@@ -162,6 +165,11 @@ export default function DestinationsPage() {
     e.preventDefault();
 
     if (!selectedPlace) return;
+
+    if (!title.trim()) {
+      alert("Please add a short title.");
+      return;
+    }
 
     if (!rating) {
       alert("Please select a rating.");
@@ -184,6 +192,7 @@ export default function DestinationsPage() {
         },
         body: JSON.stringify({
           place: selectedPlace.id,
+          title: title.trim(),
           rating,
           comment: comment.trim(),
         }),
@@ -198,6 +207,7 @@ export default function DestinationsPage() {
       }
 
       setSharedExperience(data);
+      setTitle("");
       setComment("");
       setRating(null);
       setExperienceShared(true);
@@ -367,10 +377,13 @@ export default function DestinationsPage() {
                     Published experience
                   </div>
 
-                  <div style={{ fontWeight: 500, lineHeight: 1.5 }}>
-                    {sharedExperience.comment}
-                  </div>
+                    <div style={{ fontWeight: 600, lineHeight: 1.5 }}>
+                      {sharedExperience.title || "Shared experience"}
+                    </div>
 
+                    <div style={{ marginTop: "8px", color: "#555", lineHeight: 1.5 }}>
+                      {sharedExperience.comment}
+                    </div>
                   <div
                     style={{
                       marginTop: "10px",
@@ -412,6 +425,14 @@ export default function DestinationsPage() {
               onSubmit={handleSubmitExperience}
               style={{ display: "grid", gap: "14px" }}
             >
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Short title, e.g. Sunset on the way to Itatiaia"
+                maxLength={160}
+                style={input}
+              />
+
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
@@ -445,15 +466,15 @@ export default function DestinationsPage() {
 
               <button
                 type="submit"
-                disabled={submittingExperience || !rating || !comment.trim()}
+                disabled={submittingExperience || !title.trim() || !rating || !comment.trim()}
                 style={{
                   ...primaryButton,
                   opacity:
-                    submittingExperience || !rating || !comment.trim()
+                    submittingExperience || !title.trim() || !rating || !comment.trim()
                       ? 0.5
                       : 1,
                   cursor:
-                    submittingExperience || !rating || !comment.trim()
+                    submittingExperience || !title.trim() || !rating || !comment.trim()
                       ? "not-allowed"
                       : "pointer",
                 }}

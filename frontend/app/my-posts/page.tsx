@@ -14,30 +14,151 @@ type MyPost = {
   created_at: string;
 };
 
+type MyExperience = {
+  id: number;
+  title: string;
+  comment: string;
+  rating: number | null;
+  place: string;
+  place_id: number;
+  destination: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export default function MyPostsPage() {
-  const [posts, setPosts] = useState<MyPost[]>([]);
-  const [loading, setLoading] = useState(true);
+const [posts, setPosts] = useState<MyPost[]>([]);
+const [experiences, setExperiences] = useState<MyExperience[]>([]);
+const [loading, setLoading] = useState(true);
 
-  const loadPosts = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/my-updates/`, {
+const [editingExperienceId, setEditingExperienceId] = useState<number | null>(null);
+const [editTitle, setEditTitle] = useState("");
+const [editComment, setEditComment] = useState("");
+const [editRating, setEditRating] = useState<number | null>(null);
+const [savingExperience, setSavingExperience] = useState(false);
+
+const loadPosts = async () => {
+  try {
+    const [postsRes, experiencesRes] = await Promise.all([
+      fetch(`${API_URL}/api/my-updates/`, {
         credentials: "include",
-      });
+      }),
+      fetch(`${API_URL}/api/my-experiences/`, {
+        credentials: "include",
+      }),
+    ]);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Failed to load my posts:", res.status, errorText);
-        return;
-      }
-
-      const data = await res.json();
-      setPosts(data || []);
-    } catch (error) {
-      console.error("My posts fetch error:", error);
-    } finally {
-      setLoading(false);
+    if (!postsRes.ok) {
+      const errorText = await postsRes.text();
+      console.error("Failed to load my posts:", postsRes.status, errorText);
+    } else {
+      const postsData = await postsRes.json();
+      setPosts(postsData || []);
     }
-  };
+
+    if (!experiencesRes.ok) {
+      const errorText = await experiencesRes.text();
+      console.error(
+        "Failed to load my experiences:",
+        experiencesRes.status,
+        errorText
+      );
+    } else {
+      const experiencesData = await experiencesRes.json();
+      setExperiences(experiencesData || []);
+    }
+  } catch (error) {
+    console.error("My posts fetch error:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// =========================
+// Start editing experience
+// =========================
+const startEditingExperience = (experience: MyExperience) => {
+  setEditingExperienceId(experience.id);
+  setEditTitle(experience.title || "");
+  setEditComment(experience.comment || "");
+  setEditRating(experience.rating || null);
+};
+
+// =========================
+// Cancel editing experience
+// =========================
+const cancelEditingExperience = () => {
+  setEditingExperienceId(null);
+  setEditTitle("");
+  setEditComment("");
+  setEditRating(null);
+};
+
+// =========================
+// Save edited experience
+// =========================
+const saveEditedExperience = async (experienceId: number) => {
+  if (!editTitle.trim()) {
+    alert("Please add a short title.");
+    return;
+  }
+
+  if (!editComment.trim()) {
+    alert("Please write your experience.");
+    return;
+  }
+
+  if (!editRating) {
+    alert("Please select a rating.");
+    return;
+  }
+
+  setSavingExperience(true);
+
+  try {
+    const res = await fetch(`${API_URL}/api/experiences/${experienceId}/`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: editTitle.trim(),
+        comment: editComment.trim(),
+        rating: editRating,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Failed to update experience:", data);
+      alert(data.detail || "Error updating experience.");
+      return;
+    }
+
+    setExperiences((prev) =>
+      prev.map((experience) =>
+        experience.id === experienceId
+          ? {
+              ...experience,
+              title: data.title,
+              comment: data.comment,
+              rating: data.rating,
+              updated_at: data.updated_at,
+            }
+          : experience
+      )
+    );
+
+    cancelEditingExperience();
+  } catch (error) {
+    console.error("Update experience failed:", error);
+    alert("Error updating experience.");
+  } finally {
+    setSavingExperience(false);
+  }
+};
 
   useEffect(() => {
     loadPosts();
@@ -55,7 +176,7 @@ export default function MyPostsPage() {
     <main style={page}>
       <h1>My Posts</h1>
 
-      {posts.length === 0 ? (
+      {posts.length === 0 && experiences.length === 0 ? (
         <section style={emptyBox}>
           <p>You have not created any posts yet.</p>
           <Link href="/create" style={primaryLink}>
@@ -63,32 +184,164 @@ export default function MyPostsPage() {
           </Link>
         </section>
       ) : (
-        <section style={list}>
-          {posts.map((post) => (
-            <article key={post.id} style={card}>
-              <div style={metaRow}>
-                <strong>
-                  {post.type} — {post.place}
-                </strong>
+      <>
+        {experiences.length > 0 && (
+          <section style={list}>
+            <h2 style={sectionTitle}>My Experiences</h2>
 
-                <span style={dateText}>
-                  {new Date(post.created_at).toLocaleString()}
-                </span>
-              </div>
+        {experiences.map((experience) => (
+          <article key={experience.id} style={card}>
+                {editingExperienceId === experience.id ? (
+                  <>
+                    <div style={metaRow}>
+                      <strong>Edit experience</strong>
 
-              <span style={categoryBadge}>{post.category}</span>
+                      <span style={dateText}>
+                        {new Date(experience.created_at).toLocaleString()}
+                      </span>
+                    </div>
 
-              <p style={text}>{post.text}</p>
+                    <span style={categoryBadge}>
+                      {experience.place}
+                      {experience.destination ? ` · ${experience.destination}` : ""}
+                    </span>
 
-              <div style={actions}>
-                <Link href={`/places/${post.place_id}`} style={secondaryLink}>
-                  View place
-                </Link>
-              </div>
-            </article>
-          ))}
-        </section>
-      )}
+                    <div style={editForm}>
+                      <input
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        placeholder="Short title"
+                        maxLength={160}
+                        style={input}
+                      />
+
+                      <textarea
+                        value={editComment}
+                        onChange={(e) => setEditComment(e.target.value)}
+                        placeholder="Write your experience..."
+                        rows={4}
+                        style={input}
+                      />
+
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        value={editRating ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+
+                          if (!value) {
+                            setEditRating(null);
+                            return;
+                          }
+
+                          const numeric = Number(value);
+
+                          if (numeric >= 1 && numeric <= 5) {
+                            setEditRating(numeric);
+                          }
+                        }}
+                        placeholder="Rating from 1 to 5"
+                        style={input}
+                      />
+
+                      <div style={actions}>
+                        <button
+                          style={primaryButton}
+                          disabled={savingExperience}
+                          onClick={() => saveEditedExperience(experience.id)}
+                        >
+                          {savingExperience ? "Saving..." : "Save changes"}
+                        </button>
+
+                        <button
+                          style={secondaryButton}
+                          disabled={savingExperience}
+                          onClick={cancelEditingExperience}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={metaRow}>
+                      <strong>{experience.title || "Shared experience"}</strong>
+
+                      <span style={dateText}>
+                        {new Date(experience.created_at).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <span style={categoryBadge}>
+                      {experience.place}
+                      {experience.destination ? ` · ${experience.destination}` : ""}
+                    </span>
+
+                    <p style={text}>{experience.comment}</p>
+
+                    {experience.rating && (
+                      <div style={{ color: "#f5b50a", marginBottom: "16px" }}>
+                        {"★".repeat(experience.rating)}
+                        {"☆".repeat(5 - experience.rating)}
+                      </div>
+                    )}
+
+                    <div style={actions}>
+                      <Link
+                        href={`/places/${experience.place_id}/experiences`}
+                        style={secondaryLink}
+                      >
+                        View experiences
+                      </Link>
+
+                      <button
+                        style={secondaryButton}
+                        onClick={() => startEditingExperience(experience)}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </>
+                )}
+              </article>
+            ))}
+          </section>
+        )}
+
+        {posts.length > 0 && (
+          <section style={list}>
+            <h2 style={sectionTitle}>My Posts</h2>
+
+            {posts.map((post) => (
+              <article key={post.id} style={card}>
+                <div style={metaRow}>
+                  <strong>
+                    {post.type} — {post.place}
+                  </strong>
+
+                  <span style={dateText}>
+                    {new Date(post.created_at).toLocaleString()}
+                  </span>
+                </div>
+
+                <span style={categoryBadge}>{post.category}</span>
+
+                <p style={text}>{post.text}</p>
+
+                <div style={actions}>
+                  <Link href={`/places/${post.place_id}`} style={secondaryLink}>
+                    View place
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
+      </>
+    )}
     </main>
   );
 }
@@ -170,4 +423,42 @@ const emptyBox = {
   borderRadius: "16px",
   padding: "24px",
   background: "white",
+};
+
+const sectionTitle = {
+  margin: "0 0 12px 0",
+  fontSize: "20px",
+};
+
+const secondaryButton = {
+  display: "inline-block",
+  padding: "8px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "black",
+  cursor: "pointer",
+};
+
+const primaryButton = {
+  display: "inline-block",
+  padding: "8px 12px",
+  borderRadius: "10px",
+  border: "none",
+  background: "black",
+  color: "white",
+  cursor: "pointer",
+};
+
+const editForm = {
+  display: "grid",
+  gap: "12px",
+  marginTop: "12px",
+};
+
+const input = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
 };

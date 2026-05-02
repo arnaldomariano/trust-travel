@@ -4,6 +4,7 @@ from .views import (
     DestinationListView,
     PlaceListView,
     ExperienceListView,
+    ExperienceDetailView,
     DestinationPlacesListView,
     PlaceExperiencesListView,
     PlaceDetailView,
@@ -21,9 +22,11 @@ from .views import (
     MarkUserSeenView,
     remove_friend,
     MyUpdatesView,
+    MyExperiencesView,
     PlaceUpdatesListView,
     CreateBasicPlaceView,
     MarkUpdateSeenView,
+
 )
 
 
@@ -38,11 +41,11 @@ urlpatterns = [
     path("places/<int:place_id>/experiences/", PlaceExperiencesListView.as_view()),
 
     path("register/", UserRegisterView.as_view()),
-    path("me/", MeView.as_view()),
     path("updates/", UpdateListView.as_view()),
     path("connections/", ConnectionsListView.as_view()),
 
     path("experiences/<int:experience_id>/replies/", ExperienceReplyListCreateView.as_view()),
+    path("experiences/<int:pk>/", ExperienceDetailView.as_view()),
 
     path("friends/send/", SendFriendRequestView.as_view()),
     path("friends/accept/", AcceptFriendRequestView.as_view()),
@@ -55,5 +58,6 @@ urlpatterns = [
     path("me/", MeView.as_view()),
     path("profile/", ProfileView.as_view()),
     path("my-updates/", MyUpdatesView.as_view(), name="my-updates"),
+    path("my-experiences/", MyExperiencesView.as_view(), name="my-experiences"),
 
 ]

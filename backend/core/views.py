@@ -128,12 +128,16 @@ class DestinationListView(generics.ListAPIView):
 
 
 class PlaceListView(generics.ListCreateAPIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        if self.request.user.is_authenticated:
+            serializer.save(created_by=self.request.user)
+        else:
+            serializer.save()
 
 class CreateBasicPlaceView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -193,14 +197,18 @@ class DestinationPlacesListView(generics.ListAPIView):
 
 
 class ExperienceListView(generics.ListCreateAPIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     queryset = Experience.objects.all()
     serializer_class = ExperienceSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_serializer_context(self):
         return {"request": self.request}
 
     def perform_create(self, serializer):
+        if not self.request.user.is_authenticated:
+            raise PermissionDenied("You must be logged in to share an experience.")
+
         experience = serializer.save(user=self.request.user)
 
         # Use the short experience title as the main feed text.
@@ -217,6 +225,35 @@ class ExperienceListView(generics.ListCreateAPIView):
             category="tourism",
             text=feed_text,
         )
+
+class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = ExperienceSerializer
+
+    def get_queryset(self):
+        # Users can only retrieve, edit, or delete their own experiences here.
+        return Experience.objects.filter(user=self.request.user)
+
+    def perform_update(self, serializer):
+        experience = serializer.save()
+
+        # Keep the automatic experience update aligned with the edited title.
+        feed_text = (experience.title or "").strip()
+
+        if not feed_text:
+            feed_text = experience.comment.strip()[:120]
+
+        update = Update.objects.filter(
+            user=self.request.user,
+            place=experience.place,
+            type="experience",
+            created_at__gte=experience.created_at,
+        ).order_by("created_at").first()
+
+        if update:
+            update.text = feed_text
+            update.save()
 
 class PlaceExperiencesListView(generics.ListAPIView):
     serializer_class = ExperienceSerializer
@@ -738,6 +775,8 @@ class PlaceUpdatesListView(APIView):
     def get(self, request, place_id):
         updates = Update.objects.filter(
             place_id=place_id
+        ).exclude(
+            type="experience"
         ).select_related(
             "user__profile",
             "place"
@@ -785,6 +824,35 @@ class MyUpdatesView(APIView):
                 "place": update.place.name,
                 "place_id": update.place.id,
                 "created_at": update.created_at,
+            })
+
+        return Response(result)
+
+class MyExperiencesView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        experiences = Experience.objects.filter(
+            user=request.user
+        ).select_related(
+            "place",
+            "place__destination"
+        ).order_by("-created_at")
+
+        result = []
+
+        for experience in experiences:
+            result.append({
+                "id": experience.id,
+                "title": experience.title,
+                "comment": experience.comment,
+                "rating": experience.rating,
+                "place": experience.place.name,
+                "place_id": experience.place.id,
+                "destination": experience.place.destination.name,
+                "created_at": experience.created_at,
+                "updated_at": experience.updated_at,
             })
 
         return Response(result)

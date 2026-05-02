@@ -182,9 +182,17 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     1
   );
 
+    // =========================
+    // Build mixed activity feed
+    // =========================
+    // Experience updates are created automatically for the main social feed.
+    // On the place page, experiences are already shown from the experiences list,
+    // so we hide automatic experience updates here to avoid duplicate cards.
+    const visibleUpdates = updates.filter((u) => u.type !== "experience");
+
     const combinedFeed = [
       ...experiences.map((e) => ({ ...e, content_type: "experience" })),
-      ...updates.map((u) => ({ ...u, content_type: "update" })),
+      ...visibleUpdates.map((u) => ({ ...u, content_type: "update" })),
     ].sort(
       (a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -554,13 +562,36 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
                 {isExperience ? (
                   <>
-                    <div style={{ fontWeight: "500", lineHeight: "1.5" }}>
+                    {item.title && (
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          lineHeight: "1.5",
+                          marginBottom: "6px",
+                        }}
+                      >
+                        {item.title}
+                      </div>
+                    )}
+
+                    <div style={{ fontWeight: "400", lineHeight: "1.5" }}>
                       {item.comment}
                     </div>
 
                     <div style={{ marginTop: "8px", color: "#777", fontSize: "13px" }}>
                       Rating: {"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}
                     </div>
+
+                    <div style={{ marginTop: "6px", color: "#777", fontSize: "13px" }}>
+                      Shared by {item.user || "Unknown user"} •{" "}
+                      {new Date(item.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </div>
+
+
                   </>
                 ) : (
                   <>

@@ -203,14 +203,20 @@ class ExperienceListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         experience = serializer.save(user=self.request.user)
 
+        # Use the short experience title as the main feed text.
+        # If no title is provided, fall back to the beginning of the comment.
+        feed_text = (experience.title or "").strip()
+
+        if not feed_text:
+            feed_text = experience.comment.strip()[:120]
+
         Update.objects.create(
             user=self.request.user,
             place=experience.place,
             type="experience",
             category="tourism",
-            text=experience.comment,
+            text=feed_text,
         )
-
 
 class PlaceExperiencesListView(generics.ListAPIView):
     serializer_class = ExperienceSerializer

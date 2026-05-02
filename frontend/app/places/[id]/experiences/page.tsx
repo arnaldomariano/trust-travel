@@ -431,7 +431,7 @@ const newReply = await response.json();
 
               {trendingTrusted.map((e) => (
                 <div key={e.id} style={{ marginBottom: "10px" }}>
-                  <strong>{e.user}</strong> • {e.comment.slice(0, 60)}...
+                  <strong>{e.user}</strong> • {(e.title || e.comment).slice(0, 60)}...
 
                   <div style={{ fontSize: "12px", color: "#666" }}>
                     ⭐ {getTrustedRepliesCount(e.id)} trusted interactions
@@ -457,7 +457,7 @@ const newReply = await response.json();
 
           {trendingExperiences.map((e) => (
             <div key={e.id} style={{ marginBottom: "10px" }}>
-              <strong>{e.user}</strong> • {e.comment.slice(0, 60)}...
+              <strong>{e.user}</strong> • {(e.title || e.comment).slice(0, 60)}...
 
               <div style={{ fontSize: "12px", color: "#666" }}>
                 ⭐ {getTrustedRepliesCount(e.id)} trusted interactions
@@ -569,7 +569,26 @@ const newReply = await response.json();
                       </div>
                     )}
 
-                    <div style={{ marginTop: "10px" }}>{e.comment}</div>
+                    {e.title && (
+                      <div
+                        style={{
+                          marginTop: "10px",
+                          fontWeight: 600,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {e.title}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        marginTop: e.title ? "6px" : "10px",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {e.comment}
+                    </div>
 
                     <div style={{ marginTop: "10px", fontSize: "13px", color: "#555" }}>
                       — {e.user} • {timeAgo(e.created_at)}
@@ -778,7 +797,26 @@ const newReply = await response.json();
                       </div>
                     )}
 
-                    <div style={{ marginTop: "10px" }}>{e.comment}</div>
+                    {e.title && (
+                      <div
+                        style={{
+                          marginTop: "10px",
+                          fontWeight: 600,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {e.title}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        marginTop: e.title ? "6px" : "10px",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {e.comment}
+                    </div>
 
                     <div style={{ marginTop: "10px", fontSize: "13px", color: "#555" }}>
                       — {e.user} • {timeAgo(e.created_at)}
@@ -872,7 +910,26 @@ const newReply = await response.json();
                           </div>
                         )}
 
-                        <div style={{ marginTop: "10px" }}>{e.comment}</div>
+                        {e.title && (
+                          <div
+                            style={{
+                              marginTop: "10px",
+                              fontWeight: 600,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {e.title}
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            marginTop: e.title ? "6px" : "10px",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {e.comment}
+                        </div>
 
                         <div style={{ marginTop: "10px", fontSize: "13px", color: "#777" }}>
                           — {e.user} • {timeAgo(e.created_at)}

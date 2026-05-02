@@ -63,21 +63,21 @@ class ExperienceSerializer(serializers.ModelSerializer):
     place_name = serializers.CharField(source="place.name", read_only=True)
     destination_name = serializers.CharField(source="place.destination.name", read_only=True)
     trust_level = serializers.SerializerMethodField()
-
-    is_trusted = serializers.SerializerMethodField()  # 👈 ADICIONE AQUI
+    is_trusted = serializers.SerializerMethodField()
 
     class Meta:
         model = Experience
-        fields = "__all__"
         fields = [
             "id",
             "user",
             "place",
             "place_name",
             "destination_name",
+            "title",
             "rating",
             "comment",
             "created_at",
+            "updated_at",
             "trust_level",
             "is_trusted",
         ]

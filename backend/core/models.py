@@ -123,6 +123,11 @@ class Update(models.Model):
 class Experience(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     place = models.ForeignKey(Place, on_delete=models.CASCADE)
+
+    # Short public title for the experience.
+    # Used in feeds, cards, previews, and future visual/photo-based layouts.
+    title = models.CharField(max_length=160, blank=True)
+
     rating = models.IntegerField(null=True, blank=True)
     comment = models.TextField()
     trust_level = models.IntegerField(default=3)
@@ -131,8 +136,7 @@ class Experience(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user} - {self.place}"
-
+        return f"{self.user} - {self.place} - {self.title or 'Experience'}"
 
 # ===================== Friendship =====================
 class Friendship(models.Model):

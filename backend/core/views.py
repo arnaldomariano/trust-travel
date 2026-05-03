@@ -148,6 +148,14 @@ class CreateBasicPlaceView(APIView):
         city = (request.data.get("city") or "").strip()
         country = (request.data.get("country") or "").strip()
 
+        # Optional geographic/external fields.
+        # These are not required now, but prepare the endpoint for maps,
+        # photo metadata, and future external place lookup integrations.
+        latitude = request.data.get("latitude")
+        longitude = request.data.get("longitude")
+        external_source = (request.data.get("external_source") or "").strip()
+        external_id = (request.data.get("external_id") or "").strip()
+
         if not name:
             return Response({"detail": "Place name is required."}, status=400)
 
@@ -178,6 +186,10 @@ class CreateBasicPlaceView(APIView):
             destination=destination,
             name=name,
             city=city,
+            latitude=latitude or None,
+            longitude=longitude or None,
+            external_source=external_source,
+            external_id=external_id,
             created_by=request.user,
         )
 

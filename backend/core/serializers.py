@@ -1,8 +1,15 @@
 from django.contrib.auth.models import User
-from .models import Destination, Place, Experience, ExperienceReply, Friendship, Profile
 from rest_framework import serializers
-from .models import Update
 
+from .models import (
+    Destination,
+    Place,
+    Experience,
+    ExperienceReply,
+    Friendship,
+    Profile,
+    Update,
+)
 
 class UpdateSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.username", read_only=True)

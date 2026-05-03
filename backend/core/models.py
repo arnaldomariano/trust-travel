@@ -74,6 +74,26 @@ class Place(models.Model):
     description = models.TextField(blank=True)
     image_url = models.URLField(blank=True)
 
+    # Optional geographic coordinates.
+    # These fields prepare the app for maps, photo metadata, and external place lookup.
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+
+    # Optional external reference.
+    # Future integrations may use OpenStreetMap, Google Places, Wikidata, etc.
+    external_source = models.CharField(max_length=50, blank=True)
+    external_id = models.CharField(max_length=255, blank=True)
+
     # User who first added this place to Trust Travel.
     # This keeps one global place, but preserves community/origin context for future filters.
     created_by = models.ForeignKey(
@@ -193,10 +213,8 @@ class ExperienceReply(models.Model):
     def __str__(self):
         return f"{self.user} → {self.experience}"
 
-    # ============================================================
-    # FEED STATE
-    # ============================================================
 
+# ===================== Feed State =====================
 class FeedState(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     target_user = models.ForeignKey(
@@ -209,6 +227,7 @@ class FeedState(models.Model):
     class Meta:
         unique_together = ("user", "target_user")
 
+# ===================== Seen Update =====================
 class SeenUpdate(models.Model):
     user = models.ForeignKey(
         User,

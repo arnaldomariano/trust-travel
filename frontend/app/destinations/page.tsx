@@ -15,6 +15,10 @@ export default function DestinationsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const [newPlaceName, setNewPlaceName] = useState("");
+  const [newPlaceCity, setNewPlaceCity] = useState("");
+  const [newPlaceCountry, setNewPlaceCountry] = useState("");
+
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
@@ -22,6 +26,7 @@ export default function DestinationsPage() {
   const [submittingExperience, setSubmittingExperience] = useState(false);
   const [experienceShared, setExperienceShared] = useState(false);
   const [sharedExperience, setSharedExperience] = useState<any>(null);
+  const [editingExperience, setEditingExperience] = useState(false);
 
   // =========================
   // Load places and destinations
@@ -55,6 +60,15 @@ export default function DestinationsPage() {
   }, []);
 
   // =========================
+  // Keep new place name aligned with search
+  // =========================
+  useEffect(() => {
+    if (!selectedPlace && searchTerm.trim()) {
+      setNewPlaceName(searchTerm.trim());
+    }
+  }, [searchTerm, selectedPlace]);
+
+  // =========================
   // Destination lookup map
   // =========================
   const destinationNameById = useMemo(() => {
@@ -83,7 +97,7 @@ export default function DestinationsPage() {
     })
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-  const canCreatePlace = !!searchTerm.trim();
+  const canCreatePlace = !!newPlaceName.trim();
 
   // =========================
   // Create a basic place
@@ -101,8 +115,9 @@ export default function DestinationsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: searchTerm.trim(),
-          city: searchTerm.trim(),
+          name: newPlaceName.trim(),
+          city: newPlaceCity.trim(),
+          country: newPlaceCountry.trim(),
         }),
       });
 
@@ -116,6 +131,8 @@ export default function DestinationsPage() {
       setSelectedPlace(data);
       setExperienceShared(false);
       setSharedExperience(null);
+      setEditingExperience(false);
+      setSearchTerm(data.name || newPlaceName.trim());
     } catch (error) {
       console.error("Create basic place failed:", error);
       alert("Error creating place.");
@@ -131,6 +148,7 @@ export default function DestinationsPage() {
     setSelectedPlace(place);
     setExperienceShared(false);
     setSharedExperience(null);
+    setEditingExperience(false);
   };
 
   // =========================
@@ -143,6 +161,7 @@ export default function DestinationsPage() {
     setRating(null);
     setExperienceShared(false);
     setSharedExperience(null);
+    setEditingExperience(false);
   };
 
   // =========================
@@ -151,12 +170,29 @@ export default function DestinationsPage() {
   const resetShareFlow = () => {
     setSelectedPlace(null);
     setSearchTerm("");
+    setNewPlaceName("");
+    setNewPlaceCity("");
+    setNewPlaceCountry("");
     setTitle("");
     setComment("");
     setRating(null);
     setExperienceShared(false);
     setSharedExperience(null);
+    setEditingExperience(false);
   };
+
+// =========================
+// Start editing shared experience
+// =========================
+const startEditingExperience = () => {
+  if (!sharedExperience) return;
+
+  setTitle(sharedExperience.title || "");
+  setComment(sharedExperience.comment || "");
+  setRating(sharedExperience.rating || null);
+  setExperienceShared(false);
+  setEditingExperience(true);
+};
 
   // =========================
   // Submit experience
@@ -218,6 +254,68 @@ export default function DestinationsPage() {
       setSubmittingExperience(false);
     }
   };
+
+// =========================
+// Update experience
+// =========================
+const handleUpdateExperience = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!sharedExperience) return;
+
+  if (!title.trim()) {
+    alert("Please add a short title.");
+    return;
+  }
+
+  if (!rating) {
+    alert("Please select a rating.");
+    return;
+  }
+
+  if (!comment.trim()) {
+    alert("Please write your experience.");
+    return;
+  }
+
+  setSubmittingExperience(true);
+
+  try {
+    const res = await fetch(`${API_URL}/api/experiences/${sharedExperience.id}/`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: title.trim(),
+        rating,
+        comment: comment.trim(),
+        place: selectedPlace.id,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Update experience error:", data);
+      alert(data.detail || "Error updating experience.");
+      return;
+    }
+
+    setSharedExperience(data);
+    setTitle("");
+    setComment("");
+    setRating(null);
+    setEditingExperience(false);
+    setExperienceShared(true);
+  } catch (error) {
+    console.error("Update experience failed:", error);
+    alert("Error updating experience.");
+  } finally {
+    setSubmittingExperience(false);
+  }
+};
 
   return (
     <main style={{ maxWidth: "800px", margin: "0 auto", padding: "40px" }}>
@@ -310,25 +408,44 @@ export default function DestinationsPage() {
               lineHeight: 1.5,
             }}
           >
-            You can create this place and then share your experience there.
+            You can create this place with a little more context before sharing your
+            experience.
           </p>
 
-          <button
-            onClick={handleCreatePlace}
-            disabled={!canCreatePlace || creatingPlace}
-            style={{
-              padding: "10px 14px",
-              borderRadius: "10px",
-              border: "none",
-              background: "black",
-              color: "white",
-              cursor:
-                canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
-              opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
-            }}
-          >
-            {creatingPlace ? "Creating..." : "Create this place"}
-          </button>
+          <div style={createPlaceForm}>
+            <input
+              value={newPlaceName}
+              onChange={(e) => setNewPlaceName(e.target.value)}
+              placeholder="Place name"
+              style={input}
+            />
+
+            <input
+              value={newPlaceCity}
+              onChange={(e) => setNewPlaceCity(e.target.value)}
+              placeholder="City or region, e.g. Itatiaia"
+              style={input}
+            />
+
+            <input
+              value={newPlaceCountry}
+              onChange={(e) => setNewPlaceCountry(e.target.value)}
+              placeholder="Country, e.g. Brazil"
+              style={input}
+            />
+
+            <button
+              onClick={handleCreatePlace}
+              disabled={!canCreatePlace || creatingPlace}
+              style={{
+                ...primaryButton,
+                opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
+                cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
+              }}
+            >
+              {creatingPlace ? "Creating..." : "Create this place"}
+            </button>
+          </div>
         </section>
       )}
 
@@ -397,32 +514,34 @@ export default function DestinationsPage() {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <button
-                  onClick={() =>
-                    router.push(`/places/${selectedPlace.id}/experiences`)
-                  }
-                  style={primaryButton}
-                >
-                  View experiences
-                </button>
+                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button onClick={startEditingExperience} style={secondaryButton}>
+                    Edit experience
+                  </button>
 
-                <button onClick={handleChangePlace} style={secondaryButton}>
-                  Share another experience
-                </button>
+                  <button
+                    onClick={() => router.push(`/places/${selectedPlace.id}/experiences`)}
+                    style={primaryButton}
+                  >
+                    View experiences
+                  </button>
 
-                <button onClick={() => router.push("/")} style={secondaryButton}>
-                  Back to feed
-                </button>
+                  <button onClick={handleChangePlace} style={secondaryButton}>
+                    Share another experience
+                  </button>
 
-                <button onClick={resetShareFlow} style={secondaryButton}>
-                  Start over
-                </button>
+                  <button onClick={() => router.push("/")} style={secondaryButton}>
+                    Back to feed
+                  </button>
+
+                  <button onClick={resetShareFlow} style={secondaryButton}>
+                    Start over
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
+            ) : (
             <form
-              onSubmit={handleSubmitExperience}
+              onSubmit={editingExperience ? handleUpdateExperience : handleSubmitExperience}
               style={{ display: "grid", gap: "14px" }}
             >
               <input
@@ -479,7 +598,13 @@ export default function DestinationsPage() {
                       : "pointer",
                 }}
               >
-                {submittingExperience ? "Sharing..." : "Share experience"}
+                {submittingExperience
+                  ? editingExperience
+                    ? "Saving..."
+                    : "Sharing..."
+                  : editingExperience
+                  ? "Save changes"
+                  : "Share experience"}
               </button>
             </form>
           )}
@@ -530,4 +655,10 @@ const previewCard = {
   border: "1px solid #eee",
   background: "#fafafa",
   marginBottom: "16px",
+};
+
+const createPlaceForm = {
+  display: "grid",
+  gap: "12px",
+  marginTop: "14px",
 };

@@ -857,14 +857,20 @@ class MyExperiencesView(APIView):
         result = []
 
         for experience in experiences:
+            image_url = None
+
+            if experience.image:
+                image_url = request.build_absolute_uri(experience.image.url)
+
             result.append({
                 "id": experience.id,
                 "title": experience.title,
                 "comment": experience.comment,
                 "rating": experience.rating,
+                "image_url": image_url,
                 "place": experience.place.name,
                 "place_id": experience.place.id,
-                "destination": experience.place.destination.name,
+                "destination": experience.place.destination.name if experience.place.destination else "",
                 "created_at": experience.created_at,
                 "updated_at": experience.updated_at,
             })

@@ -19,6 +19,7 @@ type MyExperience = {
   title: string;
   comment: string;
   rating: number | null;
+  image_url?: string | null;
   place: string;
   place_id: number;
   destination: string;
@@ -279,6 +280,22 @@ const saveEditedExperience = async (experienceId: number) => {
                       {experience.place}
                       {experience.destination ? ` · ${experience.destination}` : ""}
                     </span>
+
+                    {experience.image_url && (
+                      <img
+                        src={experience.image_url}
+                        alt={experience.title || "Shared experience"}
+                        style={{
+                          width: "100%",
+                          maxHeight: "260px",
+                          objectFit: "cover",
+                          borderRadius: "12px",
+                          marginTop: "10px",
+                          marginBottom: "14px",
+                          border: "1px solid #eee",
+                        }}
+                      />
+                    )}
 
                     <p style={text}>{experience.comment}</p>
 

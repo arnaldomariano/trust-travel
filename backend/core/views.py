@@ -211,6 +211,7 @@ class DestinationPlacesListView(generics.ListAPIView):
 class ExperienceListView(generics.ListCreateAPIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     queryset = Experience.objects.all()
     serializer_class = ExperienceSerializer
 
@@ -241,6 +242,7 @@ class ExperienceListView(generics.ListCreateAPIView):
 class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     serializer_class = ExperienceSerializer
 
     def get_queryset(self):

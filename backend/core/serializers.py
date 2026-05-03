@@ -114,6 +114,7 @@ class ExperienceSerializer(serializers.ModelSerializer):
     destination_name = serializers.CharField(source="place.destination.name", read_only=True)
     trust_level = serializers.SerializerMethodField()
     is_trusted = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Experience
@@ -124,6 +125,8 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "place_name",
             "destination_name",
             "title",
+            "image",
+            "image_url",
             "rating",
             "comment",
             "created_at",
@@ -131,6 +134,17 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "trust_level",
             "is_trusted",
         ]
+
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+
+        if not obj.image:
+            return None
+
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+
+        return obj.image.url
 
     def get_is_trusted(self, obj):
         return self.get_trust_level(obj) == 1

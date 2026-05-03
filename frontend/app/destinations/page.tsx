@@ -20,9 +20,12 @@ export default function DestinationsPage() {
   const [newPlaceCountry, setNewPlaceCountry] = useState("");
 
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
+
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState<number | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
   const [submittingExperience, setSubmittingExperience] = useState(false);
   const [experienceShared, setExperienceShared] = useState(false);
   const [sharedExperience, setSharedExperience] = useState<any>(null);
@@ -179,6 +182,7 @@ export default function DestinationsPage() {
     setTitle("");
     setComment("");
     setRating(null);
+    setImageFile(null);
     setExperienceShared(false);
     setSharedExperience(null);
     setEditingExperience(false);
@@ -196,6 +200,7 @@ export default function DestinationsPage() {
     setTitle("");
     setComment("");
     setRating(null);
+    setImageFile(null);
     setExperienceShared(false);
     setSharedExperience(null);
     setEditingExperience(false);
@@ -210,6 +215,7 @@ const startEditingExperience = () => {
   setTitle(sharedExperience.title || "");
   setComment(sharedExperience.comment || "");
   setRating(sharedExperience.rating || null);
+  setImageFile(null);
   setExperienceShared(false);
   setEditingExperience(true);
 };
@@ -240,19 +246,22 @@ const startEditingExperience = () => {
     setSubmittingExperience(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/experiences/`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          place: selectedPlace.id,
-          title: title.trim(),
-          rating,
-          comment: comment.trim(),
-        }),
-      });
+      const formData = new FormData();
+
+formData.append("place", String(selectedPlace.id));
+formData.append("title", title.trim());
+formData.append("rating", String(rating));
+formData.append("comment", comment.trim());
+
+if (imageFile) {
+  formData.append("image", imageFile);
+}
+
+const res = await fetch(`${API_URL}/api/experiences/`, {
+  method: "POST",
+  credentials: "include",
+  body: formData,
+});
 
       const data = await res.json();
 
@@ -266,6 +275,7 @@ const startEditingExperience = () => {
       setTitle("");
       setComment("");
       setRating(null);
+      setImageFile(null);
       setExperienceShared(true);
     } catch (error) {
       console.error("Share experience failed:", error);
@@ -534,6 +544,21 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       {sharedExperience.title || "Shared experience"}
                     </div>
 
+                    {sharedExperience.image_url && (
+                      <img
+                        src={sharedExperience.image_url}
+                        alt={sharedExperience.title || "Shared experience"}
+                        style={{
+                          width: "100%",
+                          maxHeight: "260px",
+                          objectFit: "cover",
+                          borderRadius: "12px",
+                          marginTop: "10px",
+                          marginBottom: "10px",
+                        }}
+                      />
+                    )}
+
                     <div style={{ marginTop: "8px", color: "#555", lineHeight: 1.5 }}>
                       {sharedExperience.comment}
                     </div>
@@ -618,6 +643,28 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 placeholder="Rating from 1 to 5"
                 style={input}
               />
+
+                {!editingExperience && (
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    <label style={{ fontSize: "13px", color: "#666" }}>
+                      Optional image
+                    </label>
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setImageFile(file);
+                      }}
+                      style={input}
+                    />
+
+                    <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4 }}>
+                      Avoid sharing real-time or sensitive locations in photos.
+                    </div>
+                  </div>
+                )}
 
               <button
                 type="submit"

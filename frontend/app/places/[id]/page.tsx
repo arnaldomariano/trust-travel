@@ -12,12 +12,9 @@ export default function PlacePage() {
   const [experiences, setExperiences] = useState<any[]>([]);
   const [updates, setUpdates] = useState<any[]>([]);
   const [filter, setFilter] = useState<"all" | "experience" | "update">("all");
+
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
-  const [comment, setComment] = useState("");
-  const [rating, setRating] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [showForm, setShowForm] = useState(false);
   const [showRatings, setShowRatings] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -110,57 +107,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       })
       .catch((err) => console.error(err));
   }, [id]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!id) return;
-
-    if (!rating) {
-      alert("Please select a rating before posting.");
-      return;
-    }
-
-    if (!comment.trim()) {
-      alert("Please write a comment before posting.");
-      return;
-    }
-
-    const token = localStorage.getItem("access");
-    setSubmitting(true);
-
-    try {
-      const response = await fetch(`${API_URL}/api/experiences/`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          comment,
-          rating: rating,
-          place: Number(id),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("STATUS REAL:", response.status);
-        console.error("ERRO REAL:", errorText);
-        throw new Error("Erro ao enviar experiência");
-      }
-
-      const data = await response.json();
-
-      setExperiences((prev) => [data, ...prev]);
-      setComment("");
-      setRating(null);
-      setShowForm(false);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const ratedExperiences = experiences.filter((e) => e.rating);
   const averageRating = ratedExperiences.length
@@ -420,82 +366,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             </button>
           ))}
         </div>
-      {showForm && isLoggedIn && (
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: "grid",
-            gap: "12px",
-            maxWidth: "600px",
-            marginBottom: "40px",
-            padding: "20px",
-            border: "1px solid #e5e5e5",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-            backgroundColor: "white",
-          }}
-        >
-          <h2 style={{ margin: 0 }}>Add your experience</h2>
-
-          <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Write your experience..."
-              rows={4}
-              style={{
-                padding: "12px",
-                border: "1px solid #ddd",
-                borderRadius: "8px",
-                fontSize: "14px",
-              }}
-            />
-
-          <input
-              type="number"
-              min="1"
-              max="5"
-              value={rating ?? ""}
-              onChange={(e) => {
-                const value = e.target.value;
-
-                if (!value) {
-                  setRating(null);
-                  return;
-                }
-
-                const numeric = Number(value);
-
-                if (numeric >= 1 && numeric <= 5) {
-                  setRating(numeric);
-                }
-              }}
-              placeholder="Rating from 1 to 5"
-              style={{
-                padding: "12px",
-                border: "1px solid #ddd",
-                borderRadius: "8px",
-                fontSize: "14px",
-              }}
-            />
-
-          <button
-            type="submit"
-            disabled={submitting || !rating || !comment.trim()}
-            style={{
-              padding: "12px 16px",
-              border: "none",
-              borderRadius: "8px",
-              backgroundColor: "#111",
-              color: "white",
-              cursor: submitting || !rating || !comment.trim() ? "not-allowed" : "pointer",
-              opacity: submitting || !rating || !comment.trim() ? 0.5 : 1,
-              fontSize: "14px",
-            }}
-          >
-            {submitting ? "Submitting..." : "Submit experience"}
-          </button>
-        </form>
-      )}
 
         <h2 style={{ marginBottom: "20px" }}>Activity</h2>
 
@@ -585,6 +455,22 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                       >
                         {item.title}
                       </div>
+                    )}
+
+                    {item.image_url && (
+                      <img
+                        src={item.image_url}
+                        alt={item.title || "Shared experience"}
+                        style={{
+                          width: "100%",
+                          maxHeight: "260px",
+                          objectFit: "cover",
+                          borderRadius: "12px",
+                          marginTop: "10px",
+                          marginBottom: "10px",
+                          border: "1px solid #eee",
+                        }}
+                      />
                     )}
 
                     <div style={{ fontWeight: "400", lineHeight: "1.5" }}>

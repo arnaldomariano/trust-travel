@@ -148,6 +148,14 @@ class Experience(models.Model):
     # Used in feeds, cards, previews, and future visual/photo-based layouts.
     title = models.CharField(max_length=160, blank=True)
 
+    # Optional image attached to the experience.
+    # This prepares the app for visual cards, place galleries, and future photo-based discovery.
+    image = models.ImageField(
+        upload_to="experience_images/",
+        blank=True,
+        null=True,
+    )
+
     rating = models.IntegerField(null=True, blank=True)
     comment = models.TextField()
     trust_level = models.IntegerField(default=3)

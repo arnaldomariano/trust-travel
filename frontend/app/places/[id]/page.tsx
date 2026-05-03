@@ -370,35 +370,34 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           </Link>
 
           {isLoggedIn ? (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              style={{
-                padding: "10px 16px",
-                backgroundColor: "#111",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontSize: "14px",
-              }}
-            >
-              {showForm ? "Close form" : "✍️ Share your experience"}
-            </button>
-          ) : (
-            <Link
-              href={`/login?next=/places/${id}`}
-              style={{
-                padding: "10px 16px",
-                backgroundColor: "#111",
-                color: "white",
-                borderRadius: "8px",
-                textDecoration: "none",
-                fontSize: "14px",
-              }}
-            >
-              Login to share your experience
-            </Link>
-          )}
+          <Link
+            href="/destinations"
+            style={{
+              padding: "10px 16px",
+              backgroundColor: "#111",
+              color: "white",
+              borderRadius: "8px",
+              textDecoration: "none",
+              fontSize: "14px",
+            }}
+          >
+            ✍️ Share your experience
+          </Link>
+        ) : (
+          <Link
+            href={`/login?next=/destinations`}
+            style={{
+              padding: "10px 16px",
+              backgroundColor: "#111",
+              color: "white",
+              borderRadius: "8px",
+              textDecoration: "none",
+              fontSize: "14px",
+            }}
+          >
+            Login to share your experience
+          </Link>
+        )}
         </div>
 
         <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>

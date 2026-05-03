@@ -159,11 +159,17 @@ export default function DestinationsPage() {
   // Select an existing place
   // =========================
   const handleSelectExistingPlace = (place: any) => {
-    setSelectedPlace(place);
-    setExperienceShared(false);
-    setSharedExperience(null);
-    setEditingExperience(false);
-  };
+  setSelectedPlace(place);
+  setExperienceShared(false);
+  setSharedExperience(null);
+  setEditingExperience(false);
+
+  setTimeout(() => {
+    document
+      .getElementById("share-experience-form")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+};
 
   // =========================
   // Change selected place
@@ -421,7 +427,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               </div>
 
               <div style={{ marginTop: "10px", fontSize: "14px" }}>
-                Share your experience here →
+                Select this place →
               </div>
             </button>
           ))}
@@ -479,8 +485,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       )}
 
       {selectedPlace && (
-        <section
-          style={{
+          <section
+            id="share-experience-form"
+            style={{
             marginTop: "28px",
             padding: "22px",
             border: "1px solid #eee",

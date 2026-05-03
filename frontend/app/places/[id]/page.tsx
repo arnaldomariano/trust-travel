@@ -21,6 +21,13 @@ export default function PlacePage() {
   const [showRatings, setShowRatings] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  const placeLocation = [
+    place?.city || place?.destination_name || destination?.city || destination?.name,
+    place?.destination_country || destination?.country,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const rating5 = experiences.filter((e) => e.rating === 5).length;
   const rating4 = experiences.filter((e) => e.rating === 4).length;
   const rating3 = experiences.filter((e) => e.rating === 3).length;
@@ -214,11 +221,18 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           href={`/destinations/${place?.destination}`}
           style={{ textDecoration: "none", color: "#666" }}
         >
-          {destination?.name || "Destination"}
+          {place?.destination_name || destination?.name || "Destination"}
         </Link>{" "}
         / <span>{place?.name}</span>
       </div>
+
         <h1>Activity in {place?.name}</h1>
+
+        {placeLocation && (
+          <div style={{ marginTop: "-8px", marginBottom: "8px", color: "#666", fontSize: "15px" }}>
+            {placeLocation}
+          </div>
+        )}
 
         <div style={{ marginBottom: "24px" }}>
           <div style={{ marginTop: "6px", color: "#777", fontSize: "14px" }}>

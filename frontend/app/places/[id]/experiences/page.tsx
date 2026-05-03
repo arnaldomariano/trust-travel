@@ -581,6 +581,24 @@ const newReply = await response.json();
                       </div>
                     )}
 
+                    {e.image_url && (
+
+                      <img
+                        src={e.image_url}
+                        alt={e.title || "Shared experience"}
+                        style={{
+                          width: "100%",
+                          maxHeight: "260px",
+                          objectFit: "cover",
+                          borderRadius: "12px",
+                          marginTop: "10px",
+                          marginBottom: "10px",
+                          border: "1px solid #eee",
+
+                        }}
+                      />
+                    )}
+
                     <div
                       style={{
                         marginTop: e.title ? "6px" : "10px",
@@ -798,25 +816,41 @@ const newReply = await response.json();
                     )}
 
                     {e.title && (
-                      <div
-                        style={{
-                          marginTop: "10px",
-                          fontWeight: 600,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        {e.title}
-                      </div>
-                    )}
+                          <div
+                            style={{
+                              marginTop: "10px",
+                              fontWeight: 600,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {e.title}
+                          </div>
+                        )}
 
-                    <div
-                      style={{
-                        marginTop: e.title ? "6px" : "10px",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {e.comment}
-                    </div>
+                        {e.image_url && (
+                          <img
+                            src={e.image_url}
+                            alt={e.title || "Shared experience"}
+                            style={{
+                              width: "100%",
+                              maxHeight: "260px",
+                              objectFit: "cover",
+                              borderRadius: "12px",
+                              marginTop: "10px",
+                              marginBottom: "10px",
+                              border: "1px solid #eee",
+                            }}
+                          />
+                        )}
+
+                        <div
+                          style={{
+                            marginTop: e.title ? "6px" : "10px",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {e.comment}
+                        </div>
 
                     <div style={{ marginTop: "10px", fontSize: "13px", color: "#555" }}>
                       — {e.user} • {timeAgo(e.created_at)}
@@ -920,6 +954,22 @@ const newReply = await response.json();
                           >
                             {e.title}
                           </div>
+                        )}
+
+                        {e.image_url && (
+                          <img
+                            src={e.image_url}
+                            alt={e.title || "Shared experience"}
+                            style={{
+                              width: "100%",
+                              maxHeight: "260px",
+                              objectFit: "cover",
+                              borderRadius: "12px",
+                              marginTop: "10px",
+                              marginBottom: "10px",
+                              border: "1px solid #eee",
+                            }}
+                          />
                         )}
 
                         <div

@@ -38,27 +38,70 @@ class DestinationSerializer(serializers.ModelSerializer):
 class PlaceSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
     reviews_count = serializers.SerializerMethodField()
+
     created_by_username = serializers.CharField(
         source="created_by.username",
         read_only=True
     )
 
+    destination_name = serializers.CharField(
+        source="destination.name",
+        read_only=True
+    )
+
+    destination_country = serializers.CharField(
+        source="destination.country",
+        read_only=True
+    )
+
+    destination_city = serializers.CharField(
+        source="destination.city",
+        read_only=True
+    )
+
     class Meta:
         model = Place
-        fields = "__all__"
+        fields = [
+            "id",
+            "destination",
+            "destination_name",
+            "destination_country",
+            "destination_city",
+            "name",
+            "city",
+            "description",
+            "image_url",
+            "latitude",
+            "longitude",
+            "external_source",
+            "external_id",
+            "created_by",
+            "created_by_username",
+            "created_at",
+            "average_rating",
+            "reviews_count",
+        ]
         read_only_fields = [
             "created_by",
             "created_at",
             "created_by_username",
             "average_rating",
             "reviews_count",
+            "destination_name",
+            "destination_country",
+            "destination_city",
         ]
 
     def get_average_rating(self, obj):
-        ratings = obj.experience_set.exclude(rating__isnull=True).values_list("rating", flat=True)
+        ratings = obj.experience_set.exclude(
+            rating__isnull=True
+        ).values_list("rating", flat=True)
+
         ratings = list(ratings)
+
         if not ratings:
             return None
+
         return round(sum(ratings) / len(ratings), 1)
 
     def get_reviews_count(self, obj):

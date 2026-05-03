@@ -87,15 +87,18 @@ export default function DestinationsPage() {
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const filteredPlaces = places
-    .filter((place) => {
-      if (!normalizedSearch) return false;
+      .filter((place) => {
+        if (!normalizedSearch) return false;
 
-      return (
-        (place.name || "").toLowerCase().includes(normalizedSearch) ||
-        (place.city || "").toLowerCase().includes(normalizedSearch)
-      );
-    })
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        return (
+          (place.name || "").toLowerCase().includes(normalizedSearch) ||
+          (place.city || "").toLowerCase().includes(normalizedSearch) ||
+          (place.destination_name || "").toLowerCase().includes(normalizedSearch) ||
+          (place.destination_country || "").toLowerCase().includes(normalizedSearch) ||
+          (place.destination_city || "").toLowerCase().includes(normalizedSearch)
+        );
+      })
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
   const canCreatePlace = !!newPlaceName.trim();
 
@@ -128,11 +131,22 @@ export default function DestinationsPage() {
         return;
       }
 
-      setSelectedPlace(data);
-      setExperienceShared(false);
-      setSharedExperience(null);
-      setEditingExperience(false);
-      setSearchTerm(data.name || newPlaceName.trim());
+        setPlaces((prev) => {
+          const alreadyExists = prev.some((place) => place.id === data.id);
+
+          if (alreadyExists) {
+            return prev;
+          }
+
+          return [data, ...prev];
+        });
+
+        setSelectedPlace(data);
+        setExperienceShared(false);
+        setSharedExperience(null);
+        setEditingExperience(false);
+        setSearchTerm(data.name || newPlaceName.trim());
+
     } catch (error) {
       console.error("Create basic place failed:", error);
       alert("Error creating place.");
@@ -333,9 +347,21 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         experience there. If not, you can create it.
       </p>
 
-      <input
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
+        <input
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+
+            if (selectedPlace) {
+              setSelectedPlace(null);
+              setTitle("");
+              setComment("");
+              setRating(null);
+              setExperienceShared(false);
+              setSharedExperience(null);
+              setEditingExperience(false);
+            }
+          }}
         placeholder="Search a place, city, beach, restaurant, viewpoint..."
         style={{
           width: "100%",
@@ -386,9 +412,12 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   fontSize: "14px",
                 }}
               >
-                {destinationNameById[place.destination] ||
-                  place.city ||
-                  "Place"}
+                {[
+                  place.city || place.destination_name,
+                  place.destination_country,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "Place"}
               </div>
 
               <div style={{ marginTop: "10px", fontSize: "14px" }}>

@@ -11,6 +11,7 @@ export default function PlacePage() {
 
   const [experiences, setExperiences] = useState<any[]>([]);
   const [updates, setUpdates] = useState<any[]>([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [filter, setFilter] = useState<"all" | "experience" | "update">("all");
 
   const [place, setPlace] = useState<any>(null);
@@ -89,6 +90,16 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     setUpdates(sorted);
   })
   .catch((err) => console.error("UPDATES ERROR:", err));
+
+    fetch(`${API_URL}/api/places/${id}/photos/`, {
+      credentials: "include",
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setPhotos(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => console.error("PHOTOS ERROR:", err));
+
 
     fetch(`${API_URL}/api/places/${id}/`)
       .then((res) => res.json())
@@ -345,6 +356,95 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           </Link>
         )}
         </div>
+
+                {photos.length > 0 && (
+          <section
+            style={{
+              marginBottom: "30px",
+              padding: "18px",
+              border: "1px solid #eee",
+              borderRadius: "14px",
+              backgroundColor: "white",
+              maxWidth: "760px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "14px",
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0, fontSize: "18px" }}>Latest photos</h2>
+                <div style={{ marginTop: "4px", color: "#777", fontSize: "13px" }}>
+                  Photos shared by travelers in their experiences
+                </div>
+              </div>
+
+              <Link
+                href={`/places/${id}/experiences`}
+                style={{
+                  fontSize: "13px",
+                  color: "#111",
+                  textDecoration: "none",
+                  border: "1px solid #ddd",
+                  borderRadius: "999px",
+                  padding: "6px 10px",
+                  backgroundColor: "#fafafa",
+                }}
+              >
+                View all
+              </Link>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(${Math.min(photos.length, 3)}, 1fr)`,
+                gap: "10px",
+              }}
+            >
+              {photos.slice(0, 3).map((photo) => (
+                <Link
+                  key={photo.id}
+                  href={`/places/${id}/experiences`}
+                  style={{
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
+                  <img
+                    src={photo.image_url}
+                    alt={photo.title || "Experience photo"}
+                    style={{
+                      width: "100%",
+                      height: "120px",
+                      objectFit: "cover",
+                      borderRadius: "12px",
+                      border: "1px solid #eee",
+                      display: "block",
+                    }}
+                  />
+
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      fontSize: "12px",
+                      color: "#666",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {photo.title || photo.comment}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
           {["all", "experience", "update"].map((f) => (

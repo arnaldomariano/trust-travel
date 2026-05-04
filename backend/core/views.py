@@ -823,6 +823,43 @@ class PlaceUpdatesListView(APIView):
 
         return Response(result)
 
+class PlacePhotosView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, place_id):
+        experiences = Experience.objects.filter(
+            place_id=place_id,
+            image__isnull=False
+        ).exclude(
+            image=""
+        ).select_related(
+            "user",
+            "place"
+        ).order_by("-created_at")[:6]
+
+        result = []
+
+        for experience in experiences:
+            image_url = None
+
+            if experience.image:
+                image_url = request.build_absolute_uri(experience.image.url)
+
+            result.append({
+                "id": experience.id,
+                "title": experience.title,
+                "comment": experience.comment,
+                "rating": experience.rating,
+                "image_url": image_url,
+                "user": experience.user.username if experience.user else "Unknown user",
+                "place_id": experience.place.id,
+                "created_at": experience.created_at,
+            })
+
+        return Response(result)
+
+
 class MyUpdatesView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]

@@ -250,7 +250,14 @@ class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Experience.objects.filter(user=self.request.user)
 
     def perform_update(self, serializer):
+        remove_image = self.request.data.get("remove_image") == "true"
+
         experience = serializer.save()
+
+        if remove_image and experience.image:
+            experience.image.delete(save=False)
+            experience.image = None
+            experience.save(update_fields=["image", "updated_at"])
 
         # Keep the automatic experience update aligned with the edited title.
         feed_text = (experience.title or "").strip()

@@ -36,6 +36,10 @@ const [editingExperienceId, setEditingExperienceId] = useState<number | null>(nu
 const [editTitle, setEditTitle] = useState("");
 const [editComment, setEditComment] = useState("");
 const [editRating, setEditRating] = useState<number | null>(null);
+
+const [editImageFile, setEditImageFile] = useState<File | null>(null);
+const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+const [imageAction, setImageAction] = useState<"keep" | "replace" | "remove">("keep");
 const [savingExperience, setSavingExperience] = useState(false);
 
 const loadPosts = async () => {
@@ -83,6 +87,9 @@ const startEditingExperience = (experience: MyExperience) => {
   setEditTitle(experience.title || "");
   setEditComment(experience.comment || "");
   setEditRating(experience.rating || null);
+  setEditImageFile(null);
+  setEditImagePreview(null);
+  setImageAction("keep");
 };
 
 // =========================
@@ -93,6 +100,9 @@ const cancelEditingExperience = () => {
   setEditTitle("");
   setEditComment("");
   setEditRating(null);
+  setEditImageFile(null);
+  setEditImagePreview(null);
+  setImageAction("keep");
 };
 
 // =========================
@@ -117,17 +127,24 @@ const saveEditedExperience = async (experienceId: number) => {
   setSavingExperience(true);
 
   try {
+    const formData = new FormData();
+
+    formData.append("title", editTitle.trim());
+    formData.append("comment", editComment.trim());
+    formData.append("rating", String(editRating));
+
+    if (imageAction === "replace" && editImageFile) {
+      formData.append("image", editImageFile);
+    }
+
+    if (imageAction === "remove") {
+      formData.append("remove_image", "true");
+    }
+
     const res = await fetch(`${API_URL}/api/experiences/${experienceId}/`, {
       method: "PATCH",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        title: editTitle.trim(),
-        comment: editComment.trim(),
-        rating: editRating,
-      }),
+      body: formData,
     });
 
     const data = await res.json();
@@ -142,12 +159,13 @@ const saveEditedExperience = async (experienceId: number) => {
       prev.map((experience) =>
         experience.id === experienceId
           ? {
-              ...experience,
-              title: data.title,
-              comment: data.comment,
-              rating: data.rating,
-              updated_at: data.updated_at,
-            }
+                ...experience,
+                title: data.title,
+                comment: data.comment,
+                rating: data.rating,
+                image_url: data.image_url,
+                updated_at: data.updated_at,
+              }
           : experience
       )
     );
@@ -246,6 +264,115 @@ const saveEditedExperience = async (experienceId: number) => {
                         placeholder="Rating from 1 to 5"
                         style={input}
                       />
+
+                        <div style={imageEditBox}>
+                          <div style={{ fontSize: "13px", color: "#666", fontWeight: 600 }}>
+                            Experience image
+                          </div>
+
+                          {experience.image_url && imageAction !== "remove" && !editImagePreview && (
+                            <div style={{ display: "grid", gap: "8px" }}>
+                              <div style={{ fontSize: "13px", color: "#777" }}>
+                                Current image
+                              </div>
+
+                              <img
+                                src={experience.image_url}
+                                alt={experience.title || "Current experience image"}
+                                style={imagePreview}
+                              />
+                            </div>
+                          )}
+
+                          {editImagePreview && imageAction === "replace" && (
+                            <div style={{ display: "grid", gap: "8px" }}>
+                              <div style={{ fontSize: "13px", color: "#777" }}>
+                                New image preview
+                              </div>
+
+                              <img
+                                src={editImagePreview}
+                                alt="New selected image preview"
+                                style={imagePreview}
+                              />
+
+                              <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4 }}>
+                                This new image will replace the current one when you save changes.
+                              </div>
+                            </div>
+                          )}
+
+                          {imageAction === "remove" && (
+                            <div style={removeNotice}>
+                              Image will be removed when you save changes.
+                            </div>
+                          )}
+
+                          <div style={{ display: "grid", gap: "8px" }}>
+                            <label style={{ fontSize: "13px", color: "#666" }}>
+                              Choose a new image
+                            </label>
+
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null;
+
+                                setEditImageFile(file);
+
+                                if (editImagePreview) {
+                                  URL.revokeObjectURL(editImagePreview);
+                                }
+
+                                if (file) {
+                                  setEditImagePreview(URL.createObjectURL(file));
+                                  setImageAction("replace");
+                                } else {
+                                  setEditImagePreview(null);
+                                  setImageAction("keep");
+                                }
+                              }}
+                              style={input}
+                            />
+                          </div>
+
+                          {experience.image_url && (
+                            <button
+                              type="button"
+                              style={dangerButton}
+                              onClick={() => {
+                                if (editImagePreview) {
+                                  URL.revokeObjectURL(editImagePreview);
+                                }
+
+                                setEditImageFile(null);
+                                setEditImagePreview(null);
+                                setImageAction("remove");
+                              }}
+                            >
+                              Remove image
+                            </button>
+                          )}
+
+                          {(imageAction === "replace" || imageAction === "remove") && (
+                            <button
+                              type="button"
+                              style={secondaryButton}
+                              onClick={() => {
+                                if (editImagePreview) {
+                                  URL.revokeObjectURL(editImagePreview);
+                                }
+
+                                setEditImageFile(null);
+                                setEditImagePreview(null);
+                                setImageAction("keep");
+                              }}
+                            >
+                              Keep current image
+                            </button>
+                          )}
+                        </div>
 
                       <div style={actions}>
                         <button
@@ -478,4 +605,40 @@ const input = {
   borderRadius: "10px",
   border: "1px solid #ddd",
   fontSize: "14px",
+};
+
+const imageEditBox = {
+  display: "grid",
+  gap: "12px",
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+};
+
+const imagePreview = {
+  width: "100%",
+  maxHeight: "220px",
+  objectFit: "cover" as const,
+  borderRadius: "12px",
+  border: "1px solid #eee",
+};
+
+const removeNotice = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #f3d1d1",
+  background: "#fff5f5",
+  color: "#9f1239",
+  fontSize: "13px",
+};
+
+const dangerButton = {
+  display: "inline-block",
+  padding: "8px 12px",
+  borderRadius: "10px",
+  border: "1px solid #f3d1d1",
+  background: "#fff5f5",
+  color: "#9f1239",
+  cursor: "pointer",
 };

@@ -408,13 +408,13 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             >
               {photos.slice(0, 3).map((photo) => (
                 <Link
-                  key={photo.id}
-                  href={`/places/${id}/experiences`}
-                  style={{
-                    textDecoration: "none",
-                    color: "inherit",
-                  }}
-                >
+                      key={photo.id}
+                      href={`/experiences/${photo.id}`}
+                      style={{
+                        textDecoration: "none",
+                        color: "inherit",
+                      }}
+                    >
                   <img
                     src={photo.image_url}
                     alt={photo.title || "Experience photo"}

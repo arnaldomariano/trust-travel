@@ -241,12 +241,14 @@ class ExperienceListView(generics.ListCreateAPIView):
 
 class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [CookieJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     serializer_class = ExperienceSerializer
 
     def get_queryset(self):
-        # Users can only retrieve, edit, or delete their own experiences here.
+        if self.request.method in ["GET", "HEAD", "OPTIONS"]:
+            return Experience.objects.all()
+
         return Experience.objects.filter(user=self.request.user)
 
     def perform_update(self, serializer):

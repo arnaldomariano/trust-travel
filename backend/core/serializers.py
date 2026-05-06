@@ -5,6 +5,7 @@ from .models import (
     Destination,
     Place,
     Experience,
+    ExperiencePhoto,
     ExperienceReply,
     Friendship,
     Profile,
@@ -200,6 +201,37 @@ class ExperienceSerializer(serializers.ModelSerializer):
             return 2
 
         return 3
+
+class ExperiencePhotoSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ExperiencePhoto
+        fields = [
+            "id",
+            "experience",
+            "image",
+            "image_url",
+            "caption",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "experience",
+            "image_url",
+            "created_at",
+        ]
+
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+
+        if not obj.image:
+            return None
+
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+
+        return obj.image.url
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)

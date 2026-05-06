@@ -4,6 +4,7 @@ from .views import (
     DestinationListView,
     PlaceListView,
     ExperienceListView,
+    ExperiencePhotoListCreateView,
     ExperienceDetailView,
     DestinationPlacesListView,
     PlaceExperiencesListView,
@@ -36,7 +37,7 @@ urlpatterns = [
     path("places/", PlaceListView.as_view()),
     path("places/create-basic/", CreateBasicPlaceView.as_view()),
     path("places/<int:pk>/", PlaceDetailView.as_view()),
-    path("experiences/", ExperienceListView.as_view()),
+
     path("places/<int:place_id>/updates/", PlaceUpdatesListView.as_view()),
     path("places/<int:place_id>/photos/", PlacePhotosView.as_view()),
     path("destinations/<int:destination_id>/places/", DestinationPlacesListView.as_view()),
@@ -46,8 +47,10 @@ urlpatterns = [
     path("updates/", UpdateListView.as_view()),
     path("connections/", ConnectionsListView.as_view()),
 
-    path("experiences/<int:experience_id>/replies/", ExperienceReplyListCreateView.as_view()),
+    path("experiences/", ExperienceListView.as_view()),
     path("experiences/<int:pk>/", ExperienceDetailView.as_view()),
+    path("experiences/<int:experience_id>/photos/", ExperiencePhotoListCreateView.as_view()),
+    path("experiences/<int:experience_id>/replies/", ExperienceReplyListCreateView.as_view()),
 
     path("friends/send/", SendFriendRequestView.as_view()),
     path("friends/accept/", AcceptFriendRequestView.as_view()),

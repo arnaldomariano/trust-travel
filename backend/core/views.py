@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.utils import timezone
 
+
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -10,11 +11,13 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.exceptions import PermissionDenied
 
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework import serializers
 
 from .models import (
     Destination,
     Place,
     Experience,
+    ExperiencePhoto,
     Friendship,
     ExperienceReply,
     Update,
@@ -27,6 +30,7 @@ from .serializers import (
     DestinationSerializer,
     PlaceSerializer,
     ExperienceSerializer,
+    ExperiencePhotoSerializer,
     UserRegisterSerializer,
     ExperienceReplySerializer,
     ProfileSerializer,
@@ -277,6 +281,37 @@ class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
         if update:
             update.text = feed_text
             update.save()
+
+class ExperiencePhotoListCreateView(generics.ListCreateAPIView):
+    serializer_class = ExperiencePhotoSerializer
+    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        experience_id = self.kwargs.get("experience_id")
+        return ExperiencePhoto.objects.filter(
+            experience_id=experience_id
+        ).order_by("created_at")
+
+    def perform_create(self, serializer):
+        experience_id = self.kwargs.get("experience_id")
+
+        experience = Experience.objects.get(
+            id=experience_id,
+            user=self.request.user
+        )
+
+        current_count = ExperiencePhoto.objects.filter(
+            experience=experience
+        ).count()
+
+        if current_count >= 3:
+            raise serializers.ValidationError(
+                {"detail": "You can add up to 3 extra photos per experience."}
+            )
+
+        serializer.save(experience=experience)
+
 
 class PlaceExperiencesListView(generics.ListAPIView):
     serializer_class = ExperienceSerializer

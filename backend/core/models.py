@@ -166,6 +166,23 @@ class Experience(models.Model):
     def __str__(self):
         return f"{self.user} - {self.place} - {self.title or 'Experience'}"
 
+# ===================== Experience Photo =====================
+class ExperiencePhoto(models.Model):
+    experience = models.ForeignKey(
+        Experience,
+        on_delete=models.CASCADE,
+        related_name="photos"
+    )
+
+    image = models.ImageField(upload_to="experience_gallery/")
+    caption = models.CharField(max_length=160, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Photo for experience {self.experience_id}"
+
+
 # ===================== Friendship =====================
 class Friendship(models.Model):
     from_user = models.ForeignKey(

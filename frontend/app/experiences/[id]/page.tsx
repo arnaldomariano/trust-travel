@@ -12,6 +12,7 @@ export default function ExperienceDetailPage() {
 
   const [experience, setExperience] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showGallery, setShowGallery] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -92,11 +93,24 @@ export default function ExperienceDetailPage() {
         </div>
 
         {experience.image_url && (
-          <img
-            src={experience.image_url}
-            alt={experience.title || "Shared experience"}
-            style={image}
-          />
+          <div style={galleryBox}>
+            <button
+              onClick={() => setShowGallery(!showGallery)}
+              style={galleryButton}
+            >
+              {showGallery ? "Hide photo gallery" : "View photo gallery"}
+            </button>
+
+            {showGallery && (
+              <div style={galleryGrid}>
+                <img
+                  src={experience.image_url}
+                  alt={experience.title || "Shared experience"}
+                  style={galleryImage}
+                />
+              </div>
+            )}
+          </div>
         )}
 
         <p style={comment}>{experience.comment}</p>
@@ -185,15 +199,6 @@ const placeText = {
   fontSize: "14px",
 };
 
-const image = {
-  width: "100%",
-  maxHeight: "420px",
-  objectFit: "cover" as const,
-  borderRadius: "14px",
-  marginTop: "20px",
-  border: "1px solid #eee",
-};
-
 const comment = {
   marginTop: "20px",
   fontSize: "18px",
@@ -231,4 +236,34 @@ const secondaryLink = {
 
 const mutedText = {
   color: "#666",
+};
+
+const galleryBox = {
+  marginTop: "20px",
+  marginBottom: "6px",
+};
+
+const galleryButton = {
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "#f9f9f9",
+  color: "#111",
+  cursor: "pointer",
+  fontSize: "14px",
+};
+
+const galleryGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(1, 1fr)",
+  gap: "10px",
+  marginTop: "12px",
+};
+
+const galleryImage = {
+  width: "100%",
+  maxHeight: "220px",
+  objectFit: "cover" as const,
+  borderRadius: "12px",
+  border: "1px solid #eee",
 };

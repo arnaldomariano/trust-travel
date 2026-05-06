@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { API_URL } from "../../../lib/api";
+
 export default function ExperiencesPage() {
   const params = useParams();
   const id = params.id;
@@ -673,6 +675,26 @@ const newReply = await response.json();
                         Save for later
                       </button>
 
+                        <Link
+                          href={`/experiences/${e.id}`}
+                          style={{
+                            marginTop: "10px",
+                            fontSize: "12px",
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            border: "1px solid #ddd",
+                            background: "#f9f9f9",
+                            color: "#111",
+                            textDecoration: "none",
+                            display: "inline-block",
+                          }}
+                        >
+                          Open experience
+                        </Link>
+
+
+
+
                       {isHot && (
                         <span
                           style={{
@@ -869,6 +891,25 @@ const newReply = await response.json();
                         Network
                       </span>
                     </div>
+
+                    <div style={{ marginTop: "10px" }}>
+                      <Link
+                        href={`/experiences/${e.id}`}
+                        style={{
+                          fontSize: "12px",
+                          padding: "4px 10px",
+                          borderRadius: "6px",
+                          border: "1px solid #ddd",
+                          background: "#f9f9f9",
+                          color: "#111",
+                          textDecoration: "none",
+                          display: "inline-block",
+                        }}
+                      >
+                        Open experience
+                      </Link>
+                    </div>
+
                   </div>
                 );
               })}
@@ -984,6 +1025,25 @@ const newReply = await response.json();
                         <div style={{ marginTop: "10px", fontSize: "13px", color: "#777" }}>
                           — {e.user} • {timeAgo(e.created_at)}
                         </div>
+
+                        <div style={{ marginTop: "10px" }}>
+                          <Link
+                            href={`/experiences/${e.id}`}
+                            style={{
+                              fontSize: "12px",
+                              padding: "4px 10px",
+                              borderRadius: "6px",
+                              border: "1px solid #ddd",
+                              background: "#f9f9f9",
+                              color: "#111",
+                              textDecoration: "none",
+                              display: "inline-block",
+                            }}
+                          >
+                            Open experience
+                          </Link>
+                        </div>
+
                       </div>
                     );
                   })}

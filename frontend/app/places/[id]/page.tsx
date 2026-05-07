@@ -357,94 +357,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         )}
         </div>
 
-                {photos.length > 0 && (
-          <section
-            style={{
-              marginBottom: "30px",
-              padding: "18px",
-              border: "1px solid #eee",
-              borderRadius: "14px",
-              backgroundColor: "white",
-              maxWidth: "760px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "14px",
-              }}
-            >
-              <div>
-                <h2 style={{ margin: 0, fontSize: "18px" }}>Latest photos</h2>
-                <div style={{ marginTop: "4px", color: "#777", fontSize: "13px" }}>
-                  Photos shared by travelers in their experiences
-                </div>
-              </div>
-
-              <Link
-                href={`/places/${id}/experiences`}
-                style={{
-                  fontSize: "13px",
-                  color: "#111",
-                  textDecoration: "none",
-                  border: "1px solid #ddd",
-                  borderRadius: "999px",
-                  padding: "6px 10px",
-                  backgroundColor: "#fafafa",
-                }}
-              >
-                View all
-              </Link>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: `repeat(${Math.min(photos.length, 3)}, 1fr)`,
-                gap: "10px",
-              }}
-            >
-              {photos.slice(0, 3).map((photo) => (
-                <Link
-                      key={photo.id}
-                      href={`/experiences/${photo.id}`}
-                      style={{
-                        textDecoration: "none",
-                        color: "inherit",
-                      }}
-                    >
-                  <img
-                    src={photo.image_url}
-                    alt={photo.title || "Experience photo"}
-                    style={{
-                      width: "100%",
-                      height: "120px",
-                      objectFit: "cover",
-                      borderRadius: "12px",
-                      border: "1px solid #eee",
-                      display: "block",
-                    }}
-                  />
-
-                  <div
-                    style={{
-                      marginTop: "6px",
-                      fontSize: "12px",
-                      color: "#666",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {photo.title || photo.comment}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
 
         <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
           {["all", "experience", "update"].map((f) => (
@@ -562,13 +474,14 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                         src={item.image_url}
                         alt={item.title || "Shared experience"}
                         style={{
-                          width: "100%",
-                          maxHeight: "260px",
+                          width: "140px",
+                          height: "90px",
                           objectFit: "cover",
-                          borderRadius: "12px",
-                          marginTop: "10px",
+                          borderRadius: "10px",
+                          marginTop: "8px",
                           marginBottom: "10px",
                           border: "1px solid #eee",
+                          display: "block",
                         }}
                       />
                     )}
@@ -588,6 +501,24 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                         day: "numeric",
                         year: "numeric",
                       })}
+                    </div>
+
+                    <div style={{ marginTop: "12px" }}>
+                      <Link
+                        href={`/places/${id}/experiences`}
+                        style={{
+                          display: "inline-block",
+                          padding: "8px 12px",
+                          borderRadius: "10px",
+                          border: "1px solid #ddd",
+                          backgroundColor: "#f9f9f9",
+                          color: "#111",
+                          textDecoration: "none",
+                          fontSize: "13px",
+                        }}
+                      >
+                        See full experience
+                      </Link>
                     </div>
 
 

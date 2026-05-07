@@ -11,6 +11,7 @@ export default function ExperienceDetailPage() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [experience, setExperience] = useState<any>(null);
+  const [extraPhotos, setExtraPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showGallery, setShowGallery] = useState(false);
 
@@ -31,6 +32,20 @@ export default function ExperienceDetailPage() {
 
         const data = await res.json();
         setExperience(data);
+
+        const photosRes = await fetch(`${API_URL}/api/experiences/${id}/photos/`, {
+          credentials: "include",
+        });
+
+        if (photosRes.ok) {
+          const photosData = await photosRes.json();
+          setExtraPhotos(Array.isArray(photosData) ? photosData : []);
+        } else {
+          const text = await photosRes.text();
+          console.error("Failed to load experience photos:", photosRes.status, text);
+          setExtraPhotos([]);
+        }
+
       } catch (error) {
         console.error("Experience detail fetch error:", error);
       } finally {
@@ -59,6 +74,19 @@ export default function ExperienceDetailPage() {
       </main>
     );
   }
+
+    const galleryPhotos =
+      extraPhotos.length > 0
+        ? extraPhotos
+        : experience.image_url
+        ? [
+            {
+              id: "cover",
+              image_url: experience.image_url,
+              caption: experience.title || "Main experience photo",
+            },
+          ]
+        : [];
 
   return (
     <main style={page}>
@@ -92,22 +120,34 @@ export default function ExperienceDetailPage() {
           {experience.destination_name ? ` · ${experience.destination_name}` : ""}
         </div>
 
-        {experience.image_url && (
+        {galleryPhotos.length > 0 && (
           <div style={galleryBox}>
             <button
               onClick={() => setShowGallery(!showGallery)}
               style={galleryButton}
             >
-              {showGallery ? "Hide photo gallery" : "View photo gallery"}
+              {showGallery
+                ? "Hide photo gallery"
+                : `View photo gallery (${galleryPhotos.length})`}
             </button>
 
             {showGallery && (
               <div style={galleryGrid}>
-                <img
-                  src={experience.image_url}
-                  alt={experience.title || "Shared experience"}
-                  style={galleryImage}
-                />
+                {galleryPhotos.map((photo) => (
+                  <div key={photo.id} style={{ display: "grid", gap: "6px" }}>
+                    <img
+                      src={photo.image_url}
+                      alt={photo.caption || experience.title || "Experience photo"}
+                      style={galleryImage}
+                    />
+
+                    {photo.caption && (
+                      <div style={{ fontSize: "12px", color: "#777" }}>
+                        {photo.caption}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -255,14 +295,14 @@ const galleryButton = {
 
 const galleryGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(1, 1fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
   gap: "10px",
   marginTop: "12px",
 };
 
 const galleryImage = {
   width: "100%",
-  maxHeight: "220px",
+  height: "160px",
   objectFit: "cover" as const,
   borderRadius: "12px",
   border: "1px solid #eee",

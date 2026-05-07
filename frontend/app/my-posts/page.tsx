@@ -36,11 +36,16 @@ const [editingExperienceId, setEditingExperienceId] = useState<number | null>(nu
 const [editTitle, setEditTitle] = useState("");
 const [editComment, setEditComment] = useState("");
 const [editRating, setEditRating] = useState<number | null>(null);
+const [imageAction, setImageAction] = useState<"keep" | "replace" | "remove">("keep");
+const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 
 const [editImageFile, setEditImageFile] = useState<File | null>(null);
-const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
-const [imageAction, setImageAction] = useState<"keep" | "replace" | "remove">("keep");
+const [removeImage, setRemoveImage] = useState(false);
 const [savingExperience, setSavingExperience] = useState(false);
+
+const [extraPhotoFile, setExtraPhotoFile] = useState<File | null>(null);
+const [extraPhotoCaption, setExtraPhotoCaption] = useState("");
+const [uploadingExtraPhoto, setUploadingExtraPhoto] = useState(false);
 
 const loadPosts = async () => {
   try {
@@ -88,6 +93,10 @@ const startEditingExperience = (experience: MyExperience) => {
   setEditComment(experience.comment || "");
   setEditRating(experience.rating || null);
   setEditImageFile(null);
+  setRemoveImage(false);
+  setExtraPhotoFile(null);
+  setExtraPhotoCaption("");
+  setUploadingExtraPhoto(false);
   setEditImagePreview(null);
   setImageAction("keep");
 };
@@ -101,6 +110,10 @@ const cancelEditingExperience = () => {
   setEditComment("");
   setEditRating(null);
   setEditImageFile(null);
+  setRemoveImage(false);
+  setExtraPhotoFile(null);
+  setExtraPhotoCaption("");
+  setUploadingExtraPhoto(false);
   setEditImagePreview(null);
   setImageAction("keep");
 };
@@ -178,6 +191,53 @@ const saveEditedExperience = async (experienceId: number) => {
     setSavingExperience(false);
   }
 };
+
+// =========================
+// Upload extra gallery photo
+// =========================
+const uploadExtraPhoto = async (experienceId: number) => {
+  if (!extraPhotoFile) {
+    alert("Please choose an extra photo first.");
+    return;
+  }
+
+  setUploadingExtraPhoto(true);
+
+  try {
+    const formData = new FormData();
+
+    formData.append("image", extraPhotoFile);
+
+    if (extraPhotoCaption.trim()) {
+      formData.append("caption", extraPhotoCaption.trim());
+    }
+
+    const res = await fetch(`${API_URL}/api/experiences/${experienceId}/photos/`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Failed to upload extra photo:", data);
+      alert(data.detail || "Error uploading extra photo.");
+      return;
+    }
+
+    setExtraPhotoFile(null);
+    setExtraPhotoCaption("");
+
+    alert("Extra photo added to the experience gallery.");
+  } catch (error) {
+    console.error("Upload extra photo failed:", error);
+    alert("Error uploading extra photo.");
+  } finally {
+    setUploadingExtraPhoto(false);
+  }
+};
+
 
   useEffect(() => {
     loadPosts();
@@ -433,13 +493,52 @@ const saveEditedExperience = async (experienceId: number) => {
                       </div>
                     )}
 
+                    <div style={extraGalleryBox}>
+                      <strong style={{ fontSize: "14px" }}>Extra gallery photo</strong>
+
+                      <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4 }}>
+                        Add one extra photo to this experience gallery. You can repeat this later, up to 3 photos.
+                      </div>
+
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setExtraPhotoFile(file);
+                        }}
+                        style={input}
+                      />
+
+                      <input
+                        value={extraPhotoCaption}
+                        onChange={(e) => setExtraPhotoCaption(e.target.value)}
+                        placeholder="Optional caption"
+                        maxLength={160}
+                        style={input}
+                      />
+
+                      <button
+                        type="button"
+                        style={{
+                          ...secondaryButton,
+                          opacity: uploadingExtraPhoto || !extraPhotoFile ? 0.5 : 1,
+                          cursor: uploadingExtraPhoto || !extraPhotoFile ? "not-allowed" : "pointer",
+                        }}
+                        disabled={uploadingExtraPhoto || !extraPhotoFile}
+                        onClick={() => uploadExtraPhoto(experience.id)}
+                      >
+                        {uploadingExtraPhoto ? "Uploading..." : "Add extra photo"}
+                      </button>
+                    </div>
+
                     <div style={actions}>
                       <Link
-                        href={`/places/${experience.place_id}/experiences`}
-                        style={secondaryLink}
-                      >
-                        View experiences
-                      </Link>
+                          href={`/experiences/${experience.id}`}
+                          style={secondaryLink}
+                        >
+                          View experience
+                        </Link>
 
                       <button
                         style={secondaryButton}
@@ -605,6 +704,15 @@ const input = {
   borderRadius: "10px",
   border: "1px solid #ddd",
   fontSize: "14px",
+};
+
+const extraGalleryBox = {
+  display: "grid",
+  gap: "10px",
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "#fafafa",
 };
 
 const imageEditBox = {

@@ -584,19 +584,18 @@ const newReply = await response.json();
                     )}
 
                     {e.image_url && (
-
                       <img
                         src={e.image_url}
                         alt={e.title || "Shared experience"}
                         style={{
-                          width: "100%",
-                          maxHeight: "260px",
+                          width: "140px",
+                          height: "90px",
                           objectFit: "cover",
-                          borderRadius: "12px",
-                          marginTop: "10px",
+                          borderRadius: "10px",
+                          marginTop: "8px",
                           marginBottom: "10px",
                           border: "1px solid #eee",
-
+                          display: "block",
                         }}
                       />
                     )}
@@ -676,7 +675,7 @@ const newReply = await response.json();
                       </button>
 
                         <Link
-                          href={`/experiences/${e.id}`}
+                          href={`/View full experience/${e.id}`}
                           style={{
                             marginTop: "10px",
                             fontSize: "12px",
@@ -689,7 +688,7 @@ const newReply = await response.json();
                             display: "inline-block",
                           }}
                         >
-                          Open experience
+                          View full experience
                         </Link>
 
 
@@ -854,13 +853,14 @@ const newReply = await response.json();
                             src={e.image_url}
                             alt={e.title || "Shared experience"}
                             style={{
-                              width: "100%",
-                              maxHeight: "260px",
+                              width: "140px",
+                              height: "90px",
                               objectFit: "cover",
-                              borderRadius: "12px",
-                              marginTop: "10px",
+                              borderRadius: "10px",
+                              marginTop: "8px",
                               marginBottom: "10px",
                               border: "1px solid #eee",
+                              display: "block",
                             }}
                           />
                         )}
@@ -894,7 +894,7 @@ const newReply = await response.json();
 
                     <div style={{ marginTop: "10px" }}>
                       <Link
-                        href={`/experiences/${e.id}`}
+                        href={`/View full experience/${e.id}`}
                         style={{
                           fontSize: "12px",
                           padding: "4px 10px",
@@ -906,7 +906,7 @@ const newReply = await response.json();
                           display: "inline-block",
                         }}
                       >
-                        Open experience
+                        View full experience
                       </Link>
                     </div>
 
@@ -1002,13 +1002,14 @@ const newReply = await response.json();
                             src={e.image_url}
                             alt={e.title || "Shared experience"}
                             style={{
-                              width: "100%",
-                              maxHeight: "260px",
+                              width: "140px",
+                              height: "90px",
                               objectFit: "cover",
-                              borderRadius: "12px",
-                              marginTop: "10px",
+                              borderRadius: "10px",
+                              marginTop: "8px",
                               marginBottom: "10px",
                               border: "1px solid #eee",
+                              display: "block",
                             }}
                           />
                         )}
@@ -1040,7 +1041,7 @@ const newReply = await response.json();
                               display: "inline-block",
                             }}
                           >
-                            Open experience
+                            View full experience
                           </Link>
                         </div>
 

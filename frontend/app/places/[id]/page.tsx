@@ -517,7 +517,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                           fontSize: "13px",
                         }}
                       >
-                        See full experience
+                        View full experience
                       </Link>
                     </div>
 

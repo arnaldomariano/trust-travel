@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../../../lib/api";
@@ -10,6 +10,8 @@ export default function ExperiencesPage() {
   const params = useParams();
   const id = params.id;
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightedExperienceId = searchParams.get("highlight");
 
   const [experiences, setExperiences] = useState<any[]>([]);
   const [place, setPlace] = useState<any>(null);
@@ -77,6 +79,12 @@ export default function ExperiencesPage() {
     );
   });
 
+  const highlightedExperience = highlightedExperienceId
+  ? sortedExperiences.find(
+      (e) => String(e.id) === String(highlightedExperienceId)
+    )
+  : null;
+
   const trustedExperiences = sortedExperiences.filter(
     (e) => e.trust_level === 1 && e.user !== currentUsername
   );
@@ -86,8 +94,11 @@ export default function ExperiencesPage() {
   );
 
   const otherExperiences = sortedExperiences.filter(
-    (e) => e.trust_level === 3 && e.user !== currentUsername
-  );
+  (e) =>
+    e.trust_level === 3 &&
+    e.user !== currentUsername &&
+    (!highlightedExperience || e.id !== highlightedExperience.id)
+    );
 
   const getTrustedRepliesCount = (experienceId: number) =>
     (repliesByExperience[experienceId] || []).filter(
@@ -405,7 +416,84 @@ const newReply = await response.json();
     <main style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
       <h1>Experiences about {place?.name}</h1>
 
-      {trendingExperiences.length > 0 && (
+    {highlightedExperience && (
+      <div
+        style={{
+          marginTop: "20px",
+          marginBottom: "30px",
+          padding: "18px",
+          borderRadius: "14px",
+          background: "white",
+          border: "1px solid #e5e5e5",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+        }}
+      >
+        <div style={{ fontSize: "13px", color: "#777", marginBottom: "8px" }}>
+          Selected experience
+        </div>
+
+        {highlightedExperience.rating && (
+          <div style={{ color: "#f5b50a", marginBottom: "8px" }}>
+            {"★".repeat(highlightedExperience.rating)}
+            {"☆".repeat(5 - highlightedExperience.rating)}
+          </div>
+        )}
+
+        {highlightedExperience.title && (
+          <div
+            style={{
+              fontWeight: 700,
+              fontSize: "18px",
+              marginBottom: "8px",
+            }}
+          >
+            {highlightedExperience.title}
+          </div>
+        )}
+
+        {highlightedExperience.image_url && (
+          <img
+            src={highlightedExperience.image_url}
+            alt={highlightedExperience.title || "Shared experience"}
+            style={{
+              width: "140px",
+              height: "90px",
+              objectFit: "cover",
+              borderRadius: "10px",
+              marginBottom: "10px",
+              border: "1px solid #eee",
+              display: "block",
+            }}
+          />
+        )}
+
+        <div style={{ lineHeight: 1.5, marginBottom: "10px" }}>
+          {highlightedExperience.comment}
+        </div>
+
+        <div style={{ fontSize: "13px", color: "#777", marginBottom: "12px" }}>
+          — {highlightedExperience.user} • {timeAgo(highlightedExperience.created_at)}
+        </div>
+
+        <Link
+          href={`/experiences/${highlightedExperience.id}`}
+          style={{
+            fontSize: "13px",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            border: "1px solid #ddd",
+            background: "#f9f9f9",
+            color: "#111",
+            textDecoration: "none",
+            display: "inline-block",
+          }}
+        >
+          View full experience
+        </Link>
+      </div>
+    )}
+
+      {!highlightedExperience && trendingExperiences.length > 0 && (
         <div
           style={{
             marginTop: "20px",
@@ -485,6 +573,7 @@ const newReply = await response.json();
         </div>
       )}
 
+     {trustedActivities.length > 0 && (
       <div
         style={{
           marginTop: "20px",
@@ -496,42 +585,41 @@ const newReply = await response.json();
         }}
       >
         <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "8px" }}>
-          Trusted activity
+          Recent trusted activity
         </div>
 
         <div style={{ fontSize: "14px", color: "#666", lineHeight: 1.6 }}>
-          {trustedActivities.length > 0 ? (
-            <>
-              <div style={{ marginBottom: "8px" }}>
-                New activity from your network
-              </div>
+          <div style={{ marginBottom: "8px" }}>
+            New activity from your network
+          </div>
 
-              {trustedActivities.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => router.push(`/places/${id}/experiences`)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <strong>{item.user}</strong>{" "}
-                  {item.type === "review"
-                    ? "commented on"
-                    : "replied to a review on"}{" "}
-                  <strong>{place?.name}</strong>
-                  {destination?.name && (
-                    <>
-                      {" "}
-                      • <strong>{destination.name}</strong>
-                    </>
-                  )}{" "}
-                  • {timeAgo(item.created_at)}
-                </div>
-              ))}
-            </>
-          ) : (
-            <div>No recent activity yet.</div>
-          )}
+          {trustedActivities.map((item) => (
+            <div
+              key={`${item.type}-${item.id}`}
+              onClick={() =>
+                item.type === "review"
+                  ? router.push(`/experiences/${item.id}`)
+                  : router.push(`/places/${id}/experiences`)
+              }
+              style={{ cursor: "pointer" }}
+            >
+              <strong>{item.user}</strong>{" "}
+              {item.type === "review"
+                ? "shared an experience about"
+                : "replied to a review on"}{" "}
+              <strong>{place?.name}</strong>
+              {destination?.name && (
+                <>
+                  {" "}
+                  • <strong>{destination.name}</strong>
+                </>
+              )}{" "}
+              • {timeAgo(item.created_at)}
+            </div>
+          ))}
         </div>
       </div>
+    )}
 
       <div style={{ marginTop: "30px" }}>
         {trustedExperiences.length > 0 && (

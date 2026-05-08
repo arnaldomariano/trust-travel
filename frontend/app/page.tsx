@@ -279,7 +279,14 @@ export default function HomePage() {
                   e.stopPropagation();
 
                   markUpdateAsSeen(item.id);
+
+                 if (item.type === "experience" && item.experience_id) {
+                  router.push(`/places/${item.place_id}/experiences?highlight=${item.experience_id}`);
+                } else if (item.type === "experience") {
+                  router.push(`/places/${item.place_id}/experiences`);
+                } else {
                   router.push(`/places/${item.place_id}`);
+                }
                 }}
 
               >

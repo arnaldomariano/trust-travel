@@ -310,52 +310,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           </>
         )}
 
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "30px" }}>
-          <Link
-            href={`/places/${id}/experiences`}
-            style={{
-              padding: "10px 16px",
-              backgroundColor: "#f5f5f5",
-              color: "#111",
-              borderRadius: "8px",
-              textDecoration: "none",
-              fontSize: "14px",
-              border: "1px solid #ddd",
-            }}
-          >
-            View experiences
-          </Link>
-
-          {isLoggedIn ? (
-          <Link
-            href="/destinations"
-            style={{
-              padding: "10px 16px",
-              backgroundColor: "#111",
-              color: "white",
-              borderRadius: "8px",
-              textDecoration: "none",
-              fontSize: "14px",
-            }}
-          >
-            ✍️ Share your experience
-          </Link>
-        ) : (
-          <Link
-            href={`/login?next=/destinations`}
-            style={{
-              padding: "10px 16px",
-              backgroundColor: "#111",
-              color: "white",
-              borderRadius: "8px",
-              textDecoration: "none",
-              fontSize: "14px",
-            }}
-          >
-            Login to share your experience
-          </Link>
-        )}
-        </div>
 
 
         <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>

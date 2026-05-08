@@ -493,11 +493,20 @@ const uploadExtraPhoto = async (experienceId: number) => {
                       </div>
                     )}
 
-                    <div style={extraGalleryBox}>
-                      <strong style={{ fontSize: "14px" }}>Extra gallery photo</strong>
+                   <div style={extraGalleryBox}>
+                      <strong style={{ fontSize: "14px" }}>Extra gallery photos</strong>
 
-                      <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4 }}>
-                        Add one extra photo to this experience gallery. You can repeat this later, up to 3 photos.
+                      <div
+                        style={{
+                          marginTop: "6px",
+                          marginBottom: "12px",
+                          fontSize: "12px",
+                          color: "#777",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Add up to 3 extra photos to this experience gallery. Upload one photo at a time.
+                        These photos will appear when travelers open the photo gallery on the full experience page.
                       </div>
 
                       <input
@@ -513,7 +522,7 @@ const uploadExtraPhoto = async (experienceId: number) => {
                       <input
                         value={extraPhotoCaption}
                         onChange={(e) => setExtraPhotoCaption(e.target.value)}
-                        placeholder="Optional caption"
+                        placeholder="Optional caption for this photo"
                         maxLength={160}
                         style={input}
                       />

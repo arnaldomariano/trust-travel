@@ -23,6 +23,7 @@ export default function DestinationsPage() {
 >("city");
 
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
+  const [showShareForm, setShowShareForm] = useState(false);
 
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
@@ -71,19 +72,35 @@ export default function DestinationsPage() {
   // =========================
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const filteredPlaces = places
-      .filter((place) => {
-        if (!normalizedSearch) return false;
+const filteredPlaces = places
+  .filter((place) => {
+    if (!normalizedSearch) return false;
 
-        return (
-          (place.name || "").toLowerCase().includes(normalizedSearch) ||
-          (place.city || "").toLowerCase().includes(normalizedSearch) ||
-          (place.destination_name || "").toLowerCase().includes(normalizedSearch) ||
-          (place.destination_country || "").toLowerCase().includes(normalizedSearch) ||
-          (place.destination_city || "").toLowerCase().includes(normalizedSearch)
-        );
-      })
-      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    return (
+      (place.name || "").toLowerCase().includes(normalizedSearch) ||
+      (place.city || "").toLowerCase().includes(normalizedSearch) ||
+      (place.destination_name || "").toLowerCase().includes(normalizedSearch) ||
+      (place.destination_country || "").toLowerCase().includes(normalizedSearch) ||
+      (place.destination_city || "").toLowerCase().includes(normalizedSearch)
+    );
+  })
+  .sort((a, b) => {
+    const aMatchesSelectedType = a.place_type === placeType ? 0 : 1;
+    const bMatchesSelectedType = b.place_type === placeType ? 0 : 1;
+
+    if (aMatchesSelectedType !== bMatchesSelectedType) {
+      return aMatchesSelectedType - bMatchesSelectedType;
+    }
+
+    const aExactName = (a.name || "").toLowerCase() === normalizedSearch ? 0 : 1;
+    const bExactName = (b.name || "").toLowerCase() === normalizedSearch ? 0 : 1;
+
+    if (aExactName !== bExactName) {
+      return aExactName - bExactName;
+    }
+
+    return (a.name || "").localeCompare(b.name || "");
+  });
 
   const canCreatePlace = !!newPlaceName.trim();
 
@@ -137,6 +154,20 @@ const countryPlaceholderByType: Record<typeof placeType, string> = {
   other: "Country, if relevant",
 };
 
+const getPlaceTypeLabel = (type?: string) => {
+  const labels: Record<string, string> = {
+    country: "Country",
+    city: "City / Region",
+    attraction: "Tourist attraction",
+    hotel: "Hotel",
+    restaurant: "Restaurant / Café",
+    nature: "Beach / Nature spot",
+    other: "Other",
+  };
+
+  return labels[type || ""] || "Place";
+};
+
   // =========================
   // Create a basic place
   // =========================
@@ -154,6 +185,7 @@ const countryPlaceholderByType: Record<typeof placeType, string> = {
         },
         body: JSON.stringify({
           name: newPlaceName.trim(),
+          place_type: placeType,
           city: placeType === "country" ? "" : newPlaceCity.trim(),
           country:
             placeType === "country"
@@ -198,13 +230,18 @@ const countryPlaceholderByType: Record<typeof placeType, string> = {
   // =========================
   const handleSelectExistingPlace = (place: any) => {
   setSelectedPlace(place);
+  setShowShareForm(false);
   setExperienceShared(false);
   setSharedExperience(null);
   setEditingExperience(false);
+  setTitle("");
+  setComment("");
+  setRating(null);
+  setImageFile(null);
 
   setTimeout(() => {
     document
-      .getElementById("share-experience-form")
+      .getElementById("selected-place-actions")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, 0);
 };
@@ -221,6 +258,7 @@ const countryPlaceholderByType: Record<typeof placeType, string> = {
     setExperienceShared(false);
     setSharedExperience(null);
     setEditingExperience(false);
+    setShowShareForm(false);
   };
 
   // =========================
@@ -239,6 +277,7 @@ const countryPlaceholderByType: Record<typeof placeType, string> = {
     setExperienceShared(false);
     setSharedExperience(null);
     setEditingExperience(false);
+    setShowShareForm(false);
   };
 
 // =========================
@@ -430,6 +469,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   setExperienceShared(false);
                   setSharedExperience(null);
                   setEditingExperience(false);
+                  setShowShareForm(false);
                 }}
                 style={{
                   padding: "8px 12px",
@@ -484,7 +524,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       ) : filteredPlaces.length > 0 ? (
         <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
           <p style={{ color: "#666", margin: 0 }}>
-            We found existing places. Choose one to explore existing experiences or share your own:
+              We found existing places. Results matching your selected type appear first:
           </p>
 
           {filteredPlaces.map((place) => (
@@ -503,7 +543,30 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
               }}
             >
+              <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                alignItems: "center",
+              }}
+            >
               <strong>{place.name}</strong>
+
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "#555",
+                  background: "#f5f5f5",
+                  border: "1px solid #e5e5e5",
+                  borderRadius: "999px",
+                  padding: "4px 8px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {getPlaceTypeLabel(place.place_type)}
+              </span>
+            </div>
 
               <div
                 style={{
@@ -579,51 +642,85 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         </section>
       )}
 
-      {selectedPlace && (
+        {selectedPlace && (
+  <section
+    id="selected-place-actions"
+    style={{
+      marginTop: "28px",
+      padding: "22px",
+      border: "1px solid #eee",
+      borderRadius: "16px",
+      background: "white",
+      maxWidth: "620px",
+    }}
+  >
+    <h2 style={{ marginTop: 0 }}>{selectedPlace.name}</h2>
+
+    <p style={{ color: "#666", lineHeight: 1.5 }}>
+      Choose what you want to do next.
+    </p>
+
+    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+      <button
+        type="button"
+        onClick={() => router.push(`/places/${selectedPlace.id}/experiences`)}
+        style={primaryButton}
+      >
+        View experiences
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setShowShareForm(true)}
+        style={secondaryButton}
+      >
+        Share your experience
+      </button>
+
+      <button
+        type="button"
+        onClick={handleChangePlace}
+        style={secondaryButton}
+      >
+        Change selection
+      </button>
+    </div>
+  </section>
+)}
+
+        {selectedPlace && showShareForm && (
           <section
             id="share-experience-form"
             style={{
-            marginTop: "28px",
-            padding: "22px",
-            border: "1px solid #eee",
-            borderRadius: "16px",
-            background: "white",
-            maxWidth: "620px",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>
-              Explore or share about {selectedPlace.name}
-          </h2>
+              marginTop: "18px",
+              padding: "22px",
+              border: "1px solid #eee",
+              borderRadius: "16px",
+              background: "white",
+              maxWidth: "620px",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>
+              Share your experience about {selectedPlace.name}
+            </h2>
 
-          {!experienceShared && (
-            <button
-              onClick={handleChangePlace}
-              style={{
-                ...secondaryButton,
-                marginBottom: "16px",
-              }}
-            >
-              Change selection
-            </button>
-          )}
+            {experienceShared ? (
+              <div>
+                <p style={{ color: "#555", lineHeight: 1.5 }}>
+                  Your experience was shared successfully.
+                </p>
 
-          {experienceShared ? (
-            <div>
-              <p style={{ color: "#555", lineHeight: 1.5 }}>
-                Your experience was shared successfully.
-              </p>
-
-              {sharedExperience && (
-                <div style={previewCard}>
-                  <div
-                    style={{
-                      fontSize: "13px",
-                      color: "#777",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    Published experience
-                  </div>
+                {sharedExperience && (
+                  <div style={previewCard}>
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "#777",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      Published experience
+                    </div>
 
                     <div style={{ fontWeight: 600, lineHeight: 1.5 }}>
                       {sharedExperience.title || "Shared experience"}
@@ -647,36 +744,37 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                     <div style={{ marginTop: "8px", color: "#555", lineHeight: 1.5 }}>
                       {sharedExperience.comment}
                     </div>
-                  <div
-                    style={{
-                      marginTop: "10px",
-                      color: "#777",
-                      fontSize: "13px",
-                    }}
-                  >
-                    Rating: {"★".repeat(sharedExperience.rating)}
-                    {"☆".repeat(5 - sharedExperience.rating)}
-                  </div>
-                </div>
-              )}
 
-                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        color: "#777",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Rating: {"★".repeat(sharedExperience.rating)}
+                      {"☆".repeat(5 - sharedExperience.rating)}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                   <button onClick={startEditingExperience} style={secondaryButton}>
                     Edit experience
                   </button>
 
                   <button
-                  onClick={() =>
-                    sharedExperience
-                      ? router.push(
-                          `/places/${selectedPlace.id}/experiences?highlight=${sharedExperience.id}`
-                        )
-                      : router.push(`/places/${selectedPlace.id}/experiences`)
-                  }
-                  style={primaryButton}
-                >
-                  View your experience
-                </button>
+                    onClick={() =>
+                      sharedExperience
+                        ? router.push(
+                            `/places/${selectedPlace.id}/experiences?highlight=${sharedExperience.id}`
+                          )
+                        : router.push(`/places/${selectedPlace.id}/experiences`)
+                    }
+                    style={primaryButton}
+                  >
+                    View your experience
+                  </button>
 
                   <button onClick={handleChangePlace} style={secondaryButton}>
                     Choose another place
@@ -692,48 +790,48 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 </div>
               </div>
             ) : (
-            <form
-              onSubmit={editingExperience ? handleUpdateExperience : handleSubmitExperience}
-              style={{ display: "grid", gap: "14px" }}
-            >
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Experience title, e.g. Beautiful but too crowded in high season"
-                maxLength={160}
-                style={input}
-              />
+              <form
+                onSubmit={editingExperience ? handleUpdateExperience : handleSubmitExperience}
+                style={{ display: "grid", gap: "14px" }}
+              >
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Experience title, e.g. Beautiful but too crowded in high season"
+                  maxLength={160}
+                  style={input}
+                />
 
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Write your experience..."
-                rows={4}
-                style={input}
-              />
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Write your experience..."
+                  rows={4}
+                  style={input}
+                />
 
-              <input
-                type="number"
-                min="1"
-                max="5"
-                value={rating ?? ""}
-                onChange={(e) => {
-                  const value = e.target.value;
+                <input
+                  type="number"
+                  min="1"
+                  max="5"
+                  value={rating ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
 
-                  if (!value) {
-                    setRating(null);
-                    return;
-                  }
+                    if (!value) {
+                      setRating(null);
+                      return;
+                    }
 
-                  const numeric = Number(value);
+                    const numeric = Number(value);
 
-                  if (numeric >= 1 && numeric <= 5) {
-                    setRating(numeric);
-                  }
-                }}
-                placeholder="Rating from 1 to 5"
-                style={input}
-              />
+                    if (numeric >= 1 && numeric <= 5) {
+                      setRating(numeric);
+                    }
+                  }}
+                  placeholder="Rating from 1 to 5"
+                  style={input}
+                />
 
                 {!editingExperience && (
                   <div style={{ display: "grid", gap: "6px" }}>
@@ -757,33 +855,33 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   </div>
                 )}
 
-              <button
-                type="submit"
-                disabled={submittingExperience || !title.trim() || !rating || !comment.trim()}
-                style={{
-                  ...primaryButton,
-                  opacity:
-                    submittingExperience || !title.trim() || !rating || !comment.trim()
-                      ? 0.5
-                      : 1,
-                  cursor:
-                    submittingExperience || !title.trim() || !rating || !comment.trim()
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-              >
-                {submittingExperience
-                  ? editingExperience
-                    ? "Saving..."
-                    : "Sharing..."
-                  : editingExperience
-                  ? "Save changes"
-                  : "Share experience"}
-              </button>
-            </form>
-          )}
-        </section>
-      )}
+                <button
+                  type="submit"
+                  disabled={submittingExperience || !title.trim() || !rating || !comment.trim()}
+                  style={{
+                    ...primaryButton,
+                    opacity:
+                      submittingExperience || !title.trim() || !rating || !comment.trim()
+                        ? 0.5
+                        : 1,
+                    cursor:
+                      submittingExperience || !title.trim() || !rating || !comment.trim()
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  {submittingExperience
+                    ? editingExperience
+                      ? "Saving..."
+                      : "Sharing..."
+                    : editingExperience
+                    ? "Save changes"
+                    : "Share experience"}
+                </button>
+              </form>
+            )}
+          </section>
+        )}
     </main>
   );
 }

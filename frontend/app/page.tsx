@@ -442,7 +442,7 @@ export default function HomePage() {
                 }}
                 style={menuItemButton}
               >
-                Share an experience
+                Share an experience or search a destination
               </button>
             </div>
           )}

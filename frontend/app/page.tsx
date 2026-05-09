@@ -401,13 +401,13 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Create / Share menu */}
+        {/* Search / Create / Share menu */}
         <div style={{ position: "relative" }}>
           <button
             onClick={() => setShowCreateMenu((prev) => !prev)}
             style={primaryButton}
           >
-            Create / Share
+            Search / Create / Share
           </button>
 
           {showCreateMenu && (

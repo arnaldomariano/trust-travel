@@ -546,12 +546,27 @@ const newReply = await response.json();
           </div>
 
           {trendingExperiences.map((e) => (
-            <div key={e.id} style={{ marginBottom: "10px" }}>
-              <strong>{e.user}</strong> • {(e.title || e.comment).slice(0, 60)}...
+              <div
+                key={e.id}
+                onClick={() =>
+                  router.push(`/places/${id}/experiences?highlight=${e.id}`)
+                }
+                style={{
+                  marginBottom: "10px",
+                  cursor: "pointer",
+                  padding: "8px",
+                  borderRadius: "8px",
+                }}
+              >
+                <strong>{e.user}</strong> • {(e.title || e.comment).slice(0, 60)}...
 
-              <div style={{ fontSize: "12px", color: "#666" }}>
-                ⭐ {getTrustedRepliesCount(e.id)} trusted interactions
-              </div>
+                <div style={{ fontSize: "12px", color: "#666" }}>
+                  ⭐ {getTrustedRepliesCount(e.id)} trusted interactions
+                </div>
+
+                <div style={{ fontSize: "12px", color: "#777", marginTop: "2px" }}>
+                  View this experience →
+                </div>
 
               <div style={{ fontSize: "12px", color: "#999" }}>
                 {getWhyExplanation(e)}
@@ -567,7 +582,7 @@ const newReply = await response.json();
         </div>
       )}
 
-      {currentUsername && (
+       {currentUsername && (
         <div style={{ fontSize: "13px", color: "#666", marginTop: "6px" }}>
           Viewing as <strong>{currentUsername}</strong>
         </div>
@@ -597,10 +612,10 @@ const newReply = await response.json();
             <div
               key={`${item.type}-${item.id}`}
               onClick={() =>
-                item.type === "review"
-                  ? router.push(`/experiences/${item.id}`)
-                  : router.push(`/places/${id}/experiences`)
-              }
+                  item.type === "review"
+                    ? router.push(`/places/${id}/experiences?highlight=${item.id}`)
+                    : router.push(`/places/${id}/experiences`)
+                }
               style={{ cursor: "pointer" }}
             >
               <strong>{item.user}</strong>{" "}
@@ -763,21 +778,21 @@ const newReply = await response.json();
                       </button>
 
                         <Link
-                          href={`/View full experience/${e.id}`}
-                          style={{
-                            marginTop: "10px",
-                            fontSize: "12px",
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            border: "1px solid #ddd",
-                            background: "#f9f9f9",
-                            color: "#111",
-                            textDecoration: "none",
-                            display: "inline-block",
-                          }}
-                        >
-                          View full experience
-                        </Link>
+                              href={`/experiences/${e.id}`}
+                              style={{
+                                marginTop: "10px",
+                                fontSize: "12px",
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid #ddd",
+                                background: "#f9f9f9",
+                                color: "#111",
+                                textDecoration: "none",
+                                display: "inline-block",
+                              }}
+                            >
+                              View full experience
+                            </Link>
 
 
 
@@ -982,17 +997,17 @@ const newReply = await response.json();
 
                     <div style={{ marginTop: "10px" }}>
                       <Link
-                        href={`/View full experience/${e.id}`}
-                        style={{
-                          fontSize: "12px",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
-                          border: "1px solid #ddd",
-                          background: "#f9f9f9",
-                          color: "#111",
-                          textDecoration: "none",
-                          display: "inline-block",
-                        }}
+                            href={`/experiences/${e.id}`}
+                            style={{
+                              fontSize: "12px",
+                              padding: "4px 10px",
+                              borderRadius: "6px",
+                              border: "1px solid #ddd",
+                              background: "#f9f9f9",
+                              color: "#111",
+                              textDecoration: "none",
+                              display: "inline-block",
+                            }}
                       >
                         View full experience
                       </Link>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,6 +18,9 @@ export default function DestinationsPage() {
   const [newPlaceName, setNewPlaceName] = useState("");
   const [newPlaceCity, setNewPlaceCity] = useState("");
   const [newPlaceCountry, setNewPlaceCountry] = useState("");
+  const [placeType, setPlaceType] = useState<
+  "country" | "city" | "attraction" | "hotel" | "restaurant" | "nature" | "other"
+>("city");
 
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
 
@@ -62,27 +65,6 @@ export default function DestinationsPage() {
     loadData();
   }, []);
 
-  // =========================
-  // Keep new place name aligned with search
-  // =========================
-  useEffect(() => {
-    if (!selectedPlace && searchTerm.trim()) {
-      setNewPlaceName(searchTerm.trim());
-    }
-  }, [searchTerm, selectedPlace]);
-
-  // =========================
-  // Destination lookup map
-  // =========================
-  const destinationNameById = useMemo(() => {
-    const map: Record<number, string> = {};
-
-    destinations.forEach((destination) => {
-      map[destination.id] = destination.name;
-    });
-
-    return map;
-  }, [destinations]);
 
   // =========================
   // Search and filtering
@@ -105,6 +87,56 @@ export default function DestinationsPage() {
 
   const canCreatePlace = !!newPlaceName.trim();
 
+  const placeTypeLabels: Record<typeof placeType, string> = {
+  country: "Country",
+  city: "City / Region",
+  attraction: "Tourist attraction",
+  hotel: "Hotel",
+  restaurant: "Restaurant / Café",
+  nature: "Beach / Nature spot",
+  other: "Other",
+};
+
+const searchPlaceholderByType: Record<typeof placeType, string> = {
+  country: "Search a country, e.g. Laos, Brazil, Italy",
+  city: "Search a city or region, e.g. Recife, Tuscany, Itatiaia",
+  attraction: "Search an attraction, e.g. Coliseu, Acropolis, Kuang Si Waterfalls",
+  hotel: "Search a hotel, e.g. Hotel name, resort, hostel...",
+  restaurant: "Search a restaurant or café, e.g. Café X, restaurant Y...",
+  nature: "Search a beach, park, trail, waterfall or nature spot...",
+  other: "Search a place, area, business or travel reference...",
+};
+
+const placeNamePlaceholderByType: Record<typeof placeType, string> = {
+  country: "Country name, e.g. Laos",
+  city: "City or region name, e.g. Recife, Tuscany, Itatiaia",
+  attraction: "Attraction name, e.g. Coliseu, Acropolis",
+  hotel: "Hotel name, e.g. Hotel X",
+  restaurant: "Restaurant or café name, e.g. Café X",
+  nature: "Nature spot name, e.g. Praia de Boa Viagem, Kuang Si Waterfalls",
+  other: "Neutral place name",
+};
+
+const cityPlaceholderByType: Record<typeof placeType, string> = {
+  country: "Optional region or capital, e.g. Southeast Asia",
+  city: "City or region, e.g. Recife, Tuscany",
+  attraction: "City or region, e.g. Rome, Athens, Luang Prabang",
+  hotel: "City or region where the hotel is located",
+  restaurant: "City or region where the restaurant is located",
+  nature: "City, region or nearest location",
+  other: "City or region, if relevant",
+};
+
+const countryPlaceholderByType: Record<typeof placeType, string> = {
+  country: "Country, e.g. Laos",
+  city: "Country, e.g. Brazil",
+  attraction: "Country, e.g. Italy, Greece, Laos",
+  hotel: "Country where the hotel is located",
+  restaurant: "Country where the restaurant is located",
+  nature: "Country, e.g. Brazil, Laos, Netherlands",
+  other: "Country, if relevant",
+};
+
   // =========================
   // Create a basic place
   // =========================
@@ -122,8 +154,11 @@ export default function DestinationsPage() {
         },
         body: JSON.stringify({
           name: newPlaceName.trim(),
-          city: newPlaceCity.trim(),
-          country: newPlaceCountry.trim(),
+          city: placeType === "country" ? "" : newPlaceCity.trim(),
+          country:
+            placeType === "country"
+              ? newPlaceName.trim()
+              : newPlaceCountry.trim(),
         }),
       });
 
@@ -353,15 +388,64 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         <Link href="/" style={{ color: "#666", textDecoration: "none" }}>
           Home
         </Link>{" "}
-        / <span>Share experience</span>
+        / <span>Explore</span>
       </div>
 
-      <h1>Where do you want to share your experience?</h1>
+      <h1>Find a destination or place</h1>
 
       <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
-        Search for a place first. If it already exists, you can share your
-        experience there. If not, you can create it.
+        Search by country, city, attraction, hotel, restaurant or nature spot.
+        You can read existing experiences first — and share your own if you want.
       </p>
+
+        <div style={{ marginBottom: "22px" }}>
+          <div style={{ fontWeight: 600, marginBottom: "10px" }}>
+            What do you want to search or share about?
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {[
+              ["country", "Country"],
+              ["city", "City / Region"],
+              ["attraction", "Tourist attraction"],
+              ["hotel", "Hotel"],
+              ["restaurant", "Restaurant / Café"],
+              ["nature", "Beach / Nature"],
+              ["other", "Other"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setPlaceType(value as typeof placeType);
+                  setSelectedPlace(null);
+                  setSearchTerm("");
+                  setNewPlaceName("");
+                  setNewPlaceCity("");
+                  setNewPlaceCountry("");
+                  setTitle("");
+                  setComment("");
+                  setRating(null);
+                  setImageFile(null);
+                  setExperienceShared(false);
+                  setSharedExperience(null);
+                  setEditingExperience(false);
+                }}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "999px",
+                  border: "1px solid #ddd",
+                  background: placeType === value ? "#111" : "white",
+                  color: placeType === value ? "white" : "#111",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <input
           value={searchTerm}
@@ -378,7 +462,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               setEditingExperience(false);
             }
           }}
-        placeholder="Search a place, city, beach, restaurant, viewpoint..."
+        placeholder={searchPlaceholderByType[placeType]}
         style={{
           width: "100%",
           maxWidth: "520px",
@@ -394,13 +478,13 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         <p style={{ color: "#666" }}>Loading places...</p>
       ) : !searchTerm.trim() ? (
         <div style={helperCard}>
-          Start typing the name of a place, for example: Vaticano, Maragogi,
-          Coliseu, or a viewpoint you visited.
+          Start typing based on the type you selected. For example, search for a country,
+          city, attraction, hotel, restaurant or nature spot.
         </div>
       ) : filteredPlaces.length > 0 ? (
         <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
           <p style={{ color: "#666", margin: 0 }}>
-            We found existing places. Choose one to share your experience:
+            We found existing places. Choose one to explore existing experiences or share your own:
           </p>
 
           {filteredPlaces.map((place) => (
@@ -437,7 +521,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               </div>
 
               <div style={{ marginTop: "10px", fontSize: "14px" }}>
-                Select this place →
+                Explore or share here →
               </div>
             </button>
           ))}
@@ -447,35 +531,36 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           <strong>No place found for “{searchTerm.trim()}”.</strong>
 
           <p
-            style={{
-              margin: "10px 0 16px 0",
-              color: "#666",
-              lineHeight: 1.5,
-            }}
-          >
-            You can create this place with a little more context before sharing your
-            experience.
-          </p>
+              style={{
+                margin: "10px 0 16px 0",
+                color: "#666",
+                lineHeight: 1.5,
+              }}
+            >
+              Create a neutral {placeTypeLabels[placeType].toLowerCase()} name that other
+              travelers can also use. Avoid using opinions, warnings, or personal advice
+              here. You can add your personal opinion in the experience title later.
+            </p>
 
           <div style={createPlaceForm}>
             <input
               value={newPlaceName}
               onChange={(e) => setNewPlaceName(e.target.value)}
-              placeholder="Place name"
+              placeholder={placeNamePlaceholderByType[placeType]}
               style={input}
             />
 
             <input
               value={newPlaceCity}
               onChange={(e) => setNewPlaceCity(e.target.value)}
-              placeholder="City or region, e.g. Itatiaia"
+              placeholder={cityPlaceholderByType[placeType]}
               style={input}
             />
 
             <input
               value={newPlaceCountry}
               onChange={(e) => setNewPlaceCountry(e.target.value)}
-              placeholder="Country, e.g. Brazil"
+              placeholder={countryPlaceholderByType[placeType]}
               style={input}
             />
 
@@ -507,7 +592,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           }}
         >
           <h2 style={{ marginTop: 0 }}>
-            Share your experience about {selectedPlace.name}
+              Explore or share about {selectedPlace.name}
           </h2>
 
           {!experienceShared && (
@@ -518,7 +603,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 marginBottom: "16px",
               }}
             >
-              Change place
+              Change selection
             </button>
           )}
 
@@ -581,14 +666,20 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   </button>
 
                   <button
-                    onClick={() => router.push(`/places/${selectedPlace.id}/experiences`)}
-                    style={primaryButton}
-                  >
-                    View experiences
-                  </button>
+                  onClick={() =>
+                    sharedExperience
+                      ? router.push(
+                          `/places/${selectedPlace.id}/experiences?highlight=${sharedExperience.id}`
+                        )
+                      : router.push(`/places/${selectedPlace.id}/experiences`)
+                  }
+                  style={primaryButton}
+                >
+                  View your experience
+                </button>
 
                   <button onClick={handleChangePlace} style={secondaryButton}>
-                    Share another experience
+                    Choose another place
                   </button>
 
                   <button onClick={() => router.push("/")} style={secondaryButton}>
@@ -608,7 +699,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Short title, e.g. Sunset on the way to Itatiaia"
+                placeholder="Experience title, e.g. Beautiful but too crowded in high season"
                 maxLength={160}
                 style={input}
               />

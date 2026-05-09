@@ -459,20 +459,20 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
                     <div style={{ marginTop: "12px" }}>
                       <Link
-                        href={`/places/${id}/experiences`}
-                        style={{
-                          display: "inline-block",
-                          padding: "8px 12px",
-                          borderRadius: "10px",
-                          border: "1px solid #ddd",
-                          backgroundColor: "#f9f9f9",
-                          color: "#111",
-                          textDecoration: "none",
-                          fontSize: "13px",
-                        }}
-                      >
-                        Read experience
-                      </Link>
+                          href={`/places/${id}/experiences?highlight=${item.id}`}
+                          style={{
+                            display: "inline-block",
+                            padding: "8px 12px",
+                            borderRadius: "10px",
+                            border: "1px solid #ddd",
+                            backgroundColor: "#f9f9f9",
+                            color: "#111",
+                            textDecoration: "none",
+                            fontSize: "13px",
+                          }}
+                        >
+                          Read experience
+                        </Link>
                     </div>
 
 

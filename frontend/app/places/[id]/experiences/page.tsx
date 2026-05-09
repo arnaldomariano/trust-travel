@@ -26,6 +26,30 @@ export default function ExperiencesPage() {
 
   const trustedReviewsCount = experiences.filter((e) => e.is_trusted).length;
 
+  const totalExperiences = experiences.length;
+
+  const ratedExperiences = experiences.filter((e) => e.rating);
+
+  const averageRating =
+   ratedExperiences.length > 0
+    ? (
+        ratedExperiences.reduce((sum, e) => sum + e.rating, 0) /
+        ratedExperiences.length
+      ).toFixed(1)
+    : null;
+
+  const recentExperiencesCount = experiences.filter((e) => {
+    const createdAt = new Date(e.created_at).getTime();
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+  return createdAt >= sevenDaysAgo;
+}).length;
+
+const pageTitle =
+  place?.place_type === "country" || place?.place_type === "city"
+    ? `Experiences in ${place?.name || "this place"}`
+    : `Experiences about ${place?.name || "this place"}`;
+
   const recentActivities = experiences
     .filter((e) => new Date(e.created_at).getTime() > lastVisit)
     .slice(0, 3);
@@ -414,7 +438,60 @@ const newReply = await response.json();
 
   return (
     <main style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
-      <h1>Experiences about {place?.name}</h1>
+      <h1>{pageTitle}</h1>
+
+          <div
+      style={{
+        marginTop: "14px",
+        marginBottom: "24px",
+        padding: "16px",
+        border: "1px solid #eee",
+        borderRadius: "14px",
+        background: "#fafafa",
+        display: "grid",
+        gap: "10px",
+      }}
+    >
+      <div style={{ fontWeight: 600 }}>
+        Overview
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: "10px",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: "12px", color: "#777" }}>Experiences</div>
+          <div style={{ fontSize: "18px", fontWeight: 700 }}>
+            {totalExperiences}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: "12px", color: "#777" }}>Average rating</div>
+          <div style={{ fontSize: "18px", fontWeight: 700 }}>
+            {averageRating ? `${averageRating} ★` : "No ratings yet"}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: "12px", color: "#777" }}>Trusted reviews</div>
+          <div style={{ fontSize: "18px", fontWeight: 700 }}>
+            {trustedReviewsCount}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: "12px", color: "#777" }}>Recent activity</div>
+          <div style={{ fontSize: "18px", fontWeight: 700 }}>
+            {recentExperiencesCount}
+          </div>
+        </div>
+      </div>
+    </div>
 
     {highlightedExperience && (
       <div

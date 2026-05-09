@@ -27,9 +27,21 @@ type MyExperience = {
   updated_at: string;
 };
 
+type ExtraPhoto = {
+  id: number;
+  experience: number;
+  image?: string;
+  image_url: string;
+  caption?: string;
+  created_at: string;
+};
+
 export default function MyPostsPage() {
 const [posts, setPosts] = useState<MyPost[]>([]);
 const [experiences, setExperiences] = useState<MyExperience[]>([]);
+const [extraPhotosByExperience, setExtraPhotosByExperience] = useState<
+  Record<number, ExtraPhoto[]>
+>({});
 const [loading, setLoading] = useState(true);
 
 const [editingExperienceId, setEditingExperienceId] = useState<number | null>(null);
@@ -74,8 +86,13 @@ const loadPosts = async () => {
         errorText
       );
     } else {
-      const experiencesData = await experiencesRes.json();
-      setExperiences(experiencesData || []);
+
+    const experiencesData = await experiencesRes.json();
+    const experiencesList = experiencesData || [];
+
+    setExperiences(experiencesList);
+    await loadExtraPhotosForExperiences(experiencesList);
+
     }
   } catch (error) {
     console.error("My posts fetch error:", error);
@@ -83,6 +100,44 @@ const loadPosts = async () => {
     setLoading(false);
   }
 };
+
+// =========================
+// Load extra gallery photos for experiences
+// =========================
+const loadExtraPhotosForExperiences = async (experiencesList: MyExperience[]) => {
+  try {
+    const entries = await Promise.all(
+      experiencesList.map(async (experience) => {
+        const res = await fetch(
+          `${API_URL}/api/experiences/${experience.id}/photos/`,
+          {
+            credentials: "include",
+          }
+        );
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error(
+            "Failed to load extra photos:",
+            experience.id,
+            res.status,
+            text
+          );
+          return [experience.id, []];
+        }
+
+        const data = await res.json();
+
+        return [experience.id, Array.isArray(data) ? data : []];
+      })
+    );
+
+    setExtraPhotosByExperience(Object.fromEntries(entries));
+  } catch (error) {
+    console.error("Failed to load extra gallery photos:", error);
+  }
+};
+
 
 // =========================
 // Start editing experience
@@ -228,6 +283,8 @@ const uploadExtraPhoto = async (experienceId: number) => {
 
     setExtraPhotoFile(null);
     setExtraPhotoCaption("");
+
+    await loadExtraPhotosForExperiences(experiences);
 
     alert("Extra photo added to the experience gallery.");
   } catch (error) {
@@ -494,7 +551,13 @@ const uploadExtraPhoto = async (experienceId: number) => {
                     )}
 
                    <div style={extraGalleryBox}>
-                      <strong style={{ fontSize: "14px" }}>Extra gallery photos</strong>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                        <strong style={{ fontSize: "14px" }}>Extra gallery photos</strong>
+
+                        <span style={{ fontSize: "12px", color: "#777" }}>
+                          {(extraPhotosByExperience[experience.id] || []).length} / 3 photos
+                        </span>
+                      </div>
 
                       <div
                         style={{
@@ -506,39 +569,85 @@ const uploadExtraPhoto = async (experienceId: number) => {
                         }}
                       >
                         Add up to 3 extra photos to this experience gallery. Upload one photo at a time.
-                        These photos will appear when travelers open the photo gallery on the full experience page.
+                        These photos appear when travelers open the photo gallery on the full experience page.
                       </div>
 
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null;
-                          setExtraPhotoFile(file);
-                        }}
-                        style={input}
-                      />
+                      {(extraPhotosByExperience[experience.id] || []).length > 0 && (
+                        <div style={extraPhotosGrid}>
+                          {(extraPhotosByExperience[experience.id] || []).map((photo, index) => (
+                            <div key={photo.id} style={extraPhotoItem}>
+                              <img
+                                src={photo.image_url}
+                                alt={photo.caption || `Gallery photo ${index + 1}`}
+                                style={extraPhotoThumb}
+                              />
 
-                      <input
-                        value={extraPhotoCaption}
-                        onChange={(e) => setExtraPhotoCaption(e.target.value)}
-                        placeholder="Optional caption for this photo"
-                        maxLength={160}
-                        style={input}
-                      />
+                              <div style={{ fontSize: "12px", color: "#666" }}>
+                                Photo {index + 1}
+                              </div>
 
-                      <button
-                        type="button"
-                        style={{
-                          ...secondaryButton,
-                          opacity: uploadingExtraPhoto || !extraPhotoFile ? 0.5 : 1,
-                          cursor: uploadingExtraPhoto || !extraPhotoFile ? "not-allowed" : "pointer",
-                        }}
-                        disabled={uploadingExtraPhoto || !extraPhotoFile}
-                        onClick={() => uploadExtraPhoto(experience.id)}
-                      >
-                        {uploadingExtraPhoto ? "Uploading..." : "Add extra photo"}
-                      </button>
+                              {photo.caption && (
+                                <div style={{ fontSize: "11px", color: "#777", lineHeight: 1.4 }}>
+                                  {photo.caption}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {(extraPhotosByExperience[experience.id] || []).length < 3 ? (
+                        <>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              setExtraPhotoFile(file);
+                            }}
+                            style={input}
+                          />
+
+                          <input
+                            value={extraPhotoCaption}
+                            onChange={(e) => setExtraPhotoCaption(e.target.value)}
+                            placeholder="Optional caption for this photo"
+                            maxLength={160}
+                            style={input}
+                          />
+
+                          <button
+                            type="button"
+                            style={{
+                              ...secondaryButton,
+                              opacity: uploadingExtraPhoto || !extraPhotoFile ? 0.5 : 1,
+                              cursor:
+                                uploadingExtraPhoto || !extraPhotoFile ? "not-allowed" : "pointer",
+                            }}
+                            disabled={uploadingExtraPhoto || !extraPhotoFile}
+                            onClick={() => uploadExtraPhoto(experience.id)}
+                          >
+                            {uploadingExtraPhoto
+                              ? "Uploading..."
+                              : !extraPhotoFile
+                              ? "Choose a photo first"
+                              : "Upload gallery photo"}
+                          </button>
+                        </>
+                      ) : (
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: "10px",
+                            border: "1px solid #eee",
+                            background: "white",
+                            color: "#666",
+                            fontSize: "13px",
+                          }}
+                        >
+                          Gallery complete: 3 / 3 photos added.
+                        </div>
+                      )}
                     </div>
 
                     <div style={actions}>
@@ -722,6 +831,25 @@ const extraGalleryBox = {
   borderRadius: "14px",
   border: "1px solid #eee",
   background: "#fafafa",
+};
+
+const extraPhotosGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+  gap: "10px",
+};
+
+const extraPhotoItem = {
+  display: "grid",
+  gap: "6px",
+};
+
+const extraPhotoThumb = {
+  width: "100%",
+  height: "90px",
+  objectFit: "cover" as const,
+  borderRadius: "10px",
+  border: "1px solid #eee",
 };
 
 const imageEditBox = {

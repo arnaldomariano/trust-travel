@@ -69,6 +69,7 @@ class PlaceSerializer(serializers.ModelSerializer):
             "destination_country",
             "destination_city",
             "name",
+            "place_type",
             "city",
             "description",
             "image_url",

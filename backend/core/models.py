@@ -68,8 +68,33 @@ class Destination(models.Model):
 # ===================== Place =====================
 
 class Place(models.Model):
+    PLACE_TYPE_CHOICES = [
+        ("country", "Country"),
+        ("city", "City / Region"),
+        ("attraction", "Tourist attraction"),
+        ("hotel", "Hotel"),
+        ("restaurant", "Restaurant / Café"),
+        ("nature", "Beach / Nature spot"),
+        ("other", "Other"),
+    ]
+
     destination = models.ForeignKey(Destination, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
+
+    # Type of place used for search, filtering and future travel discovery flows.
+    # Examples:
+    # country -> Laos
+    # city -> Recife
+    # attraction -> Coliseu
+    # hotel -> Hotel X
+    # restaurant -> Café Y
+    # nature -> Praia de Boa Viagem
+    place_type = models.CharField(
+        max_length=30,
+        choices=PLACE_TYPE_CHOICES,
+        default="city",
+    )
+
     city = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True)
     image_url = models.URLField(blank=True)
@@ -129,6 +154,17 @@ class Update(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     place = models.ForeignKey(Place, on_delete=models.CASCADE)
 
+    # Optional link to the original experience.
+    # Only updates of type "experience" should normally use this field.
+    # Event, alert and info updates can keep this as null.
+    experience = models.ForeignKey(
+        "Experience",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="feed_updates",
+    )
+
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
 
@@ -137,6 +173,8 @@ class Update(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.type} - {self.place}"
+
+
 
 
 # ===================== Experience =====================

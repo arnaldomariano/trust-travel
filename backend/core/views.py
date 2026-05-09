@@ -151,6 +151,20 @@ class CreateBasicPlaceView(APIView):
         name = (request.data.get("name") or "").strip()
         city = (request.data.get("city") or "").strip()
         country = (request.data.get("country") or "").strip()
+        place_type = (request.data.get("place_type") or "city").strip()
+
+        valid_place_types = [
+            "country",
+            "city",
+            "attraction",
+            "hotel",
+            "restaurant",
+            "nature",
+            "other",
+        ]
+
+        if place_type not in valid_place_types:
+            place_type = "city"
 
         # Optional geographic/external fields.
         # These are not required now, but prepare the endpoint for maps,
@@ -189,6 +203,7 @@ class CreateBasicPlaceView(APIView):
         place = Place.objects.create(
             destination=destination,
             name=name,
+            place_type=place_type,
             city=city,
             latitude=latitude or None,
             longitude=longitude or None,
@@ -238,6 +253,7 @@ class ExperienceListView(generics.ListCreateAPIView):
         Update.objects.create(
             user=self.request.user,
             place=experience.place,
+            experience=experience,
             type="experience",
             category="tourism",
             text=feed_text,
@@ -403,13 +419,13 @@ class UpdateListView(APIView):
 
         network_updates = Update.objects.filter(
             user__in=friends
-        ).select_related("user__profile", "place").order_by("-created_at")
+        ).select_related("user__profile", "place", "experience").order_by("-created_at")
 
         other_updates = Update.objects.exclude(
             user__in=friends
         ).exclude(
             user=user
-        ).select_related("user__profile", "place").order_by("-created_at")
+        ).select_related("user__profile", "place", "experience").order_by("-created_at")
 
         requests_qs = Friendship.objects.filter(
             to_user=user,
@@ -436,6 +452,7 @@ class UpdateListView(APIView):
 
                 result.append({
                     "id": u.id,
+                    "experience_id": u.experience.id if u.experience else None,
                     "type": u.type,
                     "category": u.category,
                     "text": u.text,
@@ -905,7 +922,8 @@ class MyUpdatesView(APIView):
         updates = Update.objects.filter(
             user=request.user
         ).select_related(
-            "place"
+            "place",
+            "experience"
         ).order_by("-created_at")
 
         result = []
@@ -913,6 +931,7 @@ class MyUpdatesView(APIView):
         for update in updates:
             result.append({
                 "id": update.id,
+                "experience_id": update.experience.id if update.experience else None,
                 "type": update.type,
                 "category": update.category,
                 "text": update.text,

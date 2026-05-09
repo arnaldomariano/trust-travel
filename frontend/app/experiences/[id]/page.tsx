@@ -126,9 +126,12 @@ export default function ExperienceDetailPage() {
           </span>
         </div>
 
-        <div style={placeText}>
-          {experience.place_name}
-          {experience.destination_name ? ` · ${experience.destination_name}` : ""}
+       <div style={placeText}>
+          {experience.place_name === experience.destination_name
+            ? experience.place_name
+            : `${experience.place_name}${
+                experience.destination_name ? ` · ${experience.destination_name}` : ""
+              }`}
         </div>
 
         {mainPhoto && (

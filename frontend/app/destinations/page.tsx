@@ -168,6 +168,19 @@ const getPlaceTypeLabel = (type?: string) => {
   return labels[type || ""] || "Place";
 };
 
+const getPlaceLocationText = (place: any) => {
+  if (place.place_type === "country") {
+    return place.destination_country || place.name || "Country";
+  }
+
+  const locationParts = [
+    place.city || place.destination_name,
+    place.destination_country,
+  ].filter(Boolean);
+
+  return locationParts.join(" · ") || "Place";
+};
+
   // =========================
   // Create a basic place
   // =========================
@@ -575,12 +588,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   fontSize: "14px",
                 }}
               >
-                {[
-                  place.city || place.destination_name,
-                  place.destination_country,
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || "Place"}
+                {getPlaceLocationText(place)}
+
               </div>
 
               <div style={{ marginTop: "10px", fontSize: "14px" }}>

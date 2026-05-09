@@ -581,16 +581,17 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               </span>
             </div>
 
-              <div
-                style={{
-                  marginTop: "6px",
-                  color: "#666",
-                  fontSize: "14px",
-                }}
-              >
-                {getPlaceLocationText(place)}
-
-              </div>
+                {place.place_type !== "country" && (
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      color: "#666",
+                      fontSize: "14px",
+                    }}
+                  >
+                    {getPlaceLocationText(place)}
+                  </div>
+                )}
 
               <div style={{ marginTop: "10px", fontSize: "14px" }}>
                 Explore or share here →

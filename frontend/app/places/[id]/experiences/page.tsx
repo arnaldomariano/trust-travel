@@ -619,17 +619,17 @@ const newReply = await response.json();
               style={{ cursor: "pointer" }}
             >
               <strong>{item.user}</strong>{" "}
-              {item.type === "review"
-                ? "shared an experience about"
-                : "replied to a review on"}{" "}
-              <strong>{place?.name}</strong>
-              {destination?.name && (
-                <>
-                  {" "}
-                  • <strong>{destination.name}</strong>
-                </>
-              )}{" "}
-              • {timeAgo(item.created_at)}
+                {item.type === "review"
+                  ? "shared an experience about"
+                  : "replied to a review on"}{" "}
+                <strong>{place?.name}</strong>
+                {destination?.name && destination.name !== place?.name && (
+                  <>
+                    {" "}
+                    • <strong>{destination.name}</strong>
+                  </>
+                )}{" "}
+                • {timeAgo(item.created_at)}
             </div>
           ))}
         </div>

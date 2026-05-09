@@ -19,12 +19,15 @@ export default function PlacePage() {
   const [showRatings, setShowRatings] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  const placeLocation = [
-    place?.city || place?.destination_name || destination?.city || destination?.name,
-    place?.destination_country || destination?.country,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const placeLocation =
+      place?.place_type === "country"
+        ? ""
+        : [
+            place?.city || place?.destination_name || destination?.city || destination?.name,
+            place?.destination_country || destination?.country,
+          ]
+            .filter(Boolean)
+            .join(" · ");
 
   const rating5 = experiences.filter((e) => e.rating === 5).length;
   const rating4 = experiences.filter((e) => e.rating === 4).length;

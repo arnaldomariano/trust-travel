@@ -88,6 +88,17 @@ export default function ExperienceDetailPage() {
           ]
         : [];
 
+    const mainPhoto =
+      experience.image_url
+        ? {
+            id: "main",
+            image_url: experience.image_url,
+            caption: experience.title || "Main experience photo",
+          }
+        : galleryPhotos.length > 0
+        ? galleryPhotos[0]
+        : null;
+
   return (
     <main style={page}>
       <div style={breadcrumb}>
@@ -120,38 +131,54 @@ export default function ExperienceDetailPage() {
           {experience.destination_name ? ` · ${experience.destination_name}` : ""}
         </div>
 
-        {galleryPhotos.length > 0 && (
-          <div style={galleryBox}>
-            <button
-              onClick={() => setShowGallery(!showGallery)}
-              style={galleryButton}
-            >
-              {showGallery
-                ? "Hide photo gallery"
-                : `View photo gallery (${galleryPhotos.length})`}
-            </button>
+        {mainPhoto && (
+  <div style={mainPhotoBox}>
+    <img
+      src={mainPhoto.image_url}
+      alt={mainPhoto.caption || experience.title || "Experience photo"}
+      style={mainPhotoImage}
+    />
 
-            {showGallery && (
-              <div style={galleryGrid}>
-                {galleryPhotos.map((photo) => (
-                  <div key={photo.id} style={{ display: "grid", gap: "6px" }}>
-                    <img
-                      src={photo.image_url}
-                      alt={photo.caption || experience.title || "Experience photo"}
-                      style={galleryImage}
-                    />
+    {mainPhoto.caption && (
+      <div style={mainPhotoCaption}>
+        {mainPhoto.caption}
+      </div>
+    )}
+  </div>
+)}
 
-                    {photo.caption && (
-                      <div style={{ fontSize: "12px", color: "#777" }}>
-                        {photo.caption}
-                      </div>
-                    )}
+    {galleryPhotos.length > 0 && (
+      <div style={galleryBox}>
+        <button
+          onClick={() => setShowGallery(!showGallery)}
+          style={galleryButton}
+        >
+          {showGallery
+            ? "Hide photo gallery"
+            : `View photo gallery (${galleryPhotos.length})`}
+        </button>
+
+        {showGallery && (
+          <div style={galleryGrid}>
+            {galleryPhotos.map((photo) => (
+              <div key={photo.id} style={{ display: "grid", gap: "6px" }}>
+                <img
+                  src={photo.image_url}
+                  alt={photo.caption || experience.title || "Experience photo"}
+                  style={galleryImage}
+                />
+
+                {photo.caption && (
+                  <div style={{ fontSize: "12px", color: "#777" }}>
+                    {photo.caption}
                   </div>
-                ))}
+                )}
               </div>
-            )}
+            ))}
           </div>
         )}
+      </div>
+    )}
 
         <p style={comment}>{experience.comment}</p>
 
@@ -237,6 +264,26 @@ const placeText = {
   marginTop: "12px",
   color: "#666",
   fontSize: "14px",
+};
+
+const mainPhotoBox = {
+  marginTop: "18px",
+  marginBottom: "12px",
+};
+
+const mainPhotoImage = {
+  width: "100%",
+  maxHeight: "320px",
+  objectFit: "cover" as const,
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  display: "block",
+};
+
+const mainPhotoCaption = {
+  marginTop: "6px",
+  fontSize: "12px",
+  color: "#777",
 };
 
 const comment = {

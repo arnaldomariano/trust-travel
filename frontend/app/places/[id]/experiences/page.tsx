@@ -600,9 +600,12 @@ const newReply = await response.json();
                 <div key={e.id} style={{ marginBottom: "10px" }}>
                   <strong>{e.user}</strong> • {(e.title || e.comment).slice(0, 60)}...
 
-                  <div style={{ fontSize: "12px", color: "#666" }}>
-                    ⭐ {getTrustedRepliesCount(e.id)} trusted interactions
-                  </div>
+                  {getTrustedRepliesCount(e.id) > 0 && (
+                      <div style={{ fontSize: "12px", color: "#666" }}>
+                        ⭐ {getTrustedRepliesCount(e.id)} trusted{" "}
+                        {getTrustedRepliesCount(e.id) === 1 ? "interaction" : "interactions"}
+                      </div>
+                    )}
 
                   <div style={{ fontSize: "12px", color: "#999" }}>
                     {getWhyExplanation(e)}
@@ -618,9 +621,13 @@ const newReply = await response.json();
             </div>
           )}
 
-          <div style={{ fontWeight: "600", marginBottom: "10px" }}>
-            🔥 Trending in your network
-          </div>
+          <div style={{ fontWeight: "600", marginBottom: "6px" }}>
+              🔥 Trending experiences
+            </div>
+
+            <div style={{ fontSize: "13px", color: "#666", marginBottom: "12px" }}>
+              Recent experiences people are interacting with.
+            </div>
 
           {trendingExperiences.map((e) => (
               <div
@@ -637,9 +644,12 @@ const newReply = await response.json();
               >
                 <strong>{e.user}</strong> • {(e.title || e.comment).slice(0, 60)}...
 
-                <div style={{ fontSize: "12px", color: "#666" }}>
-                  ⭐ {getTrustedRepliesCount(e.id)} trusted interactions
-                </div>
+                {getTrustedRepliesCount(e.id) > 0 && (
+                  <div style={{ fontSize: "12px", color: "#666" }}>
+                    ⭐ {getTrustedRepliesCount(e.id)} trusted{" "}
+                    {getTrustedRepliesCount(e.id) === 1 ? "interaction" : "interactions"}
+                  </div>
+                )}
 
                 <div style={{ fontSize: "12px", color: "#777", marginTop: "2px" }}>
                   View this experience →

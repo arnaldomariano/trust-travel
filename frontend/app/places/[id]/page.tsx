@@ -281,7 +281,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             </button>
 
             <button
-              onClick={() => router.push(`/destinations?place=${place?.id}`)}
+              onClick={() => router.push(`/destinations?place=${place?.id}&share=true`)}
               style={secondaryButton}
             >
               Share experience

@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../lib/api";
 
 export default function DestinationsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const placeFromUrl = searchParams.get("place");
+  const shouldOpenShareForm = searchParams.get("share") === "true";
 
   const [places, setPlaces] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
@@ -66,6 +69,33 @@ export default function DestinationsPage() {
     loadData();
   }, []);
 
+// =========================
+// Select place from URL
+// =========================
+useEffect(() => {
+  if (!placeFromUrl || places.length === 0) return;
+
+  const place = places.find((p) => String(p.id) === String(placeFromUrl));
+
+  if (!place) return;
+
+  setSelectedPlace(place);
+  setSearchTerm(place.name || "");
+  setShowShareForm(shouldOpenShareForm);
+  setExperienceShared(false);
+  setSharedExperience(null);
+  setEditingExperience(false);
+  setTitle("");
+  setComment("");
+  setRating(null);
+  setImageFile(null);
+
+  setTimeout(() => {
+    document
+      .getElementById("selected-place-actions")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+}, [placeFromUrl, shouldOpenShareForm, places]);
 
   // =========================
   // Search and filtering

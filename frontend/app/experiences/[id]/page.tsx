@@ -115,9 +115,9 @@ export default function ExperienceDetailPage() {
       <article style={card}>
         <div style={metaRow}>
           <div>
-            <div style={label}>Experience</div>
+            <div style={label}>Traveler experience</div>
             <h1 style={title}>
-              {experience.title || "Shared experience"}
+              {experience.title || experience.place_name || "Experience"}
             </h1>
           </div>
 
@@ -204,9 +204,12 @@ export default function ExperienceDetailPage() {
             View all experiences
           </Link>
 
-          <Link href={`/places/${experience.place}`} style={secondaryLink}>
-            Back to place
-          </Link>
+          <Link
+              href={`/places/${experience.place}/experiences?highlight=${experience.id}`}
+              style={secondaryLink}
+            >
+              Back to experiences
+            </Link>
         </div>
       </article>
     </main>

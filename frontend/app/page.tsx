@@ -185,6 +185,9 @@ export default function HomePage() {
     const lastUpdate = entry.lastUpdate;
     const newCount = entry.items.filter((i: any) => i.is_new).length;
 
+    const previewItems = entry.items.slice(0, 2);
+    const remainingCount = entry.items.length - previewItems.length;
+
     // Trusted users can show username + public code.
     // Explore users remain identified only by public code.
     const displayName = lastUpdate.is_friend
@@ -262,7 +265,7 @@ export default function HomePage() {
                 paddingBottom: "18px",
               }}
             >
-            {entry.items.slice(0, 5).map((item: any) => (
+            {previewItems.map((item: any) => (
               <div
                 key={item.id}
                 style={{
@@ -323,6 +326,31 @@ export default function HomePage() {
                 </div>
               </div>
             ))}
+
+        {remainingCount > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+
+              if (lastUpdate?.user_id) {
+              router.push(`/user/${user}/activity`);
+              }
+            }}
+            style={{
+              marginTop: "10px",
+              border: "none",
+              background: "transparent",
+              color: "#111",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            View all →
+          </button>
+        )}
+
           </div>
         </div>
       </div>

@@ -14,6 +14,7 @@ from .views import (
     ProfileView,
     ExperienceReplyListCreateView,
     UpdateListView,
+    UpdateDetailView,
     ConnectionsListView,
     SendFriendRequestView,
     AcceptFriendRequestView,
@@ -45,6 +46,7 @@ urlpatterns = [
 
     path("register/", UserRegisterView.as_view()),
     path("updates/", UpdateListView.as_view()),
+    path("updates/<int:pk>/", UpdateDetailView.as_view()),
     path("connections/", ConnectionsListView.as_view()),
 
     path("experiences/", ExperienceListView.as_view()),

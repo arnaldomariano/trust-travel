@@ -527,6 +527,72 @@ class UpdateListView(APIView):
             "created_at": update.created_at,
         }, status=201)
 
+class UpdateDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            update = Update.objects.get(id=pk, user=request.user)
+        except Update.DoesNotExist:
+            return Response({"detail": "Update not found."}, status=404)
+
+        # Do not allow editing automatic experience updates here.
+        # Experiences should be edited through the experience editor.
+        if update.type == "experience":
+            return Response(
+                {"detail": "Experience updates cannot be edited here."},
+                status=400
+            )
+
+        update_type = request.data.get("type", update.type)
+        category = request.data.get("category", update.category)
+        text = request.data.get("text", update.text)
+
+        valid_types = ["event", "alert", "info"]
+
+        if update_type not in valid_types:
+            return Response({"detail": "Invalid update type."}, status=400)
+
+        if not text or not str(text).strip():
+            return Response({"detail": "Text is required."}, status=400)
+
+        update.type = update_type
+        update.category = category or "tourism"
+        update.text = str(text).strip()
+        update.save()
+
+        profile = getattr(request.user, "profile", None)
+
+        return Response({
+            "id": update.id,
+            "type": update.type,
+            "category": update.category,
+            "text": update.text,
+            "user": profile.public_code if profile else request.user.username,
+            "username": request.user.username,
+            "place": update.place.name,
+            "place_id": update.place.id,
+            "created_at": update.created_at,
+        })
+
+    def delete(self, request, pk):
+        try:
+            update = Update.objects.get(id=pk, user=request.user)
+        except Update.DoesNotExist:
+            return Response({"detail": "Update not found."}, status=404)
+
+        # Do not allow deleting automatic experience updates here.
+        # If the user deletes an experience, we can later decide how to handle its feed update.
+        if update.type == "experience":
+            return Response(
+                {"detail": "Experience updates cannot be deleted here."},
+                status=400
+            )
+
+        update.delete()
+
+        return Response({"detail": "Update deleted."})
 
 # ============================================================
 # CONNECTIONS

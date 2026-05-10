@@ -304,105 +304,150 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         </section>
 
             {showRatings && (
-              <>
-            <div
-              style={{
-                marginBottom: "30px",
-                padding: "18px",
-                border: "1px solid #eee",
-                borderRadius: "12px",
-                backgroundColor: "white",
-                maxWidth: "520px",
-              }}
-            >
-              <div style={{ display: "grid", gap: "10px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-                  <span>★★★★★</span>
-                  <span>{rating5}</span>
-                </div>
+              <section
+                style={{
+                  marginBottom: "32px",
+                  padding: "22px",
+                  border: "1px solid #eee",
+                  borderRadius: "16px",
+                  backgroundColor: "white",
+                  maxWidth: "760px",
+                }}
+              >
+                <div style={{ marginBottom: "18px" }}>
+                  <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+                    Place analytics
+                  </div>
 
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-                  <span>★★★★☆</span>
-                  <span>{rating4}</span>
-                </div>
+                  <h2 style={{ margin: 0, fontSize: "22px" }}>
+                    Ratings & insights
+                  </h2>
 
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-                  <span>★★★☆☆</span>
-                  <span>{rating3}</span>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-                  <span>★★☆☆☆</span>
-                  <span>{rating2}</span>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-                  <span>★☆☆☆☆</span>
-                  <span>{rating1}</span>
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                marginBottom: "32px",
-                padding: "20px",
-                border: "1px solid #e5e5e5",
-                borderRadius: "12px",
-                backgroundColor: "white",
-                maxWidth: "650px",
-              }}
-            >
-              <h2 style={{ marginTop: 0, marginBottom: "18px", fontSize: "20px" }}>
-                Ratings breakdown
-              </h2>
-
-              {[5, 4, 3, 2, 1].map((stars) => {
-                const count = ratingCount(stars);
-                const widthPercent = `${(count / maxCount) * 100}%`;
-
-                return (
-                  <div
-                    key={stars}
+                  <p
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "36px 1fr 28px",
-                      alignItems: "center",
-                      gap: "12px",
-                      marginBottom: "10px",
+                      marginTop: "8px",
+                      marginBottom: 0,
+                      color: "#666",
+                      lineHeight: 1.5,
                     }}
                   >
-                    <div style={{ color: "#555", fontSize: "14px" }}>{stars}★</div>
+                    Understand how travelers are evaluating this place based on shared experiences.
+                  </p>
+                </div>
 
-                    <div
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                    gap: "12px",
+                    marginBottom: "24px",
+                  }}
+                >
+                  <div style={insightStatCard}>
+                    <div style={overviewStatLabel}>Average rating</div>
+                    <div style={overviewStatValue}>
+                      {averageRating ? `${averageRating} ★` : "—"}
+                    </div>
+                  </div>
+
+                  <div style={insightStatCard}>
+                    <div style={overviewStatLabel}>Total reviews</div>
+                    <div style={overviewStatValue}>
+                      {experiences.length}
+                    </div>
+                  </div>
+
+                  <div style={insightStatCard}>
+                    <div style={overviewStatLabel}>Rated experiences</div>
+                    <div style={overviewStatValue}>
+                      {ratedExperiences.length}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "22px",
+                  }}
+                >
+                  <div>
+                    <h3 style={{ marginTop: 0, marginBottom: "14px", fontSize: "17px" }}>
+                      Rating distribution
+                    </h3>
+
+                    {[5, 4, 3, 2, 1].map((stars) => {
+                      const count = ratingCount(stars);
+                      const widthPercent = `${(count / maxCount) * 100}%`;
+
+                      return (
+                        <div
+                          key={stars}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "42px 1fr 32px",
+                            alignItems: "center",
+                            gap: "12px",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          <div style={{ color: "#555", fontSize: "14px" }}>
+                            {stars}★
+                          </div>
+
+                          <div
+                            style={{
+                              height: "10px",
+                              backgroundColor: "#f1f1f1",
+                              borderRadius: "999px",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: widthPercent,
+                                height: "100%",
+                                backgroundColor: "#111",
+                                borderRadius: "999px",
+                              }}
+                            />
+                          </div>
+
+                          <div style={{ color: "#777", fontSize: "14px" }}>
+                            {count}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "16px",
+                      border: "1px dashed #ddd",
+                      borderRadius: "14px",
+                      backgroundColor: "#fafafa",
+                    }}
+                  >
+                    <h3 style={{ marginTop: 0, marginBottom: "8px", fontSize: "17px" }}>
+                      Traveler insights
+                    </h3>
+
+                    <p
                       style={{
-                        height: "10px",
-                        backgroundColor: "#f1f1f1",
-                        borderRadius: "999px",
-                        overflow: "hidden",
+                        margin: 0,
+                        color: "#666",
+                        lineHeight: 1.5,
+                        fontSize: "14px",
                       }}
                     >
-                      <div
-                        style={{
-                          width: widthPercent,
-                          height: "100%",
-                          backgroundColor: "#111",
-                          borderRadius: "999px",
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ color: "#777", fontSize: "14px" }}>{count}</div>
+                      Coming soon: breakdown by traveler profile, nationality, age group,
+                      trip type and travel style.
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        <h2 style={{ marginBottom: "20px" }}>
-          {filter === "update" ? "Events & info" : "Recent activity"}
-        </h2>
+                </div>
+              </section>
+            )}
 
         {filteredFeed.length === 0 ? (
           <div
@@ -571,6 +616,13 @@ const overviewStatCard = {
   padding: "14px",
   border: "1px solid #eee",
   borderRadius: "12px",
+  backgroundColor: "#fafafa",
+};
+
+const insightStatCard = {
+  padding: "16px",
+  border: "1px solid #eee",
+  borderRadius: "14px",
   backgroundColor: "#fafafa",
 };
 

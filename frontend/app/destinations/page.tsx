@@ -211,6 +211,8 @@ const getPlaceLocationText = (place: any) => {
   return locationParts.join(" · ") || "Place";
 };
 
+const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
+
   // =========================
   // Create a basic place
   // =========================
@@ -557,36 +559,41 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         }}
       />
 
-      {loading ? (
-        <p style={{ color: "#666" }}>Loading places...</p>
-      ) : !searchTerm.trim() ? (
-        <div style={helperCard}>
-          Start typing based on the type you selected. For example, search for a country,
-          city, attraction, hotel, restaurant or nature spot.
-        </div>
-      ) : filteredPlaces.length > 0 ? (
-        <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
-          <p style={{ color: "#666", margin: 0 }}>
-              We found existing places. Results matching your selected type appear first:
-          </p>
+          {loading ? (
+      <p style={{ color: "#666" }}>Loading places...</p>
+    ) : isDirectPlaceFlow ? (
+      <div style={helperCard}>
+        You are sharing an experience about{" "}
+        <strong>{selectedPlace.name}</strong>.
+      </div>
+    ) : !searchTerm.trim() ? (
+      <div style={helperCard}>
+        Start typing based on the type you selected. For example, search for a country,
+        city, attraction, hotel, restaurant or nature spot.
+      </div>
+    ) : filteredPlaces.length > 0 ? (
+      <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
+        <p style={{ color: "#666", margin: 0 }}>
+          We found existing places. Results matching your selected type appear first:
+        </p>
 
-          {filteredPlaces.map((place) => (
-            <button
-              key={place.id}
-              onClick={() => handleSelectExistingPlace(place)}
-              style={{
-                padding: "18px",
-                border: "1px solid #eee",
-                borderRadius: "14px",
-                background:
-                  selectedPlace?.id === place.id ? "#f5f5f5" : "white",
-                color: "black",
-                textAlign: "left",
-                cursor: "pointer",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div
+        {filteredPlaces.map((place) => (
+          <button
+            key={place.id}
+            onClick={() => handleSelectExistingPlace(place)}
+            style={{
+              padding: "18px",
+              border: "1px solid #eee",
+              borderRadius: "14px",
+              background:
+                selectedPlace?.id === place.id ? "#f5f5f5" : "white",
+              color: "black",
+              textAlign: "left",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -611,26 +618,27 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               </span>
             </div>
 
-                {place.place_type !== "country" && (
-                  <div
-                    style={{
-                      marginTop: "6px",
-                      color: "#666",
-                      fontSize: "14px",
-                    }}
-                  >
-                    {getPlaceLocationText(place)}
-                  </div>
-                )}
-
-              <div style={{ marginTop: "10px", fontSize: "14px" }}>
-                Explore or share here →
+            {place.place_type !== "country" && (
+              <div
+                style={{
+                  marginTop: "6px",
+                  color: "#666",
+                  fontSize: "14px",
+                }}
+              >
+                {getPlaceLocationText(place)}
               </div>
-            </button>
-          ))}
-        </section>
-      ) : (
-        <section style={helperCard}>
+            )}
+
+            <div style={{ marginTop: "10px", fontSize: "14px" }}>
+              Explore or share here →
+            </div>
+          </button>
+        ))}
+      </section>
+    ) : (
+      <section style={helperCard}>
+
           <strong>No place found for “{searchTerm.trim()}”.</strong>
 
           <p
@@ -682,7 +690,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         </section>
       )}
 
-        {selectedPlace && (
+ {selectedPlace && !shouldOpenShareForm && (
   <section
     id="selected-place-actions"
     style={{

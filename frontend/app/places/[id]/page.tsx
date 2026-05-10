@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../../lib/api";
+import { useRouter } from "next/navigation";
+
 export default function PlacePage() {
   const params = useParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -18,6 +20,8 @@ export default function PlacePage() {
   const [destination, setDestination] = useState<any>(null);
   const [showRatings, setShowRatings] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const router = useRouter();
 
   const placeLocation =
       place?.place_type === "country"
@@ -191,38 +195,116 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         / <span>{place?.name}</span>
       </div>
 
-        <h1>{pageTitle}</h1>
-
-        {placeLocation && (
-          <div style={{ marginTop: "-8px", marginBottom: "8px", color: "#666", fontSize: "15px" }}>
-            {placeLocation}
+        <section
+          style={{
+            marginBottom: "28px",
+            padding: "22px",
+            border: "1px solid #eee",
+            borderRadius: "16px",
+            backgroundColor: "white",
+          }}
+        >
+          <div style={{ fontSize: "13px", color: "#777", marginBottom: "8px" }}>
+            Place overview
           </div>
-        )}
 
-        <div style={{ marginBottom: "24px" }}>
-          <div style={{ marginTop: "6px", color: "#777", fontSize: "14px" }}>
-            {experiences.length} experience{experiences.length === 1 ? "" : "s"} shared
-          </div>
+          <h1 style={{ margin: 0, fontSize: "28px" }}>
+            {place?.name || pageTitle}
+          </h1>
 
-          <button
-            onClick={() => setShowRatings(!showRatings)}
+          {placeLocation && (
+            <div
+              style={{
+                marginTop: "6px",
+                color: "#666",
+                fontSize: "15px",
+              }}
+            >
+              {placeLocation}
+            </div>
+          )}
+
+          <p
             style={{
-              marginTop: "12px",
-              padding: "8px 14px",
-              borderRadius: "8px",
-              border: "1px solid #ddd",
-              backgroundColor: "#f5f5f5",
-              color: "#111",
-              cursor: "pointer",
-              fontSize: "14px",
+              marginTop: "14px",
+              marginBottom: "18px",
+              color: "#666",
+              lineHeight: 1.5,
+              maxWidth: "620px",
             }}
           >
-            {showRatings ? "Hide ratings" : "Show ratings"}
-          </button>
-        </div>
+            Explore traveler experiences, events and useful information shared about this place.
+          </p>
 
-        {showRatings && (
-          <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+              gap: "12px",
+              marginBottom: "18px",
+            }}
+          >
+            <div style={overviewStatCard}>
+              <div style={overviewStatLabel}>Experiences</div>
+              <div style={overviewStatValue}>
+                {experiences.length}
+              </div>
+            </div>
+
+            <div style={overviewStatCard}>
+              <div style={overviewStatLabel}>Average rating</div>
+              <div style={overviewStatValue}>
+              {averageRating ? `${averageRating} ★` : "—"}
+            </div>
+            </div>
+
+            <div style={overviewStatCard}>
+              <div style={overviewStatLabel}>Events & info</div>
+              <div style={overviewStatValue}>
+                  {visibleUpdates.length}
+                </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              onClick={() => router.push(`/places/${id}/experiences`)}
+              style={primaryButton}
+            >
+              View experiences
+            </button>
+
+            <button
+              onClick={() => router.push(`/destinations?place=${place?.id}`)}
+              style={secondaryButton}
+            >
+              Share experience
+            </button>
+
+            <button
+              onClick={() => setShowRatings(!showRatings)}
+              style={secondaryButton}
+            >
+              {showRatings ? "Hide ratings" : "Ratings & insights"}
+            </button>
+
+            <button
+              onClick={() => setFilter(filter === "update" ? "all" : "update")}
+              style={secondaryButton}
+            >
+              {filter === "update" ? "Show all activity" : "Events & info"}
+            </button>
+          </div>
+        </section>
+
+            {showRatings && (
+              <>
             <div
               style={{
                 marginBottom: "30px",
@@ -318,30 +400,9 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           </>
         )}
 
-
-
-        <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
-          {["all", "experience", "update"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f as any)}
-              style={{
-                padding: "8px 14px",
-                borderRadius: "8px",
-                border: "1px solid #ddd",
-                backgroundColor: filter === f ? "#111" : "#f5f5f5",
-                color: filter === f ? "white" : "#111",
-                cursor: "pointer",
-              }}
-            >
-              {f === "all" && "All"}
-              {f === "experience" && "Experiences"}
-              {f === "update" && "Events & Info"}
-            </button>
-          ))}
-        </div>
-
-        <h2 style={{ marginBottom: "20px" }}>Activity</h2>
+        <h2 style={{ marginBottom: "20px" }}>
+          {filter === "update" ? "Events & info" : "Recent activity"}
+        </h2>
 
         {filteredFeed.length === 0 ? (
           <div
@@ -354,7 +415,9 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
               fontSize: "14px",
             }}
           >
-            No activity found for this filter yet.
+            {filter === "update"
+              ? "No events or information shared about this place yet."
+              : "No activity found for this place yet."}
           </div>
         ) : (
           filteredFeed.map((item) => {
@@ -503,3 +566,42 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     </main>
   );
 }
+
+const overviewStatCard = {
+  padding: "14px",
+  border: "1px solid #eee",
+  borderRadius: "12px",
+  backgroundColor: "#fafafa",
+};
+
+const overviewStatLabel = {
+  fontSize: "12px",
+  color: "#777",
+  marginBottom: "6px",
+};
+
+const overviewStatValue = {
+  fontSize: "20px",
+  fontWeight: 700,
+  color: "#111",
+};
+
+const primaryButton = {
+  padding: "9px 14px",
+  borderRadius: "10px",
+  border: "none",
+  backgroundColor: "#111",
+  color: "white",
+  cursor: "pointer",
+  fontSize: "14px",
+};
+
+const secondaryButton = {
+  padding: "9px 14px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  backgroundColor: "white",
+  color: "#111",
+  cursor: "pointer",
+  fontSize: "14px",
+};

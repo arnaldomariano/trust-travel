@@ -44,6 +44,12 @@ const [extraPhotosByExperience, setExtraPhotosByExperience] = useState<
 >({});
 const [loading, setLoading] = useState(true);
 
+
+const [editingUpdateId, setEditingUpdateId] = useState<number | null>(null);
+const [editingUpdateText, setEditingUpdateText] = useState("");
+const [editingUpdateType, setEditingUpdateType] = useState<"event" | "alert" | "info">("info");
+const [savingUpdate, setSavingUpdate] = useState(false);
+
 const [editingExperienceId, setEditingExperienceId] = useState<number | null>(null);
 const [editTitle, setEditTitle] = useState("");
 const [editComment, setEditComment] = useState("");
@@ -76,7 +82,12 @@ const loadPosts = async () => {
       console.error("Failed to load my posts:", postsRes.status, errorText);
     } else {
       const postsData = await postsRes.json();
-      setPosts(postsData || []);
+
+    const nonExperiencePosts = Array.isArray(postsData)
+      ? postsData.filter((post) => post.type !== "experience")
+      : [];
+
+    setPosts(nonExperiencePosts);
     }
 
     if (!experiencesRes.ok) {
@@ -298,6 +309,115 @@ const uploadExtraPhoto = async (experienceId: number) => {
   }
 };
 
+// =========================
+// Start editing event/info/alert
+// =========================
+const startEditingUpdate = (post: MyPost) => {
+  setEditingUpdateId(post.id);
+  setEditingUpdateText(post.text || "");
+
+  if (post.type === "event" || post.type === "alert" || post.type === "info") {
+    setEditingUpdateType(post.type);
+  } else {
+    setEditingUpdateType("info");
+  }
+};
+
+// =========================
+// Cancel editing event/info/alert
+// =========================
+const cancelEditingUpdate = () => {
+  setEditingUpdateId(null);
+  setEditingUpdateText("");
+  setEditingUpdateType("info");
+};
+
+// =========================
+// Save edited event/info/alert
+// =========================
+const saveUpdateChanges = async (postId: number) => {
+  if (!editingUpdateText.trim()) {
+    alert("Please write the event or information.");
+    return;
+  }
+
+  setSavingUpdate(true);
+
+  try {
+    const res = await fetch(`${API_URL}/api/updates/${postId}/`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        type: editingUpdateType,
+        category: "tourism",
+        text: editingUpdateText.trim(),
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Update edit error:", data);
+      alert(data.detail || "Error updating post.");
+      return;
+    }
+
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? {
+              ...post,
+              type: data.type,
+              category: data.category,
+              text: data.text,
+              place: data.place,
+              place_id: data.place_id,
+              created_at: data.created_at,
+            }
+          : post
+      )
+    );
+
+    cancelEditingUpdate();
+  } catch (error) {
+    console.error("Failed to update post:", error);
+    alert("Error updating post.");
+  } finally {
+    setSavingUpdate(false);
+  }
+};
+
+// =========================
+// Delete event/info/alert
+// =========================
+const deleteUpdate = async (postId: number) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this event, alert or info post?"
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`${API_URL}/api/updates/${postId}/`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.detail || "Error deleting post.");
+      return;
+    }
+
+    setPosts((prev) => prev.filter((post) => post.id !== postId));
+  } catch (error) {
+    console.error("Failed to delete post:", error);
+    alert("Error deleting post.");
+  }
+};
 
   useEffect(() => {
     loadPosts();
@@ -311,9 +431,28 @@ const uploadExtraPhoto = async (experienceId: number) => {
     );
   }
 
-  return (
-    <main style={page}>
-      <h1>My Posts</h1>
+    return (
+      <main style={page}>
+        <h1>My Posts</h1>
+
+        <section style={managerNav}>
+          <div>
+            <strong>Manage your content</strong>
+            <p style={{ margin: "6px 0 0 0", color: "#666", lineHeight: 1.5 }}>
+              Experiences and event/info posts are managed separately to keep editing easier.
+            </p>
+          </div>
+
+          <div style={actions}>
+            <Link href="/my-posts" style={primaryLink}>
+              Experiences
+            </Link>
+
+            <Link href="/my-posts/updates" style={secondaryLink}>
+              Events & Info
+            </Link>
+          </div>
+        </section>
 
       {posts.length === 0 && experiences.length === 0 ? (
         <section style={emptyBox}>
@@ -694,31 +833,112 @@ const uploadExtraPhoto = async (experienceId: number) => {
 
         {posts.length > 0 && (
           <section style={list}>
-            <h2 style={sectionTitle}>My Posts</h2>
+            <h2 style={sectionTitle}>My Events & Info</h2>
 
-            {posts.map((post) => (
-              <article key={post.id} style={card}>
-                <div style={metaRow}>
-                  <strong>
-                    {post.type} — {post.place}
-                  </strong>
+            {posts.map((post) => {
+              const isEditing = editingUpdateId === post.id;
 
-                  <span style={dateText}>
-                    {new Date(post.created_at).toLocaleString()}
-                  </span>
-                </div>
+              return (
+                <article key={post.id} style={card}>
+                  <div style={metaRow}>
+                    <div>
+                      <strong>
+                        {post.type === "event" && "🎭 Event"}
+                        {post.type === "alert" && "⚠️ Alert"}
+                        {post.type === "info" && "ℹ️ Info"}
+                        {" "}— {post.place}
+                      </strong>
 
-                <span style={categoryBadge}>{post.category}</span>
+                      <div style={{ marginTop: "6px" }}>
+                        <span style={categoryBadge}>{post.category}</span>
+                      </div>
+                    </div>
 
-                <p style={text}>{post.text}</p>
+                    <span style={dateText}>
+                      {new Date(post.created_at).toLocaleString()}
+                    </span>
+                  </div>
 
-                <div style={actions}>
-                  <Link href={`/places/${post.place_id}`} style={secondaryLink}>
-                    View place
-                  </Link>
-                </div>
-              </article>
-            ))}
+                  {isEditing ? (
+                    <div style={editForm}>
+                      <select
+                        value={editingUpdateType}
+                        onChange={(e) =>
+                          setEditingUpdateType(
+                            e.target.value as "event" | "alert" | "info"
+                          )
+                        }
+                        style={input}
+                      >
+                        <option value="info">Useful info</option>
+                        <option value="event">Event</option>
+                        <option value="alert">Alert</option>
+                      </select>
+
+                      <textarea
+                        value={editingUpdateText}
+                        onChange={(e) => setEditingUpdateText(e.target.value)}
+                        rows={4}
+                        style={input}
+                      />
+
+                      <div style={actions}>
+                        <button
+                          type="button"
+                          onClick={() => saveUpdateChanges(post.id)}
+                          disabled={savingUpdate || !editingUpdateText.trim()}
+                          style={{
+                            ...primaryButton,
+                            opacity:
+                              savingUpdate || !editingUpdateText.trim() ? 0.5 : 1,
+                            cursor:
+                              savingUpdate || !editingUpdateText.trim()
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {savingUpdate ? "Saving..." : "Save changes"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={cancelEditingUpdate}
+                          style={secondaryButton}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p style={text}>{post.text}</p>
+
+                      <div style={actions}>
+                        <Link href={`/places/${post.place_id}`} style={secondaryLink}>
+                          View place
+                        </Link>
+
+                        <button
+                          type="button"
+                          onClick={() => startEditingUpdate(post)}
+                          style={secondaryButton}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deleteUpdate(post.id)}
+                          style={dangerButton}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              );
+            })}
           </section>
         )}
       </>
@@ -906,4 +1126,15 @@ const dangerButton = {
   background: "#fff5f5",
   color: "#9f1239",
   cursor: "pointer",
+};
+
+const managerNav = {
+  marginTop: "20px",
+  marginBottom: "28px",
+  padding: "18px",
+  border: "1px solid #eee",
+  borderRadius: "16px",
+  background: "white",
+  display: "grid",
+  gap: "14px",
 };

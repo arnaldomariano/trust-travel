@@ -21,6 +21,11 @@ export default function PlacePage() {
   const [showRatings, setShowRatings] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  const [showUpdateForm, setShowUpdateForm] = useState(false);
+  const [updateType, setUpdateType] = useState<"event" | "alert" | "info">("info");
+  const [updateText, setUpdateText] = useState("");
+  const [submittingUpdate, setSubmittingUpdate] = useState(false);
+
   const router = useRouter();
 
   const placeLocation =
@@ -179,6 +184,64 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       return item.content_type === filter;
     });
 
+    const handleSubmitUpdate = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!id) return;
+
+      if (!updateText.trim()) {
+        alert("Please write the event or information.");
+        return;
+      }
+
+    const placeName = place?.name || "this place";
+
+    const confirmed = window.confirm(
+      `You are about to post this ${updateType} about ${placeName}. Continue?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+      setSubmittingUpdate(true);
+
+      try {
+        const res = await fetch(`${API_URL}/api/updates/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            place: id,
+            type: updateType,
+            category: "tourism",
+            text: updateText.trim(),
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Failed to create update:", data);
+          alert(data.detail || "Error sharing event or info.");
+          return;
+        }
+
+        setUpdates((prev) => [data, ...prev]);
+        setUpdateText("");
+        setUpdateType("info");
+        setShowUpdateForm(false);
+        setFilter("update");
+      } catch (error) {
+        console.error("Create update failed:", error);
+        alert("Error sharing event or info.");
+      } finally {
+        setSubmittingUpdate(false);
+      }
+    };
+
   return (
     <main style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "900px", margin: "0 auto" }}>
       <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
@@ -300,8 +363,85 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             >
               {filter === "update" ? "Show all activity" : "Events & info"}
             </button>
+
+            <button
+              onClick={() => setShowUpdateForm(!showUpdateForm)}
+              style={secondaryButton}
+            >
+              {showUpdateForm ? "Cancel info post" : "Share event or info"}
+            </button>
+
           </div>
         </section>
+
+        {showUpdateForm && (
+          <section
+            style={{
+              marginBottom: "28px",
+              padding: "22px",
+              border: "1px solid #eee",
+              borderRadius: "16px",
+              backgroundColor: "white",
+              maxWidth: "760px",
+            }}
+          >
+            <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+              Place update
+            </div>
+
+            <h2 style={{ marginTop: 0, marginBottom: "10px", fontSize: "22px" }}>
+              Share event or info
+            </h2>
+
+            <p
+              style={{
+                marginTop: 0,
+                marginBottom: "16px",
+                color: "#666",
+                lineHeight: 1.5,
+              }}
+            >
+              Share an event, alert or useful information about this place.
+            </p>
+
+            <form onSubmit={handleSubmitUpdate} style={{ display: "grid", gap: "12px" }}>
+              <select
+                value={updateType}
+                onChange={(e) =>
+                  setUpdateType(e.target.value as "event" | "alert" | "info")
+                }
+                style={input}
+              >
+                <option value="info">Useful info</option>
+                <option value="event">Event</option>
+                <option value="alert">Alert</option>
+              </select>
+
+              <textarea
+                value={updateText}
+                onChange={(e) => setUpdateText(e.target.value)}
+                placeholder="Write the event, alert or useful information..."
+                rows={4}
+                style={input}
+              />
+
+              <button
+                type="submit"
+                disabled={submittingUpdate || !updateText.trim()}
+                style={{
+                  ...primaryButton,
+                  opacity: submittingUpdate || !updateText.trim() ? 0.5 : 1,
+                  cursor:
+                    submittingUpdate || !updateText.trim() ? "not-allowed" : "pointer",
+                }}
+              >
+                {submittingUpdate
+                  ? "Sharing..."
+                  : `Share about ${place?.name || "this place"}`}
+              </button>
+            </form>
+          </section>
+        )}
 
             {showRatings && (
               <section
@@ -714,5 +854,12 @@ const secondaryButton = {
   backgroundColor: "white",
   color: "#111",
   cursor: "pointer",
+  fontSize: "14px",
+};
+
+const input = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
   fontSize: "14px",
 };

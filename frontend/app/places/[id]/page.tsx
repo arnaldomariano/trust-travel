@@ -449,6 +449,65 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
               </section>
             )}
 
+            {filter === "update" && (
+              <section
+                style={{
+                  marginBottom: "22px",
+                  padding: "22px",
+                  border: "1px solid #eee",
+                  borderRadius: "16px",
+                  backgroundColor: "white",
+                  maxWidth: "760px",
+                }}
+              >
+                <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+                  Place information
+                </div>
+
+                <h2 style={{ margin: 0, fontSize: "22px" }}>Events & info</h2>
+
+                <p
+                  style={{
+                    marginTop: "8px",
+                    marginBottom: "18px",
+                    color: "#666",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Follow events, alerts and useful information shared about this place.
+                </p>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                    gap: "12px",
+                  }}
+                >
+                  <div style={insightStatCard}>
+                    <div style={overviewStatLabel}>Events</div>
+                    <div style={overviewStatValue}>
+                      {updates.filter((u) => u.type === "event").length}
+                    </div>
+                  </div>
+
+                  <div style={insightStatCard}>
+                    <div style={overviewStatLabel}>Alerts</div>
+                    <div style={overviewStatValue}>
+                      {updates.filter((u) => u.type === "alert").length}
+                    </div>
+                  </div>
+
+                  <div style={insightStatCard}>
+                    <div style={overviewStatLabel}>Useful info</div>
+                    <div style={overviewStatValue}>
+                      {updates.filter((u) => u.type === "info").length}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
         {filteredFeed.length === 0 ? (
           <div
             style={{

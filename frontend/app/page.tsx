@@ -121,7 +121,8 @@ export default function HomePage() {
     })
     .filter((entry: any) => {
       if (activeFilter === "all") return true;
-      return entry.lastUpdate?.type === activeFilter;
+
+      return entry.items.some((item: any) => item.type === activeFilter);
     })
     .sort((a: any, b: any) => {
       if (a.priority !== b.priority) {
@@ -213,8 +214,13 @@ const getActivityPreviewText = (item: any) => {
     const lastUpdate = entry.lastUpdate;
     const newCount = entry.items.filter((i: any) => i.is_new).length;
 
-    const previewItems = entry.items.slice(0, 2);
-    const remainingCount = entry.items.length - previewItems.length;
+    const visibleItems =
+      activeFilter === "all"
+        ? entry.items
+        : entry.items.filter((item: any) => item.type === activeFilter);
+
+    const previewItems = visibleItems.slice(0, 2);
+    const remainingCount = visibleItems.length - previewItems.length;
 
     // Trusted users can show username + public code.
     // Explore users remain identified only by public code.

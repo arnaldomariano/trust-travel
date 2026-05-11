@@ -177,6 +177,34 @@ export default function HomePage() {
       });
     };
 
+// =========================
+// Activity labels
+// =========================
+const getActivityLabel = (type: string) => {
+  if (type === "experience") return "Experience";
+  if (type === "event") return "Event";
+  if (type === "alert") return "Alert";
+  if (type === "info") return "Info";
+  return "Activity";
+};
+
+const getActivityIcon = (type: string) => {
+  if (type === "experience") return "⭐";
+  if (type === "event") return "🎭";
+  if (type === "alert") return "⚠️";
+  if (type === "info") return "ℹ️";
+  return "•";
+};
+
+const getActivityPreviewText = (item: any) => {
+  if (item.type === "experience") {
+    return item.text || "Shared an experience";
+  }
+
+  return item.text || `${getActivityLabel(item.type)} about ${item.place}`;
+};
+
+
   // =========================
   // Render user card
   // =========================
@@ -294,35 +322,57 @@ export default function HomePage() {
 
               >
                 <div>
-                    <strong>
-                      {item.is_new
-                        ? item.type === "experience"
-                          ? "⭐ "
+                  <div style={{ display: "grid", gap: "5px" }}>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "4px",
+                      alignSelf: "center",
+                      fontSize: "11px",
+                      padding: "3px 7px",
+                      borderRadius: "999px",
+                      border: item.type === "alert" ? "1px solid #f3d1d1" : "1px solid #eee",
+                      background:
+                        item.type === "alert"
+                          ? "#fff5f5"
                           : item.type === "event"
-                          ? "🎭 "
-                          : item.type === "alert"
-                          ? "⚠️ "
-                          : "ℹ️ "
-                        : ""}
+                          ? "#f8f5ff"
+                          : item.type === "info"
+                          ? "#f5f7ff"
+                          : "#f9f9f9",
+                      color: item.type === "alert" ? "#9f1239" : "#555",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>{getActivityIcon(item.type)}</span>
+                    <span>{getActivityLabel(item.type)}</span>
+                  </div>
 
-                      {item.type === "experience"
-                        ? item.text || "Experience"
-                        : item.type === "event"
-                        ? `Event — ${item.place}`
-                        : item.type === "alert"
-                        ? `Alert — ${item.place}`
-                        : `Info — ${item.place}`}
-                    </strong>
+                  <strong
+                    style={{
+                      fontSize: "12px",
+                      lineHeight: 1.35,
+                      color: "#111",
+                    }}
+                  >
+                    {getActivityPreviewText(item).slice(0, 70)}
+                    {getActivityPreviewText(item).length > 70 ? "..." : ""}
+                  </strong>
 
-                    {item.type === "experience" && (
-                      <div style={{ marginTop: "3px", color: "#666", fontSize: "11px" }}>
-                        {item.place}
-                      </div>
-                    )}
+                  <div style={{ color: "#666", fontSize: "11px", lineHeight: 1.3 }}>
+                    {item.place}
+                  </div>
 
-                  <div style={{ marginTop: "4px", color: "#777", fontSize: "11px" }}>
+                  <div style={{ color: "#999", fontSize: "11px" }}>
                     {formatActivityDate(item.created_at)}
                   </div>
+
+                  <div style={{ color: "#111", fontSize: "11px", fontWeight: 600 }}>
+                    {item.type === "experience" ? "Read experience →" : "View place →"}
+                     </div>
+                   </div>
                 </div>
               </div>
             ))}

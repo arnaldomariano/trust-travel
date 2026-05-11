@@ -207,8 +207,8 @@ const cancelRequest = async (id: number) => {
         <h1 style={title}>Connections</h1>
 
         <p style={heroText}>
-          Manage the people whose travel experiences you trust. Accepted connections
-          appear in your Trusted Network feed.
+          Manage the people you trust to share experiences, local updates, alerts and
+          useful information. Accepted connections appear in your Trusted Network feed.
         </p>
 
         <div style={statsGrid}>

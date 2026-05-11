@@ -454,10 +454,19 @@ const getActivityPreviewText = (item: any) => {
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           {["all", "event", "alert", "experience", "info", "connections"].map(
             (f) => {
-              const label =
-                f === "connections" && requests.length > 0
-                  ? `connections (${requests.length})`
-                  : f;
+              const filterLabels: Record<string, string> = {
+                  all: "All",
+                  event: "Events",
+                  alert: "Alerts",
+                  experience: "Experiences",
+                  info: "Info",
+                  connections: "Connections",
+                };
+
+                const label =
+                  f === "connections" && requests.length > 0
+                    ? `${filterLabels[f]} (${requests.length})`
+                    : filterLabels[f] || f;
 
               return (
                 <button

@@ -165,6 +165,12 @@ const cancelRequest = async (id: number) => {
   // Remove friend
   // =========================
     const removeFriend = async (userId: number) => {
+      const confirmed = window.confirm(
+        "Remove this person from your trusted network?"
+      );
+
+      if (!confirmed) return;
+
       setActionLoading(userId);
 
       try {
@@ -191,31 +197,75 @@ const cancelRequest = async (id: number) => {
         setActionLoading(null);
       }
     };
+
+
   return (
-    <main style={page}>
-      <h1 style={title}>Connections</h1>
+        <main style={page}>
+      <section style={heroCard}>
+        <div style={eyebrow}>Trust network</div>
 
-      {/* Add friend */}
-      <section style={addFriendBox}>
-        <input
-          placeholder="Enter user code"
-          value={searchCode}
-          onChange={(e) => setSearchCode(e.target.value)}
-          style={input}
-        />
+        <h1 style={title}>Connections</h1>
 
-        <button
-          onClick={() => sendFriendRequest(searchCode)}
-          style={primaryButton}
-        >
-          Add Friend
-        </button>
+        <p style={heroText}>
+          Manage the people whose travel experiences you trust. Accepted connections
+          appear in your Trusted Network feed.
+        </p>
+
+        <div style={statsGrid}>
+          <div style={statCard}>
+            <div style={statLabel}>Trusted friends</div>
+            <div style={statValue}>{friends.length}</div>
+          </div>
+
+          <div style={statCard}>
+            <div style={statLabel}>Requests received</div>
+            <div style={statValue}>{received.length}</div>
+          </div>
+
+          <div style={statCard}>
+            <div style={statLabel}>Requests sent</div>
+            <div style={statValue}>{sent.length}</div>
+          </div>
+        </div>
       </section>
 
+      {/* Add trusted contact */}
+        <section style={addFriendCard}>
+          <div>
+            <h2 style={sectionTitle}>Add trusted contact</h2>
+
+            <p style={helperText}>
+              Enter the public code of the person you want to add to your trusted network.
+            </p>
+          </div>
+
+          <div style={addFriendBox}>
+            <input
+              placeholder="Enter user code, e.g. XXb86q"
+              value={searchCode}
+              onChange={(e) => setSearchCode(e.target.value)}
+              style={input}
+            />
+
+            <button
+              onClick={() => sendFriendRequest(searchCode)}
+              style={{
+                ...primaryButton,
+                opacity: searchCode.trim() ? 1 : 0.5,
+                cursor: searchCode.trim() ? "pointer" : "not-allowed",
+              }}
+              disabled={!searchCode.trim()}
+            >
+              Send request
+            </button>
+          </div>
+        </section>
       {/* Trusted friends */}
-      <ConnectionSection title="Trusted Friends">
+      <ConnectionSection title="Trusted Network">
         {friends.length === 0 ? (
-          <p style={emptyText}>No friends yet</p>
+          <p style={emptyText}>
+              No trusted connections yet. Add someone by public code to start building your network.
+            </p>
         ) : (
           friends.map((friend) => (
             <ConnectionRow
@@ -240,9 +290,9 @@ const cancelRequest = async (id: number) => {
       </ConnectionSection>
 
       {/* Pending received */}
-      <ConnectionSection title="Pending Received">
+      <ConnectionSection title="Requests received">
         {received.length === 0 ? (
-          <p style={emptyText}>None</p>
+          <p style={emptyText}>No pending requests received.</p>
         ) : (
           received.map((request) => (
             <ConnectionRow
@@ -276,9 +326,9 @@ const cancelRequest = async (id: number) => {
       </ConnectionSection>
 
       {/* Pending sent */}
-      <ConnectionSection title="Pending Sent">
+      <ConnectionSection title="Requests sent">
         {sent.length === 0 ? (
-          <p style={emptyText}>None</p>
+          <p style={emptyText}>No pending requests sent.</p>
         ) : (
           sent.map((request) => (
             <ConnectionRow
@@ -409,7 +459,8 @@ const page = {
 };
 
 const title = {
-  marginBottom: "28px",
+  marginTop: 0,
+  marginBottom: "16px",
 };
 
 const addFriendBox = {
@@ -502,4 +553,65 @@ const secondaryButton = {
 const emptyText = {
   color: "#666",
   marginTop: "4px",
+};
+
+const heroCard = {
+  padding: "24px",
+  border: "1px solid #eee",
+  borderRadius: "18px",
+  background: "white",
+  marginBottom: "26px",
+};
+
+const eyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  marginBottom: "6px",
+};
+
+const heroText = {
+  color: "#666",
+  lineHeight: 1.5,
+  marginTop: "-12px",
+  marginBottom: "20px",
+  maxWidth: "680px",
+};
+
+const statsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "12px",
+};
+
+const statCard = {
+  padding: "14px",
+  border: "1px solid #eee",
+  borderRadius: "14px",
+  background: "#fafafa",
+};
+
+const statLabel = {
+  fontSize: "12px",
+  color: "#777",
+};
+
+const statValue = {
+  marginTop: "6px",
+  fontSize: "22px",
+  fontWeight: 700,
+};
+
+const addFriendCard = {
+  padding: "20px",
+  border: "1px solid #eee",
+  borderRadius: "16px",
+  background: "white",
+  marginBottom: "38px",
+};
+
+const helperText = {
+  color: "#666",
+  lineHeight: 1.5,
+  marginTop: "-8px",
+  marginBottom: "16px",
 };

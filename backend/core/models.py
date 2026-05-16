@@ -24,14 +24,43 @@ def generate_public_code(country_code: str):
 
 
 class Profile(models.Model):
+    AGE_RANGE_CHOICES = [
+        ("prefer_not_to_say", "Prefer not to say"),
+        ("18_24", "18–24"),
+        ("25_34", "25–34"),
+        ("35_44", "35–44"),
+        ("45_54", "45–54"),
+        ("55_64", "55–64"),
+        ("65_plus", "65+"),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+
+    # Public/pseudonymous identity.
     country_code = models.CharField(max_length=2, default="XX")
     public_code = models.CharField(max_length=6, unique=True, blank=True)
     display_name = models.CharField(max_length=100, blank=True)
 
+    # Optional visible identity detail.
+    # This can be shown only if the user allows it and only in the contexts we define.
+    nationality = models.CharField(max_length=80, blank=True)
+    show_nationality = models.BooleanField(default=False)
+
     # User avatar/photo.
     # This should only be exposed to trusted connections in the frontend/API logic.
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
+
+    # Private/analytics-oriented travel profile.
+    # These fields should not be displayed directly on public cards.
+    country_of_birth = models.CharField(max_length=80, blank=True)
+    country_of_residence = models.CharField(max_length=80, blank=True)
+
+    age_range = models.CharField(
+        max_length=30,
+        choices=AGE_RANGE_CHOICES,
+        default="prefer_not_to_say",
+    )
+
 
     def save(self, *args, **kwargs):
         if not self.public_code:
@@ -40,7 +69,6 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.public_code}"
-
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):

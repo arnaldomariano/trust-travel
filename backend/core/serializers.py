@@ -297,12 +297,22 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = [
             "username",
+
+            # Public / trusted identity
             "display_name",
             "country_code",
             "public_code",
+            "nationality",
+            "show_nationality",
             "avatar",
             "avatar_url",
+
+            # Private / analytics-oriented travel profile
+            "country_of_birth",
+            "country_of_residence",
+            "age_range",
         ]
+
         read_only_fields = [
             "username",
             "public_code",

@@ -382,6 +382,35 @@ class ExperienceReplyListCreateView(generics.ListCreateAPIView):
 
         serializer.save(user=requester, experience=experience)
 
+def serialize_update(update, request=None):
+    profile = getattr(update.user, "profile", None)
+
+    avatar_url = None
+    if request and profile and profile.avatar:
+        avatar_url = request.build_absolute_uri(profile.avatar.url)
+
+    return {
+        "id": update.id,
+        "experience_id": update.experience.id if update.experience else None,
+        "type": update.type,
+        "category": update.category,
+        "title": update.title,
+        "text": update.text,
+        "event_date": update.event_date,
+        "external_link": update.external_link,
+        "source_name": update.source_name,
+        "source_url": update.source_url,
+        "priority": update.priority,
+        "place": update.place.name,
+        "place_id": update.place.id,
+        "user": profile.public_code if profile else update.user.username,
+        "username": update.user.username,
+        "display_name": profile.display_name if profile else "",
+        "avatar_url": avatar_url,
+        "created_at": update.created_at,
+        "updated_at": update.updated_at,
+    }
+
 
 # ============================================================
 # UPDATE FEED
@@ -450,25 +479,17 @@ class UpdateListView(APIView):
                 if profile and profile.avatar:
                     avatar_url = request.build_absolute_uri(profile.avatar.url)
 
-                result.append({
-                    "id": u.id,
-                    "experience_id": u.experience.id if u.experience else None,
-                    "type": u.type,
-                    "category": u.category,
-                    "text": u.text,
-                    "user": profile.public_code if profile else u.user.username,
-                    "username": u.user.username,
-                    "display_name": profile.display_name if profile else "",
-                    "avatar_url": avatar_url,
-                    "place": u.place.name,
-                    "place_id": u.place.id,
+                data = serialize_update(u, request)
+
+                data.update({
                     "user_id": u.user.id,
-                    "created_at": u.created_at,
                     "is_new": u.id not in seen_update_ids,
                     "is_friend": u.user.id in friends,
                     "request_sent": u.user.id in sent_requests,
-                    "priority": 1 if u.user.id in friends else 2,
+                    "feed_priority": 1 if u.user.id in friends else 2,
                 })
+
+                result.append(data)
 
             return result
 
@@ -496,10 +517,29 @@ class UpdateListView(APIView):
         place_id = request.data.get("place")
         text = request.data.get("text")
         update_type = request.data.get("type")
-        category = request.data.get("category")
+        category = request.data.get("category") or "general"
 
-        if not all([place_id, text, update_type, category]):
-            return Response({"detail": "Missing fields"}, status=400)
+        title = (request.data.get("title") or "").strip()
+        event_date = request.data.get("event_date") or None
+        external_link = (request.data.get("external_link") or "").strip()
+        source_name = (request.data.get("source_name") or "").strip()
+        source_url = (request.data.get("source_url") or "").strip()
+        priority = request.data.get("priority") or "normal"
+
+        valid_types = ["event", "alert", "info"]
+        valid_priorities = ["low", "normal", "high", "urgent"]
+
+        if not place_id or not update_type:
+            return Response({"detail": "Missing required fields."}, status=400)
+
+        if update_type not in valid_types:
+            return Response({"detail": "Invalid update type."}, status=400)
+
+        if priority not in valid_priorities:
+            return Response({"detail": "Invalid priority."}, status=400)
+
+        if not text or not str(text).strip():
+            return Response({"detail": "Text is required."}, status=400)
 
         try:
             place = Place.objects.get(id=place_id)
@@ -511,22 +551,16 @@ class UpdateListView(APIView):
             place=place,
             type=update_type,
             category=category,
-            text=text,
+            title=title,
+            text=str(text).strip(),
+            event_date=event_date,
+            external_link=external_link,
+            source_name=source_name,
+            source_url=source_url,
+            priority=priority,
         )
 
-        profile = getattr(request.user, "profile", None)
-
-        return Response({
-            "id": update.id,
-            "type": update.type,
-            "category": update.category,
-            "text": update.text,
-            "user": profile.public_code if profile else request.user.username,
-            "username": request.user.username,
-            "place": update.place.name,
-            "created_at": update.created_at,
-        }, status=201)
-
+        return Response(serialize_update(update, request), status=201)
 class UpdateDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -535,8 +569,10 @@ class UpdateDetailView(APIView):
         try:
             update = Update.objects.select_related(
                 "user__profile",
-                "place"
+                "place",
+                "experience",
             ).get(id=pk)
+
         except Update.DoesNotExist:
             return Response({"detail": "Update not found."}, status=404)
 
@@ -548,25 +584,7 @@ class UpdateDetailView(APIView):
                 status=400
             )
 
-        profile = getattr(update.user, "profile", None)
-
-        avatar_url = None
-        if profile and profile.avatar:
-            avatar_url = request.build_absolute_uri(profile.avatar.url)
-
-        return Response({
-            "id": update.id,
-            "type": update.type,
-            "category": update.category,
-            "text": update.text,
-            "place": update.place.name,
-            "place_id": update.place.id,
-            "user": profile.public_code if profile else update.user.username,
-            "username": update.user.username,
-            "display_name": profile.display_name if profile else "",
-            "avatar_url": avatar_url,
-            "created_at": update.created_at,
-        })
+        return Response(serialize_update(update, request))
 
     def patch(self, request, pk):
         try:
@@ -585,8 +603,19 @@ class UpdateDetailView(APIView):
         update_type = request.data.get("type", update.type)
         category = request.data.get("category", update.category)
         text = request.data.get("text", update.text)
+        title = request.data.get("title", update.title)
+        event_date = request.data.get("event_date", update.event_date)
+        external_link = request.data.get("external_link", update.external_link)
+        source_name = request.data.get("source_name", update.source_name)
+        source_url = request.data.get("source_url", update.source_url)
+        priority = request.data.get("priority", update.priority)
+
 
         valid_types = ["event", "alert", "info"]
+        valid_priorities = ["low", "normal", "high", "urgent"]
+
+        if priority not in valid_priorities:
+            return Response({"detail": "Invalid priority."}, status=400)
 
         if update_type not in valid_types:
             return Response({"detail": "Invalid update type."}, status=400)
@@ -597,21 +626,15 @@ class UpdateDetailView(APIView):
         update.type = update_type
         update.category = category or "tourism"
         update.text = str(text).strip()
+        update.title = str(title or "").strip()
+        update.event_date = event_date or None
+        update.external_link = str(external_link or "").strip()
+        update.source_name = str(source_name or "").strip()
+        update.source_url = str(source_url or "").strip()
+        update.priority = priority or "normal"
         update.save()
 
-        profile = getattr(request.user, "profile", None)
-
-        return Response({
-            "id": update.id,
-            "type": update.type,
-            "category": update.category,
-            "text": update.text,
-            "user": profile.public_code if profile else request.user.username,
-            "username": request.user.username,
-            "place": update.place.name,
-            "place_id": update.place.id,
-            "created_at": update.created_at,
-        })
+        return Response(serialize_update(update, request))
 
     def delete(self, request, pk):
         try:
@@ -957,28 +980,14 @@ class PlaceUpdatesListView(APIView):
             type="experience"
         ).select_related(
             "user__profile",
-            "place"
+            "place",
+            "experience",
         ).order_by("-created_at")
 
-        result = []
-
-        for update in updates:
-            profile = getattr(update.user, "profile", None)
-
-            result.append({
-                "id": update.id,
-                "type": update.type,
-                "category": update.category,
-                "text": update.text,
-                "place": update.place.name,
-                "place_id": update.place.id,
-                "user": profile.public_code if profile else update.user.username,
-                "username": update.user.username,
-                "display_name": profile.display_name if profile else "",
-                "created_at": update.created_at,
-            })
-
-        return Response(result)
+        return Response([
+            serialize_update(update, request)
+            for update in updates
+        ])
 
 class PlacePhotosView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -1026,24 +1035,14 @@ class MyUpdatesView(APIView):
             user=request.user
         ).select_related(
             "place",
-            "experience"
+            "experience",
+            "user__profile",
         ).order_by("-created_at")
 
-        result = []
-
-        for update in updates:
-            result.append({
-                "id": update.id,
-                "experience_id": update.experience.id if update.experience else None,
-                "type": update.type,
-                "category": update.category,
-                "text": update.text,
-                "place": update.place.name,
-                "place_id": update.place.id,
-                "created_at": update.created_at,
-            })
-
-        return Response(result)
+        return Response([
+            serialize_update(update, request)
+            for update in updates
+        ])
 
 class MyExperiencesView(APIView):
     authentication_classes = [CookieJWTAuthentication]

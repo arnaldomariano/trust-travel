@@ -149,6 +149,19 @@ class Update(models.Model):
         ("religious", "Religious"),
         ("social", "Social"),
         ("tourism", "Tourism"),
+        ("transport", "Transport"),
+        ("safety", "Safety"),
+        ("weather", "Weather"),
+        ("food", "Food"),
+        ("culture", "Culture"),
+        ("general", "General"),
+    ]
+
+    PRIORITY_CHOICES = [
+        ("low", "Low"),
+        ("normal", "Normal"),
+        ("high", "High"),
+        ("urgent", "Urgent"),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -166,18 +179,65 @@ class Update(models.Model):
     )
 
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+
+    # Kept required for compatibility, but now with more flexible categories.
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default="general",
+    )
+
+    # Main structured fields for standalone events, alerts and useful info.
+    title = models.CharField(
+        max_length=160,
+        blank=True,
+        help_text="Short title for event, alert or useful information.",
+    )
 
     text = models.TextField()
+
+    # Optional date/time for events, or for alerts/info that refer to a specific time.
+    event_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Optional date/time related to the event, alert or information.",
+    )
+
+    # Optional external reference.
+    external_link = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text="Optional external link related to the update.",
+    )
+
+    source_name = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Optional source name, e.g. official website, local authority, venue page.",
+    )
+
+    source_url = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text="Optional source URL for verification.",
+    )
+
+    # Mainly useful for alerts, but can remain optional for all update types.
+    priority = models.CharField(
+        max_length=20,
+        choices=PRIORITY_CHOICES,
+        default="normal",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user} - {self.type} - {self.place}"
-
-
-
+        label = self.title or self.text[:40]
+        return f"{self.user} - {self.type} - {self.place} - {label}"
 
 # ===================== Experience =====================
+
 class Experience(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     place = models.ForeignKey(Place, on_delete=models.CASCADE)

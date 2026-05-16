@@ -44,6 +44,7 @@ class Profile(models.Model):
     # Optional visible identity detail.
     # This can be shown only if the user allows it and only in the contexts we define.
     nationality = models.CharField(max_length=80, blank=True)
+    nationality_country_code = models.CharField(max_length=2, blank=True)
     show_nationality = models.BooleanField(default=False)
 
     # User avatar/photo.

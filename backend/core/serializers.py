@@ -117,12 +117,16 @@ class ExperienceSerializer(serializers.ModelSerializer):
     trust_level = serializers.SerializerMethodField()
     is_trusted = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
+    author_nationality = serializers.SerializerMethodField()
+    author_nationality_country_code = serializers.SerializerMethodField()
 
     class Meta:
         model = Experience
         fields = [
             "id",
             "user",
+            "author_nationality",
+            "author_nationality_country_code",
             "place",
             "place_name",
             "destination_name",
@@ -148,6 +152,46 @@ class ExperienceSerializer(serializers.ModelSerializer):
 
         return obj.image.url
 
+    def can_show_author_nationality(self, obj):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            return False
+
+        profile = getattr(obj.user, "profile", None)
+
+        if not profile or not profile.show_nationality:
+            return False
+
+        # The author can see their own nationality flag.
+        if request.user == obj.user:
+            return True
+
+        # Trusted/direct users can see it.
+        return self.get_trust_level(obj) == 1
+
+    def get_author_nationality(self, obj):
+        if not self.can_show_author_nationality(obj):
+            return ""
+
+        profile = getattr(obj.user, "profile", None)
+
+        if not profile:
+            return ""
+
+        return profile.nationality or ""
+
+    def get_author_nationality_country_code(self, obj):
+        if not self.can_show_author_nationality(obj):
+            return ""
+
+        profile = getattr(obj.user, "profile", None)
+
+        if not profile:
+            return ""
+
+        return (profile.nationality_country_code or "").upper()
+
     def get_is_trusted(self, obj):
         return self.get_trust_level(obj) == 1
 
@@ -165,10 +209,12 @@ class ExperienceSerializer(serializers.ModelSerializer):
         # nível 1: conexão direta
         direct = Friendship.objects.filter(
             from_user=user,
-            to_user=author
+            to_user=author,
+            status="accepted"
         ).exists() or Friendship.objects.filter(
             from_user=author,
-            to_user=user
+            to_user=user,
+            status="accepted"
         ).exists()
 
         if direct:
@@ -303,6 +349,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             "country_code",
             "public_code",
             "nationality",
+            "nationality_country_code",
             "show_nationality",
             "avatar",
             "avatar_url",

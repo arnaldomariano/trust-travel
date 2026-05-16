@@ -12,6 +12,13 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [nationality, setNationality] = useState("");
+  const [showNationality, setShowNationality] = useState(false);
+
+  const [countryOfBirth, setCountryOfBirth] = useState("");
+  const [countryOfResidence, setCountryOfResidence] = useState("");
+  const [ageRange, setAgeRange] = useState("prefer_not_to_say");
+
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,6 +45,13 @@ export default function ProfilePage() {
       setCountryCode(data.country_code || "");
       setPublicCode(data.public_code || "");
       setAvatarUrl(data.avatar_url || null);
+      setNationality(data.nationality || "");
+      setShowNationality(Boolean(data.show_nationality));
+
+      setCountryOfBirth(data.country_of_birth || "");
+      setCountryOfResidence(data.country_of_residence || "");
+      setAgeRange(data.age_range || "prefer_not_to_say");
+
     } catch (error) {
       console.error("Profile fetch error:", error);
     } finally {
@@ -76,6 +90,13 @@ export default function ProfilePage() {
       formData.append("display_name", displayName);
       formData.append("country_code", countryCode);
 
+      formData.append("nationality", nationality);
+      formData.append("show_nationality", String(showNationality));
+
+      formData.append("country_of_birth", countryOfBirth);
+      formData.append("country_of_residence", countryOfResidence);
+      formData.append("age_range", ageRange);
+
       if (avatarFile) {
         formData.append("avatar", avatarFile);
       }
@@ -101,6 +122,14 @@ export default function ProfilePage() {
       setAvatarFile(null);
       setAvatarPreview(null);
 
+      setNationality(data.nationality || "");
+      setShowNationality(Boolean(data.show_nationality));
+
+      setCountryOfBirth(data.country_of_birth || "");
+      setCountryOfResidence(data.country_of_residence || "");
+      setAgeRange(data.age_range || "prefer_not_to_say");
+
+
       alert("Profile saved");
     } catch (error) {
       console.error("Profile save error:", error);
@@ -123,9 +152,30 @@ export default function ProfilePage() {
 
   return (
     <main style={page}>
-      <h1>Profile</h1>
+      <section style={heroCard}>
+        <div style={eyebrow}>Identity and trust</div>
+
+        <h1 style={{ marginTop: 0, marginBottom: "10px" }}>Profile</h1>
+
+        <p style={heroText}>
+          Manage how you appear in Trust Travel. Your public code protects your
+          identity outside your trusted network. Travel profile fields are optional
+          and intended for future aggregated analytics.
+        </p>
+      </section>
 
       <section style={card}>
+        <div>
+          <div style={eyebrow}>Public identity</div>
+
+          <h2 style={sectionTitle}>How people identify you</h2>
+
+          <p style={sectionText}>
+            People outside your trusted network see your public code. Trusted
+            connections may see your display name and avatar.
+          </p>
+        </div>
+
         {/* Avatar preview */}
         <div style={avatarBox}>
           <AvatarPreview name={avatarName} avatarUrl={visibleAvatarUrl} />
@@ -165,6 +215,9 @@ export default function ProfilePage() {
             placeholder="How trusted users will see you"
             style={input}
           />
+          <small style={hint}>
+            This is shown mainly to trusted connections, not to everyone.
+          </small>
         </div>
 
         <div style={field}>
@@ -176,20 +229,107 @@ export default function ProfilePage() {
             placeholder="BR, NL, US..."
             style={input}
           />
+          <small style={hint}>
+            Used to generate or contextualize your public code.
+          </small>
         </div>
 
         <div style={field}>
           <label style={label}>Public code</label>
           <input value={publicCode} disabled style={inputDisabled} />
           <small style={hint}>
-            Your public code is used by other users to send connection requests.
+            Other users can use this code to send you a connection request.
           </small>
         </div>
 
-        <button onClick={saveProfile} disabled={saving} style={button}>
-          {saving ? "Saving..." : "Save profile"}
-        </button>
+        <div style={field}>
+          <label style={label}>Nationality / country of origin</label>
+          <input
+            value={nationality}
+            onChange={(e) => setNationality(e.target.value)}
+            placeholder="Optional, e.g. Brazilian, Dutch, Italian..."
+            style={input}
+          />
+        </div>
+
+        <label style={checkboxRow}>
+          <input
+            type="checkbox"
+            checked={showNationality}
+            onChange={(e) => setShowNationality(e.target.checked)}
+          />
+
+          <span>
+            Allow my nationality to appear in trusted identity contexts.
+          </span>
+        </label>
       </section>
+
+      <section style={card}>
+        <div>
+          <div style={eyebrow}>Travel profile for analytics</div>
+
+          <h2 style={sectionTitle}>Optional context</h2>
+
+          <p style={sectionText}>
+            These fields are not meant to be displayed on public cards. They can
+            later help generate aggregated insights, such as recommendations by country of residence, country of birth or age range,
+            residence, age range or travel style.
+          </p>
+        </div>
+
+        <div style={fieldGrid}>
+          <div style={field}>
+            <label style={label}>Country of birth</label>
+            <input
+              value={countryOfBirth}
+              onChange={(e) => setCountryOfBirth(e.target.value)}
+              placeholder="Optional"
+              style={input}
+            />
+          </div>
+
+          <div style={field}>
+            <label style={label}>Country of residence</label>
+            <input
+              value={countryOfResidence}
+              onChange={(e) => setCountryOfResidence(e.target.value)}
+              placeholder="Optional"
+              style={input}
+            />
+          </div>
+        </div>
+
+        <div style={field}>
+          <label style={label}>Age range</label>
+          <select
+            value={ageRange}
+            onChange={(e) => setAgeRange(e.target.value)}
+            style={input}
+          >
+            <option value="prefer_not_to_say">Prefer not to say</option>
+            <option value="18_24">18–24</option>
+            <option value="25_34">25–34</option>
+            <option value="35_44">35–44</option>
+            <option value="45_54">45–54</option>
+            <option value="55_64">55–64</option>
+            <option value="65_plus">65+</option>
+          </select>
+        </div>
+
+
+        <div style={privacyNote}>
+          <strong>Privacy note</strong>
+          <p style={{ margin: "6px 0 0 0", color: "#666", lineHeight: 1.5 }}>
+            These fields should be used for aggregated analytics, not to expose
+            personal details individually in public cards.
+          </p>
+        </div>
+      </section>
+
+      <button onClick={saveProfile} disabled={saving} style={button}>
+        {saving ? "Saving..." : "Save profile"}
+      </button>
     </main>
   );
 }
@@ -248,7 +388,7 @@ function AvatarPreview({
 ========================= */
 
 const page = {
-  maxWidth: "700px",
+  maxWidth: "780px",
   margin: "0 auto",
   padding: "40px",
 };
@@ -323,4 +463,56 @@ const uploadButton = {
   cursor: "pointer",
   width: "fit-content",
   fontSize: "14px",
+};
+
+const heroCard = {
+  border: "1px solid #eee",
+  borderRadius: "16px",
+  padding: "24px",
+  background: "white",
+  marginBottom: "22px",
+};
+
+const eyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  marginBottom: "6px",
+};
+
+const heroText = {
+  color: "#666",
+  lineHeight: 1.5,
+  margin: 0,
+};
+
+const sectionTitle = {
+  marginTop: 0,
+  marginBottom: "8px",
+};
+
+const sectionText = {
+  margin: 0,
+  color: "#666",
+  lineHeight: 1.5,
+};
+
+const checkboxRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  color: "#555",
+  fontSize: "14px",
+};
+
+const fieldGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "14px",
+};
+
+const privacyNote = {
+  padding: "14px",
+  border: "1px solid #eee",
+  borderRadius: "14px",
+  background: "#fafafa",
 };

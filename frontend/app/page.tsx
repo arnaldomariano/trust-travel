@@ -56,15 +56,18 @@ export default function HomePage() {
       );
 
       const sorted = unique.sort((a: any, b: any) => {
-        if (a.priority !== b.priority) {
-          return a.priority - b.priority;
-        }
+          const priorityA = a.feed_priority || 2;
+          const priorityB = b.feed_priority || 2;
 
-        return (
-          new Date(b.created_at).getTime() -
-          new Date(a.created_at).getTime()
-        );
-      });
+          if (priorityA !== priorityB) {
+            return priorityA - priorityB;
+          }
+
+          return (
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
+          );
+        });
 
       setUpdates(sorted);
       setRequests(data.requests || []);
@@ -113,11 +116,11 @@ export default function HomePage() {
       });
 
       return {
-        user,
-        items,
-        lastUpdate,
-        priority: lastUpdate.priority || 2,
-      };
+          user,
+          items,
+          lastUpdate,
+          priority: lastUpdate.feed_priority || 2,
+        };
     })
     .filter((entry: any) => {
       if (activeFilter === "all") return true;
@@ -167,10 +170,12 @@ export default function HomePage() {
           });
         };
 
-    const formatActivityDate = (dateString: string) => {
+    const formatActivityDate = (dateString?: string | null) => {
       if (!dateString) return "";
 
       const date = new Date(dateString);
+
+      if (Number.isNaN(date.getTime())) return "";
 
       return date.toLocaleDateString("en-US", {
         month: "short",
@@ -181,10 +186,20 @@ export default function HomePage() {
 // =========================
 // Activity labels
 // =========================
-const getActivityLabel = (type: string) => {
+const getActivityLabel = (type: string, item?: any) => {
   if (type === "experience") return "Experience";
   if (type === "event") return "Event";
-  if (type === "alert") return "Alert";
+
+  if (type === "alert") {
+    const priority = item?.priority;
+
+    if (priority === "urgent") return "Alert · Urgent";
+    if (priority === "high") return "Alert · High";
+    if (priority === "low") return "Alert · Low";
+
+    return "Alert";
+  }
+
   if (type === "info") return "Info";
   return "Activity";
 };
@@ -202,7 +217,28 @@ const getActivityPreviewText = (item: any) => {
     return item.text || "Shared an experience";
   }
 
-  return item.text || `${getActivityLabel(item.type)} about ${item.place}`;
+  return (
+    item.title?.trim() ||
+    item.text ||
+    `${getActivityLabel(item.type, item)} about ${item.place}`
+  );
+};
+
+const getActivityMetaText = (item: any) => {
+  if (item.type === "experience") {
+    return item.place;
+  }
+
+  if (item.event_date) {
+    const label = item.type === "event" ? "Event date" : "Related date";
+    return `${label}: ${formatActivityDate(item.event_date)}`;
+  }
+
+  if (item.source_name) {
+    return `Source: ${item.source_name}`;
+  }
+
+  return item.place;
 };
 
 
@@ -240,7 +276,7 @@ const getActivityPreviewText = (item: any) => {
       <div
         key={user}
         onClick={() => setOpenUser(isOpen ? null : user)}
-        style={{ perspective: "1000px", width: "160px", height: "220px" }}
+        style={{ perspective: "1000px", width: "170px", height: "240px" }}
       >
         <div
           style={{
@@ -317,13 +353,13 @@ const getActivityPreviewText = (item: any) => {
 
                   markUpdateAsSeen(item.id);
 
-                 if (item.type === "experience" && item.experience_id) {
-                  router.push(`/places/${item.place_id}/experiences?highlight=${item.experience_id}`);
-                } else if (item.type === "experience") {
-                  router.push(`/places/${item.place_id}/experiences`);
-                } else {
-                  router.push(`/places/${item.place_id}`);
-                }
+                  if (item.type === "experience" && item.experience_id) {
+                    router.push(`/places/${item.place_id}/experiences?highlight=${item.experience_id}`);
+                  } else if (item.type === "experience") {
+                    router.push(`/places/${item.place_id}/experiences`);
+                  } else {
+                    router.push(`/updates/${item.id}`);
+                  }
                 }}
 
               >
@@ -353,7 +389,7 @@ const getActivityPreviewText = (item: any) => {
                     }}
                   >
                     <span>{getActivityIcon(item.type)}</span>
-                    <span>{getActivityLabel(item.type)}</span>
+                    <span>{getActivityLabel(item.type, item)}</span>
                   </div>
 
                   <strong
@@ -368,15 +404,23 @@ const getActivityPreviewText = (item: any) => {
                   </strong>
 
                   <div style={{ color: "#666", fontSize: "11px", lineHeight: 1.3 }}>
-                    {item.place}
-                  </div>
+                      {getActivityMetaText(item)}
+                    </div>
+
+                    {item.type !== "experience" &&
+                      item.place &&
+                      getActivityMetaText(item) !== item.place && (
+                        <div style={{ color: "#999", fontSize: "11px", lineHeight: 1.3 }}>
+                          {item.place}
+                        </div>
+                      )}
 
                   <div style={{ color: "#999", fontSize: "11px" }}>
                     {formatActivityDate(item.created_at)}
                   </div>
 
                   <div style={{ color: "#111", fontSize: "11px", fontWeight: 600 }}>
-                    {item.type === "experience" ? "Read experience →" : "View place →"}
+                    {item.type === "experience" ? "Read experience →" : "Read update →"}
                      </div>
                    </div>
                 </div>
@@ -504,41 +548,53 @@ const getActivityPreviewText = (item: any) => {
           </button>
 
           {showCreateMenu && (
-            <div
-              style={{
-                position: "absolute",
-                right: 0,
-                top: "44px",
-                minWidth: "220px",
-                padding: "8px",
-                border: "1px solid #eee",
-                borderRadius: "12px",
-                background: "white",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                zIndex: 10,
-              }}
-            >
-              <button
-                onClick={() => {
-                  setShowCreateMenu(false);
-                  router.push("/create");
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "44px",
+                  minWidth: "260px",
+                  padding: "8px",
+                  border: "1px solid #eee",
+                  borderRadius: "12px",
+                  background: "white",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                  zIndex: 10,
+                  display: "grid",
+                  gap: "6px",
                 }}
-                style={menuItemButton}
               >
-                Post tip, event or alert
-              </button>
+                <button
+                  onClick={() => {
+                    setShowCreateMenu(false);
+                    router.push("/destinations");
+                  }}
+                  style={menuItemButton}
+                >
+                  🔎 Search or choose a place
+                </button>
 
-              <button
-                onClick={() => {
-                  setShowCreateMenu(false);
-                  router.push("/destinations");
-                }}
-                style={menuItemButton}
-              >
-                Share an experience or search a destination
-              </button>
-            </div>
-          )}
+                <button
+                  onClick={() => {
+                    setShowCreateMenu(false);
+                    router.push("/destinations?mode=experience");
+                  }}
+                  style={menuItemButton}
+                >
+                  ⭐ Share an experience
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowCreateMenu(false);
+                    router.push("/destinations?mode=update");
+                  }}
+                  style={menuItemButton}
+                >
+                  ℹ️ Share event, alert or info
+                </button>
+              </div>
+            )}
         </div>
       </div>
 
@@ -665,11 +721,20 @@ function EmptyFeedCard({
 
   const handlePrimaryAction = () => {
       if (activeFilter === "experience") {
-        router.push("/destinations");
+        router.push("/destinations?mode=experience");
         return;
       }
 
-      router.push("/create");
+      if (
+        activeFilter === "event" ||
+        activeFilter === "alert" ||
+        activeFilter === "info"
+      ) {
+        router.push("/destinations?mode=update");
+        return;
+      }
+
+      router.push("/destinations");
     };
 
   return (
@@ -708,7 +773,7 @@ function EmptyFeedCard({
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
   gap: "20px",
   marginTop: "20px",
 };

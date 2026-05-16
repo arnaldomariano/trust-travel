@@ -531,6 +531,43 @@ class UpdateDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, pk):
+        try:
+            update = Update.objects.select_related(
+                "user__profile",
+                "place"
+            ).get(id=pk)
+        except Update.DoesNotExist:
+            return Response({"detail": "Update not found."}, status=404)
+
+        # Automatic experience updates should still be opened through
+        # the experience/detail flow, not as standalone update pages.
+        if update.type == "experience":
+            return Response(
+                {"detail": "Experience updates should be opened from the experience page."},
+                status=400
+            )
+
+        profile = getattr(update.user, "profile", None)
+
+        avatar_url = None
+        if profile and profile.avatar:
+            avatar_url = request.build_absolute_uri(profile.avatar.url)
+
+        return Response({
+            "id": update.id,
+            "type": update.type,
+            "category": update.category,
+            "text": update.text,
+            "place": update.place.name,
+            "place_id": update.place.id,
+            "user": profile.public_code if profile else update.user.username,
+            "username": update.user.username,
+            "display_name": profile.display_name if profile else "",
+            "avatar_url": avatar_url,
+            "created_at": update.created_at,
+        })
+
     def patch(self, request, pk):
         try:
             update = Update.objects.get(id=pk, user=request.user)

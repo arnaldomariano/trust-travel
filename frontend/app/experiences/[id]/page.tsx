@@ -7,6 +7,13 @@ import Link from "next/link";
 import { API_URL } from "../../lib/api";
 import { countryCodeToFlagEmoji } from "../../lib/flags";
 
+type TripPlan = {
+  id: number;
+  title: string;
+  destination_text: string;
+  saved_count: number;
+};
+
 export default function ExperienceDetailPage() {
   const params = useParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -15,6 +22,32 @@ export default function ExperienceDetailPage() {
   const [extraPhotos, setExtraPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showGallery, setShowGallery] = useState(false);
+
+  const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
+  const [selectedTripPlanId, setSelectedTripPlanId] = useState("");
+  const [showTripPlanPicker, setShowTripPlanPicker] = useState(false);
+  const [addingToPlan, setAddingToPlan] = useState(false);
+
+  const loadTripPlans = async () => {
+  try {
+    const res = await fetch(`${API_URL}/api/trip-plans/`, {
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Failed to load trip plans:", res.status, text);
+      setTripPlans([]);
+      return;
+    }
+
+    const data = await res.json();
+    setTripPlans(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error("Trip plans fetch error:", error);
+    setTripPlans([]);
+  }
+};
 
   useEffect(() => {
     if (!id) return;
@@ -55,7 +88,48 @@ export default function ExperienceDetailPage() {
     };
 
     loadExperience();
+    loadTripPlans();
   }, [id]);
+
+    const addExperienceToTripPlan = async () => {
+      if (!experience?.id) {
+        alert("Experience not loaded yet.");
+        return;
+      }
+
+      if (!selectedTripPlanId) {
+        alert("Please choose a trip plan first.");
+        return;
+      }
+
+      setAddingToPlan(true);
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/trip-plans/${selectedTripPlanId}/experiences/${experience.id}/`,
+          {
+            method: "POST",
+            credentials: "include",
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Add to trip plan error:", data);
+          alert(data.detail || "Error adding experience to trip plan.");
+          return;
+        }
+
+        alert("Experience added to your trip plan.");
+        setShowTripPlanPicker(false);
+      } catch (error) {
+        console.error("Failed to add experience to trip plan:", error);
+        alert("Error adding experience to trip plan.");
+      } finally {
+        setAddingToPlan(false);
+      }
+    };
 
   if (loading) {
     return (
@@ -258,12 +332,64 @@ const authorLabel = authorFlag
           </Link>
 
           <Link
-              href={`/places/${experience.place}/experiences?highlight=${experience.id}`}
-              style={secondaryLink}
-            >
-              Back to experiences
-            </Link>
+            href={`/places/${experience.place}/experiences?highlight=${experience.id}`}
+            style={secondaryLink}
+          >
+            Back to experiences
+          </Link>
+
+          <button
+            type="button"
+            style={secondaryButton}
+            onClick={() => setShowTripPlanPicker((prev) => !prev)}
+          >
+            Add to trip plan
+          </button>
         </div>
+
+        {showTripPlanPicker && (
+          <div style={tripPlanPickerBox}>
+            {tripPlans.length === 0 ? (
+              <div style={{ fontSize: "13px", color: "#666" }}>
+                You do not have any trip plans yet.{" "}
+                <Link href="/trip-plans" style={{ color: "#111", fontWeight: 600 }}>
+                  Create one
+                </Link>
+                .
+              </div>
+            ) : (
+              <>
+                <select
+                  value={selectedTripPlanId}
+                  onChange={(event) => setSelectedTripPlanId(event.target.value)}
+                  style={selectInput}
+                >
+                  <option value="">Choose a trip plan</option>
+
+                  {tripPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.title}
+                      {plan.destination_text ? ` — ${plan.destination_text}` : ""}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  disabled={addingToPlan}
+                  onClick={addExperienceToTripPlan}
+                  style={{
+                    ...primaryButton,
+                    opacity: addingToPlan ? 0.5 : 1,
+                    cursor: addingToPlan ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {addingToPlan ? "Adding..." : "Add"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </article>
     </main>
   );
@@ -429,4 +555,44 @@ const galleryImage = {
   objectFit: "cover" as const,
   borderRadius: "12px",
   border: "1px solid #eee",
+};
+
+const secondaryButton = {
+  display: "inline-block",
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  color: "black",
+  background: "white",
+  cursor: "pointer",
+  fontSize: "14px",
+};
+
+const primaryButton = {
+  display: "inline-block",
+  padding: "8px 12px",
+  borderRadius: "10px",
+  border: "none",
+  background: "black",
+  color: "white",
+  cursor: "pointer",
+  width: "fit-content",
+};
+
+const tripPlanPickerBox = {
+  marginTop: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  display: "grid",
+  gap: "10px",
+};
+
+const selectInput = {
+  padding: "9px 10px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+  maxWidth: "360px",
 };

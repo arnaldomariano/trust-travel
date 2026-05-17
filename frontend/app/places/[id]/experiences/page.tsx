@@ -7,6 +7,13 @@ import Link from "next/link";
 import { API_URL } from "../../../lib/api";
 import { countryCodeToFlagEmoji } from "../../../lib/flags";
 
+type TripPlan = {
+  id: number;
+  title: string;
+  destination_text: string;
+  saved_count: number;
+};
+
 export default function ExperiencesPage() {
   const params = useParams();
   const id = params.id;
@@ -24,6 +31,11 @@ export default function ExperiencesPage() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [lastVisit, setLastVisit] = useState<number>(0);
   const [showOtherReviews, setShowOtherReviews] = useState(false);
+
+  const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
+  const [selectedPlanByExperience, setSelectedPlanByExperience] = useState<Record<number, string>>({});
+  const [showTripPlanPicker, setShowTripPlanPicker] = useState<Record<number, boolean>>({});
+  const [addingToPlan, setAddingToPlan] = useState<Record<number, boolean>>({});
 
   const trustedReviewsCount = experiences.filter((e) => e.is_trusted).length;
 
@@ -327,6 +339,28 @@ const otherExperiences = sortedExperiences.filter(
     setRepliesByExperience(Object.fromEntries(repliesEntries));
   };
 
+    const loadTripPlans = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/trip-plans/`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("Failed to load trip plans:", res.status, text);
+          setTripPlans([]);
+          return;
+        }
+
+        const data = await res.json();
+        setTripPlans(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Trip plans fetch error:", error);
+        setTripPlans([]);
+      }
+    };
+
+
   useEffect(() => {
     if (!id) return;
 
@@ -400,6 +434,7 @@ const loadPlace = async () => {
 loadCurrentUser();
 loadExperiences();
 loadPlace();
+loadTripPlans();
 }, [id]);
 
 useEffect(() => {
@@ -481,6 +516,53 @@ const newReply = await response.json();
       }));
     }
   };
+
+const addExperienceToTripPlan = async (experienceId: number) => {
+  const selectedPlanId = selectedPlanByExperience[experienceId];
+
+  if (!selectedPlanId) {
+    alert("Please choose a trip plan first.");
+    return;
+  }
+
+  setAddingToPlan((prev) => ({
+    ...prev,
+    [experienceId]: true,
+  }));
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/trip-plans/${selectedPlanId}/experiences/${experienceId}/`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Add to trip plan error:", data);
+      alert(data.detail || "Error adding experience to trip plan.");
+      return;
+    }
+
+    alert("Experience added to your trip plan.");
+
+    setShowTripPlanPicker((prev) => ({
+      ...prev,
+      [experienceId]: false,
+    }));
+  } catch (error) {
+    console.error("Failed to add experience to trip plan:", error);
+    alert("Error adding experience to trip plan.");
+  } finally {
+    setAddingToPlan((prev) => ({
+      ...prev,
+      [experienceId]: false,
+    }));
+  }
+};
 
   return (
     <main style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
@@ -600,21 +682,117 @@ const newReply = await response.json();
           — {getAuthorLabel(highlightedExperience)} • {timeAgo(highlightedExperience.created_at)}
         </div>
 
-        <Link
-          href={`/experiences/${highlightedExperience.id}`}
-          style={{
-            fontSize: "13px",
-            padding: "8px 12px",
-            borderRadius: "8px",
-            border: "1px solid #ddd",
-            background: "#f9f9f9",
-            color: "#111",
-            textDecoration: "none",
-            display: "inline-block",
-          }}
-        >
-          View full experience
-        </Link>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <Link
+            href={`/experiences/${highlightedExperience.id}`}
+            style={{
+              fontSize: "13px",
+              padding: "8px 12px",
+              borderRadius: "8px",
+              border: "1px solid #ddd",
+              background: "#f9f9f9",
+              color: "#111",
+              textDecoration: "none",
+              display: "inline-block",
+            }}
+          >
+            View full experience
+          </Link>
+
+          <button
+            type="button"
+            style={{
+              fontSize: "13px",
+              padding: "8px 12px",
+              borderRadius: "8px",
+              border: "1px solid #ddd",
+              background: "#f0f0f0",
+              color: "#111",
+              cursor: "pointer",
+            }}
+            onClick={() =>
+              setShowTripPlanPicker((prev) => ({
+                ...prev,
+                [highlightedExperience.id]: !prev[highlightedExperience.id],
+              }))
+            }
+          >
+            Add to trip plan
+          </button>
+        </div>
+
+        {showTripPlanPicker[highlightedExperience.id] && (
+          <div
+            style={{
+              marginTop: "10px",
+              padding: "10px",
+              borderRadius: "10px",
+              border: "1px solid #eee",
+              background: "white",
+              display: "grid",
+              gap: "8px",
+            }}
+          >
+            {tripPlans.length === 0 ? (
+              <div style={{ fontSize: "12px", color: "#666" }}>
+                You do not have any trip plans yet.{" "}
+                <Link href="/trip-plans" style={{ color: "#111", fontWeight: 600 }}>
+                  Create one
+                </Link>
+                .
+              </div>
+            ) : (
+              <>
+                <select
+                  value={selectedPlanByExperience[highlightedExperience.id] || ""}
+                  onChange={(event) =>
+                    setSelectedPlanByExperience((prev) => ({
+                      ...prev,
+                      [highlightedExperience.id]: event.target.value,
+                    }))
+                  }
+                  style={{
+                    padding: "8px",
+                    borderRadius: "8px",
+                    border: "1px solid #ddd",
+                    fontSize: "12px",
+                    maxWidth: "320px",
+                  }}
+                >
+                  <option value="">Choose a trip plan</option>
+
+                  {tripPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.title}
+                      {plan.destination_text ? ` — ${plan.destination_text}` : ""}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  disabled={addingToPlan[highlightedExperience.id]}
+                  onClick={() => addExperienceToTripPlan(highlightedExperience.id)}
+                  style={{
+                    fontSize: "12px",
+                    padding: "6px 10px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: "black",
+                    color: "white",
+                    cursor: addingToPlan[highlightedExperience.id]
+                      ? "not-allowed"
+                      : "pointer",
+                    opacity: addingToPlan[highlightedExperience.id] ? 0.5 : 1,
+                    width: "fit-content",
+                  }}
+                >
+                  {addingToPlan[highlightedExperience.id] ? "Adding..." : "Add"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     )}
 
@@ -901,18 +1079,95 @@ const newReply = await response.json();
 
                       {/* 🔥 NOVO BOTÃO */}
                       <button
-                        style={{
-                          marginTop: "10px",
-                          fontSize: "12px",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
-                          border: "1px solid #ddd",
-                          background: "#f0f0f0",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Save for later
-                      </button>
+                          type="button"
+                          style={{
+                            marginTop: "10px",
+                            fontSize: "12px",
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            border: "1px solid #ddd",
+                            background: "#f0f0f0",
+                            cursor: "pointer",
+                          }}
+                          onClick={() =>
+                            setShowTripPlanPicker((prev) => ({
+                              ...prev,
+                              [e.id]: !prev[e.id],
+                            }))
+                          }
+                        >
+                          Add to trip plan
+                        </button>
+
+                        {showTripPlanPicker[e.id] && (
+                          <div
+                            style={{
+                              marginTop: "10px",
+                              padding: "10px",
+                              borderRadius: "10px",
+                              border: "1px solid #eee",
+                              background: "white",
+                              display: "grid",
+                              gap: "8px",
+                            }}
+                          >
+                            {tripPlans.length === 0 ? (
+                              <div style={{ fontSize: "12px", color: "#666" }}>
+                                You do not have any trip plans yet.{" "}
+                                <Link href="/trip-plans" style={{ color: "#111", fontWeight: 600 }}>
+                                  Create one
+                                </Link>
+                                .
+                              </div>
+                            ) : (
+                              <>
+                                <select
+                                  value={selectedPlanByExperience[e.id] || ""}
+                                  onChange={(event) =>
+                                    setSelectedPlanByExperience((prev) => ({
+                                      ...prev,
+                                      [e.id]: event.target.value,
+                                    }))
+                                  }
+                                  style={{
+                                    padding: "8px",
+                                    borderRadius: "8px",
+                                    border: "1px solid #ddd",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  <option value="">Choose a trip plan</option>
+
+                                  {tripPlans.map((plan) => (
+                                    <option key={plan.id} value={plan.id}>
+                                      {plan.title}
+                                      {plan.destination_text ? ` — ${plan.destination_text}` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <button
+                                  type="button"
+                                  disabled={addingToPlan[e.id]}
+                                  onClick={() => addExperienceToTripPlan(e.id)}
+                                  style={{
+                                    fontSize: "12px",
+                                    padding: "6px 10px",
+                                    borderRadius: "8px",
+                                    border: "none",
+                                    background: "black",
+                                    color: "white",
+                                    cursor: addingToPlan[e.id] ? "not-allowed" : "pointer",
+                                    opacity: addingToPlan[e.id] ? 0.5 : 1,
+                                    width: "fit-content",
+                                  }}
+                                >
+                                  {addingToPlan[e.id] ? "Adding..." : "Add"}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
 
                         <Link
                               href={`/experiences/${e.id}`}

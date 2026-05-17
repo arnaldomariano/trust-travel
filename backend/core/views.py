@@ -20,6 +20,8 @@ from .models import (
     ExperiencePhoto,
     Friendship,
     ExperienceReply,
+    SavedItem,
+    TripPlan,
     Update,
     Profile,
     FeedState,
@@ -382,35 +384,281 @@ class ExperienceReplyListCreateView(generics.ListCreateAPIView):
 
         serializer.save(user=requester, experience=experience)
 
+# ============================================================
+# TRIP PLANS / SAVED ITEMS
+# ============================================================
+
+def serialize_trip_plan(plan):
+    saved_count = plan.saved_items.count()
+
+    return {
+        "id": plan.id,
+        "title": plan.title,
+        "destination_text": plan.destination_text,
+        "description": plan.description,
+        "start_date": plan.start_date,
+        "end_date": plan.end_date,
+        "saved_count": saved_count,
+        "created_at": plan.created_at,
+        "updated_at": plan.updated_at,
+    }
+
+
+def serialize_saved_item(saved_item, request=None):
+    experience = saved_item.experience
+    place = experience.place
+    destination = place.destination if place else None
+
+    image_url = None
+
+    if request and experience.image:
+        image_url = request.build_absolute_uri(experience.image.url)
+
+    return {
+        "id": saved_item.id,
+        "trip_plan_id": saved_item.trip_plan.id if saved_item.trip_plan else None,
+        "experience_id": experience.id,
+        "title": experience.title,
+        "comment": experience.comment,
+        "rating": experience.rating,
+        "trip_context": experience.trip_context,
+        "trip_style": experience.trip_style,
+        "image_url": image_url,
+        "place": place.name if place else "",
+        "place_id": place.id if place else None,
+        "destination": destination.name if destination else "",
+        "saved_at": saved_item.created_at,
+        "experience_created_at": experience.created_at,
+    }
+
+
+class TripPlanListCreateView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        plans = TripPlan.objects.filter(
+            user=request.user
+        ).prefetch_related(
+            "saved_items"
+        ).order_by("-updated_at", "-created_at")
+
+        return Response([
+            serialize_trip_plan(plan)
+            for plan in plans
+        ])
+
+    def post(self, request):
+        title = (request.data.get("title") or "").strip()
+        destination_text = (request.data.get("destination_text") or "").strip()
+        description = (request.data.get("description") or "").strip()
+        start_date = request.data.get("start_date") or None
+        end_date = request.data.get("end_date") or None
+
+        if not title:
+            return Response({"detail": "Title is required."}, status=400)
+
+        plan = TripPlan.objects.create(
+            user=request.user,
+            title=title,
+            destination_text=destination_text,
+            description=description,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        return Response(serialize_trip_plan(plan), status=201)
+
+
+class TripPlanDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, pk):
+        try:
+            return TripPlan.objects.get(id=pk, user=request.user)
+        except TripPlan.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        plan = self.get_object(request, pk)
+
+        if not plan:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        saved_items = SavedItem.objects.filter(
+            user=request.user,
+            trip_plan=plan,
+        ).select_related(
+            "experience",
+            "experience__place",
+            "experience__place__destination",
+        ).order_by("-created_at")
+
+        data = serialize_trip_plan(plan)
+        data["saved_items"] = [
+            serialize_saved_item(item, request)
+            for item in saved_items
+        ]
+
+        return Response(data)
+
+    def patch(self, request, pk):
+        plan = self.get_object(request, pk)
+
+        if not plan:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        title = request.data.get("title", plan.title)
+        destination_text = request.data.get("destination_text", plan.destination_text)
+        description = request.data.get("description", plan.description)
+        start_date = request.data.get("start_date", plan.start_date)
+        end_date = request.data.get("end_date", plan.end_date)
+
+        if not str(title).strip():
+            return Response({"detail": "Title is required."}, status=400)
+
+        plan.title = str(title).strip()
+        plan.destination_text = str(destination_text or "").strip()
+        plan.description = str(description or "").strip()
+        plan.start_date = start_date or None
+        plan.end_date = end_date or None
+        plan.save()
+
+        return Response(serialize_trip_plan(plan))
+
+    def delete(self, request, pk):
+        plan = self.get_object(request, pk)
+
+        if not plan:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        plan.delete()
+
+        return Response({"detail": "Trip plan deleted."})
+
+
+class TripPlanExperienceView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, experience_id):
+        try:
+            plan = TripPlan.objects.get(id=pk, user=request.user)
+        except TripPlan.DoesNotExist:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        try:
+            experience = Experience.objects.get(id=experience_id)
+        except Experience.DoesNotExist:
+            return Response({"detail": "Experience not found."}, status=404)
+
+        saved_item, created = SavedItem.objects.get_or_create(
+            user=request.user,
+            trip_plan=plan,
+            experience=experience,
+        )
+
+        # Touch the plan so recently used plans rise to the top.
+        plan.save()
+
+        return Response(
+            {
+                "detail": "Experience added to trip plan.",
+                "saved": True,
+                "created": created,
+                "item": serialize_saved_item(saved_item, request),
+            },
+            status=201 if created else 200,
+        )
+
+    def delete(self, request, pk, experience_id):
+        try:
+            plan = TripPlan.objects.get(id=pk, user=request.user)
+        except TripPlan.DoesNotExist:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        deleted_count, _ = SavedItem.objects.filter(
+            user=request.user,
+            trip_plan=plan,
+            experience_id=experience_id,
+        ).delete()
+
+        if deleted_count == 0:
+            return Response(
+                {
+                    "detail": "Experience was not in this trip plan.",
+                    "saved": False,
+                },
+                status=404,
+            )
+
+        plan.save()
+
+        return Response(
+            {
+                "detail": "Experience removed from trip plan.",
+                "saved": False,
+            }
+        )
+
+# ============================================================
+
+# UPDATE SERIALIZER HELPER
+
+# ============================================================
+
 def serialize_update(update, request=None):
+
     profile = getattr(update.user, "profile", None)
 
     avatar_url = None
+
     if request and profile and profile.avatar:
+
         avatar_url = request.build_absolute_uri(profile.avatar.url)
 
     return {
-        "id": update.id,
-        "experience_id": update.experience.id if update.experience else None,
-        "type": update.type,
-        "category": update.category,
-        "title": update.title,
-        "text": update.text,
-        "event_date": update.event_date,
-        "external_link": update.external_link,
-        "source_name": update.source_name,
-        "source_url": update.source_url,
-        "priority": update.priority,
-        "place": update.place.name,
-        "place_id": update.place.id,
-        "user": profile.public_code if profile else update.user.username,
-        "username": update.user.username,
-        "display_name": profile.display_name if profile else "",
-        "avatar_url": avatar_url,
-        "created_at": update.created_at,
-        "updated_at": update.updated_at,
-    }
 
+        "id": update.id,
+
+        "experience_id": update.experience.id if update.experience else None,
+
+        "type": update.type,
+
+        "category": update.category,
+
+        "title": update.title,
+
+        "text": update.text,
+
+        "event_date": update.event_date,
+
+        "external_link": update.external_link,
+
+        "source_name": update.source_name,
+
+        "source_url": update.source_url,
+
+        "priority": update.priority,
+
+        "place": update.place.name,
+
+        "place_id": update.place.id,
+
+        "user": profile.public_code if profile and profile.public_code else update.user.username,
+
+        "username": update.user.username,
+
+        "display_name": profile.display_name if profile else "",
+
+        "avatar_url": avatar_url,
+
+        "created_at": update.created_at,
+
+        "updated_at": update.updated_at,
+
+    }
 
 # ============================================================
 # UPDATE FEED
@@ -1069,6 +1317,8 @@ class MyExperiencesView(APIView):
                 "title": experience.title,
                 "comment": experience.comment,
                 "rating": experience.rating,
+                "trip_context": experience.trip_context,
+                "trip_style": experience.trip_style,
                 "image_url": image_url,
                 "place": experience.place.name,
                 "place_id": experience.place.id,

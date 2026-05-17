@@ -404,6 +404,78 @@ class ExperienceReply(models.Model):
     def __str__(self):
         return f"{self.user} → {self.experience}"
 
+# ===================== Trip Plan =====================
+class TripPlan(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="trip_plans"
+    )
+
+    title = models.CharField(
+        max_length=160,
+        help_text="Short name for this trip plan, e.g. Thailand 2027 or Weekend in Amsterdam."
+    )
+
+    destination_text = models.CharField(
+        max_length=160,
+        blank=True,
+        help_text="Free text destination, e.g. Thailand, Rome, Amsterdam, Northeast Brazil."
+    )
+
+    description = models.TextField(blank=True)
+
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-created_at"]
+
+    def __str__(self):
+        return f"{self.user} - {self.title}"
+
+
+# ===================== Saved Item =====================
+class SavedItem(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="saved_items"
+    )
+
+    trip_plan = models.ForeignKey(
+        TripPlan,
+        on_delete=models.CASCADE,
+        related_name="saved_items",
+        null=True,
+        blank=True,
+    )
+
+    # Version 1: save experiences only inside a trip plan.
+    # Later this model can evolve to support saved places, updates,
+    # comments, map points, restaurants and personal notes.
+    experience = models.ForeignKey(
+        Experience,
+        on_delete=models.CASCADE,
+        related_name="saved_by"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trip_plan", "experience"],
+                name="unique_experience_per_trip_plan"
+            )
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user} saved experience {self.experience_id} in plan {self.trip_plan_id}"
 
 # ===================== Feed State =====================
 class FeedState(models.Model):

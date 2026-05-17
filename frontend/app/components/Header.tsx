@@ -129,12 +129,16 @@ useEffect(() => {
                   </div>
 
                   <MenuLink href="/destinations" onClick={() => setMenuOpen(false)}>
-                    Create / Share
-                  </MenuLink>
+                      Create / Share
+                    </MenuLink>
 
-                  <MenuLink href="/my-posts" onClick={() => setMenuOpen(false)}>
-                    My Posts
-                  </MenuLink>
+                    <MenuLink href="/trip-plans" onClick={() => setMenuOpen(false)}>
+                      Build my trip
+                    </MenuLink>
+
+                    <MenuLink href="/my-posts" onClick={() => setMenuOpen(false)}>
+                      My Posts
+                    </MenuLink>
 
                   <MenuLink href="/profile" onClick={() => setMenuOpen(false)}>
                     Profile

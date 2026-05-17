@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db.models import Count
 
 
 from rest_framework import generics, permissions
@@ -1328,3 +1329,45 @@ class MyExperiencesView(APIView):
             })
 
         return Response(result)
+
+    # ============================================================
+    # ANALYTICS
+    # ============================================================
+
+class TopSavedExperiencesAnalyticsView(APIView):
+        authentication_classes = [CookieJWTAuthentication]
+        permission_classes = [IsAuthenticated]
+
+        def get(self, request):
+            saved_stats = (
+                SavedItem.objects
+                .values(
+                    "experience_id",
+                    "experience__title",
+                    "experience__comment",
+                    "experience__rating",
+                    "experience__place__name",
+                    "experience__place__id",
+                    "experience__place__place_type",
+                    "experience__place__destination__name",
+                )
+                .annotate(saved_count=Count("id"))
+                .order_by("-saved_count", "experience__place__name")[:20]
+            )
+
+            result = []
+
+            for item in saved_stats:
+                result.append({
+                    "experience_id": item["experience_id"],
+                    "title": item["experience__title"],
+                    "comment": item["experience__comment"],
+                    "rating": item["experience__rating"],
+                    "place": item["experience__place__name"],
+                    "place_id": item["experience__place__id"],
+                    "place_type": item["experience__place__place_type"],
+                    "destination": item["experience__place__destination__name"],
+                    "saved_count": item["saved_count"],
+                })
+
+            return Response(result)

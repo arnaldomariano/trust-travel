@@ -29,9 +29,11 @@ from .views import (
     CreateBasicPlaceView,
     MarkUpdateSeenView,
     PlacePhotosView,
+    TopSavedExperiencesAnalyticsView,
     TripPlanListCreateView,
     TripPlanDetailView,
     TripPlanExperienceView,
+
 
 
 )
@@ -78,5 +80,10 @@ urlpatterns = [
     path("profile/", ProfileView.as_view()),
     path("my-updates/", MyUpdatesView.as_view(), name="my-updates"),
     path("my-experiences/", MyExperiencesView.as_view(), name="my-experiences"),
+    path(
+        "analytics/top-saved-experiences/",
+        TopSavedExperiencesAnalyticsView.as_view(),
+        name="top-saved-experiences-analytics",
+    ),
 
 ]

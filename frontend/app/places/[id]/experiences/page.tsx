@@ -37,6 +37,10 @@ export default function ExperiencesPage() {
   const [showTripPlanPicker, setShowTripPlanPicker] = useState<Record<number, boolean>>({});
   const [addingToPlan, setAddingToPlan] = useState<Record<number, boolean>>({});
 
+  const [tripPlanMessageByExperience, setTripPlanMessageByExperience] = useState<
+      Record<number, { text: string; planId: number | null }>
+    >({});
+
   const trustedReviewsCount = experiences.filter((e) => e.is_trusted).length;
 
   const totalExperiences = experiences.length;
@@ -547,12 +551,26 @@ const addExperienceToTripPlan = async (experienceId: number) => {
       return;
     }
 
-    alert("Experience added to your trip plan.");
+    const selectedPlan = tripPlans.find(
+      (plan) => String(plan.id) === String(selectedPlanId)
+    );
+
+    setTripPlanMessageByExperience((prev) => ({
+      ...prev,
+      [experienceId]: {
+        text: selectedPlan
+          ? `Experience added to ${selectedPlan.title}.`
+          : "Experience added to your trip plan.",
+        planId: selectedPlan ? selectedPlan.id : null,
+      },
+    }));
 
     setShowTripPlanPicker((prev) => ({
       ...prev,
       [experienceId]: false,
     }));
+
+
   } catch (error) {
     console.error("Failed to add experience to trip plan:", error);
     alert("Error adding experience to trip plan.");
@@ -793,6 +811,22 @@ const addExperienceToTripPlan = async (experienceId: number) => {
             )}
           </div>
         )}
+
+            {tripPlanMessageByExperience[highlightedExperience.id] && (
+          <div style={tripPlanSuccessBox}>
+            <span>{tripPlanMessageByExperience[highlightedExperience.id].text}</span>
+
+            {tripPlanMessageByExperience[highlightedExperience.id].planId && (
+              <Link
+                href={`/trip-plans/${tripPlanMessageByExperience[highlightedExperience.id].planId}`}
+                style={tripPlanSuccessLink}
+              >
+                View trip plan
+              </Link>
+            )}
+          </div>
+        )}
+
       </div>
     )}
 
@@ -1573,4 +1607,24 @@ const tripMetaBadge = {
   borderRadius: "999px",
   padding: "4px 8px",
   background: "#fafafa",
+};
+
+const tripPlanSuccessBox = {
+  marginTop: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  display: "flex",
+  gap: "10px",
+  alignItems: "center",
+  flexWrap: "wrap" as const,
+  fontSize: "14px",
+};
+
+const tripPlanSuccessLink = {
+  color: "#166534",
+  fontWeight: 700,
+  textDecoration: "underline",
 };

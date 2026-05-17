@@ -28,6 +28,11 @@ export default function ExperienceDetailPage() {
   const [showTripPlanPicker, setShowTripPlanPicker] = useState(false);
   const [addingToPlan, setAddingToPlan] = useState(false);
 
+  const [tripPlanMessage, setTripPlanMessage] = useState<{
+  text: string;
+  planId: number | null;
+} | null>(null);
+
   const loadTripPlans = async () => {
   try {
     const res = await fetch(`${API_URL}/api/trip-plans/`, {
@@ -121,8 +126,19 @@ export default function ExperienceDetailPage() {
           return;
         }
 
-        alert("Experience added to your trip plan.");
+        const selectedPlan = tripPlans.find(
+          (plan) => String(plan.id) === String(selectedTripPlanId)
+        );
+
+        setTripPlanMessage({
+          text: selectedPlan
+            ? `Experience added to ${selectedPlan.title}.`
+            : "Experience added to your trip plan.",
+          planId: selectedPlan ? selectedPlan.id : null,
+        });
+
         setShowTripPlanPicker(false);
+
       } catch (error) {
         console.error("Failed to add experience to trip plan:", error);
         alert("Error adding experience to trip plan.");
@@ -347,7 +363,7 @@ const authorLabel = authorFlag
           </button>
         </div>
 
-        {showTripPlanPicker && (
+                {showTripPlanPicker && (
           <div style={tripPlanPickerBox}>
             {tripPlans.length === 0 ? (
               <div style={{ fontSize: "13px", color: "#666" }}>
@@ -390,7 +406,24 @@ const authorLabel = authorFlag
             )}
           </div>
         )}
+
+        {tripPlanMessage && (
+          <div style={tripPlanSuccessBox}>
+            <span>{tripPlanMessage.text}</span>
+
+            {tripPlanMessage.planId && (
+              <Link
+                href={`/trip-plans/${tripPlanMessage.planId}`}
+                style={tripPlanSuccessLink}
+              >
+                View trip plan
+              </Link>
+            )}
+          </div>
+        )}
       </article>
+
+
     </main>
   );
 }
@@ -595,4 +628,24 @@ const selectInput = {
   border: "1px solid #ddd",
   fontSize: "14px",
   maxWidth: "360px",
+};
+
+const tripPlanSuccessBox = {
+  marginTop: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  display: "flex",
+  gap: "10px",
+  alignItems: "center",
+  flexWrap: "wrap" as const,
+  fontSize: "14px",
+};
+
+const tripPlanSuccessLink = {
+  color: "#166534",
+  fontWeight: 700,
+  textDecoration: "underline",
 };

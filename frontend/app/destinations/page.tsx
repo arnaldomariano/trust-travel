@@ -12,6 +12,10 @@ export default function DestinationsPage() {
   const placeFromUrl = searchParams.get("place");
   const shouldOpenShareForm = searchParams.get("share") === "true";
 
+  const mode = searchParams.get("mode");
+  const isExperienceMode = mode === "experience";
+  const isUpdateMode = mode === "update";
+
   const [places, setPlaces] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [creatingPlace, setCreatingPlace] = useState(false);
@@ -32,6 +36,8 @@ export default function DestinationsPage() {
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState<number | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [tripContext, setTripContext] = useState("prefer_not_to_say");
+  const [tripStyle, setTripStyle] = useState("prefer_not_to_say");
 
   const [submittingExperience, setSubmittingExperience] = useState(false);
   const [experienceShared, setExperienceShared] = useState(false);
@@ -89,6 +95,8 @@ useEffect(() => {
   setComment("");
   setRating(null);
   setImageFile(null);
+  setTripContext("prefer_not_to_say");
+   setTripStyle("prefer_not_to_say");
 
   setTimeout(() => {
     document
@@ -102,35 +110,103 @@ useEffect(() => {
   // =========================
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
+  const normalizeText = (value?: string) =>
+  (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const normalizedSearchText = normalizeText(searchTerm);
+
+const getSimilarityScore = (place: any) => {
+  const placeName = normalizeText(place.name);
+  const placeCity = normalizeText(place.city || place.destination_name);
+  const placeCountry = normalizeText(place.destination_country);
+
+  if (!normalizedSearchText) return 0;
+
+  if (placeName === normalizedSearchText) return 100;
+  if (placeName.startsWith(normalizedSearchText)) return 90;
+  if (placeName.includes(normalizedSearchText)) return 80;
+
+  if (normalizedSearchText.includes(placeName) && placeName.length >= 4) {
+    return 75;
+  }
+
+  if (placeCity.includes(normalizedSearchText)) return 60;
+  if (placeCountry.includes(normalizedSearchText)) return 50;
+
+  return 0;
+};
+
+const similarPlaces = places
+  .map((place) => ({
+    ...place,
+    similarityScore: getSimilarityScore(place),
+  }))
+  .filter((place) => place.similarityScore >= 60)
+  .sort((a, b) => b.similarityScore - a.similarityScore)
+  .slice(0, 5);
+
+const getSearchMatchScore = (place: any) => {
+  if (!normalizedSearchText) return 0;
+
+  const name = normalizeText(place.name);
+  const city = normalizeText(place.city || place.destination_name);
+  const country = normalizeText(place.destination_country || place.destination_city);
+
+  const matchesSelectedType = place.place_type === placeType;
+
+  // Strongest match: exact place name
+  if (name === normalizedSearchText) {
+    return matchesSelectedType ? 100 : 90;
+  }
+
+  // Strong match: place name starts with the search
+  if (name.startsWith(normalizedSearchText)) {
+    return matchesSelectedType ? 90 : 80;
+  }
+
+  // Good match: place name contains the search
+  if (name.includes(normalizedSearchText)) {
+    return matchesSelectedType ? 80 : 70;
+  }
+
+  // Avoid weak accidental matches like "lag" inside "alagamentos".
+  // Only use secondary fields when the search has at least 4 characters.
+  if (normalizedSearchText.length < 4) {
+    return 0;
+  }
+
+  // Secondary match: city / region
+  if (city.includes(normalizedSearchText)) {
+    return matchesSelectedType ? 60 : 45;
+  }
+
+  // Secondary match: country
+  if (country.includes(normalizedSearchText)) {
+    return matchesSelectedType ? 50 : 35;
+  }
+
+  return 0;
+};
+
 const filteredPlaces = places
-  .filter((place) => {
-    if (!normalizedSearch) return false;
-
-    return (
-      (place.name || "").toLowerCase().includes(normalizedSearch) ||
-      (place.city || "").toLowerCase().includes(normalizedSearch) ||
-      (place.destination_name || "").toLowerCase().includes(normalizedSearch) ||
-      (place.destination_country || "").toLowerCase().includes(normalizedSearch) ||
-      (place.destination_city || "").toLowerCase().includes(normalizedSearch)
-    );
-  })
+  .map((place) => ({
+    ...place,
+    searchMatchScore: getSearchMatchScore(place),
+  }))
+  .filter((place) => place.searchMatchScore > 0)
   .sort((a, b) => {
-    const aMatchesSelectedType = a.place_type === placeType ? 0 : 1;
-    const bMatchesSelectedType = b.place_type === placeType ? 0 : 1;
-
-    if (aMatchesSelectedType !== bMatchesSelectedType) {
-      return aMatchesSelectedType - bMatchesSelectedType;
-    }
-
-    const aExactName = (a.name || "").toLowerCase() === normalizedSearch ? 0 : 1;
-    const bExactName = (b.name || "").toLowerCase() === normalizedSearch ? 0 : 1;
-
-    if (aExactName !== bExactName) {
-      return aExactName - bExactName;
+    if (a.searchMatchScore !== b.searchMatchScore) {
+      return b.searchMatchScore - a.searchMatchScore;
     }
 
     return (a.name || "").localeCompare(b.name || "");
   });
+
+
 
   const canCreatePlace = !!newPlaceName.trim();
 
@@ -283,6 +359,9 @@ const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
   setComment("");
   setRating(null);
   setImageFile(null);
+  setTripContext("prefer_not_to_say");
+  setTripStyle("prefer_not_to_say");
+
 
   setTimeout(() => {
     document
@@ -304,6 +383,8 @@ const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
     setSharedExperience(null);
     setEditingExperience(false);
     setShowShareForm(false);
+    setTripContext("prefer_not_to_say");
+    setTripStyle("prefer_not_to_say");
   };
 
   // =========================
@@ -323,6 +404,8 @@ const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
     setSharedExperience(null);
     setEditingExperience(false);
     setShowShareForm(false);
+    setTripContext("prefer_not_to_say");
+    setTripStyle("prefer_not_to_say");
   };
 
 // =========================
@@ -335,6 +418,8 @@ const startEditingExperience = () => {
   setComment(sharedExperience.comment || "");
   setRating(sharedExperience.rating || null);
   setImageFile(null);
+  setTripContext(sharedExperience.trip_context || "prefer_not_to_say");
+  setTripStyle(sharedExperience.trip_style || "prefer_not_to_say");
   setExperienceShared(false);
   setEditingExperience(true);
 };
@@ -371,6 +456,9 @@ formData.append("place", String(selectedPlace.id));
 formData.append("title", title.trim());
 formData.append("rating", String(rating));
 formData.append("comment", comment.trim());
+formData.append("trip_context", tripContext);
+formData.append("trip_style", tripStyle);
+
 
 if (imageFile) {
   formData.append("image", imageFile);
@@ -396,6 +484,8 @@ const res = await fetch(`${API_URL}/api/experiences/`, {
       setRating(null);
       setImageFile(null);
       setExperienceShared(true);
+      setTripContext("prefer_not_to_say");
+      setTripStyle("prefer_not_to_say");
     } catch (error) {
       console.error("Share experience failed:", error);
       alert("Error sharing experience.");
@@ -437,11 +527,13 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        title: title.trim(),
-        rating,
-        comment: comment.trim(),
-        place: selectedPlace.id,
-      }),
+      title: title.trim(),
+      rating,
+      comment: comment.trim(),
+      place: selectedPlace.id,
+      trip_context: tripContext,
+      trip_style: tripStyle,
+    }),
     });
 
     const data = await res.json();
@@ -458,6 +550,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
     setRating(null);
     setEditingExperience(false);
     setExperienceShared(true);
+    setTripContext("prefer_not_to_say");
+    setTripStyle("prefer_not_to_say");
   } catch (error) {
     console.error("Update experience failed:", error);
     alert("Error updating experience.");
@@ -475,12 +569,21 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         / <span>Explore</span>
       </div>
 
-      <h1>Find a destination or place</h1>
+      <h1>
+          {isExperienceMode
+            ? "Find a place to share your experience"
+            : isUpdateMode
+            ? "Find a place to share event, alert or info"
+            : "Find a destination or place"}
+        </h1>
 
-      <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
-        Search by country, city, attraction, hotel, restaurant or nature spot.
-        You can read existing experiences first — and share your own if you want.
-      </p>
+        <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
+          {isExperienceMode
+            ? "Search for the place you visited. You can read existing experiences first — then share your own review."
+            : isUpdateMode
+            ? "Search for the place related to your event, alert or useful information."
+            : "Search by country, city, attraction, hotel, restaurant or nature spot. You can read existing experiences first — and share your own if you want."}
+        </p>
 
         <div style={{ marginBottom: "22px" }}>
           <div style={{ fontWeight: 600, marginBottom: "10px" }}>
@@ -515,6 +618,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   setSharedExperience(null);
                   setEditingExperience(false);
                   setShowShareForm(false);
+                  setTripContext("prefer_not_to_say");
+                  setTripStyle("prefer_not_to_say");
                 }}
                 style={{
                   padding: "8px 12px",
@@ -545,6 +650,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               setExperienceShared(false);
               setSharedExperience(null);
               setEditingExperience(false);
+              setTripContext("prefer_not_to_say");
+              setTripStyle("prefer_not_to_say");
             }
           }}
         placeholder={searchPlaceholderByType[placeType]}
@@ -573,8 +680,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       </div>
     ) : filteredPlaces.length > 0 ? (
       <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
-        <p style={{ color: "#666", margin: 0 }}>
-          We found existing places. Results matching your selected type appear first:
+        <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
+          We found existing places. Check these results before creating a new place —
+          this helps avoid duplicates and keeps experiences, events and alerts connected
+          to the right location.
         </p>
 
         {filteredPlaces.map((place) => (
@@ -637,9 +746,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         ))}
       </section>
     ) : (
-      <section style={helperCard}>
 
-          <strong>No place found for “{searchTerm.trim()}”.</strong>
+      <section style={helperCard}>
+          <strong>No exact place found for “{searchTerm.trim()}”.</strong>
 
           <p
               style={{
@@ -652,6 +761,35 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               travelers can also use. Avoid using opinions, warnings, or personal advice
               here. You can add your personal opinion in the experience title later.
             </p>
+
+            {similarPlaces.length > 0 && (
+              <div style={duplicateWarningBox}>
+                <strong>Possible similar places already exist:</strong>
+
+                <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                  {similarPlaces.map((place) => (
+                    <button
+                      key={place.id}
+                      type="button"
+                      onClick={() => handleSelectExistingPlace(place)}
+                      style={similarPlaceButton}
+                    >
+                      <span>
+                        <strong>{place.name}</strong>
+                        <br />
+                        <span style={{ color: "#666", fontSize: "13px" }}>
+                          {getPlaceTypeLabel(place.place_type)} · {getPlaceLocationText(place)}
+                        </span>
+                      </span>
+
+                      <span style={{ fontSize: "13px", color: "#111" }}>
+                        Use this →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
           <div style={createPlaceForm}>
             <input
@@ -717,13 +855,24 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         View experiences
       </button>
 
-      <button
-        type="button"
-        onClick={() => setShowShareForm(true)}
-        style={secondaryButton}
-      >
-        Share your experience
-      </button>
+      {isUpdateMode ? (
+
+          <button
+            type="button"
+            onClick={() => router.push(`/places/${selectedPlace.id}?share=update`)}
+            style={secondaryButton}
+          >
+            Share event or info
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowShareForm(true)}
+            style={secondaryButton}
+          >
+            Share your experience
+          </button>
+        )}
 
       <button
         type="button"
@@ -881,6 +1030,58 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   style={input}
                 />
 
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                    gap: "12px",
+                  }}
+                >
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    <label style={label}>Trip context</label>
+
+                    <select
+                      value={tripContext}
+                      onChange={(e) => setTripContext(e.target.value)}
+                      style={input}
+                    >
+                      <option value="prefer_not_to_say">Prefer not to say</option>
+                      <option value="solo">Solo traveler</option>
+                      <option value="couple">Couple</option>
+                      <option value="family_children">Family with children</option>
+                      <option value="friends_group">Friends / group</option>
+                      <option value="business">Business traveler</option>
+                      <option value="local_resident">Local resident</option>
+                      <option value="retired">Retired traveler</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    <label style={label}>Trip style</label>
+
+                    <select
+                      value={tripStyle}
+                      onChange={(e) => setTripStyle(e.target.value)}
+                      style={input}
+                    >
+                      <option value="prefer_not_to_say">Prefer not to say</option>
+                      <option value="culture_museums">Culture and museums</option>
+                      <option value="nature_outdoors">Nature and outdoors</option>
+                      <option value="food_restaurants">Food and restaurants</option>
+                      <option value="relaxed">Relaxed travel</option>
+                      <option value="budget">Budget travel</option>
+                      <option value="comfort">Comfort travel</option>
+                      <option value="adventure">Adventure</option>
+                      <option value="local_life">Local life</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={helperNote}>
+                  These fields describe this specific experience, not your permanent profile.
+                  They will help future analytics compare recommendations by trip context.
+                </div>
+
                 {!editingExperience && (
                   <div style={{ display: "grid", gap: "6px" }}>
                     <label style={{ fontSize: "13px", color: "#666" }}>
@@ -981,4 +1182,44 @@ const createPlaceForm = {
   display: "grid",
   gap: "12px",
   marginTop: "14px",
+};
+
+const duplicateWarningBox = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #f1e4b8",
+  background: "#fffbea",
+  color: "#5f4b00",
+  marginBottom: "16px",
+};
+
+const similarPlaceButton = {
+  width: "100%",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eadfbd",
+  background: "white",
+  color: "#111",
+  textAlign: "left" as const,
+  cursor: "pointer",
+};
+
+const helperNote = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  color: "#666",
+  fontSize: "12px",
+  lineHeight: 1.5,
+};
+
+const label = {
+  fontSize: "13px",
+  color: "#666",
+  fontWeight: 600,
 };

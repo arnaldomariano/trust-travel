@@ -19,6 +19,8 @@ type MyExperience = {
   title: string;
   comment: string;
   rating: number | null;
+  trip_context: string;
+  trip_style: string;
   image_url?: string | null;
   place: string;
   place_id: number;
@@ -51,9 +53,12 @@ const [editingUpdateType, setEditingUpdateType] = useState<"event" | "alert" | "
 const [savingUpdate, setSavingUpdate] = useState(false);
 
 const [editingExperienceId, setEditingExperienceId] = useState<number | null>(null);
+
 const [editTitle, setEditTitle] = useState("");
 const [editComment, setEditComment] = useState("");
 const [editRating, setEditRating] = useState<number | null>(null);
+const [editTripContext, setEditTripContext] = useState("prefer_not_to_say");
+const [editTripStyle, setEditTripStyle] = useState("prefer_not_to_say");
 const [imageAction, setImageAction] = useState<"keep" | "replace" | "remove">("keep");
 const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 
@@ -159,6 +164,8 @@ const startEditingExperience = (experience: MyExperience) => {
   setEditTitle(experience.title || "");
   setEditComment(experience.comment || "");
   setEditRating(experience.rating || null);
+  setEditTripContext(experience.trip_context || "prefer_not_to_say");
+  setEditTripStyle(experience.trip_style || "prefer_not_to_say");
   setEditImageFile(null);
   setRemoveImage(false);
   setExtraPhotoFile(null);
@@ -177,6 +184,8 @@ const cancelEditingExperience = () => {
   setEditTitle("");
   setEditComment("");
   setEditRating(null);
+  setEditTripContext("prefer_not_to_say");
+  setEditTripStyle("prefer_not_to_say");
   setEditImageFile(null);
   setRemoveImage(false);
   setExtraPhotoFile(null);
@@ -214,6 +223,8 @@ const saveEditedExperience = async (experienceId: number) => {
     formData.append("title", editTitle.trim());
     formData.append("comment", editComment.trim());
     formData.append("rating", String(editRating));
+    formData.append("trip_context", editTripContext);
+    formData.append("trip_style", editTripStyle);
 
     if (imageAction === "replace" && editImageFile) {
       formData.append("image", editImageFile);
@@ -241,13 +252,15 @@ const saveEditedExperience = async (experienceId: number) => {
       prev.map((experience) =>
         experience.id === experienceId
           ? {
-                ...experience,
-                title: data.title,
-                comment: data.comment,
-                rating: data.rating,
-                image_url: data.image_url,
-                updated_at: data.updated_at,
-              }
+              ...experience,
+              title: data.title,
+              comment: data.comment,
+              rating: data.rating,
+              trip_context: data.trip_context,
+              trip_style: data.trip_style,
+              image_url: data.image_url,
+              updated_at: data.updated_at,
+            }
           : experience
       )
     );
@@ -419,6 +432,29 @@ const deleteUpdate = async (postId: number) => {
   }
 };
 
+const formatTripValue = (value: string) => {
+  const labels: Record<string, string> = {
+    prefer_not_to_say: "Prefer not to say",
+    solo: "Solo traveler",
+    couple: "Couple",
+    family_children: "Family with children",
+    friends_group: "Friends / group",
+    business: "Business traveler",
+    local_resident: "Local resident",
+    retired: "Retired traveler",
+    culture_museums: "Culture and museums",
+    nature_outdoors: "Nature and outdoors",
+    food_restaurants: "Food and restaurants",
+    relaxed: "Relaxed travel",
+    budget: "Budget travel",
+    comfort: "Comfort travel",
+    adventure: "Adventure",
+    local_life: "Local life",
+  };
+
+  return labels[value] || value;
+};
+
   useEffect(() => {
     loadPosts();
   }, []);
@@ -523,6 +559,57 @@ const deleteUpdate = async (postId: number) => {
                         placeholder="Rating from 1 to 5"
                         style={input}
                       />
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                            gap: "12px",
+                          }}
+                        >
+                          <div style={{ display: "grid", gap: "6px" }}>
+                            <label style={smallLabel}>Trip context</label>
+
+                            <select
+                              value={editTripContext}
+                              onChange={(e) => setEditTripContext(e.target.value)}
+                              style={input}
+                            >
+                              <option value="prefer_not_to_say">Prefer not to say</option>
+                              <option value="solo">Solo traveler</option>
+                              <option value="couple">Couple</option>
+                              <option value="family_children">Family with children</option>
+                              <option value="friends_group">Friends / group</option>
+                              <option value="business">Business traveler</option>
+                              <option value="local_resident">Local resident</option>
+                              <option value="retired">Retired traveler</option>
+                            </select>
+                          </div>
+
+                          <div style={{ display: "grid", gap: "6px" }}>
+                            <label style={smallLabel}>Trip style</label>
+
+                            <select
+                              value={editTripStyle}
+                              onChange={(e) => setEditTripStyle(e.target.value)}
+                              style={input}
+                            >
+                              <option value="prefer_not_to_say">Prefer not to say</option>
+                              <option value="culture_museums">Culture and museums</option>
+                              <option value="nature_outdoors">Nature and outdoors</option>
+                              <option value="food_restaurants">Food and restaurants</option>
+                              <option value="relaxed">Relaxed travel</option>
+                              <option value="budget">Budget travel</option>
+                              <option value="comfort">Comfort travel</option>
+                              <option value="adventure">Adventure</option>
+                              <option value="local_life">Local life</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div style={helperNote}>
+                          These fields describe this specific experience and can be corrected later if you selected the wrong context.
+                        </div>
 
                         <div style={imageEditBox}>
                           <div style={{ fontSize: "13px", color: "#666", fontWeight: 600 }}>
@@ -691,6 +778,24 @@ const deleteUpdate = async (postId: number) => {
                         {"☆".repeat(5 - experience.rating)}
                       </div>
                     )}
+
+                    {(experience.trip_context !== "prefer_not_to_say" ||
+                      experience.trip_style !== "prefer_not_to_say") && (
+                      <div style={tripMetaRow}>
+                        {experience.trip_context !== "prefer_not_to_say" && (
+                          <span style={tripMetaBadge}>
+                            Context: {formatTripValue(experience.trip_context)}
+                          </span>
+                        )}
+
+                        {experience.trip_style !== "prefer_not_to_say" && (
+                          <span style={tripMetaBadge}>
+                            Style: {formatTripValue(experience.trip_style)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
 
                     <div style={{ marginBottom: "16px" }}>
                       <button
@@ -1137,4 +1242,37 @@ const managerNav = {
   background: "white",
   display: "grid",
   gap: "14px",
+};
+
+const smallLabel = {
+  fontSize: "13px",
+  color: "#666",
+  fontWeight: 600,
+};
+
+const helperNote = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  color: "#666",
+  fontSize: "12px",
+  lineHeight: 1.5,
+};
+
+const tripMetaRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+  marginBottom: "16px",
+};
+
+const tripMetaBadge = {
+  display: "inline-block",
+  fontSize: "12px",
+  color: "#555",
+  border: "1px solid #ddd",
+  borderRadius: "999px",
+  padding: "4px 8px",
+  background: "#fafafa",
 };

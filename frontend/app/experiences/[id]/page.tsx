@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../../lib/api";
+import { countryCodeToFlagEmoji } from "../../lib/flags";
 
 export default function ExperienceDetailPage() {
   const params = useParams();
@@ -99,7 +100,44 @@ export default function ExperienceDetailPage() {
         ? galleryPhotos[0]
         : null;
 
-  return (
+const authorFlag = countryCodeToFlagEmoji(
+  experience.author_nationality_country_code
+);
+
+const authorLabel = authorFlag
+  ? `${experience.user || "Unknown user"} ${authorFlag}`
+  : experience.user || "Unknown user";
+
+    const formatTripValue = (value?: string) => {
+      const labels: Record<string, string> = {
+        prefer_not_to_say: "Prefer not to say",
+        solo: "Solo traveler",
+        couple: "Couple",
+        family_children: "Family with children",
+        friends_group: "Friends / group",
+        business: "Business traveler",
+        local_resident: "Local resident",
+        retired: "Retired traveler",
+        culture_museums: "Culture and museums",
+        nature_outdoors: "Nature and outdoors",
+        food_restaurants: "Food and restaurants",
+        relaxed: "Relaxed travel",
+        budget: "Budget travel",
+        comfort: "Comfort travel",
+        adventure: "Adventure",
+        local_life: "Local life",
+      };
+
+      if (!value || value === "prefer_not_to_say") return "";
+
+      return labels[value] || value;
+    };
+
+    const tripContextLabel = formatTripValue(experience.trip_context);
+    const tripStyleLabel = formatTripValue(experience.trip_style);
+
+      return (
+
     <main style={page}>
       <div style={breadcrumb}>
         <Link href="/" style={breadcrumbLink}>
@@ -159,6 +197,22 @@ export default function ExperienceDetailPage() {
           </div>
         )}
 
+        {(tripContextLabel || tripStyleLabel) && (
+          <div style={tripMetaRow}>
+            {tripContextLabel && (
+              <span style={tripMetaBadge}>
+                Context: {tripContextLabel}
+              </span>
+            )}
+
+            {tripStyleLabel && (
+              <span style={tripMetaBadge}>
+                Style: {tripStyleLabel}
+              </span>
+            )}
+          </div>
+        )}
+
         {galleryPhotos.length > 0 && (
           <div style={galleryBox}>
             <button
@@ -192,7 +246,7 @@ export default function ExperienceDetailPage() {
           </div>
         )}
         <div style={authorText}>
-          Shared by {experience.user || "Unknown user"}
+          Shared by {authorLabel}
         </div>
 
         <div style={actions}>
@@ -301,6 +355,23 @@ const ratingText = {
   marginTop: "16px",
   color: "#f5b50a",
   fontSize: "20px",
+};
+
+const tripMetaRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+  marginTop: "14px",
+};
+
+const tripMetaBadge = {
+  display: "inline-block",
+  fontSize: "12px",
+  color: "#555",
+  border: "1px solid #ddd",
+  borderRadius: "999px",
+  padding: "4px 8px",
+  background: "#fafafa",
 };
 
 const authorText = {

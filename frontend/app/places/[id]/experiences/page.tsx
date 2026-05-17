@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../../../lib/api";
+import { countryCodeToFlagEmoji } from "../../../lib/flags";
 
 export default function ExperiencesPage() {
   const params = useParams();
@@ -110,19 +111,25 @@ const pageTitle =
   : null;
 
   const trustedExperiences = sortedExperiences.filter(
-    (e) => e.trust_level === 1 && e.user !== currentUsername
-  );
+  (e) =>
+    e.trust_level === 1 &&
+    e.user !== currentUsername &&
+    (!highlightedExperience || e.id !== highlightedExperience.id)
+);
 
-  const networkExperiences = sortedExperiences.filter(
-    (e) => e.trust_level === 2 && e.user !== currentUsername
-  );
+const networkExperiences = sortedExperiences.filter(
+  (e) =>
+    e.trust_level === 2 &&
+    e.user !== currentUsername &&
+    (!highlightedExperience || e.id !== highlightedExperience.id)
+);
 
-  const otherExperiences = sortedExperiences.filter(
+const otherExperiences = sortedExperiences.filter(
   (e) =>
     e.trust_level === 3 &&
     e.user !== currentUsername &&
     (!highlightedExperience || e.id !== highlightedExperience.id)
-    );
+);
 
   const getTrustedRepliesCount = (experienceId: number) =>
     (repliesByExperience[experienceId] || []).filter(
@@ -151,6 +158,66 @@ const pageTitle =
 
     return date.toLocaleDateString();
   };
+
+  const getAuthorLabel = (experience: any) => {
+  const flag = countryCodeToFlagEmoji(
+    experience.author_nationality_country_code
+  );
+
+  if (!flag) {
+    return experience.user;
+  }
+
+  return `${experience.user} ${flag}`;
+};
+
+    const formatTripValue = (value?: string) => {
+      const labels: Record<string, string> = {
+        prefer_not_to_say: "Prefer not to say",
+        solo: "Solo traveler",
+        couple: "Couple",
+        family_children: "Family with children",
+        friends_group: "Friends / group",
+        business: "Business traveler",
+        local_resident: "Local resident",
+        retired: "Retired traveler",
+        culture_museums: "Culture and museums",
+        nature_outdoors: "Nature and outdoors",
+        food_restaurants: "Food and restaurants",
+        relaxed: "Relaxed travel",
+        budget: "Budget travel",
+        comfort: "Comfort travel",
+        adventure: "Adventure",
+        local_life: "Local life",
+      };
+
+      if (!value || value === "prefer_not_to_say") return "";
+
+      return labels[value] || value;
+    };
+
+    const renderTripMeta = (experience: any) => {
+      const contextLabel = formatTripValue(experience.trip_context);
+      const styleLabel = formatTripValue(experience.trip_style);
+
+      if (!contextLabel && !styleLabel) return null;
+
+      return (
+        <div style={tripMetaRow}>
+          {contextLabel && (
+            <span style={tripMetaBadge}>
+              Context: {contextLabel}
+            </span>
+          )}
+
+          {styleLabel && (
+            <span style={tripMetaBadge}>
+              Style: {styleLabel}
+            </span>
+          )}
+        </div>
+      );
+    };
 
   const getWhyExplanation = (e: any) => {
     if (e.trust_level === 1) return "⭐ From your direct connection";
@@ -221,28 +288,24 @@ const pageTitle =
     .slice(0, 2);
 
   const loadRepliesForExperiences = async (
-    experiencesList: any[],
-    token?: string | null
-  ) => {
-    const repliesEntries = await Promise.all(
-      experiencesList.map(async (experience: any) => {
-        try {
-          let res = await fetch(
-            `${API_URL}/api/experiences/${experience.id}/replies/`,
-            {
-              headers: token
-                ? {
-                    Authorization: `Bearer ${token}`,
-                  }
-                : {},
-            }
-          );
+      experiencesList: any[]
+        ) => {
 
-          if (!res.ok) {
-            res = await fetch(
-              `${API_URL}/api/experiences/${experience.id}/replies/`
-            );
-          }
+        const repliesEntries = await Promise.all(
+          experiencesList.map(async (experience: any) => {
+            try {
+              const res = await fetch(
+      `${API_URL}/api/experiences/${experience.id}/replies/`,
+      {
+        credentials: "include",
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Failed to load replies:", res.status, text);
+      return [experience.id, []];
+    }
 
           const text = await res.text();
 
@@ -268,105 +331,88 @@ const pageTitle =
     if (!id) return;
 
     const token = localStorage.getItem("access");
+const loadCurrentUser = async () => {
+  try {
+    const res = await fetch(`${API_URL}/api/me/`, {
+      credentials: "include",
+    });
 
-    const loadCurrentUser = async () => {
-      if (!token) {
-        setCurrentUsername(null);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_URL}/api/me/`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!res.ok) {
-          localStorage.removeItem("access");
-          setCurrentUsername(null);
-          return;
-        }
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.error(text);
-          return;
-        }
-
-        const data = await res.json();
-        setCurrentUsername(data.username);
-      } catch (err) {
-        console.error("Error loading user:", err);
-        setCurrentUsername(null);
-      }
-    };
-
-    const loadExperiences = async () => {
-      try {
-        let res = await fetch(
-          `${API_URL}/api/places/${id}/experiences/`,
-          {
-            headers: token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : {},
-          }
-        );
-
-        if (!res.ok) {
-          res = await fetch(
-            `${API_URL}/api/places/${id}/experiences/`
-          );
-        }
-
-        const data = await res.json();
-
-        if (!Array.isArray(data)) {
-          setExperiences([]);
-          return;
-        }
-
-        setExperiences(data);
-        await loadRepliesForExperiences(data, token);
-      } catch (err) {
-        console.error(err);
-        setExperiences([]);
-      }
-    };
-
-    const loadPlace = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/places/${id}/`);
-        const data = await res.json();
-        setPlace(data);
-
-        const destRes = await fetch(`${API_URL}/api/destinations/`);
-        const destinations = await destRes.json();
-
-        const foundDestination = destinations.find(
-          (d: any) => d.id === data.destination
-        );
-
-        setDestination(foundDestination);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    loadCurrentUser();
-    loadExperiences();
-    loadPlace();
-  }, [id]);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("last_visit");
-    if (stored) {
-      setLastVisit(Number(stored));
+    if (!res.ok) {
+      setCurrentUsername(null);
+      return;
     }
-  }, []);
 
+    const data = await res.json();
+    setCurrentUsername(data.username);
+  } catch (err) {
+    console.error("Error loading user:", err);
+    setCurrentUsername(null);
+  }
+};
+
+const loadExperiences = async () => {
+  try {
+    const res = await fetch(`${API_URL}/api/places/${id}/experiences/`, {
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Failed to load experiences:", res.status, text);
+      setExperiences([]);
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+      setExperiences([]);
+      return;
+    }
+
+    setExperiences(data);
+    await loadRepliesForExperiences(data);
+  } catch (err) {
+    console.error(err);
+    setExperiences([]);
+  }
+};
+
+const loadPlace = async () => {
+  try {
+    const res = await fetch(`${API_URL}/api/places/${id}/`);
+    const data = await res.json();
+    setPlace(data);
+
+    const destRes = await fetch(`${API_URL}/api/destinations/`);
+    const destinations = await destRes.json();
+
+    const foundDestination = destinations.find(
+      (d: any) => d.id === data.destination
+    );
+
+    setDestination(foundDestination);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+loadCurrentUser();
+loadExperiences();
+loadPlace();
+}, [id]);
+
+useEffect(() => {
+  const stored = localStorage.getItem("last_visit");
+  if (stored) {
+    setLastVisit(Number(stored));
+  }
+}, []);
+
+useEffect(() => {
+  const now = Date.now();
+  localStorage.setItem("last_visit", String(now));
+}, []);
   useEffect(() => {
     const now = Date.now();
     localStorage.setItem("last_visit", String(now));
@@ -548,8 +594,10 @@ const newReply = await response.json();
           {highlightedExperience.comment}
         </div>
 
+        {renderTripMeta(highlightedExperience)}
+
         <div style={{ fontSize: "13px", color: "#777", marginBottom: "12px" }}>
-          — {highlightedExperience.user} • {timeAgo(highlightedExperience.created_at)}
+          — {getAuthorLabel(highlightedExperience)} • {timeAgo(highlightedExperience.created_at)}
         </div>
 
         <Link
@@ -598,7 +646,7 @@ const newReply = await response.json();
 
               {trendingTrusted.map((e) => (
                 <div key={e.id} style={{ marginBottom: "10px" }}>
-                  <strong>{e.user}</strong> • {(e.title || e.comment).slice(0, 60)}...
+                  <strong>{getAuthorLabel(e)}</strong> • {(e.title || e.comment).slice(0, 60)}...
 
                   {getTrustedRepliesCount(e.id) > 0 && (
                       <div style={{ fontSize: "12px", color: "#666" }}>
@@ -642,7 +690,7 @@ const newReply = await response.json();
                   borderRadius: "8px",
                 }}
               >
-                <strong>{e.user}</strong> • {(e.title || e.comment).slice(0, 60)}...
+                <strong>{getAuthorLabel(e)}</strong> • {(e.title || e.comment).slice(0, 60)}...
 
                 {getTrustedRepliesCount(e.id) > 0 && (
                   <div style={{ fontSize: "12px", color: "#666" }}>
@@ -705,7 +753,7 @@ const newReply = await response.json();
                 }
               style={{ cursor: "pointer" }}
             >
-              <strong>{item.user}</strong>{" "}
+              <strong>{getAuthorLabel(item)}</strong>{" "}
                 {item.type === "review"
                   ? "shared an experience about"
                   : "replied to a review on"}{" "}
@@ -799,8 +847,10 @@ const newReply = await response.json();
                       {e.comment}
                     </div>
 
+                    {renderTripMeta(e)}
+
                     <div style={{ marginTop: "10px", fontSize: "13px", color: "#555" }}>
-                      — {e.user} • {timeAgo(e.created_at)}
+                      — {getAuthorLabel(e)} • {timeAgo(e.created_at)}
 
                       {getTrustedEngagementText(e.id) && (
                         <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
@@ -1064,8 +1114,10 @@ const newReply = await response.json();
                           {e.comment}
                         </div>
 
+                        {renderTripMeta(e)}
+
                     <div style={{ marginTop: "10px", fontSize: "13px", color: "#555" }}>
-                      — {e.user} • {timeAgo(e.created_at)}
+                      — {getAuthorLabel(e)} • {timeAgo(e.created_at)}
 
                       <span
                         style={{
@@ -1213,8 +1265,10 @@ const newReply = await response.json();
                           {e.comment}
                         </div>
 
+                        {renderTripMeta(e)}
+
                         <div style={{ marginTop: "10px", fontSize: "13px", color: "#777" }}>
-                          — {e.user} • {timeAgo(e.created_at)}
+                          — {getAuthorLabel(e)} • {timeAgo(e.created_at)}
                         </div>
 
                         <div style={{ marginTop: "10px" }}>
@@ -1247,3 +1301,21 @@ const newReply = await response.json();
     </main>
   );
 }
+
+const tripMetaRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+  marginTop: "10px",
+  marginBottom: "10px",
+};
+
+const tripMetaBadge = {
+  display: "inline-block",
+  fontSize: "12px",
+  color: "#555",
+  border: "1px solid #ddd",
+  borderRadius: "999px",
+  padding: "4px 8px",
+  background: "#fafafa",
+};

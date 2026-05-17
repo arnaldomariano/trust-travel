@@ -13,6 +13,7 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [nationality, setNationality] = useState("");
+  const [nationalityCountryCode, setNationalityCountryCode] = useState("");
   const [showNationality, setShowNationality] = useState(false);
 
   const [countryOfBirth, setCountryOfBirth] = useState("");
@@ -46,6 +47,7 @@ export default function ProfilePage() {
       setPublicCode(data.public_code || "");
       setAvatarUrl(data.avatar_url || null);
       setNationality(data.nationality || "");
+      setNationalityCountryCode(data.nationality_country_code || "");
       setShowNationality(Boolean(data.show_nationality));
 
       setCountryOfBirth(data.country_of_birth || "");
@@ -91,6 +93,7 @@ export default function ProfilePage() {
       formData.append("country_code", countryCode);
 
       formData.append("nationality", nationality);
+      formData.append("nationality_country_code", nationalityCountryCode.toUpperCase());
       formData.append("show_nationality", String(showNationality));
 
       formData.append("country_of_birth", countryOfBirth);
@@ -123,6 +126,7 @@ export default function ProfilePage() {
       setAvatarPreview(null);
 
       setNationality(data.nationality || "");
+      setNationalityCountryCode(data.nationality_country_code || "");
       setShowNationality(Boolean(data.show_nationality));
 
       setCountryOfBirth(data.country_of_birth || "");
@@ -250,6 +254,22 @@ export default function ProfilePage() {
             placeholder="Optional, e.g. Brazilian, Dutch, Italian..."
             style={input}
           />
+        </div>
+
+        <div style={field}>
+          <label style={label}>Nationality country code</label>
+          <input
+            value={nationalityCountryCode}
+            onChange={(e) =>
+              setNationalityCountryCode(e.target.value.toUpperCase())
+            }
+            maxLength={2}
+            placeholder="Optional, e.g. BR, NL, IT..."
+            style={input}
+          />
+          <small style={hint}>
+            Used only to show a small flag when nationality display is enabled.
+          </small>
         </div>
 
         <label style={checkboxRow}>

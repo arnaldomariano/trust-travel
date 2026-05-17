@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../../lib/api";
@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation";
 
 export default function PlacePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const shouldOpenUpdateForm = searchParams.get("share") === "update";
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [experiences, setExperiences] = useState<any[]>([]);
@@ -25,6 +27,21 @@ export default function PlacePage() {
   const [updateType, setUpdateType] = useState<"event" | "alert" | "info">("info");
   const [updateText, setUpdateText] = useState("");
   const [submittingUpdate, setSubmittingUpdate] = useState(false);
+
+  const [updateTitle, setUpdateTitle] = useState("");
+  const [updateCategory, setUpdateCategory] = useState("general");
+  const [updateEventDate, setUpdateEventDate] = useState("");
+  const [updateExternalLink, setUpdateExternalLink] = useState("");
+  const [updateSourceName, setUpdateSourceName] = useState("");
+  const [updateSourceUrl, setUpdateSourceUrl] = useState("");
+  const [updatePriority, setUpdatePriority] = useState<"low" | "normal" | "high" | "urgent">("normal");
+
+
+    useEffect(() => {
+      if (shouldOpenUpdateForm) {
+        setShowUpdateForm(true);
+      }
+    }, [shouldOpenUpdateForm]);
 
   const router = useRouter();
 
@@ -214,11 +231,17 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            place: id,
-            type: updateType,
-            category: "tourism",
-            text: updateText.trim(),
-          }),
+              place: id,
+              type: updateType,
+              category: updateCategory,
+              title: updateTitle.trim(),
+              text: updateText.trim(),
+              event_date: updateEventDate || null,
+              external_link: updateExternalLink.trim(),
+              source_name: updateSourceName.trim(),
+              source_url: updateSourceUrl.trim(),
+              priority: updatePriority,
+            }),
         });
 
         const data = await res.json();
@@ -230,8 +253,15 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         }
 
         setUpdates((prev) => [data, ...prev]);
+        setUpdateTitle("");
         setUpdateText("");
         setUpdateType("info");
+        setUpdateCategory("general");
+        setUpdateEventDate("");
+        setUpdateExternalLink("");
+        setUpdateSourceName("");
+        setUpdateSourceUrl("");
+        setUpdatePriority("normal");
         setShowUpdateForm(false);
         setFilter("update");
       } catch (error) {
@@ -405,25 +435,161 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             </p>
 
             <form onSubmit={handleSubmitUpdate} style={{ display: "grid", gap: "12px" }}>
-              <select
-                value={updateType}
-                onChange={(e) =>
-                  setUpdateType(e.target.value as "event" | "alert" | "info")
-                }
-                style={input}
-              >
-                <option value="info">Useful info</option>
-                <option value="event">Event</option>
-                <option value="alert">Alert</option>
-              </select>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <label style={label}>Type</label>
 
-              <textarea
-                value={updateText}
-                onChange={(e) => setUpdateText(e.target.value)}
-                placeholder="Write the event, alert or useful information..."
-                rows={4}
-                style={input}
-              />
+                <select
+                  value={updateType}
+                  onChange={(e) =>
+                    setUpdateType(e.target.value as "event" | "alert" | "info")
+                  }
+                  style={input}
+                >
+                  <option value="info">Useful info</option>
+                  <option value="event">Event</option>
+                  <option value="alert">Alert</option>
+                </select>
+              </div>
+
+              <div style={{ display: "grid", gap: "6px" }}>
+                <label style={label}>Short title</label>
+
+                <input
+                  value={updateTitle}
+                  onChange={(e) => setUpdateTitle(e.target.value)}
+                  placeholder={
+                    updateType === "event"
+                      ? "Event title, e.g. Free concert tonight"
+                      : updateType === "alert"
+                      ? "Alert title, e.g. Museum closed this Sunday"
+                      : "Useful info title, e.g. Best entrance is on the north side"
+                  }
+                  maxLength={160}
+                  style={input}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "6px" }}>
+                <label style={label}>Details</label>
+
+                <textarea
+                  value={updateText}
+                  onChange={(e) => setUpdateText(e.target.value)}
+                  placeholder="Write the event, alert or useful information..."
+                  rows={4}
+                  style={input}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "12px",
+                }}
+              >
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <label style={label}>Category</label>
+
+                  <select
+                    value={updateCategory}
+                    onChange={(e) => setUpdateCategory(e.target.value)}
+                    style={input}
+                  >
+                    <option value="general">General</option>
+                    <option value="tourism">Tourism</option>
+                    <option value="music">Music</option>
+                    <option value="religious">Religious</option>
+                    <option value="social">Social</option>
+                    <option value="transport">Transport</option>
+                    <option value="safety">Safety</option>
+                    <option value="weather">Weather</option>
+                    <option value="food">Food</option>
+                    <option value="culture">Culture</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <label style={label}>
+                    {updateType === "event" ? "Event date" : "Related date"}
+                  </label>
+
+                  <input
+                    type="datetime-local"
+                    value={updateEventDate}
+                    onChange={(e) => setUpdateEventDate(e.target.value)}
+                    style={input}
+                  />
+                </div>
+              </div>
+
+              {updateType === "alert" && (
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <label style={label}>Alert priority</label>
+
+                  <select
+                    value={updatePriority}
+                    onChange={(e) =>
+                      setUpdatePriority(
+                        e.target.value as "low" | "normal" | "high" | "urgent"
+                      )
+                    }
+                    style={input}
+                  >
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              )}
+
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #eee",
+                  borderRadius: "14px",
+                  backgroundColor: "#fafafa",
+                  display: "grid",
+                  gap: "12px",
+                }}
+              >
+                <div>
+                  <strong style={{ fontSize: "14px" }}>Optional source and links</strong>
+
+                  <p
+                    style={{
+                      margin: "6px 0 0 0",
+                      color: "#666",
+                      fontSize: "13px",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Add a source or official link when the information should be verified.
+                  </p>
+                </div>
+
+                <input
+                  value={updateSourceName}
+                  onChange={(e) => setUpdateSourceName(e.target.value)}
+                  placeholder="Source name, e.g. official website, venue page, local authority"
+                  style={input}
+                />
+
+                <input
+                  value={updateSourceUrl}
+                  onChange={(e) => setUpdateSourceUrl(e.target.value)}
+                  placeholder="Source URL, e.g. https://..."
+                  style={input}
+                />
+
+                <input
+                  value={updateExternalLink}
+                  onChange={(e) => setUpdateExternalLink(e.target.value)}
+                  placeholder="Related link, e.g. ticket page, event page, article..."
+                  style={input}
+                />
+              </div>
 
               <button
                 type="submit"
@@ -772,6 +938,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                       })}
                     </div>
 
+
                     <div style={{ marginTop: "12px" }}>
                       <Link
                           href={`/places/${id}/experiences?highlight=${item.id}`}
@@ -800,6 +967,24 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
                     <div style={{ marginTop: "8px", color: "#777", fontSize: "13px" }}>
                       Shared by {item.display_name || item.username || item.user}
+                    </div>
+
+                    <div style={{ marginTop: "12px" }}>
+                      <Link
+                        href={`/updates/${item.id}`}
+                        style={{
+                          display: "inline-block",
+                          padding: "8px 12px",
+                          borderRadius: "10px",
+                          border: "1px solid #ddd",
+                          backgroundColor: "#f9f9f9",
+                          color: "#111",
+                          textDecoration: "none",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Read update
+                      </Link>
                     </div>
                   </>
                 )}
@@ -862,4 +1047,10 @@ const input = {
   borderRadius: "10px",
   border: "1px solid #ddd",
   fontSize: "14px",
+};
+
+const label = {
+  fontSize: "13px",
+  color: "#666",
+  fontWeight: 600,
 };

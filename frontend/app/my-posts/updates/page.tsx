@@ -8,10 +8,17 @@ type MyPost = {
   id: number;
   type: "event" | "alert" | "info" | string;
   category: string;
+  title?: string;
   text: string;
+  event_date?: string | null;
+  external_link?: string;
+  source_name?: string;
+  source_url?: string;
+  priority?: "low" | "normal" | "high" | "urgent" | string;
   place: string;
   place_id: number;
   created_at: string;
+  updated_at?: string;
 };
 
 export default function MyUpdatesPage() {
@@ -25,6 +32,15 @@ export default function MyUpdatesPage() {
   const [editingUpdateType, setEditingUpdateType] =
     useState<"event" | "alert" | "info">("info");
   const [savingUpdate, setSavingUpdate] = useState(false);
+
+  const [editingUpdateTitle, setEditingUpdateTitle] = useState("");
+  const [editingUpdateCategory, setEditingUpdateCategory] = useState("general");
+  const [editingUpdateEventDate, setEditingUpdateEventDate] = useState("");
+  const [editingUpdateExternalLink, setEditingUpdateExternalLink] = useState("");
+  const [editingUpdateSourceName, setEditingUpdateSourceName] = useState("");
+  const [editingUpdateSourceUrl, setEditingUpdateSourceUrl] = useState("");
+  const [editingUpdatePriority, setEditingUpdatePriority] =
+    useState<"low" | "normal" | "high" | "urgent">("normal");
 
   const loadPosts = async () => {
     try {
@@ -56,27 +72,74 @@ export default function MyUpdatesPage() {
     loadPosts();
   }, []);
 
+const toDateTimeLocalValue = (value?: string | null) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offset * 60 * 1000);
+
+  return localDate.toISOString().slice(0, 16);
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toLocaleString();
+};
+
   const filteredPosts = posts.filter((post) => {
     if (filter === "all") return true;
     return post.type === filter;
   });
 
   const startEditingUpdate = (post: MyPost) => {
-    setEditingUpdateId(post.id);
-    setEditingUpdateText(post.text || "");
+  setEditingUpdateId(post.id);
+  setEditingUpdateTitle(post.title || "");
+  setEditingUpdateText(post.text || "");
+  setEditingUpdateCategory(post.category || "general");
+  setEditingUpdateEventDate(toDateTimeLocalValue(post.event_date));
+  setEditingUpdateExternalLink(post.external_link || "");
+  setEditingUpdateSourceName(post.source_name || "");
+  setEditingUpdateSourceUrl(post.source_url || "");
 
-    if (post.type === "event" || post.type === "alert" || post.type === "info") {
-      setEditingUpdateType(post.type);
-    } else {
-      setEditingUpdateType("info");
-    }
-  };
+  if (post.type === "event" || post.type === "alert" || post.type === "info") {
+    setEditingUpdateType(post.type);
+  } else {
+    setEditingUpdateType("info");
+  }
+
+  if (
+    post.priority === "low" ||
+    post.priority === "normal" ||
+    post.priority === "high" ||
+    post.priority === "urgent"
+  ) {
+    setEditingUpdatePriority(post.priority);
+  } else {
+    setEditingUpdatePriority("normal");
+  }
+};
 
   const cancelEditingUpdate = () => {
-    setEditingUpdateId(null);
-    setEditingUpdateText("");
-    setEditingUpdateType("info");
-  };
+  setEditingUpdateId(null);
+  setEditingUpdateTitle("");
+  setEditingUpdateText("");
+  setEditingUpdateType("info");
+  setEditingUpdateCategory("general");
+  setEditingUpdateEventDate("");
+  setEditingUpdateExternalLink("");
+  setEditingUpdateSourceName("");
+  setEditingUpdateSourceUrl("");
+  setEditingUpdatePriority("normal");
+};
 
   const saveUpdateChanges = async (postId: number) => {
     if (!editingUpdateText.trim()) {
@@ -95,8 +158,14 @@ export default function MyUpdatesPage() {
         },
         body: JSON.stringify({
           type: editingUpdateType,
-          category: "tourism",
+          category: editingUpdateCategory,
+          title: editingUpdateTitle.trim(),
           text: editingUpdateText.trim(),
+          event_date: editingUpdateEventDate || null,
+          external_link: editingUpdateExternalLink.trim(),
+          source_name: editingUpdateSourceName.trim(),
+          source_url: editingUpdateSourceUrl.trim(),
+          priority: editingUpdatePriority,
         }),
       });
 
@@ -115,10 +184,17 @@ export default function MyUpdatesPage() {
                 ...post,
                 type: data.type,
                 category: data.category,
+                title: data.title,
                 text: data.text,
+                event_date: data.event_date,
+                external_link: data.external_link,
+                source_name: data.source_name,
+                source_url: data.source_url,
+                priority: data.priority,
                 place: data.place,
                 place_id: data.place_id,
                 created_at: data.created_at,
+                updated_at: data.updated_at,
               }
             : post
         )
@@ -303,62 +379,224 @@ export default function MyUpdatesPage() {
 
                 {isEditing ? (
                   <div style={editForm}>
-                    <select
-                      value={editingUpdateType}
-                      onChange={(e) =>
-                        setEditingUpdateType(
-                          e.target.value as "event" | "alert" | "info"
-                        )
-                      }
-                      style={input}
-                    >
-                      <option value="info">Useful info</option>
-                      <option value="event">Event</option>
-                      <option value="alert">Alert</option>
-                    </select>
+                      <div style={{ display: "grid", gap: "6px" }}>
+                        <label style={fieldLabel}>Type</label>
 
-                    <textarea
-                      value={editingUpdateText}
-                      onChange={(e) => setEditingUpdateText(e.target.value)}
-                      rows={4}
-                      style={input}
-                    />
+                        <select
+                          value={editingUpdateType}
+                          onChange={(e) =>
+                            setEditingUpdateType(
+                              e.target.value as "event" | "alert" | "info"
+                            )
+                          }
+                          style={input}
+                        >
+                          <option value="info">Useful info</option>
+                          <option value="event">Event</option>
+                          <option value="alert">Alert</option>
+                        </select>
+                      </div>
 
-                    <div style={actions}>
-                      <button
-                        type="button"
-                        onClick={() => saveUpdateChanges(post.id)}
-                        disabled={savingUpdate || !editingUpdateText.trim()}
+                      <div style={{ display: "grid", gap: "6px" }}>
+                        <label style={fieldLabel}>Short title</label>
+
+                        <input
+                          value={editingUpdateTitle}
+                          onChange={(e) => setEditingUpdateTitle(e.target.value)}
+                          placeholder="Short title"
+                          maxLength={160}
+                          style={input}
+                        />
+                      </div>
+
+                      <div style={{ display: "grid", gap: "6px" }}>
+                        <label style={fieldLabel}>Details</label>
+
+                        <textarea
+                          value={editingUpdateText}
+                          onChange={(e) => setEditingUpdateText(e.target.value)}
+                          rows={4}
+                          style={input}
+                        />
+                      </div>
+
+                      <div
                         style={{
-                          ...primaryButton,
-                          opacity:
-                            savingUpdate || !editingUpdateText.trim() ? 0.5 : 1,
-                          cursor:
-                            savingUpdate || !editingUpdateText.trim()
-                              ? "not-allowed"
-                              : "pointer",
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                          gap: "12px",
                         }}
                       >
-                        {savingUpdate ? "Saving..." : "Save changes"}
-                      </button>
+                        <div style={{ display: "grid", gap: "6px" }}>
+                          <label style={fieldLabel}>Category</label>
 
-                      <button
-                        type="button"
-                        onClick={cancelEditingUpdate}
-                        style={secondaryButton}
-                      >
-                        Cancel
-                      </button>
+                          <select
+                            value={editingUpdateCategory}
+                            onChange={(e) => setEditingUpdateCategory(e.target.value)}
+                            style={input}
+                          >
+                            <option value="general">General</option>
+                            <option value="tourism">Tourism</option>
+                            <option value="music">Music</option>
+                            <option value="religious">Religious</option>
+                            <option value="social">Social</option>
+                            <option value="transport">Transport</option>
+                            <option value="safety">Safety</option>
+                            <option value="weather">Weather</option>
+                            <option value="food">Food</option>
+                            <option value="culture">Culture</option>
+                          </select>
+                        </div>
+
+                        <div style={{ display: "grid", gap: "6px" }}>
+                          <label style={fieldLabel}>
+                            {editingUpdateType === "event" ? "Event date" : "Related date"}
+                          </label>
+
+                          <input
+                            type="datetime-local"
+                            value={editingUpdateEventDate}
+                            onChange={(e) => setEditingUpdateEventDate(e.target.value)}
+                            style={input}
+                          />
+                        </div>
+                      </div>
+
+                      {editingUpdateType === "alert" && (
+                        <div style={{ display: "grid", gap: "6px" }}>
+                          <label style={fieldLabel}>Alert priority</label>
+
+                          <select
+                            value={editingUpdatePriority}
+                            onChange={(e) =>
+                              setEditingUpdatePriority(
+                                e.target.value as "low" | "normal" | "high" | "urgent"
+                              )
+                            }
+                            style={input}
+                          >
+                            <option value="low">Low</option>
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                          </select>
+                        </div>
+                      )}
+
+                      <div style={sourceEditBox}>
+                        <strong style={{ fontSize: "14px" }}>Optional source and links</strong>
+
+                        <input
+                          value={editingUpdateSourceName}
+                          onChange={(e) => setEditingUpdateSourceName(e.target.value)}
+                          placeholder="Source name"
+                          style={input}
+                        />
+
+                        <input
+                          value={editingUpdateSourceUrl}
+                          onChange={(e) => setEditingUpdateSourceUrl(e.target.value)}
+                          placeholder="Source URL"
+                          style={input}
+                        />
+
+                        <input
+                          value={editingUpdateExternalLink}
+                          onChange={(e) => setEditingUpdateExternalLink(e.target.value)}
+                          placeholder="Related link"
+                          style={input}
+                        />
+                      </div>
+
+                      <div style={actions}>
+                        <button
+                          type="button"
+                          onClick={() => saveUpdateChanges(post.id)}
+                          disabled={savingUpdate || !editingUpdateText.trim()}
+                          style={{
+                            ...primaryButton,
+                            opacity:
+                              savingUpdate || !editingUpdateText.trim() ? 0.5 : 1,
+                            cursor:
+                              savingUpdate || !editingUpdateText.trim()
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {savingUpdate ? "Saving..." : "Save changes"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={cancelEditingUpdate}
+                          style={secondaryButton}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  </div>
                 ) : (
                   <>
-                    <p style={text}>{post.text}</p>
+                      {post.title?.trim() && (
+                        <h2 style={postTitle}>{post.title}</h2>
+                      )}
 
-                    <div style={actions}>
-                      <Link href={`/places/${post.place_id}`} style={secondaryLink}>
-                        View place
-                      </Link>
+                      <p style={text}>{post.text}</p>
+
+                      <div style={detailsGrid}>
+                        {post.event_date && (
+                          <span style={detailChip}>
+                            Related date: {formatDateTime(post.event_date)}
+                          </span>
+                        )}
+
+                        {post.type === "alert" && (
+                          <span style={detailChip}>
+                            Priority: {post.priority || "normal"}
+                          </span>
+                        )}
+
+                        {post.source_name && (
+                          <span style={detailChip}>
+                            Source: {post.source_name}
+                          </span>
+                        )}
+                      </div>
+
+                      {(post.source_url || post.external_link) && (
+                        <div style={linkRow}>
+                          {post.source_url && (
+                            <a
+                              href={post.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={smallLink}
+                            >
+                              Open source
+                            </a>
+                          )}
+
+                          {post.external_link && (
+                            <a
+                              href={post.external_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={smallLink}
+                            >
+                              Open related link
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      <div style={actions}>
+                        <Link href={`/updates/${post.id}`} style={secondaryLink}>
+                          Read update
+                        </Link>
+
+                        <Link href={`/places/${post.place_id}`} style={secondaryLink}>
+                          View place
+                        </Link>
 
                       <button
                         type="button"
@@ -580,4 +818,55 @@ const managerNav = {
   background: "white",
   display: "grid",
   gap: "14px",
+};
+
+const fieldLabel = {
+  fontSize: "13px",
+  color: "#666",
+  fontWeight: 600,
+};
+
+const sourceEditBox = {
+  padding: "14px",
+  border: "1px solid #eee",
+  borderRadius: "14px",
+  background: "#fafafa",
+  display: "grid",
+  gap: "12px",
+};
+
+const postTitle = {
+  marginTop: "12px",
+  marginBottom: "8px",
+  fontSize: "20px",
+};
+
+const detailsGrid = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+  marginBottom: "14px",
+};
+
+const detailChip = {
+  display: "inline-block",
+  padding: "4px 8px",
+  borderRadius: "999px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  color: "#555",
+  fontSize: "12px",
+};
+
+const linkRow = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+  marginBottom: "14px",
+};
+
+const smallLink = {
+  color: "#111",
+  fontSize: "13px",
+  fontWeight: 600,
 };

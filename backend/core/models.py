@@ -268,6 +268,29 @@ class Update(models.Model):
 # ===================== Experience =====================
 
 class Experience(models.Model):
+    TRIP_CONTEXT_CHOICES = [
+        ("prefer_not_to_say", "Prefer not to say"),
+        ("solo", "Solo traveler"),
+        ("couple", "Couple"),
+        ("family_children", "Family with children"),
+        ("friends_group", "Friends / group"),
+        ("business", "Business traveler"),
+        ("local_resident", "Local resident"),
+        ("retired", "Retired traveler"),
+    ]
+
+    TRIP_STYLE_CHOICES = [
+        ("prefer_not_to_say", "Prefer not to say"),
+        ("culture_museums", "Culture and museums"),
+        ("nature_outdoors", "Nature and outdoors"),
+        ("food_restaurants", "Food and restaurants"),
+        ("relaxed", "Relaxed travel"),
+        ("budget", "Budget travel"),
+        ("comfort", "Comfort travel"),
+        ("adventure", "Adventure"),
+        ("local_life", "Local life"),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     place = models.ForeignKey(Place, on_delete=models.CASCADE)
 
@@ -285,6 +308,22 @@ class Experience(models.Model):
 
     rating = models.IntegerField(null=True, blank=True)
     comment = models.TextField()
+
+    # Optional trip-specific context.
+    # These fields describe the situation of this specific experience,
+    # not the user's permanent profile.
+    trip_context = models.CharField(
+        max_length=30,
+        choices=TRIP_CONTEXT_CHOICES,
+        default="prefer_not_to_say",
+    )
+
+    trip_style = models.CharField(
+        max_length=30,
+        choices=TRIP_STYLE_CHOICES,
+        default="prefer_not_to_say",
+    )
+
     trust_level = models.IntegerField(default=3)
 
     created_at = models.DateTimeField(auto_now_add=True)

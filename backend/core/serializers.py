@@ -135,6 +135,8 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "image_url",
             "rating",
             "comment",
+            "trip_context",
+            "trip_style",
             "created_at",
             "updated_at",
             "trust_level",

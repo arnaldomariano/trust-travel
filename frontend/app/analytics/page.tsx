@@ -1,0 +1,360 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+import { API_URL } from "../lib/api";
+
+type TopSavedExperience = {
+  experience_id: number;
+  title: string;
+  comment: string;
+  rating: number | null;
+  place: string;
+  place_id: number;
+  place_type: string;
+  destination: string;
+  saved_count: number;
+};
+
+export default function AnalyticsPage() {
+  const [topSavedExperiences, setTopSavedExperiences] = useState<
+    TopSavedExperience[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}/api/analytics/top-saved-experiences/`,
+          {
+            credentials: "include",
+          }
+        );
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("Failed to load analytics:", res.status, text);
+          setTopSavedExperiences([]);
+          return;
+        }
+
+        const data = await res.json();
+
+        setTopSavedExperiences(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Analytics fetch error:", error);
+        setTopSavedExperiences([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAnalytics();
+  }, []);
+
+  return (
+    <main style={page}>
+      <div style={breadcrumb}>
+        <Link href="/" style={breadcrumbLink}>
+          Home
+        </Link>{" "}
+        / Analytics
+      </div>
+
+      <section style={heroCard}>
+        <div style={eyebrow}>Trust Travel insights</div>
+
+        <h1 style={title}>Analytics</h1>
+
+        <p style={description}>
+          Early planning signals based on what users are saving to their trip
+          plans.
+        </p>
+      </section>
+
+      <section style={section}>
+        <div style={sectionHeader}>
+          <div>
+            <h2 style={sectionTitle}>Top saved experiences</h2>
+            <p style={sectionDescription}>
+              Experiences most often added to trip plans.
+            </p>
+          </div>
+
+          <div style={countBadge}>
+            {topSavedExperiences.length}{" "}
+            {topSavedExperiences.length === 1 ? "item" : "items"}
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={emptyBox}>Loading analytics...</div>
+        ) : topSavedExperiences.length === 0 ? (
+          <div style={emptyBox}>No saved experiences yet.</div>
+        ) : (
+          <div style={list}>
+            {topSavedExperiences.map((item, index) => (
+              <article key={item.experience_id} style={card}>
+                <div style={rank}>#{index + 1}</div>
+
+                <div style={{ flex: 1 }}>
+                  <div style={cardTopLine}>
+                    <span style={placeTypeBadge}>
+                      {formatPlaceType(item.place_type)}
+                    </span>
+
+                    <span style={savedCountBadge}>
+                      {item.saved_count}{" "}
+                      {item.saved_count === 1 ? "save" : "saves"}
+                    </span>
+                  </div>
+
+                  <h3 style={cardTitle}>
+                    {item.title || item.comment.slice(0, 70)}
+                  </h3>
+
+                  <div style={metaLine}>
+                    {item.place}
+                    {item.destination && item.destination !== item.place
+                      ? ` · ${item.destination}`
+                      : ""}
+                  </div>
+
+                  {item.rating && (
+                    <div style={stars}>
+                      {"★".repeat(item.rating)}
+                      {"☆".repeat(5 - item.rating)}
+                    </div>
+                  )}
+
+                  <p style={comment}>
+                    {item.comment.length > 160
+                      ? `${item.comment.slice(0, 160)}...`
+                      : item.comment}
+                  </p>
+
+                  <div style={actions}>
+                    <Link
+                      href={`/experiences/${item.experience_id}`}
+                      style={primaryLink}
+                    >
+                      View experience
+                    </Link>
+
+                    <Link
+                      href={`/places/${item.place_id}/experiences?highlight=${item.experience_id}`}
+                      style={secondaryLink}
+                    >
+                      View in place
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function formatPlaceType(type: string) {
+  const labels: Record<string, string> = {
+    country: "Country",
+    city: "City / Region",
+    attraction: "Tourist attraction",
+    hotel: "Hotel",
+    restaurant: "Restaurant / Café",
+    nature: "Beach / Nature",
+    other: "Other",
+  };
+
+  return labels[type] || "Place";
+}
+
+const page = {
+  maxWidth: "900px",
+  margin: "0 auto",
+  padding: "40px 20px 80px",
+};
+
+const breadcrumb = {
+  fontSize: "14px",
+  color: "#666",
+  marginBottom: "20px",
+};
+
+const breadcrumbLink = {
+  color: "#555",
+  textDecoration: "none",
+};
+
+const heroCard = {
+  padding: "28px",
+  borderRadius: "18px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  marginBottom: "26px",
+};
+
+const eyebrow = {
+  fontSize: "14px",
+  color: "#666",
+  marginBottom: "10px",
+};
+
+const title = {
+  fontSize: "34px",
+  margin: "0 0 10px",
+};
+
+const description = {
+  fontSize: "16px",
+  color: "#555",
+  lineHeight: 1.6,
+  maxWidth: "640px",
+  margin: 0,
+};
+
+const section = {
+  display: "grid",
+  gap: "16px",
+};
+
+const sectionHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "16px",
+  alignItems: "center",
+};
+
+const sectionTitle = {
+  fontSize: "24px",
+  margin: "0 0 6px",
+};
+
+const sectionDescription = {
+  fontSize: "14px",
+  color: "#666",
+  margin: 0,
+};
+
+const countBadge = {
+  padding: "8px 12px",
+  borderRadius: "999px",
+  border: "1px solid #ddd",
+  fontSize: "13px",
+  color: "#444",
+  whiteSpace: "nowrap" as const,
+};
+
+const emptyBox = {
+  padding: "18px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  color: "#666",
+  background: "white",
+};
+
+const list = {
+  display: "grid",
+  gap: "14px",
+};
+
+const card = {
+  display: "flex",
+  gap: "16px",
+  padding: "18px",
+  borderRadius: "16px",
+  border: "1px solid #eee",
+  background: "white",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+};
+
+const rank = {
+  width: "42px",
+  height: "42px",
+  borderRadius: "50%",
+  background: "#111",
+  color: "white",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: 700,
+  flexShrink: 0,
+};
+
+const cardTopLine = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+  marginBottom: "10px",
+};
+
+const placeTypeBadge = {
+  fontSize: "12px",
+  padding: "4px 8px",
+  borderRadius: "999px",
+  border: "1px solid #ddd",
+  color: "#555",
+  background: "#fafafa",
+};
+
+const savedCountBadge = {
+  fontSize: "12px",
+  padding: "4px 8px",
+  borderRadius: "999px",
+  border: "1px solid #d7f0df",
+  color: "#166534",
+  background: "#f2fbf5",
+  fontWeight: 700,
+};
+
+const cardTitle = {
+  fontSize: "20px",
+  margin: "0 0 8px",
+};
+
+const metaLine = {
+  fontSize: "14px",
+  color: "#666",
+  marginBottom: "8px",
+};
+
+const stars = {
+  color: "#f5b50a",
+  marginBottom: "8px",
+};
+
+const comment = {
+  fontSize: "15px",
+  lineHeight: 1.6,
+  color: "#333",
+  margin: "0 0 14px",
+};
+
+const actions = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+};
+
+const primaryLink = {
+  padding: "8px 12px",
+  borderRadius: "10px",
+  background: "black",
+  color: "white",
+  textDecoration: "none",
+  fontSize: "14px",
+};
+
+const secondaryLink = {
+  padding: "8px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  color: "#111",
+  textDecoration: "none",
+  fontSize: "14px",
+};

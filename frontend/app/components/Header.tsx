@@ -136,6 +136,10 @@ useEffect(() => {
                       Build my trip
                     </MenuLink>
 
+                    <MenuLink href="/analytics" onClick={() => setMenuOpen(false)}>
+                      Insights
+                    </MenuLink>
+
                     <MenuLink href="/my-posts" onClick={() => setMenuOpen(false)}>
                       My Posts
                     </MenuLink>

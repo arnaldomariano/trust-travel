@@ -1427,6 +1427,54 @@ class TopSavedPlacesAnalyticsView(APIView):
 
         return Response(result)
 
+class TopSavedDestinationsAnalyticsView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user_country = (request.query_params.get("user_country") or "").strip().upper()
+
+        queryset = SavedItem.objects.select_related(
+            "user__profile",
+            "experience__place__destination",
+        )
+
+        if user_country:
+            queryset = queryset.filter(
+                user__profile__country_code=user_country
+            )
+
+        saved_stats = (
+            queryset
+            .values("experience__place__destination__name")
+            .annotate(
+                saved_count=Count("id"),
+                unique_places=Count("experience__place_id", distinct=True),
+                unique_experiences=Count("experience_id", distinct=True),
+                unique_users=Count("user_id", distinct=True),
+            )
+            .order_by("-saved_count", "experience__place__destination__name")[:20]
+        )
+
+        result = []
+
+        for item in saved_stats:
+            destination_name = item["experience__place__destination__name"]
+
+            if not destination_name:
+                continue
+
+            result.append({
+                "destination": destination_name,
+                "saved_count": item["saved_count"],
+                "unique_places": item["unique_places"],
+                "unique_experiences": item["unique_experiences"],
+                "unique_users": item["unique_users"],
+                "user_country": user_country or None,
+            })
+
+        return Response(result)
+
 class SummaryAnalyticsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]

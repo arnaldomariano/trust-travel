@@ -33,6 +33,15 @@ type AnalyticsSummary = {
   top_destination: string | null;
 };
 
+type TopSavedDestination = {
+  destination: string;
+  saved_count: number;
+  unique_places: number;
+  unique_experiences: number;
+  unique_users: number;
+  user_country: string | null;
+};
+
 export default function AnalyticsPage() {
   const [topSavedExperiences, setTopSavedExperiences] = useState<
   TopSavedExperience[]
@@ -43,6 +52,10 @@ const [selectedPlaceType, setSelectedPlaceType] = useState("");
 const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
 
 const [loading, setLoading] = useState(true);
+
+const [topSavedDestinations, setTopSavedDestinations] = useState<
+  TopSavedDestination[]
+>([]);
 
 const placeTypeFilters = [
   { value: "", label: "All" },
@@ -143,6 +156,38 @@ useEffect(() => {
   loadSummary();
 }, []);
 
+useEffect(() => {
+  const loadTopSavedDestinations = async () => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/analytics/top-saved-destinations/`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(
+          "Failed to load top saved destinations:",
+          res.status,
+          text
+        );
+        setTopSavedDestinations([]);
+        return;
+      }
+
+      const data = await res.json();
+      setTopSavedDestinations(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Top saved destinations fetch error:", error);
+      setTopSavedDestinations([]);
+    }
+  };
+
+  loadTopSavedDestinations();
+}, []);
+
   return (
     <main style={page}>
       <div style={breadcrumb}>
@@ -194,6 +239,62 @@ useEffect(() => {
               <div style={summaryHint}>Top destination: {summary.top_destination}</div>
             )}
           </div>
+        </section>
+
+        <section style={{ ...section, marginBottom: "34px" }}>
+          <div style={sectionHeader}>
+            <div>
+              <h2 style={sectionTitle}>Top saved destinations</h2>
+              <p style={sectionDescription}>
+                Destinations most often appearing in users&apos; trip plans.
+              </p>
+            </div>
+
+            <div style={countBadge}>
+              {topSavedDestinations.length}{" "}
+              {topSavedDestinations.length === 1 ? "destination" : "destinations"}
+            </div>
+          </div>
+
+          {topSavedDestinations.length === 0 ? (
+            <div style={emptyBox}>No saved destinations yet.</div>
+          ) : (
+            <div style={placesGrid}>
+              {topSavedDestinations.map((destination, index) => (
+                <article key={destination.destination} style={placeCard}>
+                  <div style={rank}>#{index + 1}</div>
+
+                  <div style={{ flex: 1 }}>
+                    <h3 style={cardTitle}>{destination.destination}</h3>
+
+                    <div style={cardTopLine}>
+                      <span style={savedCountBadge}>
+                        {destination.saved_count}{" "}
+                        {destination.saved_count === 1 ? "save" : "saves"}
+                      </span>
+
+                      <span style={placeTypeBadge}>
+                        {destination.unique_places}{" "}
+                        {destination.unique_places === 1 ? "place" : "places"}
+                      </span>
+
+                      <span style={placeTypeBadge}>
+                        {destination.unique_users}{" "}
+                        {destination.unique_users === 1 ? "user" : "users"}
+                      </span>
+                    </div>
+
+                    <div style={metaLine}>
+                      {destination.unique_experiences}{" "}
+                      {destination.unique_experiences === 1
+                        ? "saved experience"
+                        : "saved experiences"}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
       <section style={section}>

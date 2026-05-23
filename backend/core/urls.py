@@ -31,6 +31,7 @@ from .views import (
     PlacePhotosView,
     TopSavedExperiencesAnalyticsView,
     TopSavedPlacesAnalyticsView,
+    TopSavedDestinationsAnalyticsView,
     TripPlanListCreateView,
     TripPlanDetailView,
     TripPlanExperienceView,
@@ -89,6 +90,12 @@ urlpatterns = [
         "analytics/top-saved-places/",
         TopSavedPlacesAnalyticsView.as_view(),
         name="top-saved-places-analytics",
+    ),
+
+    path(
+        "analytics/top-saved-destinations/",
+        TopSavedDestinationsAnalyticsView.as_view(),
+        name="top-saved-destinations-analytics",
     ),
 
     path(

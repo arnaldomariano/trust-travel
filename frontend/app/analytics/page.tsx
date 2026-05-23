@@ -25,6 +25,14 @@ type TopSavedPlace = {
   saved_count: number;
 };
 
+type AnalyticsSummary = {
+  total_saved_items: number;
+  unique_experiences_saved: number;
+  unique_places_saved: number;
+  top_place_type: string | null;
+  top_destination: string | null;
+};
+
 export default function AnalyticsPage() {
   const [topSavedExperiences, setTopSavedExperiences] = useState<
   TopSavedExperience[]
@@ -32,6 +40,7 @@ export default function AnalyticsPage() {
 
 const [topSavedPlaces, setTopSavedPlaces] = useState<TopSavedPlace[]>([]);
 const [selectedPlaceType, setSelectedPlaceType] = useState("");
+const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
 
 const [loading, setLoading] = useState(true);
 
@@ -109,6 +118,31 @@ useEffect(() => {
   loadTopSavedPlaces();
 }, [selectedPlaceType]);
 
+useEffect(() => {
+  const loadSummary = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/analytics/summary/`, {
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to load analytics summary:", res.status, text);
+        setSummary(null);
+        return;
+      }
+
+      const data = await res.json();
+      setSummary(data);
+    } catch (error) {
+      console.error("Analytics summary fetch error:", error);
+      setSummary(null);
+    }
+  };
+
+  loadSummary();
+}, []);
+
   return (
     <main style={page}>
       <div style={breadcrumb}>
@@ -128,6 +162,39 @@ useEffect(() => {
           plans.
         </p>
       </section>
+
+      <section style={summaryGrid}>
+          <div style={summaryCard}>
+            <div style={summaryLabel}>Total saved items</div>
+            <div style={summaryValue}>
+              {summary ? summary.total_saved_items : "—"}
+            </div>
+          </div>
+
+          <div style={summaryCard}>
+            <div style={summaryLabel}>Saved experiences</div>
+            <div style={summaryValue}>
+              {summary ? summary.unique_experiences_saved : "—"}
+            </div>
+          </div>
+
+          <div style={summaryCard}>
+            <div style={summaryLabel}>Places tracked</div>
+            <div style={summaryValue}>
+              {summary ? summary.unique_places_saved : "—"}
+            </div>
+          </div>
+
+          <div style={summaryCard}>
+            <div style={summaryLabel}>Top place type</div>
+            <div style={summaryValue}>
+              {summary?.top_place_type ? formatPlaceType(summary.top_place_type) : "—"}
+            </div>
+            {summary?.top_destination && (
+              <div style={summaryHint}>Top destination: {summary.top_destination}</div>
+            )}
+          </div>
+        </section>
 
       <section style={section}>
         <div style={sectionHeader}>
@@ -553,4 +620,37 @@ const activeFilterButton = {
   background: "black",
   color: "white",
   border: "1px solid black",
+};
+
+const summaryGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "14px",
+  marginBottom: "30px",
+};
+
+const summaryCard = {
+  padding: "18px",
+  borderRadius: "16px",
+  border: "1px solid #eee",
+  background: "white",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+};
+
+const summaryLabel = {
+  fontSize: "13px",
+  color: "#666",
+  marginBottom: "8px",
+};
+
+const summaryValue = {
+  fontSize: "24px",
+  fontWeight: 700,
+  color: "#111",
+};
+
+const summaryHint = {
+  fontSize: "12px",
+  color: "#777",
+  marginTop: "8px",
 };

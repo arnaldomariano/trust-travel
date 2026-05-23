@@ -1426,3 +1426,60 @@ class TopSavedPlacesAnalyticsView(APIView):
             })
 
         return Response(result)
+
+class SummaryAnalyticsView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        total_saved_items = SavedItem.objects.count()
+
+        unique_experiences_saved = (
+            SavedItem.objects
+            .values("experience_id")
+            .distinct()
+            .count()
+        )
+
+        unique_places_saved = (
+            SavedItem.objects
+            .values("experience__place_id")
+            .distinct()
+            .count()
+        )
+
+        top_place_type_row = (
+            SavedItem.objects
+            .values("experience__place__place_type")
+            .annotate(saved_count=Count("id"))
+            .order_by("-saved_count", "experience__place__place_type")
+            .first()
+        )
+
+        top_destination_row = (
+            SavedItem.objects
+            .values("experience__place__destination__name")
+            .annotate(saved_count=Count("id"))
+            .order_by("-saved_count", "experience__place__destination__name")
+            .first()
+        )
+
+        top_place_type = (
+            top_place_type_row["experience__place__place_type"]
+            if top_place_type_row
+            else None
+        )
+
+        top_destination = (
+            top_destination_row["experience__place__destination__name"]
+            if top_destination_row
+            else None
+        )
+
+        return Response({
+            "total_saved_items": total_saved_items,
+            "unique_experiences_saved": unique_experiences_saved,
+            "unique_places_saved": unique_places_saved,
+            "top_place_type": top_place_type,
+            "top_destination": top_destination,
+        })

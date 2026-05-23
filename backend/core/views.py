@@ -1371,3 +1371,33 @@ class TopSavedExperiencesAnalyticsView(APIView):
                 })
 
             return Response(result)
+
+class TopSavedPlacesAnalyticsView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        saved_stats = (
+            SavedItem.objects
+            .values(
+                "experience__place__id",
+                "experience__place__name",
+                "experience__place__place_type",
+                "experience__place__destination__name",
+            )
+            .annotate(saved_count=Count("id"))
+            .order_by("-saved_count", "experience__place__name")[:20]
+        )
+
+        result = []
+
+        for item in saved_stats:
+            result.append({
+                "place_id": item["experience__place__id"],
+                "place": item["experience__place__name"],
+                "place_type": item["experience__place__place_type"],
+                "destination": item["experience__place__destination__name"],
+                "saved_count": item["saved_count"],
+            })
+
+        return Response(result)

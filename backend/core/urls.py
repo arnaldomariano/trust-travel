@@ -30,9 +30,11 @@ from .views import (
     MarkUpdateSeenView,
     PlacePhotosView,
     TopSavedExperiencesAnalyticsView,
+    TopSavedPlacesAnalyticsView,
     TripPlanListCreateView,
     TripPlanDetailView,
     TripPlanExperienceView,
+
 
 
 
@@ -84,6 +86,11 @@ urlpatterns = [
         "analytics/top-saved-experiences/",
         TopSavedExperiencesAnalyticsView.as_view(),
         name="top-saved-experiences-analytics",
+    ),
+    path(
+        "analytics/top-saved-places/",
+        TopSavedPlacesAnalyticsView.as_view(),
+        name="top-saved-places-analytics",
     ),
 
 ]

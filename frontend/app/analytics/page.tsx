@@ -49,6 +49,7 @@ export default function AnalyticsPage() {
 
 const [topSavedPlaces, setTopSavedPlaces] = useState<TopSavedPlace[]>([]);
 const [selectedPlaceType, setSelectedPlaceType] = useState("");
+const [selectedUserCountry, setSelectedUserCountry] = useState("");
 const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
 
 const [loading, setLoading] = useState(true);
@@ -56,6 +57,13 @@ const [loading, setLoading] = useState(true);
 const [topSavedDestinations, setTopSavedDestinations] = useState<
   TopSavedDestination[]
 >([]);
+
+const userCountryFilters = [
+  { value: "", label: "All users" },
+  { value: "BR", label: "Brazil" },
+  { value: "IT", label: "Italy" },
+  { value: "NL", label: "Netherlands" },
+];
 
 const placeTypeFilters = [
   { value: "", label: "All" },
@@ -68,125 +76,109 @@ const placeTypeFilters = [
 ];
 
 useEffect(() => {
-  const loadTopSavedExperiences = async () => {
-    try {
-      const res = await fetch(
-        `${API_URL}/api/analytics/top-saved-experiences/`,
-        {
-          credentials: "include",
-        }
-      );
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Failed to load top saved experiences:", res.status, text);
-        setTopSavedExperiences([]);
-        return;
-      }
-
-      const data = await res.json();
-      setTopSavedExperiences(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Top saved experiences fetch error:", error);
-      setTopSavedExperiences([]);
-    }
-  };
-
-  loadTopSavedExperiences();
-}, []);
-
-useEffect(() => {
-  const loadTopSavedPlaces = async () => {
+  const loadAnalytics = async () => {
     setLoading(true);
 
     try {
-      const query = selectedPlaceType
-        ? `?place_type=${selectedPlaceType}`
-        : "";
+      const commonParams = new URLSearchParams();
 
-      const res = await fetch(
-        `${API_URL}/api/analytics/top-saved-places/${query}`,
-        {
-          credentials: "include",
-        }
-      );
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Failed to load top saved places:", res.status, text);
-        setTopSavedPlaces([]);
-        return;
+      if (selectedUserCountry) {
+        commonParams.set("user_country", selectedUserCountry);
       }
 
-      const data = await res.json();
-      setTopSavedPlaces(Array.isArray(data) ? data : []);
+      const commonQuery = commonParams.toString();
+      const commonSuffix = commonQuery ? `?${commonQuery}` : "";
+
+      const placesParams = new URLSearchParams();
+
+      if (selectedUserCountry) {
+        placesParams.set("user_country", selectedUserCountry);
+      }
+
+      if (selectedPlaceType) {
+        placesParams.set("place_type", selectedPlaceType);
+      }
+
+      const placesQuery = placesParams.toString();
+      const placesSuffix = placesQuery ? `?${placesQuery}` : "";
+
+      const [
+        experiencesRes,
+        placesRes,
+        summaryRes,
+        destinationsRes,
+      ] = await Promise.all([
+        fetch(`${API_URL}/api/analytics/top-saved-experiences/${commonSuffix}`, {
+          credentials: "include",
+        }),
+        fetch(`${API_URL}/api/analytics/top-saved-places/${placesSuffix}`, {
+          credentials: "include",
+        }),
+        fetch(`${API_URL}/api/analytics/summary/${commonSuffix}`, {
+          credentials: "include",
+        }),
+        fetch(`${API_URL}/api/analytics/top-saved-destinations/${commonSuffix}`, {
+          credentials: "include",
+        }),
+      ]);
+
+      if (!experiencesRes.ok) {
+        const text = await experiencesRes.text();
+        console.error(
+          "Failed to load top saved experiences:",
+          experiencesRes.status,
+          text
+        );
+        setTopSavedExperiences([]);
+      } else {
+        const data = await experiencesRes.json();
+        setTopSavedExperiences(Array.isArray(data) ? data : []);
+      }
+
+      if (!placesRes.ok) {
+        const text = await placesRes.text();
+        console.error("Failed to load top saved places:", placesRes.status, text);
+        setTopSavedPlaces([]);
+      } else {
+        const data = await placesRes.json();
+        setTopSavedPlaces(Array.isArray(data) ? data : []);
+      }
+
+      if (!summaryRes.ok) {
+        const text = await summaryRes.text();
+        console.error("Failed to load analytics summary:", summaryRes.status, text);
+        setSummary(null);
+      } else {
+        const data = await summaryRes.json();
+        setSummary(data);
+      }
+
+      if (!destinationsRes.ok) {
+        const text = await destinationsRes.text();
+        console.error(
+          "Failed to load top saved destinations:",
+          destinationsRes.status,
+          text
+        );
+        setTopSavedDestinations([]);
+      } else {
+        const data = await destinationsRes.json();
+        setTopSavedDestinations(Array.isArray(data) ? data : []);
+      }
     } catch (error) {
-      console.error("Top saved places fetch error:", error);
+      console.error("Analytics fetch error:", error);
+      setTopSavedExperiences([]);
       setTopSavedPlaces([]);
+      setTopSavedDestinations([]);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
   };
 
-  loadTopSavedPlaces();
-}, [selectedPlaceType]);
+  loadAnalytics();
+}, [selectedUserCountry, selectedPlaceType]);
 
-useEffect(() => {
-  const loadSummary = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/analytics/summary/`, {
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Failed to load analytics summary:", res.status, text);
-        setSummary(null);
-        return;
-      }
-
-      const data = await res.json();
-      setSummary(data);
-    } catch (error) {
-      console.error("Analytics summary fetch error:", error);
-      setSummary(null);
-    }
-  };
-
-  loadSummary();
-}, []);
-
-useEffect(() => {
-  const loadTopSavedDestinations = async () => {
-    try {
-      const res = await fetch(
-        `${API_URL}/api/analytics/top-saved-destinations/`,
-        {
-          credentials: "include",
-        }
-      );
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error(
-          "Failed to load top saved destinations:",
-          res.status,
-          text
-        );
-        setTopSavedDestinations([]);
-        return;
-      }
-
-      const data = await res.json();
-      setTopSavedDestinations(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Top saved destinations fetch error:", error);
-      setTopSavedDestinations([]);
-    }
-  };
-
-  loadTopSavedDestinations();
-}, []);
 
   return (
     <main style={page}>
@@ -207,6 +199,35 @@ useEffect(() => {
           plans.
         </p>
       </section>
+
+        <section style={filterSection}>
+          <div>
+            <strong>Filter by planner country</strong>
+            <p style={sectionDescription}>
+              See what users from each country are saving to their trip plans.
+            </p>
+          </div>
+
+          <div style={filterRow}>
+            {userCountryFilters.map((filter) => {
+              const isActive = selectedUserCountry === filter.value;
+
+              return (
+                <button
+                  key={filter.value || "all-users"}
+                  type="button"
+                  onClick={() => setSelectedUserCountry(filter.value)}
+                  style={{
+                    ...filterButton,
+                    ...(isActive ? activeFilterButton : {}),
+                  }}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
       <section style={summaryGrid}>
           <div style={summaryCard}>
@@ -754,4 +775,14 @@ const summaryHint = {
   fontSize: "12px",
   color: "#777",
   marginTop: "8px",
+};
+
+const filterSection = {
+  display: "grid",
+  gap: "12px",
+  padding: "18px",
+  borderRadius: "16px",
+  border: "1px solid #eee",
+  background: "white",
+  marginBottom: "24px",
 };

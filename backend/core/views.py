@@ -1423,47 +1423,69 @@ class MyExperiencesView(APIView):
 
         return Response(result)
 
-    # ============================================================
-    # ANALYTICS
-    # ============================================================
+# ============================================================
+# ANALYTICS
+# ============================================================
+
+def get_filtered_saved_items(request):
+    user_country = (request.query_params.get("user_country") or "").strip().upper()
+
+    saved_items = SavedItem.objects.select_related(
+        "user",
+        "user__profile",
+        "experience",
+        "experience__place",
+        "experience__place__destination",
+    )
+
+    if user_country:
+        saved_items = saved_items.filter(
+            user__profile__country_code=user_country
+        )
+
+    return saved_items
+
 
 class TopSavedExperiencesAnalyticsView(APIView):
-        authentication_classes = [CookieJWTAuthentication]
-        permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
-        def get(self, request):
-            saved_stats = (
-                SavedItem.objects
-                .values(
-                    "experience_id",
-                    "experience__title",
-                    "experience__comment",
-                    "experience__rating",
-                    "experience__place__name",
-                    "experience__place__id",
-                    "experience__place__place_type",
-                    "experience__place__destination__name",
-                )
-                .annotate(saved_count=Count("id"))
-                .order_by("-saved_count", "experience__place__name")[:20]
+    def get(self, request):
+        queryset = get_filtered_saved_items(request)
+
+        saved_stats = (
+            queryset
+            .values(
+                "experience_id",
+                "experience__title",
+                "experience__comment",
+                "experience__rating",
+                "experience__place__name",
+                "experience__place__id",
+                "experience__place__place_type",
+                "experience__place__destination__name",
             )
+            .annotate(saved_count=Count("id"))
+            .order_by("-saved_count", "experience__place__name")[:20]
+        )
 
-            result = []
+        result = []
 
-            for item in saved_stats:
-                result.append({
-                    "experience_id": item["experience_id"],
-                    "title": item["experience__title"],
-                    "comment": item["experience__comment"],
-                    "rating": item["experience__rating"],
-                    "place": item["experience__place__name"],
-                    "place_id": item["experience__place__id"],
-                    "place_type": item["experience__place__place_type"],
-                    "destination": item["experience__place__destination__name"],
-                    "saved_count": item["saved_count"],
-                })
+        for item in saved_stats:
+            result.append({
+                "experience_id": item["experience_id"],
+                "title": item["experience__title"],
+                "comment": item["experience__comment"],
+                "rating": item["experience__rating"],
+                "place": item["experience__place__name"],
+                "place_id": item["experience__place__id"],
+                "place_type": item["experience__place__place_type"],
+                "destination": item["experience__place__destination__name"],
+                "saved_count": item["saved_count"],
+            })
 
-            return Response(result)
+        return Response(result)
+
 
 class TopSavedPlacesAnalyticsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -1482,7 +1504,7 @@ class TopSavedPlacesAnalyticsView(APIView):
             "other",
         ]
 
-        queryset = SavedItem.objects.all()
+        queryset = get_filtered_saved_items(request)
 
         if place_type:
             if place_type not in valid_place_types:
@@ -1520,6 +1542,7 @@ class TopSavedPlacesAnalyticsView(APIView):
 
         return Response(result)
 
+
 class TopSavedDestinationsAnalyticsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1527,15 +1550,7 @@ class TopSavedDestinationsAnalyticsView(APIView):
     def get(self, request):
         user_country = (request.query_params.get("user_country") or "").strip().upper()
 
-        queryset = SavedItem.objects.select_related(
-            "user__profile",
-            "experience__place__destination",
-        )
-
-        if user_country:
-            queryset = queryset.filter(
-                user__profile__country_code=user_country
-            )
+        queryset = get_filtered_saved_items(request)
 
         saved_stats = (
             queryset
@@ -1568,29 +1583,32 @@ class TopSavedDestinationsAnalyticsView(APIView):
 
         return Response(result)
 
+
 class SummaryAnalyticsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        total_saved_items = SavedItem.objects.count()
+        saved_items = get_filtered_saved_items(request)
+
+        total_saved_items = saved_items.count()
 
         unique_experiences_saved = (
-            SavedItem.objects
+            saved_items
             .values("experience_id")
             .distinct()
             .count()
         )
 
         unique_places_saved = (
-            SavedItem.objects
+            saved_items
             .values("experience__place_id")
             .distinct()
             .count()
         )
 
         top_place_type_row = (
-            SavedItem.objects
+            saved_items
             .values("experience__place__place_type")
             .annotate(saved_count=Count("id"))
             .order_by("-saved_count", "experience__place__place_type")
@@ -1598,7 +1616,7 @@ class SummaryAnalyticsView(APIView):
         )
 
         top_destination_row = (
-            SavedItem.objects
+            saved_items
             .values("experience__place__destination__name")
             .annotate(saved_count=Count("id"))
             .order_by("-saved_count", "experience__place__destination__name")

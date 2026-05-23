@@ -17,39 +17,62 @@ type TopSavedExperience = {
   saved_count: number;
 };
 
+type TopSavedPlace = {
+  place_id: number;
+  place: string;
+  place_type: string;
+  destination: string;
+  saved_count: number;
+};
+
 export default function AnalyticsPage() {
   const [topSavedExperiences, setTopSavedExperiences] = useState<
-    TopSavedExperience[]
+  TopSavedExperience[]
   >([]);
+
+  const [topSavedPlaces, setTopSavedPlaces] = useState<TopSavedPlace[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadAnalytics = async () => {
-      try {
-        const res = await fetch(
-          `${API_URL}/api/analytics/top-saved-experiences/`,
-          {
-            credentials: "include",
-          }
-        );
+  try {
+    const [experiencesRes, placesRes] = await Promise.all([
+      fetch(`${API_URL}/api/analytics/top-saved-experiences/`, {
+        credentials: "include",
+      }),
+      fetch(`${API_URL}/api/analytics/top-saved-places/`, {
+        credentials: "include",
+      }),
+    ]);
 
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("Failed to load analytics:", res.status, text);
-          setTopSavedExperiences([]);
-          return;
-        }
+    if (!experiencesRes.ok) {
+      const text = await experiencesRes.text();
+      console.error("Failed to load top saved experiences:", experiencesRes.status, text);
+      setTopSavedExperiences([]);
+    } else {
+      const experiencesData = await experiencesRes.json();
+      setTopSavedExperiences(
+        Array.isArray(experiencesData) ? experiencesData : []
+      );
+    }
 
-        const data = await res.json();
-
-        setTopSavedExperiences(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Analytics fetch error:", error);
-        setTopSavedExperiences([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!placesRes.ok) {
+      const text = await placesRes.text();
+      console.error("Failed to load top saved places:", placesRes.status, text);
+      setTopSavedPlaces([]);
+    } else {
+      const placesData = await placesRes.json();
+      setTopSavedPlaces(Array.isArray(placesData) ? placesData : []);
+    }
+  } catch (error) {
+    console.error("Analytics fetch error:", error);
+    setTopSavedExperiences([]);
+    setTopSavedPlaces([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
     loadAnalytics();
   }, []);
@@ -148,6 +171,73 @@ export default function AnalyticsPage() {
                       style={secondaryLink}
                     >
                       View in place
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+            </section>
+
+      <section style={{ ...section, marginTop: "34px" }}>
+        <div style={sectionHeader}>
+          <div>
+            <h2 style={sectionTitle}>Top saved places</h2>
+            <p style={sectionDescription}>
+              Places appearing most often in users&apos; trip plans.
+            </p>
+          </div>
+
+          <div style={countBadge}>
+            {topSavedPlaces.length}{" "}
+            {topSavedPlaces.length === 1 ? "place" : "places"}
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={emptyBox}>Loading places analytics...</div>
+        ) : topSavedPlaces.length === 0 ? (
+          <div style={emptyBox}>No saved places yet.</div>
+        ) : (
+          <div style={placesGrid}>
+            {topSavedPlaces.map((place, index) => (
+              <article key={place.place_id} style={placeCard}>
+                <div style={rank}>#{index + 1}</div>
+
+                <div style={{ flex: 1 }}>
+                  <div style={cardTopLine}>
+                    <span style={placeTypeBadge}>
+                      {formatPlaceType(place.place_type)}
+                    </span>
+
+                    <span style={savedCountBadge}>
+                      {place.saved_count}{" "}
+                      {place.saved_count === 1 ? "save" : "saves"}
+                    </span>
+                  </div>
+
+                  <h3 style={cardTitle}>{place.place}</h3>
+
+                  <div style={metaLine}>
+                    {place.destination && place.destination !== place.place
+                      ? place.destination
+                      : "Destination"}
+                  </div>
+
+                  <div style={actions}>
+                    <Link
+                      href={`/places/${place.place_id}`}
+                      style={primaryLink}
+                    >
+                      View place
+                    </Link>
+
+                    <Link
+                      href={`/places/${place.place_id}/experiences`}
+                      style={secondaryLink}
+                    >
+                      View experiences
                     </Link>
                   </div>
                 </div>
@@ -357,4 +447,20 @@ const secondaryLink = {
   color: "#111",
   textDecoration: "none",
   fontSize: "14px",
+};
+
+const placesGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gap: "14px",
+};
+
+const placeCard = {
+  display: "flex",
+  gap: "14px",
+  padding: "18px",
+  borderRadius: "16px",
+  border: "1px solid #eee",
+  background: "white",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
 };

@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.db.models import Count
+from django.db.models import Count, Q
 
 
 from rest_framework import generics, permissions
@@ -660,6 +660,99 @@ def serialize_update(update, request=None):
         "updated_at": update.updated_at,
 
     }
+
+class TripPlanSuggestionsView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            plan = TripPlan.objects.get(id=pk, user=request.user)
+        except TripPlan.DoesNotExist:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        query = (request.query_params.get("q") or "").strip()
+        place_type = (request.query_params.get("place_type") or "").strip()
+
+        valid_place_types = [
+            "country",
+            "city",
+            "attraction",
+            "hotel",
+            "restaurant",
+            "nature",
+            "other",
+        ]
+
+        experiences = Experience.objects.select_related(
+            "place",
+            "place__destination",
+            "user",
+            "user__profile",
+        ).all()
+
+        if query:
+            experiences = experiences.filter(
+                Q(title__icontains=query)
+                | Q(comment__icontains=query)
+                | Q(place__name__icontains=query)
+                | Q(place__city__icontains=query)
+                | Q(place__destination__name__icontains=query)
+                | Q(place__destination__country__icontains=query)
+                | Q(place__destination__city__icontains=query)
+            )
+        elif plan.destination_text:
+            destination_query = plan.destination_text.strip()
+
+            experiences = experiences.filter(
+                Q(place__name__icontains=destination_query)
+                | Q(place__city__icontains=destination_query)
+                | Q(place__destination__name__icontains=destination_query)
+                | Q(place__destination__country__icontains=destination_query)
+                | Q(place__destination__city__icontains=destination_query)
+            )
+
+        if place_type:
+            if place_type not in valid_place_types:
+                return Response({"detail": "Invalid place_type."}, status=400)
+
+            experiences = experiences.filter(place__place_type=place_type)
+
+        saved_experience_ids = set(
+            SavedItem.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("experience_id", flat=True)
+        )
+
+        experiences = experiences.order_by("-created_at")[:30]
+
+        result = []
+
+        for experience in experiences:
+            image_url = None
+
+            if experience.image:
+                image_url = request.build_absolute_uri(experience.image.url)
+
+            place = experience.place
+            destination = place.destination if place else None
+
+            result.append({
+                "experience_id": experience.id,
+                "title": experience.title,
+                "comment": experience.comment,
+                "rating": experience.rating,
+                "image_url": image_url,
+                "place": place.name if place else "",
+                "place_id": place.id if place else None,
+                "place_type": place.place_type if place else "",
+                "destination": destination.name if destination else "",
+                "created_at": experience.created_at,
+                "already_saved": experience.id in saved_experience_ids,
+            })
+
+        return Response(result)
 
 # ============================================================
 # UPDATE FEED

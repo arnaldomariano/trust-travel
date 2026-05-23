@@ -57,9 +57,26 @@ export default function TripPlansPage() {
     loadPlans();
   }, []);
 
+   const handleStartDateChange = (value: string) => {
+      setStartDate(value);
+
+      if (!value) {
+        return;
+      }
+
+      if (!endDate || endDate < value) {
+        setEndDate(value);
+      }
+    };
+
   const createPlan = async () => {
     if (!title.trim()) {
       alert("Please add a title for your trip plan.");
+      return;
+    }
+
+    if (startDate && endDate && endDate < startDate) {
+      alert("End date cannot be earlier than start date.");
       return;
     }
 
@@ -178,7 +195,7 @@ export default function TripPlansPage() {
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => handleStartDateChange(e.target.value)}
               style={input}
             />
           </div>
@@ -188,6 +205,7 @@ export default function TripPlansPage() {
             <input
               type="date"
               value={endDate}
+              min={startDate || undefined}
               onChange={(e) => setEndDate(e.target.value)}
               style={input}
             />

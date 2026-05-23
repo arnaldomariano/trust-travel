@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { API_URL } from "../lib/api";
 
 type TripPlan = {
@@ -17,6 +18,10 @@ type TripPlan = {
 };
 
 export default function TripPlansPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
+
   const [plans, setPlans] = useState<TripPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -91,6 +96,12 @@ export default function TripPlansPage() {
       setDescription("");
       setStartDate("");
       setEndDate("");
+
+      if (returnTo) {
+        router.push(returnTo);
+        return;
+      }
+
     } catch (error) {
       console.error("Failed to create trip plan:", error);
       alert("Error creating trip plan.");
@@ -128,12 +139,18 @@ export default function TripPlansPage() {
       </section>
 
       <section style={formCard}>
-        <div>
-          <strong>Create a new trip plan</strong>
-          <p style={helperText}>
-            Start with a destination or idea. You can add experiences to this plan later.
-          </p>
-        </div>
+          <div>
+            <strong>Create a new trip plan</strong>
+            <p style={helperText}>
+              Start with a destination or idea. You can add experiences to this plan later.
+            </p>
+
+            {returnTo && (
+              <p style={returnNotice}>
+                After creating this plan, you will return to the page where you started.
+              </p>
+            )}
+          </div>
 
         <div style={field}>
           <label style={fieldLabel}>Plan title</label>
@@ -422,4 +439,14 @@ const primaryLink = {
 
 const muted = {
   color: "#666",
+};
+
+const returnNotice = {
+  margin: "10px 0 0 0",
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "14px",
 };

@@ -1377,8 +1377,33 @@ class TopSavedPlacesAnalyticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        place_type = (request.query_params.get("place_type") or "").strip()
+
+        valid_place_types = [
+            "country",
+            "city",
+            "attraction",
+            "hotel",
+            "restaurant",
+            "nature",
+            "other",
+        ]
+
+        queryset = SavedItem.objects.all()
+
+        if place_type:
+            if place_type not in valid_place_types:
+                return Response(
+                    {"detail": "Invalid place_type."},
+                    status=400,
+                )
+
+            queryset = queryset.filter(
+                experience__place__place_type=place_type
+            )
+
         saved_stats = (
-            SavedItem.objects
+            queryset
             .values(
                 "experience__place__id",
                 "experience__place__name",

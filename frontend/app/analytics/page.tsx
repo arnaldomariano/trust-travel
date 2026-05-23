@@ -30,52 +30,84 @@ export default function AnalyticsPage() {
   TopSavedExperience[]
   >([]);
 
-  const [topSavedPlaces, setTopSavedPlaces] = useState<TopSavedPlace[]>([]);
+const [topSavedPlaces, setTopSavedPlaces] = useState<TopSavedPlace[]>([]);
+const [selectedPlaceType, setSelectedPlaceType] = useState("");
 
-  const [loading, setLoading] = useState(true);
+const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadAnalytics = async () => {
-  try {
-    const [experiencesRes, placesRes] = await Promise.all([
-      fetch(`${API_URL}/api/analytics/top-saved-experiences/`, {
-        credentials: "include",
-      }),
-      fetch(`${API_URL}/api/analytics/top-saved-places/`, {
-        credentials: "include",
-      }),
-    ]);
+const placeTypeFilters = [
+  { value: "", label: "All" },
+  { value: "country", label: "Countries" },
+  { value: "city", label: "Cities" },
+  { value: "attraction", label: "Attractions" },
+  { value: "hotel", label: "Hotels" },
+  { value: "restaurant", label: "Restaurants" },
+  { value: "nature", label: "Nature" },
+];
 
-    if (!experiencesRes.ok) {
-      const text = await experiencesRes.text();
-      console.error("Failed to load top saved experiences:", experiencesRes.status, text);
-      setTopSavedExperiences([]);
-    } else {
-      const experiencesData = await experiencesRes.json();
-      setTopSavedExperiences(
-        Array.isArray(experiencesData) ? experiencesData : []
+useEffect(() => {
+  const loadTopSavedExperiences = async () => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/analytics/top-saved-experiences/`,
+        {
+          credentials: "include",
+        }
       );
-    }
 
-    if (!placesRes.ok) {
-      const text = await placesRes.text();
-      console.error("Failed to load top saved places:", placesRes.status, text);
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to load top saved experiences:", res.status, text);
+        setTopSavedExperiences([]);
+        return;
+      }
+
+      const data = await res.json();
+      setTopSavedExperiences(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Top saved experiences fetch error:", error);
+      setTopSavedExperiences([]);
+    }
+  };
+
+  loadTopSavedExperiences();
+}, []);
+
+useEffect(() => {
+  const loadTopSavedPlaces = async () => {
+    setLoading(true);
+
+    try {
+      const query = selectedPlaceType
+        ? `?place_type=${selectedPlaceType}`
+        : "";
+
+      const res = await fetch(
+        `${API_URL}/api/analytics/top-saved-places/${query}`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to load top saved places:", res.status, text);
+        setTopSavedPlaces([]);
+        return;
+      }
+
+      const data = await res.json();
+      setTopSavedPlaces(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Top saved places fetch error:", error);
       setTopSavedPlaces([]);
-    } else {
-      const placesData = await placesRes.json();
-      setTopSavedPlaces(Array.isArray(placesData) ? placesData : []);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("Analytics fetch error:", error);
-    setTopSavedExperiences([]);
-    setTopSavedPlaces([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
-    loadAnalytics();
-  }, []);
+  loadTopSavedPlaces();
+}, [selectedPlaceType]);
 
   return (
     <main style={page}>
@@ -194,6 +226,42 @@ export default function AnalyticsPage() {
             {topSavedPlaces.length === 1 ? "place" : "places"}
           </div>
         </div>
+
+          <div style={filterRow}>
+
+            {placeTypeFilters.map((filter) => {
+
+              const isActive = selectedPlaceType === filter.value;
+
+              return (
+
+                <button
+
+                  key={filter.value || "all"}
+
+                  type="button"
+
+                  onClick={() => setSelectedPlaceType(filter.value)}
+
+                  style={{
+
+                    ...filterButton,
+
+                    ...(isActive ? activeFilterButton : {}),
+
+                  }}
+
+                >
+
+                  {filter.label}
+
+                </button>
+
+              );
+
+            })}
+
+          </div>
 
         {loading ? (
           <div style={emptyBox}>Loading places analytics...</div>
@@ -463,4 +531,26 @@ const placeCard = {
   border: "1px solid #eee",
   background: "white",
   boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+};
+
+const filterRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+};
+
+const filterButton = {
+  padding: "8px 12px",
+  borderRadius: "999px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#444",
+  cursor: "pointer",
+  fontSize: "13px",
+};
+
+const activeFilterButton = {
+  background: "black",
+  color: "white",
+  border: "1px solid black",
 };

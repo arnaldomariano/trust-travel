@@ -521,6 +521,12 @@ const newReply = await response.json();
     }
   };
 
+const getCreateTripPlanUrl = (experienceId: number) => {
+  return `/trip-plans?returnTo=${encodeURIComponent(
+    `/places/${id}/experiences?highlight=${experienceId}`
+  )}`;
+};
+
 const addExperienceToTripPlan = async (experienceId: number) => {
   const selectedPlanId = selectedPlanByExperience[experienceId];
 
@@ -754,7 +760,10 @@ const addExperienceToTripPlan = async (experienceId: number) => {
             {tripPlans.length === 0 ? (
               <div style={{ fontSize: "12px", color: "#666" }}>
                 You do not have any trip plans yet.{" "}
-                <Link href="/trip-plans" style={{ color: "#111", fontWeight: 600 }}>
+                <Link
+                  href={getCreateTripPlanUrl(highlightedExperience.id)}
+                  style={{ color: "#111", fontWeight: 600 }}
+                >
                   Create one
                 </Link>
                 .
@@ -807,6 +816,13 @@ const addExperienceToTripPlan = async (experienceId: number) => {
                 >
                   {addingToPlan[highlightedExperience.id] ? "Adding..." : "Add"}
                 </button>
+
+                <Link
+                  href={getCreateTripPlanUrl(highlightedExperience.id)}
+                  style={createPlanLink}
+                >
+                  Create a new trip plan
+                </Link>
               </>
             )}
           </div>
@@ -1148,7 +1164,10 @@ const addExperienceToTripPlan = async (experienceId: number) => {
                             {tripPlans.length === 0 ? (
                               <div style={{ fontSize: "12px", color: "#666" }}>
                                 You do not have any trip plans yet.{" "}
-                                <Link href="/trip-plans" style={{ color: "#111", fontWeight: 600 }}>
+                                <Link
+                                  href={getCreateTripPlanUrl(e.id)}
+                                  style={{ color: "#111", fontWeight: 600 }}
+                                >
                                   Create one
                                 </Link>
                                 .
@@ -1198,6 +1217,13 @@ const addExperienceToTripPlan = async (experienceId: number) => {
                                 >
                                   {addingToPlan[e.id] ? "Adding..." : "Add"}
                                 </button>
+
+                                <Link
+                                  href={getCreateTripPlanUrl(e.id)}
+                                  style={createPlanLink}
+                                >
+                                  Create a new trip plan
+                                </Link>
                               </>
                             )}
                           </div>
@@ -1627,4 +1653,12 @@ const tripPlanSuccessLink = {
   color: "#166534",
   fontWeight: 700,
   textDecoration: "underline",
+};
+
+const createPlanLink = {
+  color: "#111",
+  fontWeight: 600,
+  fontSize: "13px",
+  textDecoration: "underline",
+  width: "fit-content",
 };

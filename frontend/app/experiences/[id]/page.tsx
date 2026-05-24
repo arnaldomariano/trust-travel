@@ -364,48 +364,62 @@ const authorLabel = authorFlag
         </div>
 
                 {showTripPlanPicker && (
-          <div style={tripPlanPickerBox}>
-            {tripPlans.length === 0 ? (
-              <div style={{ fontSize: "13px", color: "#666" }}>
-                You do not have any trip plans yet.{" "}
-                <Link href="/trip-plans" style={{ color: "#111", fontWeight: 600 }}>
-                  Create one
-                </Link>
-                .
-              </div>
-            ) : (
-              <>
-                <select
-                  value={selectedTripPlanId}
-                  onChange={(event) => setSelectedTripPlanId(event.target.value)}
-                  style={selectInput}
-                >
-                  <option value="">Choose a trip plan</option>
+                  <div style={tripPlanPickerBox}>
+                    {tripPlans.length === 0 ? (
+                      <div style={{ fontSize: "13px", color: "#666" }}>
+                        You do not have any trip plans yet.{" "}
+                        <Link
+                          href={`/trip-plans?returnTo=${encodeURIComponent(
+                            `/experiences/${experience.id}`
+                          )}`}
+                          style={{ color: "#111", fontWeight: 600 }}
+                        >
+                          Create one
+                        </Link>
+                        .
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          value={selectedTripPlanId}
+                          onChange={(event) => setSelectedTripPlanId(event.target.value)}
+                          style={selectInput}
+                        >
+                          <option value="">Choose a trip plan</option>
 
-                  {tripPlans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.title}
-                      {plan.destination_text ? ` — ${plan.destination_text}` : ""}
-                    </option>
-                  ))}
-                </select>
+                          {tripPlans.map((plan) => (
+                            <option key={plan.id} value={plan.id}>
+                              {plan.title}
+                              {plan.destination_text ? ` — ${plan.destination_text}` : ""}
+                            </option>
+                          ))}
+                        </select>
 
-                <button
-                  type="button"
-                  disabled={addingToPlan}
-                  onClick={addExperienceToTripPlan}
-                  style={{
-                    ...primaryButton,
-                    opacity: addingToPlan ? 0.5 : 1,
-                    cursor: addingToPlan ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {addingToPlan ? "Adding..." : "Add"}
-                </button>
-              </>
-            )}
-          </div>
-        )}
+                        <button
+                          type="button"
+                          disabled={addingToPlan}
+                          onClick={addExperienceToTripPlan}
+                          style={{
+                            ...primaryButton,
+                            opacity: addingToPlan ? 0.5 : 1,
+                            cursor: addingToPlan ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {addingToPlan ? "Adding..." : "Add"}
+                        </button>
+
+                        <Link
+                          href={`/trip-plans?returnTo=${encodeURIComponent(
+                            `/experiences/${experience.id}`
+                          )}`}
+                          style={createPlanLink}
+                        >
+                          Create a new trip plan
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
 
         {tripPlanMessage && (
           <div style={tripPlanSuccessBox}>
@@ -648,4 +662,12 @@ const tripPlanSuccessLink = {
   color: "#166534",
   fontWeight: 700,
   textDecoration: "underline",
+};
+
+const createPlanLink = {
+  color: "#111",
+  fontWeight: 600,
+  fontSize: "13px",
+  textDecoration: "underline",
+  width: "fit-content",
 };

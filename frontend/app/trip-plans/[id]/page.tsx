@@ -35,6 +35,20 @@ type TripPlanDetail = {
   saved_items: SavedItem[];
 };
 
+type TripSuggestion = {
+  experience_id: number;
+  title: string;
+  comment: string;
+  rating: number | null;
+  image_url: string | null;
+  place: string;
+  place_id: number;
+  place_type: string;
+  destination: string;
+  created_at: string;
+  already_saved: boolean;
+};
+
 export default function TripPlanDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -43,6 +57,26 @@ export default function TripPlanDetailPage() {
   const [plan, setPlan] = useState<TripPlanDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
+
+  const [suggestions, setSuggestions] = useState<TripSuggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPlaceType, setSelectedPlaceType] = useState("");
+  const [addingSuggestionId, setAddingSuggestionId] = useState<number | null>(null);
+
+  const availableSuggestions = suggestions.filter(
+  (suggestion) => !suggestion.already_saved
+  );
+
+  const placeTypeFilters = [
+      { value: "", label: "All" },
+      { value: "country", label: "Countries" },
+      { value: "city", label: "Cities" },
+      { value: "attraction", label: "Attractions" },
+      { value: "hotel", label: "Hotels" },
+      { value: "restaurant", label: "Restaurants" },
+      { value: "nature", label: "Nature" },
+    ];
 
   const loadPlan = async () => {
     if (!id) return;
@@ -67,9 +101,56 @@ export default function TripPlanDetailPage() {
     }
   };
 
+const loadSuggestions = async () => {
+  if (!id) return;
+
+  setSuggestionsLoading(true);
+
+  try {
+    const params = new URLSearchParams();
+
+    if (searchQuery.trim()) {
+      params.set("q", searchQuery.trim());
+    }
+
+    if (selectedPlaceType) {
+      params.set("place_type", selectedPlaceType);
+    }
+
+    const queryString = params.toString();
+    const url = `${API_URL}/api/trip-plans/${id}/suggestions/${
+      queryString ? `?${queryString}` : ""
+    }`;
+
+    const res = await fetch(url, {
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Failed to load trip suggestions:", res.status, text);
+      setSuggestions([]);
+      return;
+    }
+
+    const data = await res.json();
+    setSuggestions(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error("Trip suggestions fetch error:", error);
+    setSuggestions([]);
+  } finally {
+    setSuggestionsLoading(false);
+  }
+};
+
   useEffect(() => {
-    loadPlan();
-  }, [id]);
+      loadPlan();
+    }, [id]);
+
+    useEffect(() => {
+      if (!id) return;
+      loadSuggestions();
+    }, [id, selectedPlaceType]);
 
   const removeExperienceFromPlan = async (item: SavedItem) => {
     if (!plan) return;
@@ -112,6 +193,9 @@ export default function TripPlanDetailPage() {
           saved_count: updatedItems.length,
         };
       });
+
+      await loadSuggestions();
+
     } catch (error) {
       console.error("Failed to remove experience from trip plan:", error);
       alert("Error removing experience from plan.");
@@ -119,6 +203,47 @@ export default function TripPlanDetailPage() {
       setRemovingItemId(null);
     }
   };
+
+const addSuggestionToPlan = async (suggestion: TripSuggestion) => {
+  if (!plan) return;
+
+  setAddingSuggestionId(suggestion.experience_id);
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/trip-plans/${plan.id}/experiences/${suggestion.experience_id}/`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Add suggestion to trip plan error:", data);
+      alert(data.detail || "Error adding experience to plan.");
+      return;
+    }
+
+    await loadPlan();
+    await loadSuggestions();
+  } catch (error) {
+    console.error("Failed to add suggestion to trip plan:", error);
+    alert("Error adding experience to plan.");
+  } finally {
+    setAddingSuggestionId(null);
+  }
+};
+
+const resetSuggestionsSearch = async () => {
+  setSearchQuery("");
+  setSelectedPlaceType("");
+
+  setTimeout(() => {
+    loadSuggestions();
+  }, 0);
+};
 
   if (loading) {
     return (
@@ -190,6 +315,163 @@ export default function TripPlanDetailPage() {
             Explore feed
           </button>
         </div>
+      </section>
+
+             <section style={suggestionsSection}>
+        <div>
+          <h2 style={sectionTitle}>Find ideas for this trip</h2>
+          <p style={helperText}>
+            Search destinations, places, restaurants, attractions or travel
+            experiences and add useful ideas directly to this plan.
+          </p>
+        </div>
+
+        <div style={searchRow}>
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={
+              plan.destination_text
+                ? `Search ideas for ${plan.destination_text}`
+                : "Search destination, place or keyword"
+            }
+            style={searchInput}
+          />
+
+          <button
+            type="button"
+            onClick={loadSuggestions}
+            style={primaryButton}
+          >
+            Search
+          </button>
+        </div>
+
+        <div style={filterRow}>
+          {placeTypeFilters.map((filter) => {
+            const isActive = selectedPlaceType === filter.value;
+
+            return (
+              <button
+                key={filter.value || "all"}
+                type="button"
+                onClick={() => setSelectedPlaceType(filter.value)}
+                style={{
+                  ...filterButton,
+                  ...(isActive ? activeFilterButton : {}),
+                }}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {suggestionsLoading ? (
+          <div style={emptyBox}>Loading suggestions...</div>
+        ) : availableSuggestions.length === 0 ? (
+          <div style={emptyBox}>
+            <p style={{ marginTop: 0 }}>
+              No new suggestions found.
+            </p>
+
+            <p style={helperText}>
+              Everything found for this search may already be saved in this trip plan,
+              or there are no matching experiences yet.
+            </p>
+
+            <div style={actions}>
+              <button
+                type="button"
+                onClick={resetSuggestionsSearch}
+                style={secondaryLink}
+              >
+                Reset search
+              </button>
+
+              <Link href="/" style={primaryLink}>
+                Explore feed
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div style={list}>
+            {availableSuggestions.map((suggestion) => (
+
+              <article key={suggestion.experience_id} style={experienceCard}>
+                {suggestion.image_url && (
+                  <img
+                    src={suggestion.image_url}
+                    alt={suggestion.title || "Trip suggestion"}
+                    style={image}
+                  />
+                )}
+
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <div style={label}>Suggested experience</div>
+
+                  <h3 style={experienceTitle}>
+                    {suggestion.title || suggestion.place || "Experience"}
+                  </h3>
+
+                  <div style={placeText}>
+                    {suggestion.place}
+                    {suggestion.destination &&
+                    suggestion.destination !== suggestion.place
+                      ? ` · ${suggestion.destination}`
+                      : ""}
+                  </div>
+
+                  {suggestion.rating && (
+                    <div style={rating}>
+                      {"★".repeat(suggestion.rating)}
+                      {"☆".repeat(5 - suggestion.rating)}
+                    </div>
+                  )}
+
+                  <p style={commentText}>{suggestion.comment}</p>
+
+                  <div style={actions}>
+                    <Link
+                      href={`/experiences/${suggestion.experience_id}`}
+                      style={secondaryLink}
+                    >
+                      View experience
+                    </Link>
+
+                    <Link
+                      href={`/places/${suggestion.place_id}/experiences?highlight=${suggestion.experience_id}`}
+                      style={secondaryLink}
+                    >
+                      View in place
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => addSuggestionToPlan(suggestion)}
+                      disabled={addingSuggestionId === suggestion.experience_id}
+                      style={{
+                        ...primaryButton,
+                        opacity:
+                          addingSuggestionId === suggestion.experience_id
+                            ? 0.5
+                            : 1,
+                        cursor:
+                          addingSuggestionId === suggestion.experience_id
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      {addingSuggestionId === suggestion.experience_id
+                        ? "Adding..."
+                        : "Add to this trip"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section style={section}>
@@ -468,4 +750,62 @@ const commentText = {
 
 const muted = {
   color: "#666",
+};
+
+const suggestionsSection = {
+  display: "grid",
+  gap: "14px",
+  padding: "20px",
+  border: "1px solid #eee",
+  borderRadius: "18px",
+  background: "#fafafa",
+  marginBottom: "28px",
+};
+
+const searchRow = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+};
+
+const searchInput = {
+  flex: 1,
+  minWidth: "240px",
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+};
+
+const filterRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+};
+
+const filterButton = {
+  padding: "8px 12px",
+  borderRadius: "999px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#444",
+  cursor: "pointer",
+  fontSize: "13px",
+};
+
+const activeFilterButton = {
+  background: "black",
+  color: "white",
+  border: "1px solid black",
+};
+
+const alreadySavedBadge = {
+  display: "inline-block",
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "14px",
+  fontWeight: 700,
 };

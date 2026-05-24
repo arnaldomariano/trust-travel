@@ -42,6 +42,12 @@ type TopSavedDestination = {
   user_country: string | null;
 };
 
+type PlannerCountry = {
+  country_code: string;
+  label: string;
+  saved_count: number;
+};
+
 export default function AnalyticsPage() {
   const [topSavedExperiences, setTopSavedExperiences] = useState<
   TopSavedExperience[]
@@ -50,6 +56,7 @@ export default function AnalyticsPage() {
 const [topSavedPlaces, setTopSavedPlaces] = useState<TopSavedPlace[]>([]);
 const [selectedPlaceType, setSelectedPlaceType] = useState("");
 const [selectedUserCountry, setSelectedUserCountry] = useState("");
+const [plannerCountries, setPlannerCountries] = useState<PlannerCountry[]>([]);
 const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
 
 const [loading, setLoading] = useState(true);
@@ -59,10 +66,12 @@ const [topSavedDestinations, setTopSavedDestinations] = useState<
 >([]);
 
 const userCountryFilters = [
-  { value: "", label: "All users" },
-  { value: "BR", label: "Brazil" },
-  { value: "IT", label: "Italy" },
-  { value: "NL", label: "Netherlands" },
+  { value: "", label: "All users", saved_count: null },
+  ...plannerCountries.map((country) => ({
+    value: country.country_code,
+    label: country.label,
+    saved_count: country.saved_count,
+  })),
 ];
 
 const placeTypeFilters = [
@@ -103,24 +112,28 @@ useEffect(() => {
       const placesSuffix = placesQuery ? `?${placesQuery}` : "";
 
       const [
-        experiencesRes,
-        placesRes,
-        summaryRes,
-        destinationsRes,
-      ] = await Promise.all([
-        fetch(`${API_URL}/api/analytics/top-saved-experiences/${commonSuffix}`, {
-          credentials: "include",
-        }),
-        fetch(`${API_URL}/api/analytics/top-saved-places/${placesSuffix}`, {
-          credentials: "include",
-        }),
-        fetch(`${API_URL}/api/analytics/summary/${commonSuffix}`, {
-          credentials: "include",
-        }),
-        fetch(`${API_URL}/api/analytics/top-saved-destinations/${commonSuffix}`, {
-          credentials: "include",
-        }),
-      ]);
+          experiencesRes,
+          placesRes,
+          summaryRes,
+          destinationsRes,
+          plannerCountriesRes,
+        ] = await Promise.all([
+          fetch(`${API_URL}/api/analytics/top-saved-experiences/${commonSuffix}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/analytics/top-saved-places/${placesSuffix}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/analytics/summary/${commonSuffix}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/analytics/top-saved-destinations/${commonSuffix}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/analytics/planner-countries/`, {
+            credentials: "include",
+          }),
+        ]);
 
       if (!experiencesRes.ok) {
         const text = await experiencesRes.text();
@@ -165,11 +178,26 @@ useEffect(() => {
         const data = await destinationsRes.json();
         setTopSavedDestinations(Array.isArray(data) ? data : []);
       }
+
+      if (!plannerCountriesRes.ok) {
+      const text = await plannerCountriesRes.text();
+      console.error(
+        "Failed to load planner countries:",
+        plannerCountriesRes.status,
+        text
+      );
+      setPlannerCountries([]);
+    } else {
+      const data = await plannerCountriesRes.json();
+      setPlannerCountries(Array.isArray(data) ? data : []);
+    }
+
     } catch (error) {
       console.error("Analytics fetch error:", error);
       setTopSavedExperiences([]);
       setTopSavedPlaces([]);
       setTopSavedDestinations([]);
+      setPlannerCountries([]);
       setSummary(null);
     } finally {
       setLoading(false);
@@ -223,6 +251,7 @@ useEffect(() => {
                   }}
                 >
                   {filter.label}
+                  {filter.saved_count !== null ? ` (${filter.saved_count})` : ""}
                 </button>
               );
             })}

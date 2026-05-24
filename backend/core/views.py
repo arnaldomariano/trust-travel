@@ -1445,6 +1445,45 @@ def get_filtered_saved_items(request):
 
     return saved_items
 
+class PlannerCountriesAnalyticsView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        country_stats = (
+            SavedItem.objects
+            .exclude(user__profile__country_code__isnull=True)
+            .exclude(user__profile__country_code="")
+            .exclude(user__profile__country_code="XX")
+            .values("user__profile__country_code")
+            .annotate(saved_count=Count("id"))
+            .order_by("user__profile__country_code")
+        )
+
+        country_labels = {
+            "BR": "Brazil",
+            "IT": "Italy",
+            "NL": "Netherlands",
+            "US": "United States",
+            "PT": "Portugal",
+            "FR": "France",
+            "DE": "Germany",
+            "ES": "Spain",
+            "GB": "United Kingdom",
+        }
+
+        result = []
+
+        for item in country_stats:
+            country_code = item["user__profile__country_code"]
+
+            result.append({
+                "country_code": country_code,
+                "label": country_labels.get(country_code, country_code),
+                "saved_count": item["saved_count"],
+            })
+
+        return Response(result)
 
 class TopSavedExperiencesAnalyticsView(APIView):
     authentication_classes = [CookieJWTAuthentication]

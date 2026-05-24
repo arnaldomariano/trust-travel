@@ -8,6 +8,47 @@ import { getInitials, getColorFromName } from "./lib/avatar";
 import { API_URL } from "./lib/api";
 import { countryCodeToFlagEmoji } from "./lib/flags";
 
+const getProfessionBadge = (profession?: string | null) => {
+  const value = (profession || "").trim().toLowerCase();
+
+  if (!value) return "";
+
+  if (value.includes("journalist") || value.includes("jornalista")) return "J";
+  if (value.includes("doctor") || value.includes("médico") || value.includes("medico")) return "MD";
+  if (value.includes("lawyer") || value.includes("advogado") || value.includes("advogada")) return "LAW";
+  if (
+    value.includes("teacher") ||
+    value.includes("professor") ||
+    value.includes("professora") ||
+    value.includes("educator")
+  ) {
+    return "EDU";
+  }
+  if (value.includes("engineer") || value.includes("engenheiro") || value.includes("engenheira")) return "ENG";
+  if (value.includes("artist") || value.includes("artista") || value.includes("creative")) return "ART";
+  if (
+    value.includes("developer") ||
+    value.includes("programmer") ||
+    value.includes("programador") ||
+    value.includes("technology") ||
+    value.includes("tech")
+  ) {
+    return "DEV";
+  }
+  if (
+    value.includes("athlete") ||
+    value.includes("atleta") ||
+    value.includes("sports") ||
+    value.includes("esportista") ||
+    value.includes("surfer") ||
+    value.includes("surfista")
+  ) {
+    return "ATH";
+  }
+
+  return "PRO";
+};
+
 export default function HomePage() {
   const { username, isLoggedIn, loading } = useAuth();
   const router = useRouter();
@@ -278,6 +319,15 @@ const getActivityMetaText = (item: any) => {
         ? `${nationalityFlag} ${nationalityCode}`
         : "";
 
+    const professionBadge = getProfessionBadge(lastUpdate.author_profession);
+
+    const profileContextText = [
+      lastUpdate.author_profession,
+      lastUpdate.author_travel_interests,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
     // Only trusted users can show their real avatar.
     // Explore/public users remain protected.
     const avatarUrl = lastUpdate.is_friend ? lastUpdate.avatar_url : null;
@@ -315,6 +365,20 @@ const getActivityMetaText = (item: any) => {
               <div style={trustBadge}>
                 T
               </div>
+            )}
+
+            {professionBadge && profileContextText && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  alert(profileContextText);
+                }}
+                title={profileContextText}
+                style={professionBadgeStyle}
+              >
+                {professionBadge}
+              </button>
             )}
 
             <Avatar
@@ -918,4 +982,25 @@ const countryBadge = {
   background: "#fafafa",
   color: "#444",
   fontWeight: 600,
+};
+
+const professionBadgeStyle = {
+  position: "absolute" as const,
+  top: "12px",
+  left: "12px",
+  minWidth: "24px",
+  height: "22px",
+  padding: "0 6px",
+  borderRadius: "999px",
+  background: "white",
+  color: "#111",
+  border: "1px solid #ddd",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "10px",
+  fontWeight: "bold",
+  boxShadow: "0 0 10px rgba(0,0,0,0.10)",
+  zIndex: 2,
+  cursor: "pointer",
 };

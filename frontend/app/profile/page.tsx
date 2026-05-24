@@ -48,6 +48,11 @@ export default function ProfilePage() {
   const [countryOfBirth, setCountryOfBirth] = useState("");
   const [countryOfResidence, setCountryOfResidence] = useState("");
   const [residenceMode, setResidenceMode] = useState<"same" | "other">("same");
+
+  const [profession, setProfession] = useState("");
+  const [travelInterests, setTravelInterests] = useState("");
+  const [showProfileContext, setShowProfileContext] = useState(false);
+
   const [ageRange, setAgeRange] = useState("prefer_not_to_say");
 
 
@@ -95,6 +100,11 @@ export default function ProfilePage() {
       } else {
           setResidenceMode("same");
       }
+
+      setProfession(data.profession || "");
+      setTravelInterests(data.travel_interests || "");
+      setShowProfileContext(Boolean(data.show_profile_context));
+
       setAgeRange(data.age_range || "prefer_not_to_say");
 
     } catch (error) {
@@ -183,6 +193,11 @@ export default function ProfilePage() {
 
       formData.append("country_of_birth", nationalityLabel);
       formData.append("country_of_residence", residenceCountry);
+
+      formData.append("profession", profession.trim());
+      formData.append("travel_interests", travelInterests.trim());
+      formData.append("show_profile_context", String(showProfileContext));
+
       formData.append("age_range", ageRange);
 
       if (avatarFile) {
@@ -220,6 +235,11 @@ export default function ProfilePage() {
 
       setCountryOfBirth(data.country_of_birth || "");
       setCountryOfResidence(data.country_of_residence || "");
+
+      setProfession(data.profession || "");
+      setTravelInterests(data.travel_interests || "");
+      setShowProfileContext(Boolean(data.show_profile_context));
+
       setAgeRange(data.age_range || "prefer_not_to_say");
 
 
@@ -257,6 +277,17 @@ export default function ProfilePage() {
           and intended for future aggregated analytics.
         </p>
       </section>
+
+        {!countryCode && (
+          <div style={profileWarning}>
+            <strong>Complete your country/nationality</strong>
+            <p style={{ margin: "6px 0 0 0", color: "#7a4b00", lineHeight: 1.5 }}>
+              Choose your country of birth or nationality to improve travel analytics
+              and help other travelers understand your perspective. Showing your flag on
+              travel cards remains optional.
+            </p>
+          </div>
+        )}
 
       <section style={card}>
         <div>
@@ -430,6 +461,52 @@ export default function ProfilePage() {
           <small style={hint}>
             This helps future aggregated insights compare nationality and country of
             residence.
+          </small>
+        </div>
+
+        <div style={field}>
+          <label style={label}>Profession / occupation</label>
+          <input
+            value={profession}
+            onChange={(e) => setProfession(e.target.value)}
+            placeholder="Optional, e.g. doctor, lawyer, teacher, engineer..."
+            style={input}
+          />
+          <small style={hint}>
+            This can help future insights compare travel decisions by professional
+            context.
+          </small>
+        </div>
+
+        <div style={field}>
+          <label style={label}>Travel interests / identity</label>
+          <input
+            value={travelInterests}
+            onChange={(e) => setTravelInterests(e.target.value)}
+            placeholder="Optional, e.g. surfer, art lover, hiker, foodie..."
+            style={input}
+          />
+          <small style={hint}>
+            Add a few words that describe how you travel or what you usually look for.
+          </small>
+        </div>
+
+        <div style={field}>
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={showProfileContext}
+              onChange={(e) => setShowProfileContext(e.target.checked)}
+            />
+
+            <span>
+              Show my profession/interests as travel context.
+            </span>
+          </label>
+
+          <small style={hint}>
+            Optional. This may help other travelers understand your perspective, while
+            your public identity remains protected.
           </small>
         </div>
 
@@ -672,4 +749,13 @@ const privacyNote = {
   border: "1px solid #eee",
   borderRadius: "14px",
   background: "#fafafa",
+};
+
+const profileWarning = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #fde68a",
+  background: "#fffbeb",
+  color: "#7a4b00",
+  marginBottom: "18px",
 };

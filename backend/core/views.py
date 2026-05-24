@@ -663,6 +663,18 @@ def serialize_update(update, request=None):
             else ""
         ),
 
+        "author_profession": (
+            profile.profession if profile and profile.show_profile_context else ""
+        ),
+
+        "author_travel_interests": (
+            profile.travel_interests if profile and profile.show_profile_context else ""
+        ),
+
+        "author_show_profile_context": (
+            profile.show_profile_context if profile else False
+        ),
+
         "avatar_url": avatar_url,
 
         "created_at": update.created_at,

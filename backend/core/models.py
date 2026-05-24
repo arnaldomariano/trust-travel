@@ -56,6 +56,12 @@ class Profile(models.Model):
     country_of_birth = models.CharField(max_length=80, blank=True)
     country_of_residence = models.CharField(max_length=80, blank=True)
 
+    # Optional professional/contextual profile.
+    # These fields can help users interpret travel experiences by human context.
+    profession = models.CharField(max_length=120, blank=True)
+    travel_interests = models.CharField(max_length=255, blank=True)
+    show_profile_context = models.BooleanField(default=False)
+
     age_range = models.CharField(
         max_length=30,
         choices=AGE_RANGE_CHOICES,

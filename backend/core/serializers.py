@@ -349,6 +349,9 @@ class ProfileSerializer(serializers.ModelSerializer):
             # Private / analytics-oriented travel profile
             "country_of_birth",
             "country_of_residence",
+            "profession",
+            "travel_interests",
+            "show_profile_context",
             "age_range",
         ]
 

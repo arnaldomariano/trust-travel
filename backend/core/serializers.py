@@ -155,22 +155,12 @@ class ExperienceSerializer(serializers.ModelSerializer):
         return obj.image.url
 
     def can_show_author_nationality(self, obj):
-        request = self.context.get("request")
-
-        if not request or not request.user.is_authenticated:
-            return False
-
         profile = getattr(obj.user, "profile", None)
 
         if not profile or not profile.show_nationality:
             return False
 
-        # The author can see their own nationality flag.
-        if request.user == obj.user:
-            return True
-
-        # Trusted/direct users can see it.
-        return self.get_trust_level(obj) == 1
+        return True
 
     def get_author_nationality(self, obj):
         if not self.can_show_author_nationality(obj):

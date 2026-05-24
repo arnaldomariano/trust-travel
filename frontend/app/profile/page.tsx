@@ -4,6 +4,34 @@ import { useEffect, useState } from "react";
 import { API_URL } from "../lib/api";
 import { getInitials, getColorFromName } from "../lib/avatar";
 
+const COUNTRY_OPTIONS = [
+  { code: "", label: "Select a country", flag: "" },
+  { code: "BR", label: "Brazil", flag: "🇧🇷" },
+  { code: "PT", label: "Portugal", flag: "🇵🇹" },
+  { code: "NL", label: "Netherlands", flag: "🇳🇱" },
+  { code: "IT", label: "Italy", flag: "🇮🇹" },
+  { code: "US", label: "United States", flag: "🇺🇸" },
+  { code: "GB", label: "United Kingdom", flag: "🇬🇧" },
+  { code: "ES", label: "Spain", flag: "🇪🇸" },
+  { code: "FR", label: "France", flag: "🇫🇷" },
+  { code: "DE", label: "Germany", flag: "🇩🇪" },
+  { code: "MX", label: "Mexico", flag: "🇲🇽" },
+  { code: "CL", label: "Chile", flag: "🇨🇱" },
+  { code: "AR", label: "Argentina", flag: "🇦🇷" },
+  { code: "GR", label: "Greece", flag: "🇬🇷" },
+  { code: "TH", label: "Thailand", flag: "🇹🇭" },
+  { code: "LA", label: "Laos", flag: "🇱🇦" },
+  { code: "BO", label: "Bolivia", flag: "🇧🇴" },
+];
+
+const getCountryOption = (code: string) => {
+  return COUNTRY_OPTIONS.find((country) => country.code === code) || null;
+};
+
+const getCountryByLabel = (label: string) => {
+  return COUNTRY_OPTIONS.find((country) => country.label === label) || null;
+};
+
 export default function ProfilePage() {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -12,12 +40,14 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
   const [nationality, setNationality] = useState("");
   const [nationalityCountryCode, setNationalityCountryCode] = useState("");
   const [showNationality, setShowNationality] = useState(false);
 
   const [countryOfBirth, setCountryOfBirth] = useState("");
   const [countryOfResidence, setCountryOfResidence] = useState("");
+  const [residenceMode, setResidenceMode] = useState<"same" | "other">("same");
   const [ageRange, setAgeRange] = useState("prefer_not_to_say");
 
 
@@ -43,15 +73,28 @@ export default function ProfilePage() {
 
       setUsername(data.username || "");
       setDisplayName(data.display_name || "");
-      setCountryCode(data.country_code || "");
+      setCountryCode(data.country_code && data.country_code !== "XX" ? data.country_code : "");
       setPublicCode(data.public_code || "");
       setAvatarUrl(data.avatar_url || null);
       setNationality(data.nationality || "");
-      setNationalityCountryCode(data.nationality_country_code || "");
+      setNationalityCountryCode(
+          data.nationality_country_code && data.nationality_country_code !== "XX"
+            ? data.nationality_country_code
+            : ""
+      );
       setShowNationality(Boolean(data.show_nationality));
 
-      setCountryOfBirth(data.country_of_birth || "");
-      setCountryOfResidence(data.country_of_residence || "");
+      const birthCountry = data.country_of_birth || "";
+      const residenceCountry = data.country_of_residence || "";
+
+      setCountryOfBirth(birthCountry);
+      setCountryOfResidence(residenceCountry);
+
+      if (birthCountry && residenceCountry && birthCountry !== residenceCountry) {
+          setResidenceMode("other");
+      } else {
+          setResidenceMode("same");
+      }
       setAgeRange(data.age_range || "prefer_not_to_say");
 
     } catch (error) {
@@ -80,6 +123,43 @@ export default function ProfilePage() {
     setAvatarPreview(previewUrl);
   };
 
+    const handleCountryChange = (value: string) => {
+      setCountryCode(value);
+
+      const selectedCountry = getCountryOption(value);
+
+      if (selectedCountry && selectedCountry.code) {
+        setCountryOfBirth(selectedCountry.label);
+
+        if (!nationalityCountryCode || nationalityCountryCode === "XX") {
+          setNationalityCountryCode(selectedCountry.code);
+        }
+
+        if (!nationality) {
+          setNationality(selectedCountry.label);
+        }
+      }
+    };
+
+    const handleNationalityChange = (value: string) => {
+      setCountryCode(value);
+      setNationalityCountryCode(value);
+
+      const selectedCountry = getCountryOption(value);
+
+      if (selectedCountry && selectedCountry.code) {
+        setNationality(selectedCountry.label);
+        setCountryOfBirth(selectedCountry.label);
+
+        if (residenceMode === "same") {
+          setCountryOfResidence(selectedCountry.label);
+        }
+      } else {
+        setNationality("");
+        setCountryOfBirth("");
+      }
+    };
+
   // =========================
   // Save profile changes
   // =========================
@@ -89,15 +169,20 @@ export default function ProfilePage() {
     try {
       const formData = new FormData();
 
-      formData.append("display_name", displayName);
-      formData.append("country_code", countryCode);
+      const selectedNationalityCountry = getCountryOption(countryCode);
+      const nationalityLabel = selectedNationalityCountry?.label || "";
+      const residenceCountry =
+        residenceMode === "same" ? nationalityLabel : countryOfResidence;
 
-      formData.append("nationality", nationality);
-      formData.append("nationality_country_code", nationalityCountryCode.toUpperCase());
+      formData.append("display_name", displayName);
+      formData.append("country_code", countryCode || "");
+
+      formData.append("nationality", nationalityLabel);
+      formData.append("nationality_country_code", countryCode || "");
       formData.append("show_nationality", String(showNationality));
 
-      formData.append("country_of_birth", countryOfBirth);
-      formData.append("country_of_residence", countryOfResidence);
+      formData.append("country_of_birth", nationalityLabel);
+      formData.append("country_of_residence", residenceCountry);
       formData.append("age_range", ageRange);
 
       if (avatarFile) {
@@ -119,14 +204,18 @@ export default function ProfilePage() {
       }
 
       setDisplayName(data.display_name || "");
-      setCountryCode(data.country_code || "");
+      setCountryCode(data.country_code && data.country_code !== "XX" ? data.country_code : "");
       setPublicCode(data.public_code || "");
       setAvatarUrl(data.avatar_url || null);
       setAvatarFile(null);
       setAvatarPreview(null);
 
       setNationality(data.nationality || "");
-      setNationalityCountryCode(data.nationality_country_code || "");
+      setNationalityCountryCode(
+          data.nationality_country_code && data.nationality_country_code !== "XX"
+            ? data.nationality_country_code
+            : ""
+      );
       setShowNationality(Boolean(data.show_nationality));
 
       setCountryOfBirth(data.country_of_birth || "");
@@ -153,6 +242,7 @@ export default function ProfilePage() {
 
   const avatarName = displayName || username;
   const visibleAvatarUrl = avatarPreview || avatarUrl;
+  const selectedNationalityCountry = getCountryOption(countryCode);
 
   return (
     <main style={page}>
@@ -224,18 +314,31 @@ export default function ProfilePage() {
           </small>
         </div>
 
-        <div style={field}>
-          <label style={label}>Country code</label>
-          <input
+       <div style={field}>
+          <label style={label}>Country of birth / Nationality</label>
+
+          <select
             value={countryCode}
-            onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
-            maxLength={2}
-            placeholder="BR, NL, US..."
+            onChange={(e) => handleNationalityChange(e.target.value)}
             style={input}
-          />
-          <small style={hint}>
-            Used to generate or contextualize your public code.
-          </small>
+          >
+            {COUNTRY_OPTIONS.map((country) => (
+              <option key={country.code || "empty"} value={country.code}>
+                {country.flag ? `${country.flag} ${country.label}` : country.label}
+              </option>
+            ))}
+          </select>
+
+          {selectedNationalityCountry && selectedNationalityCountry.code ? (
+            <small style={countryPreview}>
+              {selectedNationalityCountry.flag} {selectedNationalityCountry.label} will
+              be used in aggregated planner analytics.
+            </small>
+          ) : (
+            <small style={hint}>
+              Choose the country that represents your nationality or country of birth.
+            </small>
+          )}
         </div>
 
         <div style={field}>
@@ -247,42 +350,24 @@ export default function ProfilePage() {
         </div>
 
         <div style={field}>
-          <label style={label}>Nationality / country of origin</label>
-          <input
-            value={nationality}
-            onChange={(e) => setNationality(e.target.value)}
-            placeholder="Optional, e.g. Brazilian, Dutch, Italian..."
-            style={input}
-          />
-        </div>
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={showNationality}
+              onChange={(e) => setShowNationality(e.target.checked)}
+            />
 
-        <div style={field}>
-          <label style={label}>Nationality country code</label>
-          <input
-            value={nationalityCountryCode}
-            onChange={(e) =>
-              setNationalityCountryCode(e.target.value.toUpperCase())
-            }
-            maxLength={2}
-            placeholder="Optional, e.g. BR, NL, IT..."
-            style={input}
-          />
+            <span>
+              Show my country/nationality flag on travel cards.
+            </span>
+          </label>
+
           <small style={hint}>
-            Used only to show a small flag when nationality display is enabled.
+            If enabled, other travelers may see your public code with your country flag,
+            for example {publicCode || "BR757zn50"} 🇧🇷. Your real identity remains
+            protected.
           </small>
         </div>
-
-        <label style={checkboxRow}>
-          <input
-            type="checkbox"
-            checked={showNationality}
-            onChange={(e) => setShowNationality(e.target.checked)}
-          />
-
-          <span>
-            Allow my nationality to appear in trusted identity contexts.
-          </span>
-        </label>
       </section>
 
       <section style={card}>
@@ -292,32 +377,60 @@ export default function ProfilePage() {
           <h2 style={sectionTitle}>Optional context</h2>
 
           <p style={sectionText}>
-            These fields are not meant to be displayed on public cards. They can
-            later help generate aggregated insights, such as recommendations by country of residence, country of birth or age range,
-            residence, age range or travel style.
+              These optional fields help Trust Travel generate aggregated insights, such as
+              how travelers from different countries plan trips. They are not used to reveal
+              your real identity.
           </p>
         </div>
 
-        <div style={fieldGrid}>
-          <div style={field}>
-            <label style={label}>Country of birth</label>
-            <input
-              value={countryOfBirth}
-              onChange={(e) => setCountryOfBirth(e.target.value)}
-              placeholder="Optional"
-              style={input}
-            />
+        <div style={field}>
+          <label style={label}>Country where you live</label>
+
+          <div style={radioGroup}>
+            <label style={radioRow}>
+              <input
+                type="radio"
+                checked={residenceMode === "same"}
+                onChange={() => {
+                  setResidenceMode("same");
+
+                  const selectedCountry = getCountryOption(countryCode);
+                  setCountryOfResidence(selectedCountry?.label || "");
+                }}
+              />
+              Same as nationality
+            </label>
+
+            <label style={radioRow}>
+              <input
+                type="radio"
+                checked={residenceMode === "other"}
+                onChange={() => setResidenceMode("other")}
+              />
+              Other country
+            </label>
           </div>
 
-          <div style={field}>
-            <label style={label}>Country of residence</label>
-            <input
+          {residenceMode === "other" && (
+            <select
               value={countryOfResidence}
               onChange={(e) => setCountryOfResidence(e.target.value)}
-              placeholder="Optional"
               style={input}
-            />
-          </div>
+            >
+              <option value="">Select country of residence</option>
+
+              {COUNTRY_OPTIONS.filter((country) => country.code).map((country) => (
+                <option key={country.code} value={country.label}>
+                  {country.flag} {country.label}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <small style={hint}>
+            This helps future aggregated insights compare nationality and country of
+            residence.
+          </small>
         </div>
 
         <div style={field}>
@@ -341,8 +454,9 @@ export default function ProfilePage() {
         <div style={privacyNote}>
           <strong>Privacy note</strong>
           <p style={{ margin: "6px 0 0 0", color: "#666", lineHeight: 1.5 }}>
-            These fields should be used for aggregated analytics, not to expose
-            personal details individually in public cards.
+            Aggregated analytics may use your profile context, but your real identity is not
+            shown individually. Public travel cards use your public code, with your country
+            flag only if you allow it.
           </p>
         </div>
       </section>
@@ -463,6 +577,29 @@ const inputDisabled = {
 const hint = {
   color: "#666",
   fontSize: "12px",
+};
+
+const countryPreview = {
+  color: "#166534",
+  fontSize: "12px",
+  padding: "8px 10px",
+  borderRadius: "10px",
+  background: "#f2fbf5",
+  border: "1px solid #d7f0df",
+};
+
+const radioGroup = {
+  display: "flex",
+  gap: "14px",
+  flexWrap: "wrap" as const,
+};
+
+const radioRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  color: "#555",
+  fontSize: "14px",
 };
 
 const button = {

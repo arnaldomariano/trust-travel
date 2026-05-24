@@ -6,6 +6,7 @@ import { useAuth } from "./providers/AuthProvider";
 import { labels } from "./lib/labels";
 import { getInitials, getColorFromName } from "./lib/avatar";
 import { API_URL } from "./lib/api";
+import { countryCodeToFlagEmoji } from "./lib/flags";
 
 export default function HomePage() {
   const { username, isLoggedIn, loading } = useAuth();
@@ -266,6 +267,17 @@ const getActivityMetaText = (item: any) => {
 
     const displayCode = user;
 
+    const nationalityCode = (
+      lastUpdate.author_nationality_country_code || ""
+    ).toUpperCase();
+
+    const nationalityFlag = countryCodeToFlagEmoji(nationalityCode);
+
+    const nationalityBadge =
+      nationalityFlag && nationalityCode
+        ? `${nationalityFlag} ${nationalityCode}`
+        : "";
+
     // Only trusted users can show their real avatar.
     // Explore/public users remain protected.
     const avatarUrl = lastUpdate.is_friend ? lastUpdate.avatar_url : null;
@@ -312,6 +324,12 @@ const getActivityMetaText = (item: any) => {
             />
 
             <strong style={{ marginTop: "10px" }}>{displayName}</strong>
+
+            {nationalityBadge && (
+              <span style={countryBadge}>
+                {nationalityBadge}
+              </span>
+            )}
 
             {lastUpdate.is_friend && <span style={muted}>{displayCode}</span>}
 
@@ -890,4 +908,14 @@ const trustBadge = {
   fontWeight: "bold",
   boxShadow: "0 0 10px rgba(0,0,0,0.12)",
   zIndex: 2,
+};
+
+const countryBadge = {
+  fontSize: "11px",
+  padding: "3px 8px",
+  borderRadius: "999px",
+  border: "1px solid #ddd",
+  background: "#fafafa",
+  color: "#444",
+  fontWeight: 600,
 };

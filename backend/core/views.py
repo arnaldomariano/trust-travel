@@ -653,6 +653,16 @@ def serialize_update(update, request=None):
 
         "display_name": profile.display_name if profile else "",
 
+        "author_nationality": (
+            profile.nationality if profile and profile.show_nationality else ""
+        ),
+
+        "author_nationality_country_code": (
+            (profile.nationality_country_code or profile.country_code or "").upper()
+            if profile and profile.show_nationality
+            else ""
+        ),
+
         "avatar_url": avatar_url,
 
         "created_at": update.created_at,

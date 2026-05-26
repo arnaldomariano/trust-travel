@@ -57,8 +57,10 @@ export default function HomePage() {
   const [updates, setUpdates] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [openUser, setOpenUser] = useState<string | null>(null);
+  const [openProfileContextUser, setOpenProfileContextUser] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [showCreateMenu, setShowCreateMenu] = useState(false);
+
 
   // =========================
   // Redirect anonymous users
@@ -337,7 +339,10 @@ const getActivityMetaText = (item: any) => {
     return (
       <div
         key={user}
-        onClick={() => setOpenUser(isOpen ? null : user)}
+        onClick={() => {
+          setOpenProfileContextUser(null);
+          setOpenUser(isOpen ? null : user);
+        }}
         style={{ perspective: "1000px", width: "170px", height: "240px" }}
       >
         <div
@@ -368,18 +373,33 @@ const getActivityMetaText = (item: any) => {
             )}
 
             {professionBadge && profileContextText && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  alert(profileContextText);
-                }}
-                title={profileContextText}
-                style={professionBadgeStyle}
-              >
-                {professionBadge}
-              </button>
-            )}
+                  <>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+
+                        setOpenProfileContextUser((current) =>
+                          current === user ? null : user
+                        );
+                      }}
+                      title={profileContextText}
+                      style={professionBadgeStyle}
+                    >
+                      {professionBadge}
+                    </button>
+
+                    {openProfileContextUser === user && (
+                      <div
+                        style={profileContextPopover}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <div style={profileContextPopoverTitle}>Travel context</div>
+                        <div style={profileContextPopoverText}>{profileContextText}</div>
+                      </div>
+                    )}
+                  </>
+                )}
 
             <Avatar
               name={displayName}
@@ -1003,4 +1023,33 @@ const professionBadgeStyle = {
   boxShadow: "0 0 10px rgba(0,0,0,0.10)",
   zIndex: 2,
   cursor: "pointer",
+};
+
+const profileContextPopover = {
+  position: "absolute" as const,
+  top: "40px",
+  left: "10px",
+  right: "10px",
+  padding: "10px",
+  borderRadius: "12px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+  zIndex: 5,
+  fontSize: "12px",
+  textAlign: "left" as const,
+};
+
+const profileContextPopoverTitle = {
+  fontSize: "11px",
+  color: "#777",
+  fontWeight: 700,
+  marginBottom: "4px",
+};
+
+const profileContextPopoverText = {
+  fontSize: "12px",
+  color: "#333",
+  lineHeight: 1.4,
 };

@@ -62,14 +62,8 @@ export default function HomePage() {
   const [showCreateMenu, setShowCreateMenu] = useState(false);
 
 
-  // =========================
-  // Redirect anonymous users
-  // =========================
-  useEffect(() => {
-    if (!loading && username === null) {
-      router.push("/login");
-    }
-  }, [loading, username, router]);
+// Anonymous users see the public landing screen.
+// Logged-in users see the feed.
 
   // =========================
   // Load feed updates
@@ -587,6 +581,59 @@ const getActivityMetaText = (item: any) => {
       );
     };
 
+    if (loading) {
+      return (
+        <main style={landingPage}>
+          <section style={landingCard}>
+            <div style={landingEyebrow}>Trust Travel</div>
+            <h1 style={landingTitle}>Loading...</h1>
+          </section>
+        </main>
+      );
+    }
+
+    if (!isLoggedIn) {
+      return (
+        <main style={landingPage}>
+          <section style={landingCard}>
+            <div style={landingEyebrow}>Trust Travel</div>
+
+            <h1 style={landingTitle}>
+              Plan trips through trusted human experiences.
+            </h1>
+
+            <p style={landingText}>
+              Discover places, experiences, alerts and travel ideas shared by people
+              you trust — and by broader networks with clear context.
+            </p>
+
+            <div style={landingActions}>
+              <button
+                type="button"
+                onClick={() => router.push("/login")}
+                style={landingPrimaryButton}
+              >
+                Sign in
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push("/register")}
+                style={landingSecondaryButton}
+              >
+                Create account
+              </button>
+            </div>
+
+            <div style={landingNote}>
+              Your public code protects your identity outside your trusted network.
+              You decide what profile context appears on your cards.
+            </div>
+          </section>
+        </main>
+      );
+    }
+
   return (
     <main style={{ maxWidth: "900px", margin: "0 auto", padding: "40px" }}>
       <h1>{t.appName}</h1>
@@ -1052,4 +1099,84 @@ const profileContextPopoverText = {
   fontSize: "12px",
   color: "#333",
   lineHeight: 1.4,
+};
+
+const landingPage = {
+  minHeight: "100vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "40px",
+  background:
+    "radial-gradient(circle at top left, #f4f0ff 0, transparent 34%), #fafafa",
+};
+
+const landingCard = {
+  width: "100%",
+  maxWidth: "680px",
+  padding: "38px",
+  borderRadius: "24px",
+  border: "1px solid #eee",
+  background: "white",
+  boxShadow: "0 16px 40px rgba(0,0,0,0.08)",
+};
+
+const landingEyebrow = {
+  fontSize: "14px",
+  color: "#666",
+  fontWeight: 700,
+  marginBottom: "12px",
+};
+
+const landingTitle = {
+  fontSize: "42px",
+  lineHeight: 1.1,
+  margin: "0 0 18px",
+  maxWidth: "620px",
+};
+
+const landingText = {
+  fontSize: "18px",
+  color: "#555",
+  lineHeight: 1.6,
+  margin: "0 0 26px",
+};
+
+const landingActions = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap" as const,
+  marginBottom: "22px",
+};
+
+const landingPrimaryButton = {
+  padding: "12px 18px",
+  borderRadius: "999px",
+  border: "none",
+  background: "black",
+  color: "white",
+  fontSize: "15px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const landingSecondaryButton = {
+  padding: "12px 18px",
+  borderRadius: "999px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  fontSize: "15px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const landingNote = {
+  padding: "14px",
+  borderRadius: "14px",
+  background: "#f8f8f8",
+  border: "1px solid #eee",
+  color: "#666",
+  fontSize: "14px",
+  lineHeight: 1.5,
 };

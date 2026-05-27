@@ -275,6 +275,26 @@ class ExperiencePhotoSerializer(serializers.ModelSerializer):
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     country_code = serializers.CharField(write_only=True, max_length=2)
+    email = serializers.EmailField(required=False, allow_blank=True)
+
+    COUNTRY_LABELS = {
+        "BR": "Brazil",
+        "PT": "Portugal",
+        "NL": "Netherlands",
+        "IT": "Italy",
+        "US": "United States",
+        "GB": "United Kingdom",
+        "ES": "Spain",
+        "FR": "France",
+        "DE": "Germany",
+        "MX": "Mexico",
+        "CL": "Chile",
+        "AR": "Argentina",
+        "GR": "Greece",
+        "TH": "Thailand",
+        "LA": "Laos",
+        "BO": "Bolivia",
+    }
 
     class Meta:
         model = User
@@ -282,6 +302,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         country_code = validated_data.pop("country_code", "XX")
+        country_code = (country_code or "XX").upper()[:2]
+        country_label = self.COUNTRY_LABELS.get(country_code, "")
 
         user = User.objects.create_user(
             username=validated_data["username"],
@@ -289,9 +311,19 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             password=validated_data["password"],
         )
 
-        user.profile.country_code = country_code.upper()[:2]
-        user.profile.public_code = ""
-        user.profile.save()
+        profile = user.profile
+        profile.country_code = country_code
+        profile.public_code = ""
+
+        profile.nationality = country_label
+        profile.nationality_country_code = country_code
+        profile.country_of_birth = country_label
+
+        # Privacy default: the system knows the country for analytics/public code,
+        # but does not show the flag publicly unless the user opts in later.
+        profile.show_nationality = False
+
+        profile.save()
 
         return user
 

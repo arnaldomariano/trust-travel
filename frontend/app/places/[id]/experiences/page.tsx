@@ -645,6 +645,41 @@ const addExperienceToTripPlan = async (experienceId: number) => {
       </div>
     </div>
 
+    {totalExperiences === 0 && (
+  <div style={emptyExperienceBox}>
+    <div style={emptyExperienceEyebrow}>First experience opportunity</div>
+
+    <h2 style={emptyExperienceTitle}>
+      You are the first person to explore this place on Trust Travel.
+    </h2>
+
+    <p style={emptyExperienceText}>
+      There are no shared experiences here yet. If you visited this place,
+      your comment can help future travelers understand what to expect.
+    </p>
+
+    <div style={emptyExperienceActions}>
+      <button
+          type="button"
+          onClick={() =>
+            router.push(`/destinations?mode=experience&place=${id}&share=true`)
+          }
+          style={emptyExperiencePrimaryButton}
+        >
+          Share the first experience
+        </button>
+
+      <button
+        type="button"
+        onClick={() => router.push("/destinations?mode=experience")}
+        style={emptyExperienceSecondaryButton}
+      >
+        Search another place
+      </button>
+    </div>
+  </div>
+)}
+
     {highlightedExperience && (
       <div
         style={{
@@ -1661,4 +1696,61 @@ const createPlanLink = {
   fontSize: "13px",
   textDecoration: "underline",
   width: "fit-content",
+};
+
+const emptyExperienceBox = {
+  marginTop: "20px",
+  marginBottom: "30px",
+  padding: "22px",
+  borderRadius: "16px",
+  border: "1px solid #eee",
+  background: "white",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+  display: "grid",
+  gap: "12px",
+};
+
+const emptyExperienceEyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  fontWeight: 700,
+};
+
+const emptyExperienceTitle = {
+  margin: 0,
+  fontSize: "22px",
+  lineHeight: 1.25,
+};
+
+const emptyExperienceText = {
+  margin: 0,
+  color: "#555",
+  lineHeight: 1.6,
+};
+
+const emptyExperienceActions = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+  marginTop: "6px",
+};
+
+const emptyExperiencePrimaryButton = {
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "none",
+  background: "black",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const emptyExperienceSecondaryButton = {
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  cursor: "pointer",
+  fontWeight: 700,
 };

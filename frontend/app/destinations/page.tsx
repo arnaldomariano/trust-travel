@@ -31,6 +31,7 @@ export default function DestinationsPage() {
 
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [showShareForm, setShowShareForm] = useState(false);
+  const [createdPlaceId, setCreatedPlaceId] = useState<number | null>(null);
 
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
@@ -289,6 +290,13 @@ const getPlaceLocationText = (place: any) => {
 
 const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
+const isNewlyCreatedPlace = createdPlaceId === selectedPlace?.id;
+
+const selectedPlaceReviewsCount =
+  Number(selectedPlace?.reviews_count ?? selectedPlace?.average_rating_count ?? 0);
+
+const selectedPlaceHasNoExperiences =
+  !!selectedPlace && selectedPlaceReviewsCount === 0;
   // =========================
   // Create a basic place
   // =========================
@@ -332,11 +340,13 @@ const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
           return [data, ...prev];
         });
 
-        setSelectedPlace(data);
-        setExperienceShared(false);
-        setSharedExperience(null);
-        setEditingExperience(false);
-        setSearchTerm(data.name || newPlaceName.trim());
+    setSelectedPlace(data);
+    setCreatedPlaceId(data.id);
+    setShowShareForm(false);
+    setExperienceShared(false);
+    setSharedExperience(null);
+    setEditingExperience(false);
+    setSearchTerm(data.name || newPlaceName.trim());
 
     } catch (error) {
       console.error("Create basic place failed:", error);
@@ -351,6 +361,7 @@ const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
   // =========================
   const handleSelectExistingPlace = (place: any) => {
   setSelectedPlace(place);
+  setCreatedPlaceId(null);
   setShowShareForm(false);
   setExperienceShared(false);
   setSharedExperience(null);
@@ -375,6 +386,7 @@ const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
   // =========================
   const handleChangePlace = () => {
     setSelectedPlace(null);
+    setCreatedPlaceId(null);
     setTitle("");
     setComment("");
     setRating(null);
@@ -392,6 +404,7 @@ const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
   // =========================
   const resetShareFlow = () => {
     setSelectedPlace(null);
+    setCreatedPlaceId(null);
     setSearchTerm("");
     setNewPlaceName("");
     setNewPlaceCity("");
@@ -828,62 +841,99 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         </section>
       )}
 
- {selectedPlace && !shouldOpenShareForm && (
-  <section
-    id="selected-place-actions"
-    style={{
-      marginTop: "28px",
-      padding: "22px",
-      border: "1px solid #eee",
-      borderRadius: "16px",
-      background: "white",
-      maxWidth: "620px",
-    }}
-  >
-    <h2 style={{ marginTop: 0 }}>{selectedPlace.name}</h2>
-
-    <p style={{ color: "#666", lineHeight: 1.5 }}>
-      Choose what you want to do next.
-    </p>
-
-    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-      <button
-        type="button"
-        onClick={() => router.push(`/places/${selectedPlace.id}/experiences`)}
-        style={primaryButton}
+     {selectedPlace && !shouldOpenShareForm && (
+      <section
+        id="selected-place-actions"
+        style={{
+          marginTop: "28px",
+          padding: "22px",
+          border: "1px solid #eee",
+          borderRadius: "16px",
+          background: "white",
+          maxWidth: "620px",
+        }}
       >
-        View experiences
-      </button>
+        <h2 style={{ marginTop: 0 }}>{selectedPlace.name}</h2>
 
-      {isUpdateMode ? (
+        {isUpdateMode ? (
+          <p style={{ color: "#666", lineHeight: 1.5 }}>
+            Choose what you want to share about this place.
+          </p>
+        ) : selectedPlaceHasNoExperiences ? (
+          <div style={newPlaceNotice}>
+            <strong>
+              There are no experiences about this place yet.
+            </strong>
 
-          <button
-            type="button"
-            onClick={() => router.push(`/places/${selectedPlace.id}?share=update`)}
-            style={secondaryButton}
-          >
-            Share event or info
-          </button>
+            <p style={{ margin: "8px 0 0 0", color: "#555", lineHeight: 1.5 }}>
+              Be the first to share what you know about {selectedPlace.name}.
+              Your experience can help future travelers decide if this place fits
+              their trip.
+            </p>
+          </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => setShowShareForm(true)}
-            style={secondaryButton}
-          >
-            Share your experience
-          </button>
+          <p style={{ color: "#666", lineHeight: 1.5 }}>
+            You can read existing experiences first — then share your own review.
+          </p>
         )}
 
-      <button
-        type="button"
-        onClick={handleChangePlace}
-        style={secondaryButton}
-      >
-        Change selection
-      </button>
-    </div>
-  </section>
-)}
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          {isUpdateMode ? (
+            <button
+              type="button"
+              onClick={() => router.push(`/places/${selectedPlace.id}?share=update`)}
+              style={primaryButton}
+            >
+              Share event or info
+            </button>
+          ) : selectedPlaceHasNoExperiences ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowShareForm(true)}
+                style={primaryButton}
+              >
+                Share the first experience
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push(`/places/${selectedPlace.id}/experiences`)}
+                style={secondaryButton}
+              >
+                View empty experience page
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => router.push(`/places/${selectedPlace.id}/experiences`)}
+                style={primaryButton}
+              >
+                View experiences first
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowShareForm(true)}
+                style={secondaryButton}
+              >
+                Share your experience
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={handleChangePlace}
+            style={secondaryButton}
+          >
+            Change selection
+          </button>
+        </div>
+      </section>
+    )}
 
         {selectedPlace && showShareForm && (
           <section
@@ -1216,6 +1266,15 @@ const helperNote = {
   color: "#666",
   fontSize: "12px",
   lineHeight: 1.5,
+};
+
+const newPlaceNotice = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  marginBottom: "16px",
 };
 
 const label = {

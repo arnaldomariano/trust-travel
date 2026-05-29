@@ -10,6 +10,7 @@ from .models import (
     Friendship,
     Profile,
     Update,
+    generate_recovery_code,
 )
 
 class UpdateSerializer(serializers.ModelSerializer):
@@ -276,6 +277,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     country_code = serializers.CharField(write_only=True, max_length=2)
     email = serializers.EmailField(required=False, allow_blank=True)
+    recovery_code = serializers.CharField(read_only=True)
 
     COUNTRY_LABELS = {
         "BR": "Brazil",
@@ -298,7 +300,14 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "password", "country_code"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "password",
+            "country_code",
+            "recovery_code",
+        ]
 
     def create(self, validated_data):
         country_code = validated_data.pop("country_code", "XX")
@@ -310,6 +319,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             email=validated_data.get("email", ""),
             password=validated_data["password"],
         )
+
+        recovery_code = generate_recovery_code()
 
         profile = user.profile
         profile.country_code = country_code
@@ -323,10 +334,25 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         # but does not show the flag publicly unless the user opts in later.
         profile.show_nationality = False
 
+        # Recovery default: show the plain code once in the register response,
+        # but store only the hash in the database.
+        profile.set_recovery_code(recovery_code)
+
         profile.save()
+
+        user.recovery_code = recovery_code
 
         return user
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        recovery_code = getattr(instance, "recovery_code", None)
+
+        if recovery_code:
+            data["recovery_code"] = recovery_code
+
+        return data
 
 class ExperienceReplySerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField(read_only=True)

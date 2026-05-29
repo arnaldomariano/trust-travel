@@ -1,8 +1,11 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password, check_password
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 import random
+import secrets
 import string
 
 def generate_public_code(country_code: str):
@@ -22,6 +25,16 @@ def generate_public_code(country_code: str):
         if not Profile.objects.filter(public_code=code).exists():
             return code
 
+def generate_recovery_code():
+    alphabet = string.ascii_uppercase + string.digits
+
+    blocks = []
+
+    for _ in range(3):
+        block = "".join(secrets.choice(alphabet) for _ in range(4))
+        blocks.append(block)
+
+    return "TT-" + "-".join(blocks)
 
 class Profile(models.Model):
     AGE_RANGE_CHOICES = [
@@ -62,12 +75,28 @@ class Profile(models.Model):
     travel_interests = models.CharField(max_length=255, blank=True)
     show_profile_context = models.BooleanField(default=False)
 
+    # Private account recovery.
+    # The plain recovery code is shown only once after signup.
+    # We store only the hash, never the plain code.
+    recovery_code_hash = models.CharField(max_length=255, blank=True)
+    recovery_code_created_at = models.DateTimeField(null=True, blank=True)
+
     age_range = models.CharField(
         max_length=30,
         choices=AGE_RANGE_CHOICES,
         default="prefer_not_to_say",
     )
 
+
+    def set_recovery_code(self, plain_code: str):
+        self.recovery_code_hash = make_password(plain_code)
+        self.recovery_code_created_at = timezone.now()
+
+    def check_recovery_code(self, plain_code: str):
+        if not self.recovery_code_hash:
+            return False
+
+        return check_password(plain_code, self.recovery_code_hash)
 
     def save(self, *args, **kwargs):
         if not self.public_code:

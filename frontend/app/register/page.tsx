@@ -28,12 +28,16 @@ const COUNTRY_OPTIONS = [
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [countryCode, setCountryCode] = useState("");
-  const [loading, setLoading] = useState(false);
+const [username, setUsername] = useState("");
+const [email, setEmail] = useState("");
+const [password, setPassword] = useState("");
+const [countryCode, setCountryCode] = useState("");
+const [loading, setLoading] = useState(false);
 
+const [registrationResult, setRegistrationResult] = useState<{
+  username: string;
+  recovery_code?: string;
+} | null>(null);
   const selectedCountry = COUNTRY_OPTIONS.find(
     (country) => country.code === countryCode
   );
@@ -43,6 +47,15 @@ export default function RegisterPage() {
 
     if (!username.trim()) {
       alert("Please choose a username.");
+      return;
+    }
+
+    const usernamePattern = /^[A-Za-z0-9@.+\-_]+$/;
+
+    if (!usernamePattern.test(username.trim())) {
+      alert(
+        "Username can only contain letters, numbers, and these symbols: @ . + - _"
+      );
       return;
     }
 
@@ -80,8 +93,12 @@ export default function RegisterPage() {
         return;
       }
 
-      alert("Account created successfully");
-      router.push("/login");
+      const data = await response.json();
+
+    setRegistrationResult({
+      username: data.username || username.trim(),
+      recovery_code: data.recovery_code,
+    });
     } catch (error) {
       console.error(error);
       alert("Something went wrong");
@@ -89,6 +106,50 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+    if (registrationResult) {
+      return (
+        <main style={page}>
+          <section style={formCard}>
+            <div>
+              <div style={eyebrow}>Account created</div>
+
+              <h1 style={title}>Welcome to Trust Travel</h1>
+
+              <p style={introText}>
+                Your account was created successfully. Trust Travel is built around
+                trusted connections. Invite at least two people you really trust —
+                they can help make your travel network stronger and may also help
+                you recover your account in the future.
+              </p>
+            </div>
+
+            {registrationResult.recovery_code && (
+              <div style={recoveryCodeBox}>
+                <strong>Save this private recovery code</strong>
+
+                <div style={recoveryCodeValue}>
+                  {registrationResult.recovery_code}
+                </div>
+
+                <p style={recoveryCodeText}>
+                  Keep this code in a safe place. It is shown only once. Do not
+                  share it publicly.
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => router.push("/login")}
+              style={button}
+            >
+              Continue to login
+            </button>
+          </section>
+        </main>
+      );
+    }
 
   return (
     <main style={page}>
@@ -106,14 +167,19 @@ export default function RegisterPage() {
 
         <div style={field}>
           <label style={label}>Username</label>
+
           <input
             type="text"
-            placeholder="Choose a username"
+            placeholder="Username, e.g. maria_silva"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
             style={input}
           />
+
+          <small style={hint}>
+            Use only letters, numbers, and @ . + - _. No spaces or accents.
+          </small>
         </div>
 
         <div style={field}>
@@ -270,4 +336,33 @@ const loginText = {
 
 const loginLink = {
   color: "#111",
+};
+
+const recoveryCodeBox = {
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  display: "grid",
+  gap: "10px",
+};
+
+const recoveryCodeValue = {
+  padding: "12px",
+  borderRadius: "10px",
+  background: "white",
+  border: "1px dashed #8fd19e",
+  color: "#111",
+  fontSize: "20px",
+  fontWeight: 800,
+  letterSpacing: "1px",
+  textAlign: "center" as const,
+};
+
+const recoveryCodeText = {
+  margin: 0,
+  color: "#555",
+  fontSize: "13px",
+  lineHeight: 1.5,
 };

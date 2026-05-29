@@ -10,6 +10,7 @@ from .views import (
     PlaceExperiencesListView,
     PlaceDetailView,
     UserRegisterView,
+    RecoverPasswordView,
     MeView,
     ProfileView,
     ExperienceReplyListCreateView,
@@ -53,7 +54,9 @@ urlpatterns = [
     path("destinations/<int:destination_id>/places/", DestinationPlacesListView.as_view()),
     path("places/<int:place_id>/experiences/", PlaceExperiencesListView.as_view()),
 
+
     path("register/", UserRegisterView.as_view()),
+    path("recover-password/", RecoverPasswordView.as_view()),
     path("updates/", UpdateListView.as_view()),
     path("updates/<int:pk>/", UpdateDetailView.as_view()),
     path("connections/", ConnectionsListView.as_view()),

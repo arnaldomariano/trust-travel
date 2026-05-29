@@ -96,6 +96,59 @@ class ProfileView(APIView):
 class UserRegisterView(generics.CreateAPIView):
     serializer_class = UserRegisterSerializer
 
+class RecoverPasswordView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        username = (request.data.get("username") or "").strip()
+        recovery_code = (request.data.get("recovery_code") or "").strip()
+        new_password = request.data.get("new_password") or ""
+
+        if not username or not recovery_code or not new_password:
+            return Response(
+                {
+                    "detail": "Username, recovery code and new password are required."
+                },
+                status=400,
+            )
+
+        if len(new_password) < 8:
+            return Response(
+                {
+                    "detail": "New password must be at least 8 characters long."
+                },
+                status=400,
+            )
+
+        try:
+            user = User.objects.select_related("profile").get(username=username)
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "detail": "Invalid username or recovery code."
+                },
+                status=400,
+            )
+
+        profile = getattr(user, "profile", None)
+
+        if not profile or not profile.check_recovery_code(recovery_code):
+            return Response(
+                {
+                    "detail": "Invalid username or recovery code."
+                },
+                status=400,
+            )
+
+        user.set_password(new_password)
+        user.save()
+
+        return Response(
+            {
+                "detail": "Password updated successfully. You can now log in with your new password."
+            }
+        )
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):

@@ -128,6 +128,23 @@ export default function LoginPage() {
         {error && (
           <div style={{ color: "red", fontSize: "14px" }}>{error}</div>
         )}
+
+        <button
+          type="button"
+          onClick={() => router.push("/recover-password")}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: "#111",
+            cursor: "pointer",
+            textDecoration: "underline",
+            fontSize: "14px",
+            padding: "4px",
+          }}
+        >
+          Forgot password?
+        </button>
+
       </form>
     </main>
   );

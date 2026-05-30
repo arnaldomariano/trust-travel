@@ -24,6 +24,13 @@ type ContentReport = {
   created_at: string;
 };
 
+type ReportStatusFilter =
+  | "all"
+  | "pending"
+  | "reviewed"
+  | "dismissed"
+  | "action_taken";
+
 const reasonLabels: Record<string, string> = {
   misleading_information: "Misleading information",
   unsafe_place: "Unsafe place",
@@ -47,6 +54,7 @@ export default function ReportsPage() {
   const [error, setError] = useState("");
   const [updatingReportId, setUpdatingReportId] = useState<number | null>(null);
   const [actionMessage, setActionMessage] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>("all");
 
   const loadReports = async () => {
     setLoading(true);
@@ -149,6 +157,19 @@ export default function ReportsPage() {
     return null;
   };
 
+  const filteredReports =
+      statusFilter === "all"
+        ? reports
+        : reports.filter((report) => report.status === statusFilter);
+
+  const getStatusCount = (status: ReportStatusFilter) => {
+      if (status === "all") {
+        return reports.length;
+      }
+
+      return reports.filter((report) => report.status === status).length;
+    };
+
   return (
     <main style={page}>
       <div style={breadcrumb}>
@@ -169,6 +190,28 @@ export default function ReportsPage() {
         </p>
       </section>
 
+      <div style={filterBar}>
+          {[
+            ["all", "All"],
+            ["pending", "Pending"],
+            ["reviewed", "Reviewed"],
+            ["dismissed", "Dismissed"],
+            ["action_taken", "Action taken"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatusFilter(value as ReportStatusFilter)}
+              style={{
+                ...filterButton,
+                ...(statusFilter === value ? activeFilterButton : {}),
+              }}
+            >
+              {label} ({getStatusCount(value as ReportStatusFilter)})
+            </button>
+          ))}
+        </div>
+
       {loading && <p style={mutedText}>Loading reports...</p>}
 
       {error && <div style={errorBox}>{error}</div>}
@@ -179,15 +222,19 @@ export default function ReportsPage() {
           </div>
         )}
 
-      {!loading && !error && reports.length === 0 && (
-        <div style={emptyBox}>
-          No reports found.
-        </div>
-      )}
+      {!loading && !error && filteredReports.length === 0 && (
+          <div style={emptyBox}>
+            {statusFilter === "all"
+              ? "No reports found."
+              : `No ${statusLabels[statusFilter]?.toLowerCase() || statusFilter} reports found.`}
+          </div>
+        )}
 
-      {!loading && reports.length > 0 && (
-        <section style={reportsGrid}>
-          {reports.map((report) => {
+      {!loading && filteredReports.length > 0 && (
+          <section style={reportsGrid}>
+            {filteredReports.map((report) => {
+
+
             const contentLink = getContentLink(report);
 
             return (
@@ -462,4 +509,28 @@ const successBox = {
   background: "#f2fbf5",
   color: "#166534",
   marginBottom: "16px",
+};
+
+const filterBar = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+  marginBottom: "22px",
+};
+
+const filterButton = {
+  padding: "9px 13px",
+  borderRadius: "999px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  cursor: "pointer",
+  fontSize: "14px",
+  fontWeight: 600,
+};
+
+const activeFilterButton = {
+  background: "black",
+  color: "white",
+  border: "1px solid black",
 };

@@ -15,11 +15,20 @@ type TripPlan = {
 };
 
 export default function ExperiencesPage() {
+
+  // =====================
+  // Route / navigation
+  // =====================
+
   const params = useParams();
   const id = params.id;
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightedExperienceId = searchParams.get("highlight");
+
+  // =====================
+  // Core page state
+  // =====================
 
   const [experiences, setExperiences] = useState<any[]>([]);
   const [place, setPlace] = useState<any>(null);
@@ -32,14 +41,28 @@ export default function ExperiencesPage() {
   const [lastVisit, setLastVisit] = useState<number>(0);
   const [showOtherReviews, setShowOtherReviews] = useState(false);
 
+  // =====================
+  // Trip plan inline picker state
+  // =====================
+
   const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
   const [selectedPlanByExperience, setSelectedPlanByExperience] = useState<Record<number, string>>({});
   const [showTripPlanPicker, setShowTripPlanPicker] = useState<Record<number, boolean>>({});
   const [addingToPlan, setAddingToPlan] = useState<Record<number, boolean>>({});
 
+  const [showCreatePlanByExperience, setShowCreatePlanByExperience] = useState<Record<number, boolean>>({});
+  const [newPlanTitleByExperience, setNewPlanTitleByExperience] = useState<Record<number, string>>({});
+  const [newPlanDestinationByExperience, setNewPlanDestinationByExperience] = useState<Record<number, string>>({});
+  const [creatingPlanByExperience, setCreatingPlanByExperience] = useState<Record<number, boolean>>({});
+  const [tripPlanErrorByExperience, setTripPlanErrorByExperience] = useState<Record<number, string>>({});
+
   const [tripPlanMessageByExperience, setTripPlanMessageByExperience] = useState<
       Record<number, { text: string; planId: number | null }>
     >({});
+
+  // =====================
+  // Report / moderation state
+  // =====================
 
   const [showReportFormByExperience, setShowReportFormByExperience] = useState<Record<number, boolean>>({});
   const [reportReasonByExperience, setReportReasonByExperience] = useState<Record<number, string>>({});
@@ -47,6 +70,10 @@ export default function ExperiencesPage() {
   const [submittingReportByExperience, setSubmittingReportByExperience] = useState<Record<number, boolean>>({});
   const [reportMessageByExperience, setReportMessageByExperience] = useState<Record<number, string>>({});
   const [reportErrorByExperience, setReportErrorByExperience] = useState<Record<number, string>>({});
+
+  // =====================
+  // Derived page metrics
+  // =====================
 
   const trustedReviewsCount = experiences.filter((e) => e.is_trusted).length;
 
@@ -310,6 +337,10 @@ const otherExperiences = sortedExperiences.filter(
     .sort((a, b) => b.score - a.score)
     .slice(0, 2);
 
+  // =====================
+  // Data loading helpers
+  // =====================
+
   const loadRepliesForExperiences = async (
       experiencesList: any[]
         ) => {
@@ -371,6 +402,9 @@ const otherExperiences = sortedExperiences.filter(
       }
     };
 
+ // =====================
+  // Initial data loading
+  // =====================
 
   useEffect(() => {
     if (!id) return;
@@ -459,10 +493,10 @@ useEffect(() => {
   const now = Date.now();
   localStorage.setItem("last_visit", String(now));
 }, []);
-  useEffect(() => {
-    const now = Date.now();
-    localStorage.setItem("last_visit", String(now));
-  }, []);
+
+  // =====================
+  // Reply actions
+  // =====================
 
   const handleReplySubmit = async (experienceId: number) => {
     const token = localStorage.getItem("access");
@@ -528,11 +562,9 @@ const newReply = await response.json();
     }
   };
 
-const getCreateTripPlanUrl = (experienceId: number) => {
-  return `/trip-plans?returnTo=${encodeURIComponent(
-    `/places/${id}/experiences?highlight=${experienceId}`
-  )}`;
-};
+  // =====================
+  // Trip plan actions
+  // =====================
 
 const addExperienceToTripPlan = async (experienceId: number) => {
   const selectedPlanId = selectedPlanByExperience[experienceId];
@@ -594,6 +626,146 @@ const addExperienceToTripPlan = async (experienceId: number) => {
     }));
   }
 };
+
+const createTripPlanAndAddExperience = async (experience: any) => {
+  const experienceId = experience?.id;
+
+  if (!experienceId) {
+    setTripPlanErrorByExperience((prev) => ({
+      ...prev,
+      0: "Experience not loaded yet.",
+    }));
+    return;
+  }
+
+  const title = (newPlanTitleByExperience[experienceId] || "").trim();
+
+  const destinationText =
+    (newPlanDestinationByExperience[experienceId] || "").trim() ||
+    experience.destination_name ||
+    experience.place_name ||
+    place?.name ||
+    "";
+
+  if (!title) {
+    setTripPlanErrorByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "Please give your trip plan a title.",
+    }));
+    return;
+  }
+
+  setCreatingPlanByExperience((prev) => ({
+    ...prev,
+    [experienceId]: true,
+  }));
+
+  setTripPlanErrorByExperience((prev) => ({
+    ...prev,
+    [experienceId]: "",
+  }));
+
+  try {
+    const createRes = await fetch(`${API_URL}/api/trip-plans/`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title,
+        destination_text: destinationText,
+      }),
+    });
+
+    const createdPlan = await createRes.json();
+
+    if (!createRes.ok) {
+      console.error("Create trip plan error:", createdPlan);
+
+      setTripPlanErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]: createdPlan.detail || "Could not create trip plan.",
+      }));
+
+      return;
+    }
+
+    const addRes = await fetch(
+      `${API_URL}/api/trip-plans/${createdPlan.id}/experiences/${experienceId}/`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+
+    const addData = await addRes.json();
+
+    if (!addRes.ok) {
+      console.error("Add to new trip plan error:", addData);
+
+      setTripPlanErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]:
+          addData.detail ||
+          "Trip plan was created, but the experience was not added.",
+      }));
+
+      return;
+    }
+
+    setTripPlans((prev) => [createdPlan, ...prev]);
+
+    setSelectedPlanByExperience((prev) => ({
+      ...prev,
+      [experienceId]: String(createdPlan.id),
+    }));
+
+    setTripPlanMessageByExperience((prev) => ({
+      ...prev,
+      [experienceId]: {
+        text: `Experience added to ${createdPlan.title}.`,
+        planId: createdPlan.id,
+      },
+    }));
+
+    setNewPlanTitleByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "",
+    }));
+
+    setNewPlanDestinationByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "",
+    }));
+
+    setShowCreatePlanByExperience((prev) => ({
+      ...prev,
+      [experienceId]: false,
+    }));
+
+    setShowTripPlanPicker((prev) => ({
+      ...prev,
+      [experienceId]: false,
+    }));
+  } catch (error) {
+    console.error("Create trip plan and add experience error:", error);
+
+    setTripPlanErrorByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "Something went wrong while creating the trip plan.",
+    }));
+  } finally {
+    setCreatingPlanByExperience((prev) => ({
+      ...prev,
+      [experienceId]: false,
+    }));
+  }
+};
+
+  // =====================
+  // Report actions
+  // =====================
 
 const submitExperienceReport = async (experienceId: number) => {
   const reason = reportReasonByExperience[experienceId] || "misleading_information";
@@ -701,6 +873,10 @@ const submitExperienceReport = async (experienceId: number) => {
   }
 };
 
+  // =====================
+  // Reusable report UI
+  // =====================
+
 const renderReportControls = (experience: any) => {
   if (!experience?.id) return null;
 
@@ -715,6 +891,8 @@ const renderReportControls = (experience: any) => {
   const submitting = submittingReportByExperience[experienceId];
   const message = reportMessageByExperience[experienceId];
   const error = reportErrorByExperience[experienceId];
+
+
 
   return (
     <div style={reportContainer}>
@@ -803,6 +981,10 @@ const renderReportControls = (experience: any) => {
     </div>
   );
 };
+
+  // =====================
+  // Page render
+  // =====================
 
   return (
     <main style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
@@ -973,126 +1155,9 @@ const renderReportControls = (experience: any) => {
           >
             View full experience
           </Link>
-
-          <button
-            type="button"
-            style={{
-              fontSize: "13px",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "1px solid #ddd",
-              background: "#f0f0f0",
-              color: "#111",
-              cursor: "pointer",
-            }}
-            onClick={() =>
-              setShowTripPlanPicker((prev) => ({
-                ...prev,
-                [highlightedExperience.id]: !prev[highlightedExperience.id],
-              }))
-            }
-          >
-            Add to trip plan
-          </button>
         </div>
 
-        {showTripPlanPicker[highlightedExperience.id] && (
-          <div
-            style={{
-              marginTop: "10px",
-              padding: "10px",
-              borderRadius: "10px",
-              border: "1px solid #eee",
-              background: "white",
-              display: "grid",
-              gap: "8px",
-            }}
-          >
-            {tripPlans.length === 0 ? (
-              <div style={{ fontSize: "12px", color: "#666" }}>
-                You do not have any trip plans yet.{" "}
-                <Link
-                  href={getCreateTripPlanUrl(highlightedExperience.id)}
-                  style={{ color: "#111", fontWeight: 600 }}
-                >
-                  Create one
-                </Link>
-                .
-              </div>
-            ) : (
-              <>
-                <select
-                  value={selectedPlanByExperience[highlightedExperience.id] || ""}
-                  onChange={(event) =>
-                    setSelectedPlanByExperience((prev) => ({
-                      ...prev,
-                      [highlightedExperience.id]: event.target.value,
-                    }))
-                  }
-                  style={{
-                    padding: "8px",
-                    borderRadius: "8px",
-                    border: "1px solid #ddd",
-                    fontSize: "12px",
-                    maxWidth: "320px",
-                  }}
-                >
-                  <option value="">Choose a trip plan</option>
-
-                  {tripPlans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.title}
-                      {plan.destination_text ? ` — ${plan.destination_text}` : ""}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  type="button"
-                  disabled={addingToPlan[highlightedExperience.id]}
-                  onClick={() => addExperienceToTripPlan(highlightedExperience.id)}
-                  style={{
-                    fontSize: "12px",
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    border: "none",
-                    background: "black",
-                    color: "white",
-                    cursor: addingToPlan[highlightedExperience.id]
-                      ? "not-allowed"
-                      : "pointer",
-                    opacity: addingToPlan[highlightedExperience.id] ? 0.5 : 1,
-                    width: "fit-content",
-                  }}
-                >
-                  {addingToPlan[highlightedExperience.id] ? "Adding..." : "Add"}
-                </button>
-
-                <Link
-                  href={getCreateTripPlanUrl(highlightedExperience.id)}
-                  style={createPlanLink}
-                >
-                  Create a new trip plan
-                </Link>
-              </>
-            )}
-          </div>
-        )}
-
-        {tripPlanMessageByExperience[highlightedExperience.id] && (
-          <div style={tripPlanSuccessBox}>
-            <span>{tripPlanMessageByExperience[highlightedExperience.id].text}</span>
-
-            {tripPlanMessageByExperience[highlightedExperience.id].planId && (
-              <Link
-                href={`/trip-plans/${tripPlanMessageByExperience[highlightedExperience.id].planId}`}
-                style={tripPlanSuccessLink}
-              >
-                View trip plan
-              </Link>
-            )}
-          </div>
-         )}
+        {renderTripPlanControls(highlightedExperience)}
 
         {renderReportControls(highlightedExperience)}
 
@@ -2062,4 +2127,95 @@ const reportErrorBox = {
   background: "#fff5f5",
   color: "#991b1b",
   fontSize: "13px",
+};
+
+const inlineTripPlanPickerBox = {
+  marginTop: "10px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  display: "grid",
+  gap: "10px",
+};
+
+const inlineTripPlanTitle = {
+  fontWeight: 700,
+  fontSize: "13px",
+};
+
+const inlineTripPlanHelp = {
+  color: "#666",
+  fontSize: "12px",
+  lineHeight: 1.5,
+};
+
+const inlineExistingPlanBox = {
+  display: "grid",
+  gap: "8px",
+};
+
+const inlineSelectInput = {
+  padding: "8px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  fontSize: "12px",
+  maxWidth: "360px",
+};
+
+const inlinePrimaryButton = {
+  fontSize: "12px",
+  padding: "7px 10px",
+  borderRadius: "8px",
+  border: "none",
+  background: "black",
+  color: "white",
+  cursor: "pointer",
+  width: "fit-content",
+};
+
+const inlineSecondaryButton = {
+  fontSize: "12px",
+  padding: "7px 10px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  cursor: "pointer",
+  width: "fit-content",
+};
+
+const inlineDividerText = {
+  marginTop: "2px",
+  color: "#777",
+  fontSize: "12px",
+  fontWeight: 600,
+};
+
+const inlineQuickCreateBox = {
+  display: "grid",
+  gap: "8px",
+};
+
+const inlineTextInput = {
+  padding: "8px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  fontSize: "12px",
+  maxWidth: "360px",
+};
+
+const inlineQuickCreateActions = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+};
+
+const inlineTripPlanErrorBox = {
+  padding: "9px 10px",
+  borderRadius: "8px",
+  border: "1px solid #f3c2c2",
+  background: "#fff5f5",
+  color: "#b91c1c",
+  fontSize: "12px",
 };

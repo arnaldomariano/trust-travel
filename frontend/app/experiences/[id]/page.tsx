@@ -23,6 +23,13 @@ export default function ExperienceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showGallery, setShowGallery] = useState(false);
 
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportReason, setReportReason] = useState("misleading_information");
+  const [reportComment, setReportComment] = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportMessage, setReportMessage] = useState("");
+  const [reportError, setReportError] = useState("");
+
   const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
   const [selectedTripPlanId, setSelectedTripPlanId] = useState("");
   const [showTripPlanPicker, setShowTripPlanPicker] = useState(false);
@@ -144,6 +151,58 @@ export default function ExperienceDetailPage() {
         alert("Error adding experience to trip plan.");
       } finally {
         setAddingToPlan(false);
+      }
+    };
+
+    const handleSubmitReport = async (event: React.FormEvent) => {
+      event.preventDefault();
+
+      if (!experience?.id) {
+        setReportError("Experience not loaded yet.");
+        return;
+      }
+
+      setSubmittingReport(true);
+      setReportError("");
+      setReportMessage("");
+
+      try {
+        const res = await fetch(`${API_URL}/api/reports/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            content_type: "experience",
+            experience: experience.id,
+            reason: reportReason,
+            comment: reportComment.trim(),
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          const duplicateMessage =
+            data?.non_field_errors?.[0] ||
+            data?.detail ||
+            "Could not submit report.";
+
+          setReportError(duplicateMessage);
+          return;
+        }
+
+        setReportMessage(
+          "Report submitted. Thank you for helping keep Trust Travel safe."
+        );
+        setReportComment("");
+        setShowReportForm(false);
+      } catch (error) {
+        console.error("Report submit error:", error);
+        setReportError("Something went wrong while submitting the report.");
+      } finally {
+        setSubmittingReport(false);
       }
     };
 
@@ -340,28 +399,114 @@ const authorLabel = authorFlag
         </div>
 
         <div style={actions}>
-          <Link
-            href={`/places/${experience.place}/experiences`}
-            style={secondaryLink}
-          >
-            View all experiences
-          </Link>
+              <Link
+                href={`/places/${experience.place}/experiences`}
+                style={secondaryLink}
+              >
+                View all experiences
+              </Link>
 
-          <Link
-            href={`/places/${experience.place}/experiences?highlight=${experience.id}`}
-            style={secondaryLink}
-          >
-            Back to experiences
-          </Link>
+              <Link
+                href={`/places/${experience.place}/experiences?highlight=${experience.id}`}
+                style={secondaryLink}
+              >
+                Back to experiences
+              </Link>
 
-          <button
-            type="button"
-            style={secondaryButton}
-            onClick={() => setShowTripPlanPicker((prev) => !prev)}
-          >
-            Add to trip plan
-          </button>
-        </div>
+              <button
+                type="button"
+                style={secondaryButton}
+                onClick={() => setShowTripPlanPicker((prev) => !prev)}
+              >
+                Add to trip plan
+              </button>
+
+              <button
+                type="button"
+                style={reportButton}
+                onClick={() => {
+                  setShowReportForm((prev) => !prev);
+                  setReportError("");
+                  setReportMessage("");
+                }}
+              >
+                Report
+              </button>
+            </div>
+
+            {showReportForm && (
+              <form onSubmit={handleSubmitReport} style={reportBox}>
+                <div>
+                  <div style={reportTitle}>Report this experience</div>
+
+                  <p style={reportIntro}>
+                    Use this only for misleading, unsafe, abusive or suspicious content.
+                    Your report will help us review possible problems.
+                  </p>
+                </div>
+
+                <label style={reportLabel}>
+                  Reason
+                  <select
+                    value={reportReason}
+                    onChange={(event) => setReportReason(event.target.value)}
+                    style={reportSelect}
+                  >
+                    <option value="misleading_information">Misleading information</option>
+                    <option value="unsafe_place">Unsafe place</option>
+                    <option value="fake_photo">Fake photo</option>
+                    <option value="scam_or_fraud">Scam or fraud</option>
+                    <option value="harassment">Harassment</option>
+                    <option value="suspicious_behavior">Suspicious behavior</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+
+                <label style={reportLabel}>
+                  Comment optional
+                  <textarea
+                    value={reportComment}
+                    onChange={(event) => setReportComment(event.target.value)}
+                    placeholder="Add details that can help us understand the issue..."
+                    rows={4}
+                    style={reportTextarea}
+                  />
+                </label>
+
+                {reportError && <div style={reportErrorBox}>{reportError}</div>}
+
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button
+                    type="submit"
+                    disabled={submittingReport}
+                    style={{
+                      ...primaryButton,
+                      opacity: submittingReport ? 0.5 : 1,
+                      cursor: submittingReport ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {submittingReport ? "Submitting..." : "Submit report"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={secondaryButton}
+                    onClick={() => {
+                      setShowReportForm(false);
+                      setReportError("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {reportMessage && (
+              <div style={reportSuccessBox}>
+                {reportMessage}
+              </div>
+            )}
 
                 {showTripPlanPicker && (
                   <div style={tripPlanPickerBox}>
@@ -670,4 +815,80 @@ const createPlanLink = {
   fontSize: "13px",
   textDecoration: "underline",
   width: "fit-content",
+};
+
+const reportButton = {
+  display: "inline-block",
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "1px solid #f3c2c2",
+  color: "#991b1b",
+  background: "#fff5f5",
+  cursor: "pointer",
+  fontSize: "14px",
+};
+
+const reportBox = {
+  marginTop: "14px",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #f3c2c2",
+  background: "#fffafa",
+  display: "grid",
+  gap: "12px",
+};
+
+const reportTitle = {
+  fontWeight: 700,
+  color: "#991b1b",
+};
+
+const reportIntro = {
+  margin: "6px 0 0 0",
+  color: "#666",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+
+const reportLabel = {
+  display: "grid",
+  gap: "6px",
+  fontSize: "13px",
+  fontWeight: 600,
+  color: "#444",
+};
+
+const reportSelect = {
+  padding: "9px 10px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+  background: "white",
+};
+
+const reportTextarea = {
+  padding: "10px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+  resize: "vertical" as const,
+};
+
+const reportErrorBox = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #f3c2c2",
+  background: "#fff5f5",
+  color: "#b91c1c",
+  fontSize: "13px",
+};
+
+const reportSuccessBox = {
+  marginTop: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "14px",
 };

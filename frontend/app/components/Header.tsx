@@ -11,7 +11,19 @@ import { getInitials, getColorFromName } from "../lib/avatar";
 export default function Header() {
 
   /* ===================== Hooks ===================== */
-const { username, displayName, avatarUrl, isLoggedIn, loading, logout } = useAuth();
+const {
+  username,
+  displayName,
+  avatarUrl,
+  isStaff,
+  isSuperuser,
+  isLoggedIn,
+  loading,
+  logout,
+} = useAuth();
+
+const canAccessReports = isStaff || isSuperuser;
+
 const [menuOpen, setMenuOpen] = useState(false);
 const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -139,6 +151,12 @@ useEffect(() => {
                     <MenuLink href="/analytics" onClick={() => setMenuOpen(false)}>
                       Insights
                     </MenuLink>
+
+                    {canAccessReports && (
+                      <MenuLink href="/admin/reports" onClick={() => setMenuOpen(false)}>
+                        Reports
+                      </MenuLink>
+                    )}
 
                     <MenuLink href="/my-posts" onClick={() => setMenuOpen(false)}>
                       My Posts

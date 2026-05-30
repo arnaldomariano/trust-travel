@@ -27,6 +27,7 @@ from .models import (
     Profile,
     FeedState,
     SeenUpdate,
+    ContentReport,
 )
 
 from .serializers import (
@@ -37,6 +38,7 @@ from .serializers import (
     UserRegisterSerializer,
     ExperienceReplySerializer,
     ProfileSerializer,
+    ContentReportSerializer,
 )
 
 from .authentication import CookieJWTAuthentication
@@ -1497,6 +1499,44 @@ class MyExperiencesView(APIView):
             })
 
         return Response(result)
+
+# ============================================================
+# TRUST & SAFETY / CONTENT REPORTS
+# ============================================================
+
+class ContentReportListCreateView(generics.ListCreateAPIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = ContentReportSerializer
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+    def get_queryset(self):
+        user = self.request.user
+
+        # For now, staff users can review all reports.
+        # Regular users only see their own reports.
+        if user.is_staff:
+            return ContentReport.objects.select_related(
+                "reported_by",
+                "experience",
+                "update",
+                "place",
+                "reviewed_by",
+            ).all()
+
+        return ContentReport.objects.select_related(
+            "reported_by",
+            "experience",
+            "update",
+            "place",
+            "reviewed_by",
+        ).filter(reported_by=user)
+
+    def perform_create(self, serializer):
+        serializer.save(reported_by=self.request.user)
+
 
 # ============================================================
 # ANALYTICS

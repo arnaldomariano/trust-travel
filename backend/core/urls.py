@@ -39,6 +39,7 @@ from .views import (
     TripPlanSuggestionsView,
     SummaryAnalyticsView,
     PlannerCountriesAnalyticsView,
+    ContentReportListCreateView,
 
 )
 
@@ -88,6 +89,7 @@ urlpatterns = [
     path("friends/remove/", remove_friend),
     path("me/", MeView.as_view()),
     path("profile/", ProfileView.as_view()),
+    path("reports/", ContentReportListCreateView.as_view(), name="content-reports"),
     path("my-updates/", MyUpdatesView.as_view(), name="my-updates"),
     path("my-experiences/", MyExperiencesView.as_view(), name="my-experiences"),
     path(

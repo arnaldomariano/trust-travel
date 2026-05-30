@@ -546,3 +546,106 @@ class SeenUpdate(models.Model):
 
     def __str__(self):
         return f"{self.user} seen update {self.update_id}"
+
+# ===================== Content Report / Trust & Safety =====================
+class ContentReport(models.Model):
+    CONTENT_TYPE_CHOICES = [
+        ("experience", "Experience"),
+        ("update", "Update"),
+        ("place", "Place"),
+    ]
+
+    REASON_CHOICES = [
+        ("misleading_information", "Misleading information"),
+        ("unsafe_place", "Unsafe place"),
+        ("fake_photo", "Fake photo"),
+        ("scam_or_fraud", "Scam or fraud"),
+        ("harassment", "Harassment"),
+        ("suspicious_behavior", "Suspicious behavior"),
+        ("other", "Other"),
+    ]
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("reviewed", "Reviewed"),
+        ("dismissed", "Dismissed"),
+        ("action_taken", "Action taken"),
+    ]
+
+    reported_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="content_reports",
+    )
+
+    content_type = models.CharField(
+        max_length=30,
+        choices=CONTENT_TYPE_CHOICES,
+    )
+
+    experience = models.ForeignKey(
+        Experience,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="reports",
+    )
+
+    update = models.ForeignKey(
+        Update,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="reports",
+    )
+
+    place = models.ForeignKey(
+        Place,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="reports",
+    )
+
+    reason = models.CharField(
+        max_length=40,
+        choices=REASON_CHOICES,
+    )
+
+    comment = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending",
+    )
+
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_content_reports",
+    )
+
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "reported_by",
+                    "content_type",
+                    "experience",
+                    "update",
+                    "place",
+                ],
+                name="unique_report_per_user_content",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.reported_by} reported {self.content_type} - {self.reason}"

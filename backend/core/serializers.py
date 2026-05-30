@@ -10,6 +10,7 @@ from .models import (
     Friendship,
     Profile,
     Update,
+    ContentReport,
     generate_recovery_code,
 )
 
@@ -429,3 +430,114 @@ class ProfileSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.avatar.url)
 
         return obj.avatar.url
+
+class ContentReportSerializer(serializers.ModelSerializer):
+    reported_by_username = serializers.CharField(
+        source="reported_by.username",
+        read_only=True,
+    )
+
+    experience_title = serializers.CharField(
+        source="experience.title",
+        read_only=True,
+    )
+
+    update_title = serializers.CharField(
+        source="update.title",
+        read_only=True,
+    )
+
+    place_name = serializers.CharField(
+        source="place.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ContentReport
+        fields = [
+            "id",
+            "reported_by",
+            "reported_by_username",
+            "content_type",
+            "experience",
+            "experience_title",
+            "update",
+            "update_title",
+            "place",
+            "place_name",
+            "reason",
+            "comment",
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "reported_by",
+            "reported_by_username",
+            "experience_title",
+            "update_title",
+            "place_name",
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+        ]
+
+    def validate(self, attrs):
+        content_type = attrs.get("content_type")
+        experience = attrs.get("experience")
+        update = attrs.get("update")
+        place = attrs.get("place")
+
+        selected_targets = [
+            bool(experience),
+            bool(update),
+            bool(place),
+        ]
+
+        if selected_targets.count(True) != 1:
+            raise serializers.ValidationError(
+                "Report must target exactly one content item."
+            )
+
+        if content_type == "experience" and not experience:
+            raise serializers.ValidationError(
+                "Experience report requires an experience."
+            )
+
+        if content_type == "update" and not update:
+            raise serializers.ValidationError(
+                "Update report requires an update."
+            )
+
+        if content_type == "place" and not place:
+            raise serializers.ValidationError(
+                "Place report requires a place."
+            )
+
+        request = self.context.get("request")
+
+        if request and request.user and request.user.is_authenticated:
+            existing_report = ContentReport.objects.filter(
+                reported_by=request.user,
+                content_type=content_type,
+            )
+
+            if content_type == "experience":
+                existing_report = existing_report.filter(experience=experience)
+
+            if content_type == "update":
+                existing_report = existing_report.filter(update=update)
+
+            if content_type == "place":
+                existing_report = existing_report.filter(place=place)
+
+            if existing_report.exists():
+                raise serializers.ValidationError(
+                    "You have already reported this content."
+                )
+
+        return attrs

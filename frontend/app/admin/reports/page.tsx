@@ -19,6 +19,12 @@ type ContentReport = {
   update_title?: string;
   place: number | null;
   place_name?: string;
+
+  content_author?: string;
+  content_place_name?: string;
+  content_created_at?: string | null;
+  content_text?: string;
+
   reason: string;
   comment: string;
   status: string;
@@ -318,6 +324,37 @@ export default function ReportsPage() {
                   Reported by: <strong>{report.reported_by_username}</strong>
                 </div>
 
+                <div style={moderationContextBox}>
+                  <div style={smallLabel}>Content context</div>
+
+                  {report.content_author && (
+                    <div style={metaText}>
+                      Original author: <strong>{report.content_author}</strong>
+                    </div>
+                  )}
+
+                  {report.content_place_name && (
+                    <div style={metaText}>
+                      Related place: <strong>{report.content_place_name}</strong>
+                    </div>
+                  )}
+
+                  {report.content_created_at && (
+                    <div style={metaText}>
+                      Content date:{" "}
+                      <strong>{new Date(report.content_created_at).toLocaleString()}</strong>
+                    </div>
+                  )}
+
+                  {report.content_text && (
+                    <div style={originalContentBox}>
+                      {report.content_text.length > 320
+                        ? `${report.content_text.slice(0, 320)}...`
+                        : report.content_text}
+                    </div>
+                  )}
+                </div>
+
                 {report.comment && (
                   <div style={commentBox}>
                     “{report.comment}”
@@ -583,4 +620,23 @@ const activeFilterButton = {
   background: "black",
   color: "white",
   border: "1px solid black",
+};
+
+const moderationContextBox = {
+  marginTop: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+};
+
+const originalContentBox = {
+  marginTop: "10px",
+  padding: "10px",
+  borderRadius: "10px",
+  border: "1px solid #eee",
+  background: "white",
+  color: "#333",
+  fontSize: "14px",
+  lineHeight: 1.5,
 };

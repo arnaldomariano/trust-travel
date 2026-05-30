@@ -452,6 +452,11 @@ class ContentReportSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    content_author = serializers.SerializerMethodField()
+    content_place_name = serializers.SerializerMethodField()
+    content_created_at = serializers.SerializerMethodField()
+    content_text = serializers.SerializerMethodField()
+
     class Meta:
         model = ContentReport
         fields = [
@@ -465,6 +470,13 @@ class ContentReportSerializer(serializers.ModelSerializer):
             "update_title",
             "place",
             "place_name",
+
+            # Extra moderation context
+            "content_author",
+            "content_place_name",
+            "content_created_at",
+            "content_text",
+
             "reason",
             "comment",
             "status",
@@ -480,11 +492,79 @@ class ContentReportSerializer(serializers.ModelSerializer):
             "experience_title",
             "update_title",
             "place_name",
+            "content_author",
+            "content_place_name",
+            "content_created_at",
+            "content_text",
             "status",
             "reviewed_by",
             "reviewed_at",
             "created_at",
         ]
+
+    def get_content_author(self, obj):
+        if obj.content_type == "experience" and obj.experience:
+            return obj.experience.user.username if obj.experience.user else ""
+
+        if obj.content_type == "update" and obj.update:
+            return obj.update.user.username if obj.update.user else ""
+
+        if obj.content_type == "place" and obj.place:
+            return obj.place.created_by.username if obj.place.created_by else ""
+
+        return ""
+
+    def get_content_place_name(self, obj):
+        if obj.content_type == "experience" and obj.experience:
+            return obj.experience.place.name if obj.experience.place else ""
+
+        if obj.content_type == "update" and obj.update:
+            return obj.update.place.name if obj.update.place else ""
+
+        if obj.content_type == "place" and obj.place:
+            return obj.place.name
+
+        return ""
+
+    def get_content_created_at(self, obj):
+        if obj.content_type == "experience" and obj.experience:
+            return obj.experience.created_at
+
+        if obj.content_type == "update" and obj.update:
+            return obj.update.created_at
+
+        if obj.content_type == "place" and obj.place:
+            return obj.place.created_at
+
+        return None
+
+    def get_content_text(self, obj):
+        if obj.content_type == "experience" and obj.experience:
+            parts = []
+
+            if obj.experience.title:
+                parts.append(obj.experience.title)
+
+            if obj.experience.comment:
+                parts.append(obj.experience.comment)
+
+            return " — ".join(parts)
+
+        if obj.content_type == "update" and obj.update:
+            parts = []
+
+            if obj.update.title:
+                parts.append(obj.update.title)
+
+            if obj.update.text:
+                parts.append(obj.update.text)
+
+            return " — ".join(parts)
+
+        if obj.content_type == "place" and obj.place:
+            return obj.place.description or obj.place.name
+
+        return ""
 
     def validate(self, attrs):
         content_type = attrs.get("content_type")

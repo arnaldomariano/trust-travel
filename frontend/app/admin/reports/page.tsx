@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../../providers/AuthProvider";
 
 import { API_URL } from "../../lib/api";
 
@@ -49,6 +52,12 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function ReportsPage() {
+
+  const router = useRouter();
+  const { isStaff, isSuperuser, loading: authLoading, isLoggedIn } = useAuth();
+
+  const canAccessReports = isStaff || isSuperuser;
+
   const [reports, setReports] = useState<ContentReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -125,9 +134,21 @@ export default function ReportsPage() {
       }
     };
 
-  useEffect(() => {
-    loadReports();
-  }, []);
+      useEffect(() => {
+      if (authLoading) return;
+
+      if (!isLoggedIn) {
+        router.push("/login?next=/admin/reports");
+        return;
+      }
+
+      if (!canAccessReports) {
+        setLoading(false);
+        return;
+      }
+
+      loadReports();
+    }, [authLoading, isLoggedIn, canAccessReports]);
 
   const getContentTitle = (report: ContentReport) => {
     if (report.content_type === "experience") {
@@ -169,6 +190,36 @@ export default function ReportsPage() {
 
       return reports.filter((report) => report.status === status).length;
     };
+
+    if (authLoading || loading) {
+      return (
+        <main style={page}>
+          <p style={mutedText}>Loading reports...</p>
+        </main>
+      );
+    }
+
+    if (!canAccessReports) {
+      return (
+        <main style={page}>
+          <section style={headerCard}>
+            <div style={eyebrow}>Trust & Safety</div>
+
+            <h1 style={title}>Access restricted</h1>
+
+            <p style={introText}>
+              This moderation area is available only to Trust Travel staff users.
+            </p>
+
+            <div style={{ marginTop: "16px" }}>
+              <Link href="/" style={primaryLink}>
+                Back to home
+              </Link>
+            </div>
+          </section>
+        </main>
+      );
+    }
 
   return (
     <main style={page}>
@@ -212,7 +263,6 @@ export default function ReportsPage() {
           ))}
         </div>
 
-      {loading && <p style={mutedText}>Loading reports...</p>}
 
       {error && <div style={errorBox}>{error}</div>}
 

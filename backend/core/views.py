@@ -65,6 +65,8 @@ class MeView(APIView):
             "public_code": profile.public_code if profile else None,
             "country_code": profile.country_code if profile else None,
             "avatar_url": avatar_url,
+            "is_staff": request.user.is_staff,
+            "is_superuser": request.user.is_superuser,
         })
 
 class ProfileView(APIView):

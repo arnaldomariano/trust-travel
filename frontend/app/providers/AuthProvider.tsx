@@ -8,6 +8,8 @@ type AuthContextType = {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  isStaff: boolean;
+  isSuperuser: boolean;
   isLoggedIn: boolean;
   loading: boolean;
   refreshUser: () => Promise<boolean>;
@@ -19,10 +21,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /* ===================== Provider ===================== */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-const [username, setUsername] = useState<string | null>(null);
-const [displayName, setDisplayName] = useState<string | null>(null);
-const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-const [loading, setLoading] = useState(true);
+
+    const [username, setUsername] = useState<string | null>(null);
+    const [displayName, setDisplayName] = useState<string | null>(null);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [isStaff, setIsStaff] = useState(false);
+    const [isSuperuser, setIsSuperuser] = useState(false);
+    const [loading, setLoading] = useState(true);
 
   /* ===================== Load Current User ===================== */
     const refreshUser = async () => {
@@ -35,6 +40,8 @@ const [loading, setLoading] = useState(true);
           setUsername(null);
           setDisplayName(null);
           setAvatarUrl(null);
+          setIsStaff(false);
+          setIsSuperuser(false);
           return false;
         }
 
@@ -43,6 +50,8 @@ const [loading, setLoading] = useState(true);
         setUsername(data.username);
         setDisplayName(data.display_name || data.username);
         setAvatarUrl(data.avatar_url || null);
+        setIsStaff(Boolean(data.is_staff));
+        setIsSuperuser(Boolean(data.is_superuser));
 
         return true;
       } catch (error) {
@@ -50,6 +59,8 @@ const [loading, setLoading] = useState(true);
         setUsername(null);
         setDisplayName(null);
         setAvatarUrl(null);
+        setIsStaff(false);
+        setIsSuperuser(false);
         return false;
       } finally {
         // 🔥 ESSA LINHA É O QUE FALTA
@@ -79,6 +90,8 @@ const [loading, setLoading] = useState(true);
       setUsername(null);
       setDisplayName(null);
       setAvatarUrl(null);
+      setIsStaff(false);
+      setIsSuperuser(false);
       // force full reset
       window.location.href = "/login";
     };
@@ -88,6 +101,8 @@ const [loading, setLoading] = useState(true);
       username,
       displayName,
       avatarUrl,
+      isStaff,
+      isSuperuser,
       isLoggedIn: !!username,
       loading,
       refreshUser,

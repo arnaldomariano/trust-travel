@@ -41,6 +41,13 @@ export default function ExperiencesPage() {
       Record<number, { text: string; planId: number | null }>
     >({});
 
+  const [showReportFormByExperience, setShowReportFormByExperience] = useState<Record<number, boolean>>({});
+  const [reportReasonByExperience, setReportReasonByExperience] = useState<Record<number, string>>({});
+  const [reportCommentByExperience, setReportCommentByExperience] = useState<Record<number, string>>({});
+  const [submittingReportByExperience, setSubmittingReportByExperience] = useState<Record<number, boolean>>({});
+  const [reportMessageByExperience, setReportMessageByExperience] = useState<Record<number, string>>({});
+  const [reportErrorByExperience, setReportErrorByExperience] = useState<Record<number, string>>({});
+
   const trustedReviewsCount = experiences.filter((e) => e.is_trusted).length;
 
   const totalExperiences = experiences.length;
@@ -588,6 +595,215 @@ const addExperienceToTripPlan = async (experienceId: number) => {
   }
 };
 
+const submitExperienceReport = async (experienceId: number) => {
+  const reason = reportReasonByExperience[experienceId] || "misleading_information";
+  const comment = (reportCommentByExperience[experienceId] || "").trim();
+
+  if (!comment) {
+    setReportErrorByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "Please explain why you are reporting this content.",
+    }));
+    return;
+  }
+
+  setSubmittingReportByExperience((prev) => ({
+    ...prev,
+    [experienceId]: true,
+  }));
+
+  setReportErrorByExperience((prev) => ({
+    ...prev,
+    [experienceId]: "",
+  }));
+
+  setReportMessageByExperience((prev) => ({
+    ...prev,
+    [experienceId]: "",
+  }));
+
+  try {
+    const res = await fetch(`${API_URL}/api/reports/`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content_type: "experience",
+        experience: experienceId,
+        reason,
+        comment,
+      }),
+    });
+
+    const text = await res.text();
+
+    let data: any = {};
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      console.error("Report response was not JSON. Status:", res.status);
+      console.error("Raw response:", text);
+
+      setReportErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]:
+          "The server returned an unexpected response. Check the backend terminal for details.",
+      }));
+
+      return;
+    }
+
+    if (!res.ok) {
+      const duplicateMessage =
+        data.non_field_errors && Array.isArray(data.non_field_errors)
+          ? data.non_field_errors[0]
+          : null;
+
+      setReportErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]:
+          duplicateMessage || data.detail || "Could not submit report.",
+      }));
+
+      return;
+    }
+
+    setReportMessageByExperience((prev) => ({
+      ...prev,
+      [experienceId]:
+        "Report submitted. Thank you for helping keep Trust Travel safe.",
+    }));
+
+    setReportCommentByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "",
+    }));
+
+    setShowReportFormByExperience((prev) => ({
+      ...prev,
+      [experienceId]: false,
+    }));
+  } catch (error) {
+    console.error("Report submit error:", error);
+
+    setReportErrorByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "Something went wrong while submitting the report.",
+    }));
+  } finally {
+    setSubmittingReportByExperience((prev) => ({
+      ...prev,
+      [experienceId]: false,
+    }));
+  }
+};
+
+const renderReportControls = (experience: any) => {
+  if (!experience?.id) return null;
+
+  if (experience.user === currentUsername) {
+    return null;
+  }
+
+  const experienceId = experience.id;
+  const showForm = showReportFormByExperience[experienceId];
+  const reason = reportReasonByExperience[experienceId] || "misleading_information";
+  const comment = reportCommentByExperience[experienceId] || "";
+  const submitting = submittingReportByExperience[experienceId];
+  const message = reportMessageByExperience[experienceId];
+  const error = reportErrorByExperience[experienceId];
+
+  return (
+    <div style={reportContainer}>
+      <button
+        type="button"
+        style={reportButton}
+        onClick={() =>
+          setShowReportFormByExperience((prev) => ({
+            ...prev,
+            [experienceId]: !prev[experienceId],
+          }))
+        }
+      >
+        Report
+      </button>
+
+      {showForm && (
+        <div style={reportFormBox}>
+          <div style={reportTitle}>Report this experience</div>
+
+          <select
+            value={reason}
+            onChange={(event) =>
+              setReportReasonByExperience((prev) => ({
+                ...prev,
+                [experienceId]: event.target.value,
+              }))
+            }
+            style={reportInput}
+          >
+            <option value="misleading_information">Misleading information</option>
+            <option value="unsafe_place">Unsafe place</option>
+            <option value="fake_photo">Fake photo</option>
+            <option value="scam_or_fraud">Scam or fraud</option>
+            <option value="harassment">Harassment</option>
+            <option value="suspicious_behavior">Suspicious behavior</option>
+            <option value="other">Other</option>
+          </select>
+
+          <textarea
+            value={comment}
+            onChange={(event) =>
+              setReportCommentByExperience((prev) => ({
+                ...prev,
+                [experienceId]: event.target.value,
+              }))
+            }
+            placeholder="Briefly explain the issue..."
+            rows={3}
+            style={reportTextarea}
+          />
+
+          {error && <div style={reportErrorBox}>{error}</div>}
+
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => submitExperienceReport(experienceId)}
+              style={{
+                ...reportSubmitButton,
+                opacity: submitting ? 0.5 : 1,
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
+              {submitting ? "Submitting..." : "Submit report"}
+            </button>
+
+            <button
+              type="button"
+              style={reportCancelButton}
+              onClick={() =>
+                setShowReportFormByExperience((prev) => ({
+                  ...prev,
+                  [experienceId]: false,
+                }))
+              }
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {message && <div style={reportSuccessBox}>{message}</div>}
+    </div>
+  );
+};
+
   return (
     <main style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
       <h1>{pageTitle}</h1>
@@ -863,7 +1079,7 @@ const addExperienceToTripPlan = async (experienceId: number) => {
           </div>
         )}
 
-            {tripPlanMessageByExperience[highlightedExperience.id] && (
+        {tripPlanMessageByExperience[highlightedExperience.id] && (
           <div style={tripPlanSuccessBox}>
             <span>{tripPlanMessageByExperience[highlightedExperience.id].text}</span>
 
@@ -876,7 +1092,9 @@ const addExperienceToTripPlan = async (experienceId: number) => {
               </Link>
             )}
           </div>
-        )}
+         )}
+
+        {renderReportControls(highlightedExperience)}
 
       </div>
     )}
@@ -1281,6 +1499,7 @@ const addExperienceToTripPlan = async (experienceId: number) => {
                               View full experience
                             </Link>
 
+                         {renderReportControls(e)}
 
 
 
@@ -1500,6 +1719,9 @@ const addExperienceToTripPlan = async (experienceId: number) => {
                       >
                         View full experience
                       </Link>
+
+                      {renderReportControls(e)}
+
                     </div>
 
                   </div>
@@ -1637,6 +1859,9 @@ const addExperienceToTripPlan = async (experienceId: number) => {
                           >
                             View full experience
                           </Link>
+
+                          {renderReportControls(e)}
+
                         </div>
 
                       </div>
@@ -1753,4 +1978,88 @@ const emptyExperienceSecondaryButton = {
   color: "#111",
   cursor: "pointer",
   fontWeight: 700,
+};
+
+const reportContainer = {
+  marginTop: "10px",
+  width: "100%",
+};
+
+const reportButton = {
+  fontSize: "12px",
+  padding: "4px 10px",
+  borderRadius: "6px",
+  border: "1px solid #f3c2c2",
+  background: "#fff5f5",
+  color: "#991b1b",
+  cursor: "pointer",
+};
+
+const reportFormBox = {
+  marginTop: "10px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #f3c2c2",
+  background: "#fffafa",
+  display: "grid",
+  gap: "10px",
+};
+
+const reportTitle = {
+  fontSize: "13px",
+  fontWeight: 700,
+  color: "#991b1b",
+};
+
+const reportInput = {
+  padding: "8px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  fontSize: "12px",
+};
+
+const reportTextarea = {
+  padding: "8px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  fontSize: "12px",
+  resize: "vertical" as const,
+};
+
+const reportSubmitButton = {
+  fontSize: "12px",
+  padding: "6px 10px",
+  borderRadius: "8px",
+  border: "none",
+  background: "black",
+  color: "white",
+};
+
+const reportCancelButton = {
+  fontSize: "12px",
+  padding: "6px 10px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  cursor: "pointer",
+};
+
+const reportSuccessBox = {
+  marginTop: "10px",
+  padding: "10px",
+  borderRadius: "10px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "13px",
+};
+
+const reportErrorBox = {
+  padding: "10px",
+  borderRadius: "10px",
+  border: "1px solid #f3c2c2",
+  background: "#fff5f5",
+  color: "#991b1b",
+  fontSize: "13px",
 };

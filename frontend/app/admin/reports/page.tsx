@@ -1,0 +1,357 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+import { API_URL } from "../../lib/api";
+
+type ContentReport = {
+  id: number;
+  reported_by: number;
+  reported_by_username: string;
+  content_type: "experience" | "update" | "place";
+  experience: number | null;
+  experience_title?: string;
+  update: number | null;
+  update_title?: string;
+  place: number | null;
+  place_name?: string;
+  reason: string;
+  comment: string;
+  status: string;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+};
+
+const reasonLabels: Record<string, string> = {
+  misleading_information: "Misleading information",
+  unsafe_place: "Unsafe place",
+  fake_photo: "Fake photo",
+  scam_or_fraud: "Scam or fraud",
+  harassment: "Harassment",
+  suspicious_behavior: "Suspicious behavior",
+  other: "Other",
+};
+
+const statusLabels: Record<string, string> = {
+  pending: "Pending",
+  reviewed: "Reviewed",
+  dismissed: "Dismissed",
+  action_taken: "Action taken",
+};
+
+export default function ReportsPage() {
+  const [reports, setReports] = useState<ContentReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadReports = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/reports/`, {
+        credentials: "include",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.detail || "Could not load reports.");
+        setReports([]);
+        return;
+      }
+
+      setReports(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Reports fetch error:", err);
+      setError("Something went wrong while loading reports.");
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadReports();
+  }, []);
+
+  const getContentTitle = (report: ContentReport) => {
+    if (report.content_type === "experience") {
+      return report.experience_title || `Experience #${report.experience}`;
+    }
+
+    if (report.content_type === "update") {
+      return report.update_title || `Update #${report.update}`;
+    }
+
+    if (report.content_type === "place") {
+      return report.place_name || `Place #${report.place}`;
+    }
+
+    return "Reported content";
+  };
+
+  const getContentLink = (report: ContentReport) => {
+    if (report.content_type === "experience" && report.experience) {
+      return `/experiences/${report.experience}`;
+    }
+
+    if (report.content_type === "place" && report.place) {
+      return `/places/${report.place}`;
+    }
+
+    return null;
+  };
+
+  return (
+    <main style={page}>
+      <div style={breadcrumb}>
+        <Link href="/" style={breadcrumbLink}>
+          Home
+        </Link>{" "}
+        / <span>Reports</span>
+      </div>
+
+      <section style={headerCard}>
+        <div style={eyebrow}>Trust & Safety</div>
+
+        <h1 style={title}>Content reports</h1>
+
+        <p style={introText}>
+          Review reports submitted by users about misleading, unsafe, abusive or
+          suspicious content.
+        </p>
+      </section>
+
+      {loading && <p style={mutedText}>Loading reports...</p>}
+
+      {error && <div style={errorBox}>{error}</div>}
+
+      {!loading && !error && reports.length === 0 && (
+        <div style={emptyBox}>
+          No reports found.
+        </div>
+      )}
+
+      {!loading && reports.length > 0 && (
+        <section style={reportsGrid}>
+          {reports.map((report) => {
+            const contentLink = getContentLink(report);
+
+            return (
+              <article key={report.id} style={reportCard}>
+                <div style={reportTopRow}>
+                  <span style={statusBadge}>
+                    {statusLabels[report.status] || report.status}
+                  </span>
+
+                  <span style={dateText}>
+                    {new Date(report.created_at).toLocaleString()}
+                  </span>
+                </div>
+
+                <div style={smallLabel}>Reported content</div>
+
+                <h2 style={reportTitle}>
+                  {getContentTitle(report)}
+                </h2>
+
+                <div style={metaText}>
+                  Type: <strong>{report.content_type}</strong>
+                </div>
+
+                <div style={metaText}>
+                  Reason:{" "}
+                  <strong>{reasonLabels[report.reason] || report.reason}</strong>
+                </div>
+
+                <div style={metaText}>
+                  Reported by: <strong>{report.reported_by_username}</strong>
+                </div>
+
+                {report.comment && (
+                  <div style={commentBox}>
+                    “{report.comment}”
+                  </div>
+                )}
+
+                <div style={actions}>
+                  {contentLink && (
+                    <Link href={contentLink} style={primaryLink}>
+                      Open content
+                    </Link>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={loadReports}
+                    style={secondaryButton}
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
+    </main>
+  );
+}
+
+const page = {
+  maxWidth: "900px",
+  margin: "0 auto",
+  padding: "40px",
+};
+
+const breadcrumb = {
+  marginBottom: "20px",
+  color: "#666",
+  fontSize: "14px",
+};
+
+const breadcrumbLink = {
+  color: "#666",
+  textDecoration: "none",
+};
+
+const headerCard = {
+  padding: "22px",
+  borderRadius: "18px",
+  border: "1px solid #eee",
+  background: "white",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+  marginBottom: "22px",
+};
+
+const eyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  fontWeight: 700,
+  marginBottom: "6px",
+};
+
+const title = {
+  margin: 0,
+  fontSize: "28px",
+};
+
+const introText = {
+  color: "#666",
+  lineHeight: 1.5,
+  marginBottom: 0,
+};
+
+const mutedText = {
+  color: "#666",
+};
+
+const errorBox = {
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #f3c2c2",
+  background: "#fff5f5",
+  color: "#b91c1c",
+};
+
+const emptyBox = {
+  padding: "18px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  color: "#666",
+};
+
+const reportsGrid = {
+  display: "grid",
+  gap: "16px",
+};
+
+const reportCard = {
+  padding: "18px",
+  borderRadius: "16px",
+  border: "1px solid #eee",
+  background: "white",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+};
+
+const reportTopRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  alignItems: "center",
+  marginBottom: "12px",
+};
+
+const statusBadge = {
+  display: "inline-block",
+  padding: "4px 9px",
+  borderRadius: "999px",
+  background: "#fff7e6",
+  border: "1px solid #ffe3b3",
+  color: "#92400e",
+  fontSize: "12px",
+  fontWeight: 700,
+};
+
+const dateText = {
+  color: "#777",
+  fontSize: "12px",
+};
+
+const smallLabel = {
+  color: "#777",
+  fontSize: "13px",
+  marginBottom: "4px",
+};
+
+const reportTitle = {
+  margin: "0 0 10px 0",
+  fontSize: "20px",
+};
+
+const metaText = {
+  color: "#555",
+  fontSize: "14px",
+  marginTop: "6px",
+};
+
+const commentBox = {
+  marginTop: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  background: "#fafafa",
+  border: "1px solid #eee",
+  color: "#333",
+  lineHeight: 1.5,
+};
+
+const actions = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+  marginTop: "14px",
+};
+
+const primaryLink = {
+  display: "inline-block",
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "none",
+  background: "black",
+  color: "white",
+  textDecoration: "none",
+};
+
+const secondaryButton = {
+  display: "inline-block",
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "black",
+  cursor: "pointer",
+};

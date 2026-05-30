@@ -40,6 +40,7 @@ from .views import (
     SummaryAnalyticsView,
     PlannerCountriesAnalyticsView,
     ContentReportListCreateView,
+    ContentReportDetailView,
 
 )
 
@@ -90,6 +91,7 @@ urlpatterns = [
     path("me/", MeView.as_view()),
     path("profile/", ProfileView.as_view()),
     path("reports/", ContentReportListCreateView.as_view(), name="content-reports"),
+    path("reports/<int:pk>/", ContentReportDetailView.as_view(), name="content-report-detail"),
     path("my-updates/", MyUpdatesView.as_view(), name="my-updates"),
     path("my-experiences/", MyExperiencesView.as_view(), name="my-experiences"),
     path(

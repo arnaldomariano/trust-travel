@@ -1537,6 +1537,51 @@ class ContentReportListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(reported_by=self.request.user)
 
+class ContentReportDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            return Response(
+                {"detail": "Only staff users can update reports."},
+                status=403,
+            )
+
+        try:
+            report = ContentReport.objects.get(id=pk)
+        except ContentReport.DoesNotExist:
+            return Response(
+                {"detail": "Report not found."},
+                status=404,
+            )
+
+        new_status = request.data.get("status")
+
+        valid_statuses = [
+            "pending",
+            "reviewed",
+            "dismissed",
+            "action_taken",
+        ]
+
+        if new_status not in valid_statuses:
+            return Response(
+                {"detail": "Invalid report status."},
+                status=400,
+            )
+
+        report.status = new_status
+        report.reviewed_by = request.user
+        report.reviewed_at = timezone.now()
+        report.save()
+
+        serializer = ContentReportSerializer(
+            report,
+            context={"request": request},
+        )
+
+        return Response(serializer.data)
 
 # ============================================================
 # ANALYTICS

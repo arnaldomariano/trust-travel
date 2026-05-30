@@ -45,6 +45,8 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<ContentReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [updatingReportId, setUpdatingReportId] = useState<number | null>(null);
+  const [actionMessage, setActionMessage] = useState("");
 
   const loadReports = async () => {
     setLoading(true);
@@ -72,6 +74,48 @@ export default function ReportsPage() {
       setLoading(false);
     }
   };
+
+    const updateReportStatus = async (
+      reportId: number,
+      status: "reviewed" | "dismissed" | "action_taken"
+    ) => {
+      setUpdatingReportId(reportId);
+      setError("");
+      setActionMessage("");
+
+      try {
+        const res = await fetch(`${API_URL}/api/reports/${reportId}/`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.detail || "Could not update report.");
+          return;
+        }
+
+        setReports((prev) =>
+          prev.map((report) =>
+            report.id === reportId ? data : report
+          )
+        );
+
+        setActionMessage("Report status updated.");
+      } catch (err) {
+        console.error("Report status update error:", err);
+        setError("Something went wrong while updating the report.");
+      } finally {
+        setUpdatingReportId(null);
+      }
+    };
 
   useEffect(() => {
     loadReports();
@@ -128,6 +172,12 @@ export default function ReportsPage() {
       {loading && <p style={mutedText}>Loading reports...</p>}
 
       {error && <div style={errorBox}>{error}</div>}
+
+      {actionMessage && (
+          <div style={successBox}>
+            {actionMessage}
+          </div>
+        )}
 
       {!loading && !error && reports.length === 0 && (
         <div style={emptyBox}>
@@ -190,6 +240,45 @@ export default function ReportsPage() {
                     style={secondaryButton}
                   >
                     Refresh
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={updatingReportId === report.id}
+                    onClick={() => updateReportStatus(report.id, "reviewed")}
+                    style={{
+                      ...secondaryButton,
+                      opacity: updatingReportId === report.id ? 0.5 : 1,
+                      cursor: updatingReportId === report.id ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Mark reviewed
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={updatingReportId === report.id}
+                    onClick={() => updateReportStatus(report.id, "dismissed")}
+                    style={{
+                      ...secondaryButton,
+                      opacity: updatingReportId === report.id ? 0.5 : 1,
+                      cursor: updatingReportId === report.id ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Dismiss
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={updatingReportId === report.id}
+                    onClick={() => updateReportStatus(report.id, "action_taken")}
+                    style={{
+                      ...dangerActionButton,
+                      opacity: updatingReportId === report.id ? 0.5 : 1,
+                      cursor: updatingReportId === report.id ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Action taken
                   </button>
                 </div>
               </article>
@@ -354,4 +443,23 @@ const secondaryButton = {
   background: "white",
   color: "black",
   cursor: "pointer",
+};
+
+const dangerActionButton = {
+  display: "inline-block",
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "1px solid #f3c2c2",
+  background: "#fff5f5",
+  color: "#991b1b",
+  cursor: "pointer",
+};
+
+const successBox = {
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  marginBottom: "16px",
 };

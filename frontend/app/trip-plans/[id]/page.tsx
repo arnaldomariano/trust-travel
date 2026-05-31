@@ -80,6 +80,7 @@ type RelatedPlace = {
   already_saved_place: boolean;
   already_has_saved_experience: boolean;
   already_in_trip_plan: boolean;
+  already_saved_in_plan: boolean;
 };
 
 type TripRadar = {
@@ -1201,11 +1202,15 @@ const resetSuggestionsSearch = async () => {
                       </div>
                     )}
 
-                    {!place.already_saved_place && place.already_has_saved_experience && (
+                    {place.already_saved_in_plan ? (
+                      <div style={alreadyRelatedText}>
+                        Already saved in this trip.
+                      </div>
+                    ) : place.already_has_saved_experience ? (
                       <div style={alreadyRelatedText}>
                         You already saved an experience from this place.
                       </div>
-                    )}
+                    ) : null}
 
                     <div style={actions}>
                       <Link
@@ -1222,9 +1227,9 @@ const resetSuggestionsSearch = async () => {
                         View experiences
                       </Link>
 
-                      {place.already_saved_place ? (
+                      {place.already_in_trip_plan ? (
                           <span style={alreadySavedBadge}>
-                            Saved place
+                            Already in this trip
                           </span>
                         ) : (
                           <button

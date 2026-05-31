@@ -67,6 +67,16 @@ export default function TripPlanDetailPage() {
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
 
+  const [editingPlan, setEditingPlan] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [deletingPlan, setDeletingPlan] = useState(false);
+
+  const [editTitle, setEditTitle] = useState("");
+  const [editDestinationText, setEditDestinationText] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+
   const availableSuggestions = suggestions.filter(
   (suggestion) => !suggestion.already_saved
   );
@@ -74,6 +84,25 @@ export default function TripPlanDetailPage() {
   const clearActionFeedback = () => {
     setActionMessage("");
     setActionError("");
+  };
+
+  const startEditingPlan = () => {
+    if (!plan) return;
+
+    clearActionFeedback();
+
+    setEditTitle(plan.title || "");
+    setEditDestinationText(plan.destination_text || "");
+    setEditDescription(plan.description || "");
+    setEditStartDate(plan.start_date || "");
+    setEditEndDate(plan.end_date || "");
+
+    setEditingPlan(true);
+  };
+
+  const cancelEditingPlan = () => {
+    setEditingPlan(false);
+    clearActionFeedback();
   };
 
   const placeTypeFilters = [
@@ -253,6 +282,103 @@ const addSuggestionToPlan = async (suggestion: TripSuggestion) => {
   }
 };
 
+const saveTripPlanChanges = async () => {
+  if (!plan) return;
+
+  clearActionFeedback();
+
+  const title = editTitle.trim();
+
+  if (!title) {
+    setActionError("Trip plan title is required.");
+    return;
+  }
+
+  setSavingPlan(true);
+
+  try {
+    const res = await fetch(`${API_URL}/api/trip-plans/${plan.id}/`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title,
+        destination_text: editDestinationText.trim(),
+        description: editDescription.trim(),
+        start_date: editStartDate || null,
+        end_date: editEndDate || null,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Update trip plan error:", data);
+      setActionError(data.detail || "Could not update this trip plan.");
+      return;
+    }
+
+    setPlan((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        title: data.title,
+        destination_text: data.destination_text,
+        description: data.description,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        updated_at: data.updated_at,
+      };
+    });
+
+    setEditingPlan(false);
+    setActionMessage("Trip plan updated successfully.");
+  } catch (error) {
+    console.error("Failed to update trip plan:", error);
+    setActionError("Something went wrong while updating this trip plan.");
+  } finally {
+    setSavingPlan(false);
+  }
+};
+
+const deleteTripPlan = async () => {
+  if (!plan) return;
+
+  const confirmed = window.confirm(
+    "Delete this trip plan? This will remove the plan and all saved items inside it."
+  );
+
+  if (!confirmed) return;
+
+  clearActionFeedback();
+  setDeletingPlan(true);
+
+  try {
+    const res = await fetch(`${API_URL}/api/trip-plans/${plan.id}/`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Delete trip plan error:", data);
+      setActionError(data.detail || "Could not delete this trip plan.");
+      return;
+    }
+
+    router.push("/trip-plans");
+  } catch (error) {
+    console.error("Failed to delete trip plan:", error);
+    setActionError("Something went wrong while deleting this trip plan.");
+  } finally {
+    setDeletingPlan(false);
+  }
+};
+
 const resetSuggestionsSearch = async () => {
   setSearchQuery("");
   setSelectedPlaceType("");
@@ -319,7 +445,7 @@ const resetSuggestionsSearch = async () => {
           )}
         </div>
 
-        <div style={actions}>
+                <div style={actions}>
           <Link href="/trip-plans" style={secondaryLink}>
             Back to plans
           </Link>
@@ -331,8 +457,120 @@ const resetSuggestionsSearch = async () => {
           >
             Explore feed
           </button>
+
+          <button
+            type="button"
+            onClick={startEditingPlan}
+            style={secondaryButton}
+          >
+            Edit trip plan
+          </button>
+
+          <button
+            type="button"
+            onClick={deleteTripPlan}
+            disabled={deletingPlan}
+            style={{
+              ...dangerButton,
+              opacity: deletingPlan ? 0.5 : 1,
+              cursor: deletingPlan ? "not-allowed" : "pointer",
+            }}
+          >
+            {deletingPlan ? "Deleting..." : "Delete trip plan"}
+          </button>
         </div>
+
+
       </section>
+
+      {editingPlan && (
+        <section style={editPlanBox}>
+          <div>
+            <h2 style={sectionTitle}>Edit trip plan</h2>
+            <p style={helperText}>
+              Update the basic details of this trip plan.
+            </p>
+          </div>
+
+          <label style={formLabel}>
+            Title
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(event) => setEditTitle(event.target.value)}
+              placeholder="Trip plan title"
+              style={textInput}
+            />
+          </label>
+
+          <label style={formLabel}>
+            Destination
+            <input
+              type="text"
+              value={editDestinationText}
+              onChange={(event) => setEditDestinationText(event.target.value)}
+              placeholder="Destination, city or country"
+              style={textInput}
+            />
+          </label>
+
+          <label style={formLabel}>
+            Description
+            <textarea
+              value={editDescription}
+              onChange={(event) => setEditDescription(event.target.value)}
+              placeholder="Optional notes about this trip..."
+              rows={4}
+              style={textareaInput}
+            />
+          </label>
+
+          <div style={dateGrid}>
+            <label style={formLabel}>
+              Start date
+              <input
+                type="date"
+                value={editStartDate}
+                onChange={(event) => setEditStartDate(event.target.value)}
+                style={textInput}
+              />
+            </label>
+
+            <label style={formLabel}>
+              End date
+              <input
+                type="date"
+                value={editEndDate}
+                onChange={(event) => setEditEndDate(event.target.value)}
+                style={textInput}
+              />
+            </label>
+          </div>
+
+          <div style={actions}>
+            <button
+              type="button"
+              onClick={saveTripPlanChanges}
+              disabled={savingPlan}
+              style={{
+                ...primaryButton,
+                opacity: savingPlan ? 0.5 : 1,
+                cursor: savingPlan ? "not-allowed" : "pointer",
+              }}
+            >
+              {savingPlan ? "Saving..." : "Save changes"}
+            </button>
+
+            <button
+              type="button"
+              onClick={cancelEditingPlan}
+              style={secondaryButton}
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
 
       {actionMessage && (
         <div style={successBox}>
@@ -703,6 +941,16 @@ const secondaryLink = {
   textDecoration: "none",
 };
 
+const secondaryButton = {
+  display: "inline-block",
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  color: "black",
+  background: "white",
+  cursor: "pointer",
+};
+
 const dangerButton = {
   display: "inline-block",
   padding: "9px 13px",
@@ -747,6 +995,47 @@ const errorBox = {
   background: "#fff5f5",
   color: "#b91c1c",
   fontSize: "14px",
+};
+
+const editPlanBox = {
+  display: "grid",
+  gap: "14px",
+  padding: "20px",
+  border: "1px solid #eee",
+  borderRadius: "18px",
+  background: "#fafafa",
+  marginBottom: "18px",
+};
+
+const formLabel = {
+  display: "grid",
+  gap: "6px",
+  fontSize: "13px",
+  fontWeight: 700,
+  color: "#444",
+};
+
+const textInput = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+  background: "white",
+};
+
+const textareaInput = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+  background: "white",
+  resize: "vertical" as const,
+};
+
+const dateGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "12px",
 };
 
 const helperText = {
@@ -847,15 +1136,4 @@ const activeFilterButton = {
   background: "black",
   color: "white",
   border: "1px solid black",
-};
-
-const alreadySavedBadge = {
-  display: "inline-block",
-  padding: "9px 13px",
-  borderRadius: "10px",
-  border: "1px solid #d7f0df",
-  background: "#f2fbf5",
-  color: "#166534",
-  fontSize: "14px",
-  fontWeight: 700,
 };

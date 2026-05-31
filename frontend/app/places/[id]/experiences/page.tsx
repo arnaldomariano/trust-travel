@@ -566,6 +566,12 @@ const newReply = await response.json();
   // Trip plan actions
   // =====================
 
+const getCreateTripPlanUrl = (experienceId: number) => {
+  return `/trip-plans?returnTo=${encodeURIComponent(
+    `/places/${id}/experiences?highlight=${experienceId}`
+  )}`;
+};
+
 const addExperienceToTripPlan = async (experienceId: number) => {
   const selectedPlanId = selectedPlanByExperience[experienceId];
 

@@ -49,6 +49,17 @@ type TripSuggestion = {
   already_saved: boolean;
 };
 
+type RelatedPlace = {
+  place_id: number;
+  name: string;
+  place_type: string;
+  city: string;
+  destination: string;
+  destination_country: string;
+  destination_city: string;
+  already_has_saved_experience: boolean;
+};
+
 export default function TripPlanDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -59,7 +70,10 @@ export default function TripPlanDetailPage() {
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
 
   const [suggestions, setSuggestions] = useState<TripSuggestion[]>([]);
+  const [relatedPlaces, setRelatedPlaces] = useState<RelatedPlace[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPlaceType, setSelectedPlaceType] = useState("");
   const [addingSuggestionId, setAddingSuggestionId] = useState<number | null>(null);
@@ -167,14 +181,19 @@ const loadSuggestions = async () => {
       const text = await res.text();
       console.error("Failed to load trip suggestions:", res.status, text);
       setSuggestions([]);
+      setRelatedPlaces([]);
       return;
     }
 
     const data = await res.json();
-    setSuggestions(Array.isArray(data) ? data : []);
+
+    setSuggestions(Array.isArray(data.experiences) ? data.experiences : []);
+    setRelatedPlaces(Array.isArray(data.places) ? data.places : []);
+
   } catch (error) {
     console.error("Trip suggestions fetch error:", error);
     setSuggestions([]);
+    setRelatedPlaces([]);
   } finally {
     setSuggestionsLoading(false);
   }
@@ -740,7 +759,7 @@ const resetSuggestionsSearch = async () => {
 
         {suggestionsLoading ? (
           <div style={emptyBox}>Loading suggestions...</div>
-        ) : availableSuggestions.length === 0 ? (
+        ) : availableSuggestions.length === 0 && relatedPlaces.length === 0 ? (
           <div style={emptyBox}>
             <p style={{ marginTop: 0 }}>
               No new suggestions found.
@@ -765,82 +784,133 @@ const resetSuggestionsSearch = async () => {
               </Link>
             </div>
           </div>
-        ) : (
+       ) : (
           <div style={list}>
-            {availableSuggestions.map((suggestion) => (
+            {availableSuggestions.length > 0 && (
+              <div style={suggestionGroup}>
+                <h3 style={suggestionGroupTitle}>Suggested experiences</h3>
 
-              <article key={suggestion.experience_id} style={experienceCard}>
-                {suggestion.image_url && (
-                  <img
-                    src={suggestion.image_url}
-                    alt={suggestion.title || "Trip suggestion"}
-                    style={image}
-                  />
-                )}
+                {availableSuggestions.map((suggestion) => (
+                  <article key={suggestion.experience_id} style={experienceCard}>
+                    {suggestion.image_url && (
+                      <img
+                        src={suggestion.image_url}
+                        alt={suggestion.title || "Trip suggestion"}
+                        style={image}
+                      />
+                    )}
 
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <div style={label}>Suggested experience</div>
+                    <div style={{ display: "grid", gap: "8px" }}>
+                      <div style={label}>Suggested experience</div>
 
-                  <h3 style={experienceTitle}>
-                    {suggestion.title || suggestion.place || "Experience"}
-                  </h3>
+                      <h3 style={experienceTitle}>
+                        {suggestion.title || suggestion.place || "Experience"}
+                      </h3>
 
-                  <div style={placeText}>
-                    {suggestion.place}
-                    {suggestion.destination &&
-                    suggestion.destination !== suggestion.place
-                      ? ` · ${suggestion.destination}`
-                      : ""}
-                  </div>
+                      <div style={placeText}>
+                        {suggestion.place}
+                        {suggestion.destination &&
+                        suggestion.destination !== suggestion.place
+                          ? ` · ${suggestion.destination}`
+                          : ""}
+                      </div>
 
-                  {suggestion.rating && (
-                    <div style={rating}>
-                      {"★".repeat(suggestion.rating)}
-                      {"☆".repeat(5 - suggestion.rating)}
+                      {suggestion.rating && (
+                        <div style={rating}>
+                          {"★".repeat(suggestion.rating)}
+                          {"☆".repeat(5 - suggestion.rating)}
+                        </div>
+                      )}
+
+                      <p style={commentText}>{suggestion.comment}</p>
+
+                      <div style={actions}>
+                        <Link
+                          href={`/experiences/${suggestion.experience_id}`}
+                          style={secondaryLink}
+                        >
+                          View experience
+                        </Link>
+
+                        <Link
+                          href={`/places/${suggestion.place_id}/experiences?highlight=${suggestion.experience_id}`}
+                          style={secondaryLink}
+                        >
+                          View in place
+                        </Link>
+
+                        <button
+                          type="button"
+                          onClick={() => addSuggestionToPlan(suggestion)}
+                          disabled={addingSuggestionId === suggestion.experience_id}
+                          style={{
+                            ...primaryButton,
+                            opacity:
+                              addingSuggestionId === suggestion.experience_id
+                                ? 0.5
+                                : 1,
+                            cursor:
+                              addingSuggestionId === suggestion.experience_id
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {addingSuggestionId === suggestion.experience_id
+                            ? "Adding..."
+                            : "Add to this trip"}
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  </article>
+                ))}
+              </div>
+            )}
 
-                  <p style={commentText}>{suggestion.comment}</p>
+            {relatedPlaces.length > 0 && (
+              <div style={suggestionGroup}>
+                <h3 style={suggestionGroupTitle}>Related places</h3>
 
-                  <div style={actions}>
-                    <Link
-                      href={`/experiences/${suggestion.experience_id}`}
-                      style={secondaryLink}
-                    >
-                      View experience
-                    </Link>
+                {relatedPlaces.map((place) => (
+                  <article key={place.place_id} style={placeSuggestionCard}>
+                    <div style={label}>Related place</div>
 
-                    <Link
-                      href={`/places/${suggestion.place_id}/experiences?highlight=${suggestion.experience_id}`}
-                      style={secondaryLink}
-                    >
-                      View in place
-                    </Link>
+                    <h3 style={experienceTitle}>{place.name}</h3>
 
-                    <button
-                      type="button"
-                      onClick={() => addSuggestionToPlan(suggestion)}
-                      disabled={addingSuggestionId === suggestion.experience_id}
-                      style={{
-                        ...primaryButton,
-                        opacity:
-                          addingSuggestionId === suggestion.experience_id
-                            ? 0.5
-                            : 1,
-                        cursor:
-                          addingSuggestionId === suggestion.experience_id
-                            ? "not-allowed"
-                            : "pointer",
-                      }}
-                    >
-                      {addingSuggestionId === suggestion.experience_id
-                        ? "Adding..."
-                        : "Add to this trip"}
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
+                    <div style={placeText}>
+                      {place.place_type}
+                      {place.destination && place.destination !== place.name
+                        ? ` · ${place.destination}`
+                        : ""}
+                      {place.destination_country
+                        ? ` · ${place.destination_country}`
+                        : ""}
+                    </div>
+
+                    {place.already_has_saved_experience && (
+                      <div style={alreadyRelatedText}>
+                        You already saved an experience from this place.
+                      </div>
+                    )}
+
+                    <div style={actions}>
+                      <Link
+                        href={`/places/${place.place_id}`}
+                        style={secondaryLink}
+                      >
+                        View place
+                      </Link>
+
+                      <Link
+                        href={`/places/${place.place_id}/experiences`}
+                        style={primaryLink}
+                      >
+                        View experiences
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -1099,6 +1169,34 @@ const suggestionsSection = {
   borderRadius: "18px",
   background: "#fafafa",
   marginBottom: "28px",
+};
+
+const suggestionGroup = {
+  display: "grid",
+  gap: "12px",
+};
+
+const suggestionGroupTitle = {
+  margin: "4px 0 0 0",
+  fontSize: "18px",
+};
+
+const placeSuggestionCard = {
+  padding: "18px",
+  border: "1px solid #eee",
+  borderRadius: "16px",
+  background: "white",
+  display: "grid",
+  gap: "8px",
+};
+
+const alreadyRelatedText = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "13px",
 };
 
 const searchRow = {

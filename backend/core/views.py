@@ -739,7 +739,6 @@ def serialize_update(update, request=None):
         "updated_at": update.updated_at,
 
     }
-
 class TripPlanSuggestionsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -763,39 +762,10 @@ class TripPlanSuggestionsView(APIView):
             "other",
         ]
 
-        experiences = Experience.objects.select_related(
-            "place",
-            "place__destination",
-            "user",
-            "user__profile",
-        ).all()
+        if place_type and place_type not in valid_place_types:
+            return Response({"detail": "Invalid place_type."}, status=400)
 
-        if query:
-            experiences = experiences.filter(
-                Q(title__icontains=query)
-                | Q(comment__icontains=query)
-                | Q(place__name__icontains=query)
-                | Q(place__city__icontains=query)
-                | Q(place__destination__name__icontains=query)
-                | Q(place__destination__country__icontains=query)
-                | Q(place__destination__city__icontains=query)
-            )
-        elif plan.destination_text:
-            destination_query = plan.destination_text.strip()
-
-            experiences = experiences.filter(
-                Q(place__name__icontains=destination_query)
-                | Q(place__city__icontains=destination_query)
-                | Q(place__destination__name__icontains=destination_query)
-                | Q(place__destination__country__icontains=destination_query)
-                | Q(place__destination__city__icontains=destination_query)
-            )
-
-        if place_type:
-            if place_type not in valid_place_types:
-                return Response({"detail": "Invalid place_type."}, status=400)
-
-            experiences = experiences.filter(place__place_type=place_type)
+        search_text = query or (plan.destination_text or "").strip()
 
         saved_experience_ids = set(
             SavedItem.objects.filter(
@@ -804,9 +774,40 @@ class TripPlanSuggestionsView(APIView):
             ).values_list("experience_id", flat=True)
         )
 
+        saved_place_ids = set(
+            SavedItem.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("experience__place_id", flat=True)
+        )
+
+        # ============================================================
+        # Suggested experiences
+        # ============================================================
+        experiences = Experience.objects.select_related(
+            "place",
+            "place__destination",
+            "user",
+            "user__profile",
+        ).all()
+
+        if search_text:
+            experiences = experiences.filter(
+                Q(title__icontains=search_text)
+                | Q(comment__icontains=search_text)
+                | Q(place__name__icontains=search_text)
+                | Q(place__city__icontains=search_text)
+                | Q(place__destination__name__icontains=search_text)
+                | Q(place__destination__country__icontains=search_text)
+                | Q(place__destination__city__icontains=search_text)
+            )
+
+        if place_type:
+            experiences = experiences.filter(place__place_type=place_type)
+
         experiences = experiences.order_by("-created_at")[:30]
 
-        result = []
+        experience_results = []
 
         for experience in experiences:
             image_url = None
@@ -817,7 +818,7 @@ class TripPlanSuggestionsView(APIView):
             place = experience.place
             destination = place.destination if place else None
 
-            result.append({
+            experience_results.append({
                 "experience_id": experience.id,
                 "title": experience.title,
                 "comment": experience.comment,
@@ -831,8 +832,47 @@ class TripPlanSuggestionsView(APIView):
                 "already_saved": experience.id in saved_experience_ids,
             })
 
-        return Response(result)
+        # ============================================================
+        # Related places
+        # ============================================================
+        places = Place.objects.select_related(
+            "destination"
+        ).all()
 
+        if search_text:
+            places = places.filter(
+                Q(name__icontains=search_text)
+                | Q(city__icontains=search_text)
+                | Q(destination__name__icontains=search_text)
+                | Q(destination__country__icontains=search_text)
+                | Q(destination__city__icontains=search_text)
+            )
+
+        if place_type:
+            places = places.filter(place_type=place_type)
+
+        places = places.order_by("name")[:30]
+
+        place_results = []
+
+        for place in places:
+            destination = place.destination
+
+            place_results.append({
+                "place_id": place.id,
+                "name": place.name,
+                "place_type": place.place_type,
+                "city": place.city,
+                "destination": destination.name if destination else "",
+                "destination_country": destination.country if destination else "",
+                "destination_city": destination.city if destination else "",
+                "already_has_saved_experience": place.id in saved_place_ids,
+            })
+
+        return Response({
+            "experiences": experience_results,
+            "places": place_results,
+        })
 # ============================================================
 # UPDATE FEED
 # ============================================================

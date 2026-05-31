@@ -764,6 +764,208 @@ const createTripPlanAndAddExperience = async (experience: any) => {
 };
 
   // =====================
+  // Reusable trip plan UI
+  // =====================
+
+const renderTripPlanControls = (experience: any) => {
+  if (!experience?.id) return null;
+
+  const experienceId = experience.id;
+  const showPicker = showTripPlanPicker[experienceId];
+  const selectedPlanId = selectedPlanByExperience[experienceId] || "";
+  const isAdding = addingToPlan[experienceId];
+  const isCreating = creatingPlanByExperience[experienceId];
+  const showCreateForm = showCreatePlanByExperience[experienceId];
+  const tripPlanError = tripPlanErrorByExperience[experienceId];
+  const tripPlanMessage = tripPlanMessageByExperience[experienceId];
+
+  return (
+    <div style={inlineTripPlanContainer}>
+      <button
+        type="button"
+        style={inlineSecondaryButton}
+        onClick={() =>
+          setShowTripPlanPicker((prev) => ({
+            ...prev,
+            [experienceId]: !prev[experienceId],
+          }))
+        }
+      >
+        Add to trip plan
+      </button>
+
+      {showPicker && (
+        <div style={inlineTripPlanPickerBox}>
+          <div style={inlineTripPlanTitle}>
+            Add this experience to your trip plan
+          </div>
+
+          <div style={inlineTripPlanHelp}>
+            Save this recommendation so you can find it later while planning your trip.
+          </div>
+
+          {tripPlans.length > 0 && (
+            <div style={inlineExistingPlanBox}>
+              <select
+                value={selectedPlanId}
+                onChange={(event) =>
+                  setSelectedPlanByExperience((prev) => ({
+                    ...prev,
+                    [experienceId]: event.target.value,
+                  }))
+                }
+                style={inlineSelectInput}
+              >
+                <option value="">Choose an existing trip plan</option>
+
+                {tripPlans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.title}
+                    {plan.destination_text ? ` — ${plan.destination_text}` : ""}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                disabled={isAdding}
+                onClick={() => addExperienceToTripPlan(experienceId)}
+                style={{
+                  ...inlinePrimaryButton,
+                  opacity: isAdding ? 0.5 : 1,
+                  cursor: isAdding ? "not-allowed" : "pointer",
+                }}
+              >
+                {isAdding ? "Adding..." : "Add to selected plan"}
+              </button>
+            </div>
+          )}
+
+          <div style={inlineDividerText}>
+            {tripPlans.length > 0
+              ? "Or create a new trip plan"
+              : "Create your first trip plan"}
+          </div>
+
+          {!showCreateForm ? (
+            <button
+              type="button"
+              style={inlineSecondaryButton}
+              onClick={() => {
+                setShowCreatePlanByExperience((prev) => ({
+                  ...prev,
+                  [experienceId]: true,
+                }));
+
+                setTripPlanErrorByExperience((prev) => ({
+                  ...prev,
+                  [experienceId]: "",
+                }));
+
+                if (!newPlanDestinationByExperience[experienceId]) {
+                  setNewPlanDestinationByExperience((prev) => ({
+                    ...prev,
+                    [experienceId]:
+                      experience.destination_name ||
+                      experience.place_name ||
+                      place?.name ||
+                      "",
+                  }));
+                }
+              }}
+            >
+              Create new trip plan here
+            </button>
+          ) : (
+            <div style={inlineQuickCreateBox}>
+              <input
+                type="text"
+                value={newPlanTitleByExperience[experienceId] || ""}
+                onChange={(event) =>
+                  setNewPlanTitleByExperience((prev) => ({
+                    ...prev,
+                    [experienceId]: event.target.value,
+                  }))
+                }
+                placeholder="Trip plan title, e.g. Italy 2026"
+                style={inlineTextInput}
+              />
+
+              <input
+                type="text"
+                value={newPlanDestinationByExperience[experienceId] || ""}
+                onChange={(event) =>
+                  setNewPlanDestinationByExperience((prev) => ({
+                    ...prev,
+                    [experienceId]: event.target.value,
+                  }))
+                }
+                placeholder="Destination, e.g. Rome, Thailand, São Roque"
+                style={inlineTextInput}
+              />
+
+              <div style={inlineQuickCreateActions}>
+                <button
+                  type="button"
+                  disabled={isCreating}
+                  onClick={() => createTripPlanAndAddExperience(experience)}
+                  style={{
+                    ...inlinePrimaryButton,
+                    opacity: isCreating ? 0.5 : 1,
+                    cursor: isCreating ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isCreating ? "Creating..." : "Create and add experience"}
+                </button>
+
+                <button
+                  type="button"
+                  style={inlineSecondaryButton}
+                  onClick={() => {
+                    setShowCreatePlanByExperience((prev) => ({
+                      ...prev,
+                      [experienceId]: false,
+                    }));
+
+                    setTripPlanErrorByExperience((prev) => ({
+                      ...prev,
+                      [experienceId]: "",
+                    }));
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tripPlanError && (
+            <div style={inlineTripPlanErrorBox}>
+              {tripPlanError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tripPlanMessage && (
+        <div style={tripPlanSuccessBox}>
+          <span>{tripPlanMessage.text}</span>
+
+          {tripPlanMessage.planId && (
+            <Link
+              href={`/trip-plans/${tripPlanMessage.planId}`}
+              style={tripPlanSuccessLink}
+            >
+              View trip plan
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+  // =====================
   // Report actions
   // =====================
 
@@ -2127,6 +2329,12 @@ const reportErrorBox = {
   background: "#fff5f5",
   color: "#991b1b",
   fontSize: "13px",
+};
+
+const inlineTripPlanContainer = {
+  marginTop: "10px",
+  display: "grid",
+  gap: "10px",
 };
 
 const inlineTripPlanPickerBox = {

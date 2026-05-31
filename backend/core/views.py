@@ -22,6 +22,7 @@ from .models import (
     Friendship,
     ExperienceReply,
     SavedItem,
+    SavedPlace,
     TripPlan,
     Update,
     Profile,
@@ -447,7 +448,8 @@ class ExperienceReplyListCreateView(generics.ListCreateAPIView):
 # ============================================================
 
 def serialize_trip_plan(plan):
-    saved_count = plan.saved_items.count()
+    saved_items_count = plan.saved_items.count()
+    saved_places_count = plan.saved_places.count()
 
     return {
         "id": plan.id,
@@ -456,7 +458,9 @@ def serialize_trip_plan(plan):
         "description": plan.description,
         "start_date": plan.start_date,
         "end_date": plan.end_date,
-        "saved_count": saved_count,
+        "saved_count": saved_items_count + saved_places_count,
+        "saved_items_count": saved_items_count,
+        "saved_places_count": saved_places_count,
         "created_at": plan.created_at,
         "updated_at": plan.updated_at,
     }
@@ -487,6 +491,43 @@ def serialize_saved_item(saved_item, request=None):
         "destination": destination.name if destination else "",
         "saved_at": saved_item.created_at,
         "experience_created_at": experience.created_at,
+    }
+
+def serialize_saved_place(saved_place, request=None):
+    place = saved_place.place
+    destination = place.destination if place else None
+
+    related_experiences_count = 0
+    related_updates_count = 0
+
+    if place:
+        related_experiences_count = Experience.objects.filter(
+            place=place
+        ).count()
+
+        related_updates_count = Update.objects.filter(
+            place=place
+        ).exclude(
+            type="experience"
+        ).count()
+
+    return {
+        "id": saved_place.id,
+        "trip_plan_id": saved_place.trip_plan.id,
+        "place_id": place.id if place else None,
+        "name": place.name if place else "",
+        "place_type": place.place_type if place else "",
+        "city": place.city if place else "",
+        "destination": destination.name if destination else "",
+        "destination_country": destination.country if destination else "",
+        "destination_city": destination.city if destination else "",
+        "note": saved_place.note,
+        "saved_at": saved_place.created_at,
+        "related_experiences_count": related_experiences_count,
+        "related_updates_count": related_updates_count,
+        "has_related_content": (
+            related_experiences_count > 0 or related_updates_count > 0
+        ),
     }
 
 
@@ -553,10 +594,24 @@ class TripPlanDetailView(APIView):
             "experience__place__destination",
         ).order_by("-created_at")
 
+        saved_places = SavedPlace.objects.filter(
+            user=request.user,
+            trip_plan=plan,
+        ).select_related(
+            "place",
+            "place__destination",
+        ).order_by("-created_at")
+
         data = serialize_trip_plan(plan)
+
         data["saved_items"] = [
             serialize_saved_item(item, request)
             for item in saved_items
+        ]
+
+        data["saved_places"] = [
+            serialize_saved_place(saved_place, request)
+            for saved_place in saved_places
         ]
 
         return Response(data)
@@ -660,10 +715,81 @@ class TripPlanExperienceView(APIView):
             }
         )
 
+class TripPlanPlaceView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, place_id):
+        try:
+            plan = TripPlan.objects.get(id=pk, user=request.user)
+        except TripPlan.DoesNotExist:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        try:
+            place = Place.objects.get(id=place_id)
+        except Place.DoesNotExist:
+            return Response({"detail": "Place not found."}, status=404)
+
+        note = (request.data.get("note") or "").strip()
+
+        saved_place, created = SavedPlace.objects.get_or_create(
+            user=request.user,
+            trip_plan=plan,
+            place=place,
+            defaults={
+                "note": note,
+            },
+        )
+
+        if not created and note:
+            saved_place.note = note
+            saved_place.save()
+
+        # Touch the plan so recently used plans rise to the top.
+        plan.save()
+
+        return Response(
+            {
+                "detail": "Place added to trip plan.",
+                "saved": True,
+                "created": created,
+                "place": serialize_saved_place(saved_place, request),
+            },
+            status=201 if created else 200,
+        )
+
+    def delete(self, request, pk, place_id):
+        try:
+            plan = TripPlan.objects.get(id=pk, user=request.user)
+        except TripPlan.DoesNotExist:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        deleted_count, _ = SavedPlace.objects.filter(
+            user=request.user,
+            trip_plan=plan,
+            place_id=place_id,
+        ).delete()
+
+        if deleted_count == 0:
+            return Response(
+                {
+                    "detail": "Place was not in this trip plan.",
+                    "saved": False,
+                },
+                status=404,
+            )
+
+        plan.save()
+
+        return Response(
+            {
+                "detail": "Place removed from trip plan.",
+                "saved": False,
+            }
+        )
+
 # ============================================================
-
 # UPDATE SERIALIZER HELPER
-
 # ============================================================
 
 def serialize_update(update, request=None):
@@ -774,12 +900,21 @@ class TripPlanSuggestionsView(APIView):
             ).values_list("experience_id", flat=True)
         )
 
-        saved_place_ids = set(
+        saved_place_ids_from_experiences = set(
             SavedItem.objects.filter(
                 user=request.user,
                 trip_plan=plan,
             ).values_list("experience__place_id", flat=True)
         )
+
+        saved_place_ids_direct = set(
+            SavedPlace.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("place_id", flat=True)
+        )
+
+        saved_place_ids = saved_place_ids_from_experiences | saved_place_ids_direct
 
         # ============================================================
         # Suggested experiences
@@ -866,7 +1001,9 @@ class TripPlanSuggestionsView(APIView):
                 "destination": destination.name if destination else "",
                 "destination_country": destination.country if destination else "",
                 "destination_city": destination.city if destination else "",
-                "already_has_saved_experience": place.id in saved_place_ids,
+                "already_saved_place": place.id in saved_place_ids_direct,
+                "already_has_saved_experience": place.id in saved_place_ids_from_experiences,
+                "already_in_trip_plan": place.id in saved_place_ids,
             })
 
         return Response({

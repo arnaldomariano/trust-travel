@@ -22,6 +22,23 @@ type SavedItem = {
   experience_created_at: string;
 };
 
+type SavedPlace = {
+  id: number;
+  trip_plan_id: number;
+  place_id: number;
+  name: string;
+  place_type: string;
+  city: string;
+  destination: string;
+  destination_country: string;
+  destination_city: string;
+  note: string;
+  saved_at: string;
+  related_experiences_count: number;
+  related_updates_count: number;
+  has_related_content: boolean;
+};
+
 type TripPlanDetail = {
   id: number;
   title: string;
@@ -30,9 +47,12 @@ type TripPlanDetail = {
   start_date: string | null;
   end_date: string | null;
   saved_count: number;
+  saved_items_count?: number;
+  saved_places_count?: number;
   created_at: string;
   updated_at: string;
   saved_items: SavedItem[];
+  saved_places: SavedPlace[];
 };
 
 type TripSuggestion = {
@@ -57,7 +77,9 @@ type RelatedPlace = {
   destination: string;
   destination_country: string;
   destination_city: string;
+  already_saved_place: boolean;
   already_has_saved_experience: boolean;
+  already_in_trip_plan: boolean;
 };
 
 type TripRadar = {
@@ -85,6 +107,9 @@ export default function TripPlanDetailPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPlaceType, setSelectedPlaceType] = useState("");
   const [addingSuggestionId, setAddingSuggestionId] = useState<number | null>(null);
+
+  const [savingPlaceId, setSavingPlaceId] = useState<number | null>(null);
+  const [removingPlaceId, setRemovingPlaceId] = useState<number | null>(null);
 
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
@@ -287,7 +312,8 @@ const loadSuggestions = async () => {
         return {
           ...prev,
           saved_items: updatedItems,
-          saved_count: updatedItems.length,
+          saved_items_count: updatedItems.length,
+          saved_count: updatedItems.length + (prev.saved_places?.length || 0),
         };
       });
 
@@ -337,6 +363,98 @@ const addSuggestionToPlan = async (suggestion: TripSuggestion) => {
     setActionError("Error adding experience to plan.");
     } finally {
     setAddingSuggestionId(null);
+  }
+};
+
+const savePlaceToPlan = async (place: RelatedPlace) => {
+  if (!plan) return;
+
+  clearActionFeedback();
+  setSavingPlaceId(place.place_id);
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/trip-plans/${plan.id}/places/${place.place_id}/`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Save place to trip plan error:", data);
+      setActionError(data.detail || "Error saving place to this trip plan.");
+      return;
+    }
+
+    await loadPlan();
+    await loadSuggestions();
+    await loadRadar();
+
+    setActionMessage(`${place.name} saved to this trip plan.`);
+  } catch (error) {
+    console.error("Failed to save place to trip plan:", error);
+    setActionError("Error saving place to this trip plan.");
+  } finally {
+    setSavingPlaceId(null);
+  }
+};
+
+const removePlaceFromPlan = async (savedPlace: SavedPlace) => {
+  if (!plan) return;
+
+  const confirmed = window.confirm(
+    "Remove this place from your trip plan?"
+  );
+
+  if (!confirmed) return;
+
+  clearActionFeedback();
+  setRemovingPlaceId(savedPlace.id);
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/trip-plans/${plan.id}/places/${savedPlace.place_id}/`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Remove place from trip plan error:", data);
+      setActionError(data.detail || "Error removing place from this trip plan.");
+      return;
+    }
+
+    setPlan((prev) => {
+      if (!prev) return prev;
+
+      const updatedPlaces = (prev.saved_places || []).filter(
+        (place) => place.id !== savedPlace.id
+      );
+
+      return {
+        ...prev,
+        saved_places: updatedPlaces,
+        saved_places_count: updatedPlaces.length,
+        saved_count: (prev.saved_items?.length || 0) + updatedPlaces.length,
+      };
+    });
+
+    await loadSuggestions();
+    await loadRadar();
+
+    setActionMessage("Place removed from this trip plan.");
+  } catch (error) {
+    console.error("Failed to remove place from trip plan:", error);
+    setActionError("Error removing place from this trip plan.");
+  } finally {
+    setRemovingPlaceId(null);
   }
 };
 
@@ -490,9 +608,19 @@ const resetSuggestionsSearch = async () => {
         {plan.description && <p style={descriptionText}>{plan.description}</p>}
 
         <div style={metaRow}>
-          <span>
-            {plan.saved_count} saved item{plan.saved_count === 1 ? "" : "s"}
-          </span>
+         <span>
+          {plan.saved_count} saved item{plan.saved_count === 1 ? "" : "s"}
+        </span>
+
+        <span>
+          {plan.saved_items_count ?? plan.saved_items.length} experience
+          {(plan.saved_items_count ?? plan.saved_items.length) === 1 ? "" : "s"}
+        </span>
+
+        <span>
+          {plan.saved_places_count ?? plan.saved_places?.length ?? 0} place
+          {(plan.saved_places_count ?? plan.saved_places?.length ?? 0) === 1 ? "" : "s"}
+        </span>
 
           {plan.start_date && (
             <span>From {new Date(plan.start_date).toLocaleDateString()}</span>
@@ -806,6 +934,88 @@ const resetSuggestionsSearch = async () => {
         )}
       </section>
 
+      <section style={section}>
+        <h2 style={sectionTitle}>Saved places</h2>
+
+        {!plan.saved_places || plan.saved_places.length === 0 ? (
+          <div style={emptyBox}>
+            <p style={{ marginTop: 0 }}>
+              This plan does not have any saved places yet.
+            </p>
+
+            <p style={helperText}>
+              Save places you want to watch, even when there are no experiences
+              about them yet.
+            </p>
+          </div>
+        ) : (
+          <div style={list}>
+            {plan.saved_places.map((savedPlace) => (
+              <article key={savedPlace.id} style={placeSuggestionCard}>
+                <div style={label}>Saved place</div>
+
+                <h3 style={experienceTitle}>{savedPlace.name}</h3>
+
+                <div style={placeText}>
+                  {savedPlace.place_type}
+                  {savedPlace.destination && savedPlace.destination !== savedPlace.name
+                    ? ` · ${savedPlace.destination}`
+                    : ""}
+                  {savedPlace.destination_country
+                    ? ` · ${savedPlace.destination_country}`
+                    : ""}
+                </div>
+
+                {savedPlace.has_related_content ? (
+                  <div style={alreadyRelatedText}>
+                    Trust Radar found {savedPlace.related_experiences_count} related experience
+                    {savedPlace.related_experiences_count === 1 ? "" : "s"} and{" "}
+                    {savedPlace.related_updates_count} update
+                    {savedPlace.related_updates_count === 1 ? "" : "s"} for this place.
+                  </div>
+                ) : (
+                  <div style={watchingPlaceText}>
+                    No related content yet. Trust Radar is watching this place.
+                  </div>
+                )}
+
+                <div style={actions}>
+                  <Link
+                    href={`/places/${savedPlace.place_id}`}
+                    style={secondaryLink}
+                  >
+                    View place
+                  </Link>
+
+                  <Link
+                    href={`/places/${savedPlace.place_id}/experiences`}
+                    style={primaryLink}
+                  >
+                    View experiences
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => removePlaceFromPlan(savedPlace)}
+                    disabled={removingPlaceId === savedPlace.id}
+                    style={{
+                      ...dangerButton,
+                      opacity: removingPlaceId === savedPlace.id ? 0.5 : 1,
+                      cursor:
+                        removingPlaceId === savedPlace.id
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                  >
+                    {removingPlaceId === savedPlace.id ? "Removing..." : "Remove"}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section id="trip-ideas" style={suggestionsSection}>
         <div>
           <h2 style={sectionTitle}>Find ideas for this trip</h2>
@@ -985,7 +1195,13 @@ const resetSuggestionsSearch = async () => {
                         : ""}
                     </div>
 
-                    {place.already_has_saved_experience && (
+                    {place.already_saved_place && (
+                      <div style={alreadyRelatedText}>
+                        This place is already saved in this trip plan.
+                      </div>
+                    )}
+
+                    {!place.already_saved_place && place.already_has_saved_experience && (
                       <div style={alreadyRelatedText}>
                         You already saved an experience from this place.
                       </div>
@@ -1005,6 +1221,31 @@ const resetSuggestionsSearch = async () => {
                       >
                         View experiences
                       </Link>
+
+                      {place.already_saved_place ? (
+                          <span style={alreadySavedBadge}>
+                            Saved place
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => savePlaceToPlan(place)}
+                            disabled={savingPlaceId === place.place_id}
+                            style={{
+                              ...secondaryButton,
+                              opacity: savingPlaceId === place.place_id ? 0.5 : 1,
+                              cursor:
+                                savingPlaceId === place.place_id
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                          >
+                            {savingPlaceId === place.place_id
+                              ? "Saving..."
+                              : "Save place to this trip"}
+                          </button>
+                        )}
+
                     </div>
                   </article>
                 ))}
@@ -1392,4 +1633,24 @@ const activeFilterButton = {
   background: "black",
   color: "white",
   border: "1px solid black",
+};
+
+const watchingPlaceText = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  color: "#555",
+  fontSize: "13px",
+};
+
+const alreadySavedBadge = {
+  display: "inline-block",
+  padding: "9px 13px",
+  borderRadius: "10px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "14px",
+  fontWeight: 700,
 };

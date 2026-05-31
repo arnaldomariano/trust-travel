@@ -340,13 +340,18 @@ const selectedPlaceHasNoExperiences =
           return [data, ...prev];
         });
 
-    setSelectedPlace(data);
-    setCreatedPlaceId(data.id);
-    setShowShareForm(false);
-    setExperienceShared(false);
-    setSharedExperience(null);
-    setEditingExperience(false);
-    setSearchTerm(data.name || newPlaceName.trim());
+if (isUpdateMode) {
+  router.push(`/create?place=${data.id}`);
+  return;
+}
+
+setSelectedPlace(data);
+setCreatedPlaceId(data.id);
+setShowShareForm(isExperienceMode);
+setExperienceShared(false);
+setSharedExperience(null);
+setEditingExperience(false);
+setSearchTerm(data.name || newPlaceName.trim());
 
     } catch (error) {
       console.error("Create basic place failed:", error);
@@ -360,9 +365,14 @@ const selectedPlaceHasNoExperiences =
   // Select an existing place
   // =========================
   const handleSelectExistingPlace = (place: any) => {
+  if (isUpdateMode) {
+    router.push(`/create?place=${place.id}`);
+    return;
+  }
+
   setSelectedPlace(place);
   setCreatedPlaceId(null);
-  setShowShareForm(false);
+  setShowShareForm(isExperienceMode);
   setExperienceShared(false);
   setSharedExperience(null);
   setEditingExperience(false);
@@ -373,10 +383,11 @@ const selectedPlaceHasNoExperiences =
   setTripContext("prefer_not_to_say");
   setTripStyle("prefer_not_to_say");
 
-
   setTimeout(() => {
     document
-      .getElementById("selected-place-actions")
+      .getElementById(
+        isExperienceMode ? "share-experience-form" : "selected-place-actions"
+      )
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, 0);
 };
@@ -681,10 +692,23 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
           {loading ? (
       <p style={{ color: "#666" }}>Loading places...</p>
-    ) : isDirectPlaceFlow ? (
+        ) : isDirectPlaceFlow ? (
       <div style={helperCard}>
-        You are sharing an experience about{" "}
-        <strong>{selectedPlace.name}</strong>.
+        {isUpdateMode ? (
+          <>
+            You are preparing a post about{" "}
+            <strong>{selectedPlace.name}</strong>.
+          </>
+        ) : isExperienceMode ? (
+          <>
+            You are sharing an experience about{" "}
+            <strong>{selectedPlace.name}</strong>.
+          </>
+        ) : (
+          <>
+            You selected <strong>{selectedPlace.name}</strong>.
+          </>
+        )}
       </div>
     ) : !searchTerm.trim() ? (
       <div style={helperCard}>
@@ -753,7 +777,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             )}
 
             <div style={{ marginTop: "10px", fontSize: "14px" }}>
-              Explore or share here →
+              {isUpdateMode
+                ? "Post alert, event or info here →"
+                : isExperienceMode
+                ? "Share experience here →"
+                : "Explore this place →"}
             </div>
           </button>
         ))}
@@ -841,7 +869,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         </section>
       )}
 
-     {selectedPlace && !shouldOpenShareForm && (
+     {selectedPlace && !showShareForm && (
       <section
         id="selected-place-actions"
         style={{
@@ -879,14 +907,14 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           {isUpdateMode ? (
-            <button
-              type="button"
-              onClick={() => router.push(`/places/${selectedPlace.id}?share=update`)}
-              style={primaryButton}
-            >
-              Share event or info
-            </button>
-          ) : selectedPlaceHasNoExperiences ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/create?place=${selectedPlace.id}`)}
+                style={primaryButton}
+              >
+                Post alert, event or info here
+              </button>
+            ) : selectedPlaceHasNoExperiences ? (
             <>
               <button
                 type="button"

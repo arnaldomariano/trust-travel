@@ -1267,6 +1267,34 @@ const renderReportControls = (experience: any) => {
     <main style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
       <h1>{pageTitle}</h1>
 
+        <div
+      style={{
+        display: "flex",
+        gap: "10px",
+        flexWrap: "wrap",
+        marginTop: "12px",
+        marginBottom: "18px",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() =>
+          router.push(`/destinations?mode=experience&place=${id}&share=true`)
+        }
+        style={{
+          padding: "10px 14px",
+          borderRadius: "10px",
+          border: "none",
+          background: "black",
+          color: "white",
+          cursor: "pointer",
+          fontWeight: 700,
+        }}
+      >
+        Share your experience here
+      </button>
+    </div>
+
           <div
       style={{
         marginTop: "14px",

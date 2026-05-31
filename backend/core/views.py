@@ -873,6 +873,72 @@ class TripPlanSuggestionsView(APIView):
             "experiences": experience_results,
             "places": place_results,
         })
+
+class TripPlanRadarView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            plan = TripPlan.objects.get(id=pk, user=request.user)
+        except TripPlan.DoesNotExist:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        query = (plan.destination_text or plan.title or "").strip()
+
+        if not query:
+            return Response({
+                "query": "",
+                "related_experiences_count": 0,
+                "related_places_count": 0,
+                "related_updates_count": 0,
+                "has_related_content": False,
+            })
+
+        related_experiences = Experience.objects.filter(
+            Q(title__icontains=query)
+            | Q(comment__icontains=query)
+            | Q(place__name__icontains=query)
+            | Q(place__city__icontains=query)
+            | Q(place__destination__name__icontains=query)
+            | Q(place__destination__country__icontains=query)
+            | Q(place__destination__city__icontains=query)
+        )
+
+        related_places = Place.objects.filter(
+            Q(name__icontains=query)
+            | Q(city__icontains=query)
+            | Q(destination__name__icontains=query)
+            | Q(destination__country__icontains=query)
+            | Q(destination__city__icontains=query)
+        )
+
+        related_updates = Update.objects.filter(
+            Q(title__icontains=query)
+            | Q(text__icontains=query)
+            | Q(category__icontains=query)
+            | Q(place__name__icontains=query)
+            | Q(place__city__icontains=query)
+            | Q(place__destination__name__icontains=query)
+            | Q(place__destination__country__icontains=query)
+            | Q(place__destination__city__icontains=query)
+        )
+
+        related_experiences_count = related_experiences.count()
+        related_places_count = related_places.count()
+        related_updates_count = related_updates.count()
+
+        return Response({
+            "query": query,
+            "related_experiences_count": related_experiences_count,
+            "related_places_count": related_places_count,
+            "related_updates_count": related_updates_count,
+            "has_related_content": (
+                related_experiences_count > 0
+                or related_places_count > 0
+                or related_updates_count > 0
+            ),
+        })
 # ============================================================
 # UPDATE FEED
 # ============================================================

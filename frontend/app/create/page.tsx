@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { API_URL } from "../lib/api";
 
 type Place = {
@@ -15,6 +15,8 @@ type UpdateType = "alert" | "event" | "info";
 
 export default function CreatePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialPlaceId = searchParams.get("place");
 
   const [places, setPlaces] = useState<Place[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState("");
@@ -73,6 +75,17 @@ export default function CreatePage() {
         );
 
         setPlaces(sorted);
+
+        if (initialPlaceId) {
+          const exists = sorted.some(
+            (place: Place) => String(place.id) === String(initialPlaceId)
+          );
+
+          if (exists) {
+            setSelectedPlaceId(initialPlaceId);
+          }
+        }
+
       } catch (error) {
         console.error("Places fetch error:", error);
       } finally {
@@ -81,7 +94,7 @@ export default function CreatePage() {
     };
 
     loadPlaces();
-  }, []);
+  }, [initialPlaceId]);
 
   // =========================
   // Create update
@@ -143,8 +156,8 @@ export default function CreatePage() {
       <h1>Create Post</h1>
 
       <p style={intro}>
-        Share an alert, event or general information about a place. Experiences
-        with ratings will be created separately from the place page.
+        Share an alert, event, useful information or a personal travel
+        experience about a place.
       </p>
 
       <section style={card}>
@@ -187,8 +200,7 @@ export default function CreatePage() {
           </select>
 
           <small style={hint}>
-            Experiences and reviews require a rating and will be added from the
-            place page.
+              Use this form only for alerts, events and useful information.
           </small>
         </div>
 
@@ -229,6 +241,8 @@ const intro = {
   lineHeight: 1.5,
   marginBottom: "20px",
 };
+
+
 
 const card = {
   border: "1px solid #eee",

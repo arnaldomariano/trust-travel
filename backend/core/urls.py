@@ -37,6 +37,7 @@ from .views import (
     TripPlanDetailView,
     TripPlanExperienceView,
     TripPlanSuggestionsView,
+    TripPlanRadarView,
     SummaryAnalyticsView,
     PlannerCountriesAnalyticsView,
     ContentReportListCreateView,
@@ -79,6 +80,8 @@ urlpatterns = [
         TripPlanSuggestionsView.as_view(),
         name="trip-plan-suggestions",
     ),
+
+    path("trip-plans/<int:pk>/radar/", TripPlanRadarView.as_view(), name="trip-plan-radar"),
 
     path("friends/send/", SendFriendRequestView.as_view()),
     path("friends/accept/", AcceptFriendRequestView.as_view()),

@@ -60,6 +60,14 @@ type RelatedPlace = {
   already_has_saved_experience: boolean;
 };
 
+type TripRadar = {
+  query: string;
+  related_experiences_count: number;
+  related_places_count: number;
+  related_updates_count: number;
+  has_related_content: boolean;
+};
+
 export default function TripPlanDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -80,6 +88,9 @@ export default function TripPlanDetailPage() {
 
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
+
+  const [radar, setRadar] = useState<TripRadar | null>(null);
+  const [radarLoading, setRadarLoading] = useState(false);
 
   const [editingPlan, setEditingPlan] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
@@ -152,6 +163,33 @@ export default function TripPlanDetailPage() {
     }
   };
 
+const loadRadar = async () => {
+  if (!id) return;
+
+  setRadarLoading(true);
+
+  try {
+    const res = await fetch(`${API_URL}/api/trip-plans/${id}/radar/`, {
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Failed to load Trust Radar:", res.status, text);
+      setRadar(null);
+      return;
+    }
+
+    const data = await res.json();
+    setRadar(data);
+  } catch (error) {
+    console.error("Trust Radar fetch error:", error);
+    setRadar(null);
+  } finally {
+    setRadarLoading(false);
+  }
+};
+
 const loadSuggestions = async () => {
   if (!id) return;
 
@@ -200,8 +238,9 @@ const loadSuggestions = async () => {
 };
 
   useEffect(() => {
-      loadPlan();
-    }, [id]);
+  loadPlan();
+  loadRadar();
+}, [id]);
 
     useEffect(() => {
       if (!id) return;
@@ -502,6 +541,66 @@ const resetSuggestionsSearch = async () => {
 
       </section>
 
+    <section style={radarBox}>
+      <div style={radarHeaderRow}>
+        <div>
+          <div style={radarEyebrow}>Trust Radar</div>
+          <h2 style={radarTitle}>Watching this trip</h2>
+        </div>
+
+        {radarLoading && (
+          <span style={radarMutedText}>Checking...</span>
+        )}
+      </div>
+
+      {radar && radar.query ? (
+        <>
+          <p style={radarText}>
+            Monitoring content related to <strong>{radar.query}</strong>.
+          </p>
+
+          {radar.has_related_content ? (
+            <div style={radarStatsRow}>
+              <span style={radarStatBadge}>
+                {radar.related_experiences_count} experiences
+              </span>
+
+              <span style={radarStatBadge}>
+                {radar.related_places_count} places
+              </span>
+
+              <span style={radarStatBadge}>
+                {radar.related_updates_count} updates
+              </span>
+            </div>
+          ) : (
+            <p style={radarText}>
+              No related content found yet. Trust Radar will help you notice when
+              experiences, places or updates appear for this trip.
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              const element = document.getElementById("trip-ideas");
+              element?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            style={secondaryButton}
+          >
+            View related ideas
+          </button>
+        </>
+      ) : (
+        <p style={radarText}>
+          Add a destination to this trip plan so Trust Radar can watch for related
+          experiences, places and updates.
+        </p>
+      )}
+    </section>
+
+
+
       {editingPlan && (
         <section style={editPlanBox}>
           <div>
@@ -707,7 +806,7 @@ const resetSuggestionsSearch = async () => {
         )}
       </section>
 
-      <section style={suggestionsSection}>
+      <section id="trip-ideas" style={suggestionsSection}>
         <div>
           <h2 style={sectionTitle}>Find ideas for this trip</h2>
           <p style={helperText}>
@@ -1065,6 +1164,65 @@ const errorBox = {
   background: "#fff5f5",
   color: "#b91c1c",
   fontSize: "14px",
+};
+
+const radarBox = {
+  display: "grid",
+  gap: "12px",
+  padding: "18px",
+  borderRadius: "18px",
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  marginBottom: "18px",
+};
+
+const radarHeaderRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  alignItems: "flex-start",
+  flexWrap: "wrap" as const,
+};
+
+const radarEyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  fontWeight: 700,
+  marginBottom: "4px",
+};
+
+const radarTitle = {
+  margin: 0,
+  fontSize: "20px",
+};
+
+const radarText = {
+  margin: 0,
+  color: "#555",
+  lineHeight: 1.5,
+  fontSize: "14px",
+};
+
+const radarMutedText = {
+  color: "#777",
+  fontSize: "13px",
+};
+
+const radarStatsRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+};
+
+const radarStatBadge = {
+  display: "inline-block",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#333",
+  fontSize: "13px",
+  fontWeight: 700,
 };
 
 const editPlanBox = {

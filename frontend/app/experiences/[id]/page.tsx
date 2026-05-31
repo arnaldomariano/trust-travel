@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../../lib/api";
@@ -17,6 +17,7 @@ type TripPlan = {
 export default function ExperienceDetailPage() {
   const params = useParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const router = useRouter();
 
   const [experience, setExperience] = useState<any>(null);
   const [extraPhotos, setExtraPhotos] = useState<any[]>([]);
@@ -519,30 +520,42 @@ const authorLabel = authorFlag
         </div>
 
         <div style={actions}>
-              <Link
-                href={`/places/${experience.place}/experiences`}
-                style={secondaryLink}
-              >
-                View all experiences
-              </Link>
+      <Link
+        href={`/places/${experience.place}/experiences`}
+        style={secondaryLink}
+      >
+        View all experiences
+      </Link>
 
-              <Link
-                href={`/places/${experience.place}/experiences?highlight=${experience.id}`}
-                style={secondaryLink}
-              >
-                Back to experiences
-              </Link>
+      <Link
+        href={`/places/${experience.place}/experiences?highlight=${experience.id}`}
+        style={secondaryLink}
+      >
+        Back to experiences
+      </Link>
 
-                <button
-                  type="button"
-                  style={secondaryButton}
-                  onClick={() => {
-                    setShowTripPlanPicker((prev) => !prev);
-                    setTripPlanError("");
-                  }}
-                >
-                  Add to trip plan
-                </button>
+      <button
+        type="button"
+        style={secondaryButton}
+        onClick={() =>
+          router.push(
+            `/destinations?mode=experience&place=${experience.place}&share=true`
+          )
+        }
+      >
+        Share your experience here
+      </button>
+
+        <button
+          type="button"
+          style={secondaryButton}
+          onClick={() => {
+            setShowTripPlanPicker((prev) => !prev);
+            setTripPlanError("");
+          }}
+        >
+          Add to trip plan
+        </button>
 
               <button
                 type="button"

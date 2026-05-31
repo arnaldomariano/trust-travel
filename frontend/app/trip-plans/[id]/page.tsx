@@ -64,9 +64,17 @@ export default function TripPlanDetailPage() {
   const [selectedPlaceType, setSelectedPlaceType] = useState("");
   const [addingSuggestionId, setAddingSuggestionId] = useState<number | null>(null);
 
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
+
   const availableSuggestions = suggestions.filter(
   (suggestion) => !suggestion.already_saved
   );
+
+  const clearActionFeedback = () => {
+    setActionMessage("");
+    setActionError("");
+  };
 
   const placeTypeFilters = [
       { value: "", label: "All" },
@@ -161,6 +169,8 @@ const loadSuggestions = async () => {
 
     if (!confirmed) return;
 
+    clearActionFeedback();
+
     setRemovingItemId(item.id);
 
     try {
@@ -176,7 +186,7 @@ const loadSuggestions = async () => {
 
       if (!res.ok) {
         console.error("Remove from trip plan error:", data);
-        alert(data.detail || "Error removing experience from plan.");
+        setActionError(data.detail || "Error removing experience from plan.");
         return;
       }
 
@@ -194,11 +204,13 @@ const loadSuggestions = async () => {
         };
       });
 
+      setActionMessage("Experience removed from this trip plan.");
+
       await loadSuggestions();
 
     } catch (error) {
       console.error("Failed to remove experience from trip plan:", error);
-      alert("Error removing experience from plan.");
+      setActionError("Error removing experience from plan.");
     } finally {
       setRemovingItemId(null);
     }
@@ -206,6 +218,8 @@ const loadSuggestions = async () => {
 
 const addSuggestionToPlan = async (suggestion: TripSuggestion) => {
   if (!plan) return;
+
+  clearActionFeedback();
 
   setAddingSuggestionId(suggestion.experience_id);
 
@@ -222,16 +236,19 @@ const addSuggestionToPlan = async (suggestion: TripSuggestion) => {
 
     if (!res.ok) {
       console.error("Add suggestion to trip plan error:", data);
-      alert(data.detail || "Error adding experience to plan.");
+      setActionError(data.detail || "Error adding experience to plan.");
       return;
     }
 
     await loadPlan();
     await loadSuggestions();
-  } catch (error) {
+
+    setActionMessage("Experience added to this trip plan.");
+
+    } catch (error) {
     console.error("Failed to add suggestion to trip plan:", error);
-    alert("Error adding experience to plan.");
-  } finally {
+    setActionError("Error adding experience to plan.");
+    } finally {
     setAddingSuggestionId(null);
   }
 };
@@ -317,7 +334,123 @@ const resetSuggestionsSearch = async () => {
         </div>
       </section>
 
-             <section style={suggestionsSection}>
+      {actionMessage && (
+        <div style={successBox}>
+          {actionMessage}
+        </div>
+      )}
+
+      {actionError && (
+        <div style={errorBox}>
+          {actionError}
+        </div>
+      )}
+
+      <section style={section}>
+        <h2 style={sectionTitle}>Saved experiences</h2>
+
+        {plan.saved_items.length === 0 ? (
+          <div style={emptyBox}>
+            <p style={{ marginTop: 0 }}>
+              This plan does not have any saved experiences yet.
+            </p>
+
+            <p style={helperText}>
+              Open a place or experience and add useful recommendations to this
+              trip plan.
+            </p>
+
+            <Link href="/" style={primaryLink}>
+              Explore experiences
+            </Link>
+          </div>
+        ) : (
+          <div style={list}>
+            {plan.saved_items.map((item) => (
+              <article key={item.id} style={experienceCard}>
+                {item.image_url && (
+                  <img
+                    src={item.image_url}
+                    alt={item.title || "Saved experience"}
+                    style={image}
+                  />
+                )}
+
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <div style={label}>Saved experience</div>
+
+                  <h3 style={experienceTitle}>
+                    {item.title || item.place || "Experience"}
+                  </h3>
+
+                  <div style={placeText}>
+                    {item.place}
+                    {item.destination && item.destination !== item.place
+                      ? ` · ${item.destination}`
+                      : ""}
+                  </div>
+
+                  {item.rating && (
+                    <div style={rating}>
+                      {"★".repeat(item.rating)}
+                      {"☆".repeat(5 - item.rating)}
+                    </div>
+                  )}
+
+                  <p style={commentText}>{item.comment}</p>
+
+                  <div style={metaRow}>
+                    <span>
+                      Saved {new Date(item.saved_at).toLocaleDateString()}
+                    </span>
+
+                    <span>
+                      Experience{" "}
+                      {new Date(
+                        item.experience_created_at
+                      ).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  <div style={actions}>
+                    <Link
+                      href={`/experiences/${item.experience_id}`}
+                      style={primaryLink}
+                    >
+                      View experience
+                    </Link>
+
+                    <Link
+                      href={`/places/${item.place_id}/experiences?highlight=${item.experience_id}`}
+                      style={secondaryLink}
+                    >
+                      View in place
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => removeExperienceFromPlan(item)}
+                      disabled={removingItemId === item.id}
+                      style={{
+                        ...dangerButton,
+                        opacity: removingItemId === item.id ? 0.5 : 1,
+                        cursor:
+                          removingItemId === item.id
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      {removingItemId === item.id ? "Removing..." : "Remove"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section style={suggestionsSection}>
         <div>
           <h2 style={sectionTitle}>Find ideas for this trip</h2>
           <p style={helperText}>
@@ -474,109 +607,6 @@ const resetSuggestionsSearch = async () => {
         )}
       </section>
 
-      <section style={section}>
-        <h2 style={sectionTitle}>Saved experiences</h2>
-
-        {plan.saved_items.length === 0 ? (
-          <div style={emptyBox}>
-            <p style={{ marginTop: 0 }}>
-              This plan does not have any saved experiences yet.
-            </p>
-
-            <p style={helperText}>
-              Open a place or experience and add useful recommendations to this
-              trip plan.
-            </p>
-
-            <Link href="/" style={primaryLink}>
-              Explore experiences
-            </Link>
-          </div>
-        ) : (
-          <div style={list}>
-            {plan.saved_items.map((item) => (
-              <article key={item.id} style={experienceCard}>
-                {item.image_url && (
-                  <img
-                    src={item.image_url}
-                    alt={item.title || "Saved experience"}
-                    style={image}
-                  />
-                )}
-
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <div style={label}>Saved experience</div>
-
-                  <h3 style={experienceTitle}>
-                    {item.title || item.place || "Experience"}
-                  </h3>
-
-                  <div style={placeText}>
-                    {item.place}
-                    {item.destination && item.destination !== item.place
-                      ? ` · ${item.destination}`
-                      : ""}
-                  </div>
-
-                  {item.rating && (
-                    <div style={rating}>
-                      {"★".repeat(item.rating)}
-                      {"☆".repeat(5 - item.rating)}
-                    </div>
-                  )}
-
-                  <p style={commentText}>{item.comment}</p>
-
-                  <div style={metaRow}>
-                    <span>
-                      Saved {new Date(item.saved_at).toLocaleDateString()}
-                    </span>
-
-                    <span>
-                      Experience{" "}
-                      {new Date(
-                        item.experience_created_at
-                      ).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  <div style={actions}>
-                    <Link
-                      href={`/experiences/${item.experience_id}`}
-                      style={primaryLink}
-                    >
-                      View experience
-                    </Link>
-
-                    <Link
-                      href={`/places/${item.place_id}/experiences?highlight=${item.experience_id}`}
-                      style={secondaryLink}
-                    >
-                      View in place
-                    </Link>
-
-                    <button
-                      type="button"
-                      onClick={() => removeExperienceFromPlan(item)}
-                      disabled={removingItemId === item.id}
-                      style={{
-                        ...dangerButton,
-                        opacity: removingItemId === item.id ? 0.5 : 1,
-                        cursor:
-                          removingItemId === item.id
-                            ? "not-allowed"
-                            : "pointer",
-                      }}
-                    >
-                      {removingItemId === item.id ? "Removing..." : "Remove"}
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
     </main>
   );
 }
@@ -697,6 +727,26 @@ const emptyBox = {
   border: "1px solid #eee",
   borderRadius: "16px",
   background: "white",
+};
+
+const successBox = {
+  marginBottom: "18px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "14px",
+};
+
+const errorBox = {
+  marginBottom: "18px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #f3c2c2",
+  background: "#fff5f5",
+  color: "#b91c1c",
+  fontSize: "14px",
 };
 
 const helperText = {

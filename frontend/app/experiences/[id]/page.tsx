@@ -240,6 +240,40 @@ export default function ExperienceDetailPage() {
       }
     };
 
+    const removeExperienceFromTripPlan = async () => {
+      if (!experience?.id || !tripPlanMessage?.planId) {
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/trip-plans/${tripPlanMessage.planId}/experiences/${experience.id}/`,
+          {
+            method: "DELETE",
+            credentials: "include",
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Remove from trip plan error:", data);
+          alert(data.detail || "Could not remove experience from this trip plan.");
+          return;
+        }
+
+        setTripPlanMessage({
+          text: "Experience removed from this trip plan.",
+          planId: null,
+        });
+
+        setSelectedTripPlanId("");
+      } catch (error) {
+        console.error("Remove from trip plan error:", error);
+        alert("Something went wrong while removing this experience.");
+      }
+    };
+
     const handleSubmitReport = async (event: React.FormEvent) => {
       event.preventDefault();
 
@@ -719,12 +753,22 @@ const authorLabel = authorFlag
             <span>{tripPlanMessage.text}</span>
 
             {tripPlanMessage.planId && (
-              <Link
-                href={`/trip-plans/${tripPlanMessage.planId}`}
-                style={tripPlanSuccessLink}
-              >
-                View trip plan
-              </Link>
+              <>
+                <Link
+                  href={`/trip-plans/${tripPlanMessage.planId}`}
+                  style={tripPlanSuccessLink}
+                >
+                  View trip plan
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={removeExperienceFromTripPlan}
+                  style={tripPlanUndoButton}
+                >
+                  Remove from this plan
+                </button>
+              </>
             )}
           </div>
         )}
@@ -955,6 +999,17 @@ const tripPlanSuccessLink = {
   color: "#166534",
   fontWeight: 700,
   textDecoration: "underline",
+};
+
+const tripPlanUndoButton = {
+  border: "none",
+  background: "transparent",
+  color: "#991b1b",
+  fontWeight: 700,
+  textDecoration: "underline",
+  cursor: "pointer",
+  padding: 0,
+  fontSize: "14px",
 };
 
 const createPlanLink = {

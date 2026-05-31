@@ -639,21 +639,21 @@ const getActivityMetaText = (item: any) => {
       <h1>{t.appName}</h1>
 
       {/* Top actions */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "10px",
-          margin: "20px 0",
-        }}
-      >
-        {/* Feed filters */}
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          {["all", "event", "alert", "experience", "info", "connections"].map(
-            (f) => {
-              const filterLabels: Record<string, string> = {
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "10px",
+            margin: "20px 0",
+          }}
+        >
+          {/* Feed filters */}
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            {["all", "event", "alert", "experience", "info", "connections"].map(
+              (f) => {
+                const filterLabels: Record<string, string> = {
                   all: "All",
                   event: "Events",
                   alert: "Alerts",
@@ -667,86 +667,96 @@ const getActivityMetaText = (item: any) => {
                     ? `${filterLabels[f]} (${requests.length})`
                     : filterLabels[f] || f;
 
-              return (
-                <button
-                  key={f}
-                  onClick={() => {
-                    if (f === "connections") {
-                      router.push("/connections");
-                      return;
-                    }
+                return (
+                  <button
+                    key={f}
+                    onClick={() => {
+                      if (f === "connections") {
+                        router.push("/connections");
+                        return;
+                      }
 
-                    setActiveFilter(f);
-                  }}
-                  style={filterButton(activeFilter === f)}
-                >
-                  {label}
-                </button>
-              );
-            }
-          )}
-        </div>
-
-        {/* Search / Create / Share menu */}
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setShowCreateMenu((prev) => !prev)}
-            style={primaryButton}
-          >
-            Search / Create / Share
-          </button>
-
-          {showCreateMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "44px",
-                  minWidth: "260px",
-                  padding: "8px",
-                  border: "1px solid #eee",
-                  borderRadius: "12px",
-                  background: "white",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                  zIndex: 10,
-                  display: "grid",
-                  gap: "6px",
-                }}
-              >
-                <button
-                  onClick={() => {
-                    setShowCreateMenu(false);
-                    router.push("/destinations");
-                  }}
-                  style={menuItemButton}
-                >
-                  🔎 Search or choose a place
-                </button>
-
-                <button
-                  onClick={() => {
-                    setShowCreateMenu(false);
-                    router.push("/destinations?mode=experience");
-                  }}
-                  style={menuItemButton}
-                >
-                  ⭐ Share an experience
-                </button>
-
-                <button
-                  onClick={() => {
-                    setShowCreateMenu(false);
-                    router.push("/destinations?mode=update");
-                  }}
-                  style={menuItemButton}
-                >
-                  ℹ️ Share event, alert or info
-                </button>
-              </div>
+                      setActiveFilter(f);
+                    }}
+                    style={filterButton(activeFilter === f)}
+                  >
+                    {label}
+                  </button>
+                );
+              }
             )}
-        </div>
-      </div>
+          </div>
 
+          {/* Quick planning + Search / Create / Share menu */}
+          <div style={topActionButtons}>
+            <button
+              type="button"
+              onClick={() => router.push("/trip-plans")}
+              style={secondaryButton}
+            >
+              My trips
+            </button>
+
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setShowCreateMenu((prev) => !prev)}
+                style={primaryButton}
+              >
+                Search / Create / Share
+              </button>
+
+              {showCreateMenu && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "44px",
+                    minWidth: "260px",
+                    padding: "8px",
+                    border: "1px solid #eee",
+                    borderRadius: "12px",
+                    background: "white",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                    zIndex: 10,
+                    display: "grid",
+                    gap: "6px",
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      setShowCreateMenu(false);
+                      router.push("/destinations");
+                    }}
+                    style={menuItemButton}
+                  >
+                    🔎 Search or choose a place
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowCreateMenu(false);
+                      router.push("/destinations?mode=experience");
+                    }}
+                    style={menuItemButton}
+                  >
+                    ⭐ Share an experience
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowCreateMenu(false);
+                      router.push("/destinations?mode=update");
+                    }}
+                    style={menuItemButton}
+                  >
+                    ℹ️ Share event, alert or info
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       {/* Feed content */}
       {renderFeed()}
     </main>
@@ -936,6 +946,13 @@ const card = {
   flexDirection: "column" as const,
   alignItems: "center",
   gap: "10px",
+};
+
+const topActionButtons = {
+  display: "flex",
+  gap: "10px",
+  alignItems: "center",
+  flexWrap: "wrap" as const,
 };
 
 const primaryButton = {

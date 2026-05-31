@@ -763,6 +763,60 @@ const createTripPlanAndAddExperience = async (experience: any) => {
   }
 };
 
+    const removeExperienceFromTripPlan = async (
+      experienceId: number,
+      planId: number
+    ) => {
+      setTripPlanErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]: "",
+      }));
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/trip-plans/${planId}/experiences/${experienceId}/`,
+          {
+            method: "DELETE",
+            credentials: "include",
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Remove from trip plan error:", data);
+
+          setTripPlanErrorByExperience((prev) => ({
+            ...prev,
+            [experienceId]:
+              data.detail || "Could not remove experience from this trip plan.",
+          }));
+
+          return;
+        }
+
+        setTripPlanMessageByExperience((prev) => ({
+          ...prev,
+          [experienceId]: {
+            text: "Experience removed from this trip plan.",
+            planId: null,
+          },
+        }));
+
+        setSelectedPlanByExperience((prev) => ({
+          ...prev,
+          [experienceId]: "",
+        }));
+      } catch (error) {
+        console.error("Remove from trip plan error:", error);
+
+        setTripPlanErrorByExperience((prev) => ({
+          ...prev,
+          [experienceId]: "Something went wrong while removing this experience.",
+        }));
+      }
+    };
+
   // =====================
   // Reusable trip plan UI
   // =====================
@@ -947,17 +1001,32 @@ const renderTripPlanControls = (experience: any) => {
         </div>
       )}
 
-      {tripPlanMessage && (
+            {tripPlanMessage && (
         <div style={tripPlanSuccessBox}>
           <span>{tripPlanMessage.text}</span>
 
           {tripPlanMessage.planId && (
-            <Link
-              href={`/trip-plans/${tripPlanMessage.planId}`}
-              style={tripPlanSuccessLink}
-            >
-              View trip plan
-            </Link>
+            <>
+              <Link
+                href={`/trip-plans/${tripPlanMessage.planId}`}
+                style={tripPlanSuccessLink}
+              >
+                Open trip plan
+              </Link>
+
+              <button
+                type="button"
+                onClick={() =>
+                  removeExperienceFromTripPlan(
+                    experienceId,
+                    tripPlanMessage.planId as number
+                  )
+                }
+                style={tripPlanUndoButton}
+              >
+                Remove from this plan
+              </button>
+            </>
           )}
         </div>
       )}
@@ -2180,6 +2249,17 @@ const tripPlanSuccessLink = {
   color: "#166534",
   fontWeight: 700,
   textDecoration: "underline",
+};
+
+const tripPlanUndoButton = {
+  border: "none",
+  background: "transparent",
+  color: "#991b1b",
+  fontWeight: 700,
+  textDecoration: "underline",
+  cursor: "pointer",
+  padding: 0,
+  fontSize: "14px",
 };
 
 const createPlanLink = {

@@ -162,6 +162,10 @@ export default function TripPlansPage() {
               Start with a destination or idea. You can add experiences to this plan later.
             </p>
 
+            <p style={requiredNote}>
+              Fields marked with <span style={requiredMark}>*</span> are required.
+            </p>
+
             {returnTo && (
               <p style={returnNotice}>
                 After creating this plan, you will return to the page where you started.
@@ -170,13 +174,22 @@ export default function TripPlansPage() {
           </div>
 
         <div style={field}>
-          <label style={fieldLabel}>Plan title</label>
+          <label style={fieldLabel}>
+            Plan title <span style={requiredMark}>*</span>
+          </label>
+
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Thailand 2027, Weekend in Amsterdam..."
             style={input}
           />
+
+          {!title.trim() && (
+            <div style={requiredHint}>
+              Plan title is required to create a trip plan.
+            </div>
+          )}
         </div>
 
         <div style={field}>
@@ -467,4 +480,21 @@ const returnNotice = {
   background: "#f2fbf5",
   color: "#166534",
   fontSize: "14px",
+};
+
+const requiredMark = {
+  color: "#b91c1c",
+  fontWeight: 700,
+};
+
+const requiredNote = {
+  margin: "6px 0 0 0",
+  color: "#777",
+  fontSize: "13px",
+};
+
+const requiredHint = {
+  color: "#b91c1c",
+  fontSize: "12px",
+  marginTop: "4px",
 };

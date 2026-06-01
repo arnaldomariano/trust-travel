@@ -709,16 +709,6 @@ const resetSuggestionsSearch = async () => {
             </p>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              const element = document.getElementById("trip-ideas");
-              element?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-            style={secondaryButton}
-          >
-            View related ideas
-          </button>
         </>
       ) : (
         <p style={radarText}>
@@ -845,9 +835,16 @@ const resetSuggestionsSearch = async () => {
               trip plan.
             </p>
 
-            <Link href="/" style={primaryLink}>
-              Explore experiences
-            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                const element = document.getElementById("trip-ideas");
+                element?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              style={primaryButton}
+            >
+              Explore ideas for this trip
+            </button>
           </div>
         ) : (
           <div style={list}>
@@ -1178,11 +1175,16 @@ const resetSuggestionsSearch = async () => {
 
             {relatedPlaces.length > 0 && (
               <div style={suggestionGroup}>
-                <h3 style={suggestionGroupTitle}>Related places</h3>
+                <h3 style={suggestionGroupTitle}>Places to watch</h3>
+
+                <p style={watchPlacesIntro}>
+                  Save places you may want to visit. Trust Radar will monitor them for
+                  related experiences, alerts and updates.
+                </p>
 
                 {relatedPlaces.map((place) => (
                   <article key={place.place_id} style={placeSuggestionCard}>
-                    <div style={label}>Related place</div>
+                    <div style={label}>Place monitored by Trust Radar</div>
 
                     <h3 style={experienceTitle}>{place.name}</h3>
 
@@ -1585,6 +1587,13 @@ const suggestionGroupTitle = {
   fontSize: "18px",
 };
 
+const watchPlacesIntro = {
+  margin: "0 0 4px 0",
+  color: "#666",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
 const placeSuggestionCard = {
   padding: "18px",
   border: "1px solid #eee",
@@ -1659,3 +1668,4 @@ const alreadySavedBadge = {
   fontSize: "14px",
   fontWeight: 700,
 };
+

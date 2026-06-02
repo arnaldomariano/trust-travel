@@ -685,8 +685,9 @@ const resetSuggestionsSearch = async () => {
       {radar && radar.query ? (
         <>
           <p style={radarText}>
-            Monitoring content related to <strong>{radar.query}</strong>.
-          </p>
+              Trust Radar is watching <strong>{radar.query}</strong> for related
+              experiences, places, alerts and updates.
+            </p>
 
           {radar.has_related_content ? (
             <div style={radarStatsRow}>
@@ -704,16 +705,16 @@ const resetSuggestionsSearch = async () => {
             </div>
           ) : (
             <p style={radarText}>
-              No related content found yet. Trust Radar will help you notice when
-              experiences, places or updates appear for this trip.
+              No related content found yet. When travelers share experiences, alerts,
+              events or useful information about this trip, Trust Radar will help surface it here.
             </p>
           )}
 
         </>
       ) : (
         <p style={radarText}>
-          Add a destination to this trip plan so Trust Radar can watch for related
-          experiences, places and updates.
+          Add a destination or theme to this trip plan so Trust Radar can watch for
+          related experiences, places, alerts and updates.
         </p>
       )}
     </section>
@@ -942,8 +943,8 @@ const resetSuggestionsSearch = async () => {
             </p>
 
             <p style={helperText}>
-              Save places you want to watch, even when there are no experiences
-              about them yet.
+              Save places you may want to visit, even before there are experiences about
+              them. Trust Radar will help you notice when related content appears.
             </p>
           </div>
         ) : (
@@ -973,8 +974,9 @@ const resetSuggestionsSearch = async () => {
                   </div>
                 ) : (
                   <div style={watchingPlaceText}>
-                    No related content yet. Trust Radar is watching this place.
-                  </div>
+                      No related content yet. Trust Radar is watching this place for future
+                      experiences, alerts and updates.
+                    </div>
                 )}
 
                 <div style={actions}>
@@ -1178,8 +1180,8 @@ const resetSuggestionsSearch = async () => {
                 <h3 style={suggestionGroupTitle}>Places to watch</h3>
 
                 <p style={watchPlacesIntro}>
-                  Save places you may want to visit. Trust Radar will monitor them for
-                  related experiences, alerts and updates.
+                  Save places you may want to visit or monitor. Trust Radar will watch for
+                  related experiences, alerts, events and useful updates.
                 </p>
 
                 {relatedPlaces.map((place) => (

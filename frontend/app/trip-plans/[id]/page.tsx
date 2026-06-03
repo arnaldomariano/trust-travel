@@ -1076,7 +1076,7 @@ const resetSuggestionsSearch = async () => {
 
             <p style={helperText}>
               Everything found for this search may already be saved in this trip plan,
-              or there are no matching experiences yet.
+              or Trust Radar has not found matching experiences or places yet.
             </p>
 
             <div style={actions}>
@@ -1097,7 +1097,11 @@ const resetSuggestionsSearch = async () => {
           <div style={list}>
             {availableSuggestions.length > 0 && (
               <div style={suggestionGroup}>
-                <h3 style={suggestionGroupTitle}>Suggested experiences</h3>
+                <h3 style={suggestionGroupTitle}>Suggested experiences for this trip</h3>
+                <p style={suggestionGroupIntro}>
+                  Experiences already shared by travelers that may help you decide what to add
+                  to this plan.
+                </p>
 
                 {availableSuggestions.map((suggestion) => (
                   <article key={suggestion.experience_id} style={experienceCard}>
@@ -1110,7 +1114,7 @@ const resetSuggestionsSearch = async () => {
                     )}
 
                     <div style={{ display: "grid", gap: "8px" }}>
-                      <div style={label}>Suggested experience</div>
+                      <div style={label}>Experience suggestion</div>
 
                       <h3 style={experienceTitle}>
                         {suggestion.title || suggestion.place || "Experience"}
@@ -1177,11 +1181,11 @@ const resetSuggestionsSearch = async () => {
 
             {relatedPlaces.length > 0 && (
               <div style={suggestionGroup}>
-                <h3 style={suggestionGroupTitle}>Places to watch</h3>
+                <h3 style={suggestionGroupTitle}>Places to watch with Trust Radar</h3>
 
                 <p style={watchPlacesIntro}>
-                  Save places you may want to visit or monitor. Trust Radar will watch for
-                  related experiences, alerts, events and useful updates.
+                  Save places you may want to visit, even if they do not have experiences yet.
+                  Trust Radar will watch for future experiences, alerts, events and useful updates.
                 </p>
 
                 {relatedPlaces.map((place) => (
@@ -1587,6 +1591,13 @@ const suggestionGroup = {
 const suggestionGroupTitle = {
   margin: "4px 0 0 0",
   fontSize: "18px",
+};
+
+const suggestionGroupIntro = {
+  margin: "0 0 4px 0",
+  color: "#666",
+  fontSize: "14px",
+  lineHeight: 1.5,
 };
 
 const watchPlacesIntro = {

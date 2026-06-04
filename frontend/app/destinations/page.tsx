@@ -25,6 +25,8 @@ export default function DestinationsPage() {
   const [newPlaceName, setNewPlaceName] = useState("");
   const [newPlaceCity, setNewPlaceCity] = useState("");
   const [newPlaceCountry, setNewPlaceCountry] = useState("");
+  const [showCreatePlaceForm, setShowCreatePlaceForm] = useState(false);
+
   const [placeType, setPlaceType] = useState<
   "country" | "city" | "attraction" | "hotel" | "restaurant" | "nature" | "other"
 >("city");
@@ -297,6 +299,40 @@ const selectedPlaceReviewsCount =
 
 const selectedPlaceHasNoExperiences =
   !!selectedPlace && selectedPlaceReviewsCount === 0;
+
+  // =========================
+// Open create-place form from an existing search
+// =========================
+const openCreatePlaceFromSearch = () => {
+  const search = searchTerm.trim();
+
+  setSelectedPlace(null);
+  setCreatedPlaceId(null);
+  setShowShareForm(false);
+  setExperienceShared(false);
+  setSharedExperience(null);
+  setEditingExperience(false);
+
+  setNewPlaceName("");
+
+  if (placeType === "country") {
+    setNewPlaceName(search);
+    setNewPlaceCity("");
+    setNewPlaceCountry(search);
+  } else {
+    setNewPlaceCity("");
+    setNewPlaceCountry(search);
+  }
+
+  setShowCreatePlaceForm(true);
+
+  setTimeout(() => {
+    document
+      .getElementById("create-place-form")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+};
+
   // =========================
   // Create a basic place
   // =========================
@@ -345,13 +381,22 @@ if (isUpdateMode) {
   return;
 }
 
-setSelectedPlace(data);
-setCreatedPlaceId(data.id);
-setShowShareForm(isExperienceMode);
-setExperienceShared(false);
-setSharedExperience(null);
-setEditingExperience(false);
-setSearchTerm(data.name || newPlaceName.trim());
+    setSelectedPlace(data);
+    setCreatedPlaceId(data.id);
+
+    // Do not open the experience form automatically after creating a place.
+    // The user can click the selected place card to open the form.
+    setShowShareForm(false);
+    setShowCreatePlaceForm(false);
+
+    setExperienceShared(false);
+    setSharedExperience(null);
+    setEditingExperience(false);
+    setSearchTerm(data.name || newPlaceName.trim());
+
+    setNewPlaceName("");
+    setNewPlaceCity("");
+    setNewPlaceCountry("");
 
     } catch (error) {
       console.error("Create basic place failed:", error);
@@ -370,27 +415,35 @@ setSearchTerm(data.name || newPlaceName.trim());
     return;
   }
 
-  setSelectedPlace(place);
-  setCreatedPlaceId(null);
-  setShowShareForm(isExperienceMode);
-  setExperienceShared(false);
-  setSharedExperience(null);
-  setEditingExperience(false);
-  setTitle("");
-  setComment("");
-  setRating(null);
-  setImageFile(null);
-  setTripContext("prefer_not_to_say");
-  setTripStyle("prefer_not_to_say");
+    const isSameSelectedPlace = selectedPlace?.id === place.id;
 
-  setTimeout(() => {
-    document
-      .getElementById(
-        isExperienceMode ? "share-experience-form" : "selected-place-actions"
-      )
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 0);
-};
+    setSelectedPlace(place);
+    setCreatedPlaceId(null);
+
+    // In experience mode, the first click selects the place.
+    // If the place is already selected, clicking again opens the experience form.
+    setShowShareForm(isExperienceMode && isSameSelectedPlace);
+
+    setExperienceShared(false);
+    setSharedExperience(null);
+    setEditingExperience(false);
+      setTitle("");
+      setComment("");
+      setRating(null);
+      setImageFile(null);
+      setTripContext("prefer_not_to_say");
+      setTripStyle("prefer_not_to_say");
+
+      setTimeout(() => {
+        document
+          .getElementById(
+            isExperienceMode && isSameSelectedPlace
+              ? "share-experience-form"
+              : "selected-place-actions"
+          )
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    };
 
   // =========================
   // Change selected place
@@ -406,6 +459,7 @@ setSearchTerm(data.name || newPlaceName.trim());
     setSharedExperience(null);
     setEditingExperience(false);
     setShowShareForm(false);
+    setShowCreatePlaceForm(false);
     setTripContext("prefer_not_to_say");
     setTripStyle("prefer_not_to_say");
   };
@@ -428,6 +482,7 @@ setSearchTerm(data.name || newPlaceName.trim());
     setSharedExperience(null);
     setEditingExperience(false);
     setShowShareForm(false);
+    setShowCreatePlaceForm(false);
     setTripContext("prefer_not_to_say");
     setTripStyle("prefer_not_to_say");
   };
@@ -668,6 +723,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
             if (selectedPlace) {
               setSelectedPlace(null);
+              setShowCreatePlaceForm(false);
               setTitle("");
               setComment("");
               setRating(null);
@@ -715,12 +771,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         Start typing based on the type you selected. For example, search for a country,
         city, attraction, hotel, restaurant or nature spot.
       </div>
-    ) : filteredPlaces.length > 0 ? (
+        ) : filteredPlaces.length > 0 ? (
       <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
         <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
-          We found existing places. Check these results before creating a new place —
-          this helps avoid duplicates and keeps experiences, events and alerts connected
-          to the right location.
+          We found existing places related to your search. Choose one if it matches,
+          or create another place if your exact place is not listed.
         </p>
 
         {filteredPlaces.map((place) => (
@@ -785,9 +840,86 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             </div>
           </button>
         ))}
+
+        {!showCreatePlaceForm ? (
+          <div style={createAnotherPlaceBox}>
+            <strong>Can’t find the exact place?</strong>
+
+            <p style={createAnotherPlaceText}>
+              Create another place related to “{searchTerm.trim()}”. This is useful
+              when the country or region exists, but the city, restaurant, hotel,
+              attraction or nature spot you want is not listed yet.
+            </p>
+
+            <button
+              type="button"
+              onClick={openCreatePlaceFromSearch}
+              style={secondaryButton}
+            >
+              Create another place related to this search
+            </button>
+          </div>
+        ) : (
+          <section id="create-place-form" style={helperCard}>
+            <strong>Create another place related to “{searchTerm.trim()}”.</strong>
+
+            <p
+              style={{
+                margin: "10px 0 16px 0",
+                color: "#666",
+                lineHeight: 1.5,
+              }}
+            >
+              Add the exact place you want to share or monitor. Use a neutral name,
+              such as a city, restaurant, hotel, attraction or nature spot.
+            </p>
+
+            <div style={createPlaceForm}>
+              <input
+                value={newPlaceName}
+                onChange={(e) => setNewPlaceName(e.target.value)}
+                placeholder={placeNamePlaceholderByType[placeType]}
+                style={input}
+              />
+
+              <input
+                value={newPlaceCity}
+                onChange={(e) => setNewPlaceCity(e.target.value)}
+                placeholder={cityPlaceholderByType[placeType]}
+                style={input}
+              />
+
+              <input
+                value={newPlaceCountry}
+                onChange={(e) => setNewPlaceCountry(e.target.value)}
+                placeholder={countryPlaceholderByType[placeType]}
+                style={input}
+              />
+
+              <button
+                onClick={handleCreatePlace}
+                disabled={!canCreatePlace || creatingPlace}
+                style={{
+                  ...primaryButton,
+                  opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
+                  cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
+                }}
+              >
+                {creatingPlace ? "Creating..." : "Create this place"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowCreatePlaceForm(false)}
+                style={secondaryButton}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        )}
       </section>
     ) : (
-
       <section style={helperCard}>
           <strong>No exact place found for “{searchTerm.trim()}”.</strong>
 
@@ -1284,6 +1416,22 @@ const similarPlaceButton = {
   color: "#111",
   textAlign: "left" as const,
   cursor: "pointer",
+};
+
+const createAnotherPlaceBox = {
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #ddd",
+  background: "#fafafa",
+  display: "grid",
+  gap: "10px",
+};
+
+const createAnotherPlaceText = {
+  margin: 0,
+  color: "#666",
+  fontSize: "14px",
+  lineHeight: 1.5,
 };
 
 const helperNote = {

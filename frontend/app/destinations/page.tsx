@@ -833,10 +833,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
             <div style={{ marginTop: "10px", fontSize: "14px" }}>
               {isUpdateMode
-                ? "Post alert, event or info here →"
+                ? "Post alert, event or info about this place →"
                 : isExperienceMode
-                ? "Share experience here →"
-                : "Explore this place →"}
+                ? "Share experience about this place →"
+                : "Open this place →"}
             </div>
           </button>
         ))}

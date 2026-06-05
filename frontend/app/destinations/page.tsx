@@ -209,6 +209,15 @@ const filteredPlaces = places
     return (a.name || "").localeCompare(b.name || "");
   });
 
+const countryMatches = filteredPlaces.filter(
+  (place) => place.place_type === "country"
+);
+
+const relatedNonCountryPlaces = filteredPlaces.filter(
+  (place) => place.place_type !== "country"
+);
+
+const hasCountryMatch = countryMatches.length > 0;
 
 
   const canCreatePlace = !!newPlaceName.trim();
@@ -772,13 +781,80 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         city, attraction, hotel, restaurant or nature spot.
       </div>
         ) : filteredPlaces.length > 0 ? (
-      <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
-        <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
-          We found existing places related to your search. Choose one if it matches,
-          or create another place if your exact place is not listed.
-        </p>
+  <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
+    <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
+      We found existing places related to your search. Start with the country when
+      possible, then choose a city, region or specific place below.
+    </p>
 
-        {filteredPlaces.map((place) => (
+    {hasCountryMatch && (
+      <div style={{ display: "grid", gap: "10px" }}>
+        <div style={{ fontWeight: 700, fontSize: "15px" }}>
+          Country found
+        </div>
+
+        {countryMatches.map((place) => (
+          <button
+            key={place.id}
+            onClick={() => handleSelectExistingPlace(place)}
+            style={{
+              padding: "18px",
+              border: "1px solid #d7f0df",
+              borderRadius: "14px",
+              background:
+                selectedPlace?.id === place.id ? "#f2fbf5" : "white",
+              color: "black",
+              textAlign: "left",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                alignItems: "center",
+              }}
+            >
+              <strong>{place.name}</strong>
+
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "#166534",
+                  background: "#f2fbf5",
+                  border: "1px solid #d7f0df",
+                  borderRadius: "999px",
+                  padding: "4px 8px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {getPlaceTypeLabel(place.place_type)}
+              </span>
+            </div>
+
+            <div style={{ marginTop: "10px", fontSize: "14px" }}>
+              {isUpdateMode
+                ? "Post alert, event or info about this country →"
+                : isExperienceMode
+                ? "Share experience about this country →"
+                : "Open this country →"}
+            </div>
+          </button>
+        ))}
+      </div>
+    )}
+
+    {relatedNonCountryPlaces.length > 0 && (
+      <div style={{ display: "grid", gap: "10px" }}>
+        {hasCountryMatch && (
+          <div style={{ fontWeight: 700, fontSize: "15px", marginTop: "8px" }}>
+            Places related to this country
+          </div>
+        )}
+
+        {relatedNonCountryPlaces.map((place) => (
           <button
             key={place.id}
             onClick={() => handleSelectExistingPlace(place)}
@@ -840,85 +916,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             </div>
           </button>
         ))}
-
-        {!showCreatePlaceForm ? (
-          <div style={createAnotherPlaceBox}>
-            <strong>Can’t find the exact place?</strong>
-
-            <p style={createAnotherPlaceText}>
-              Create another place related to “{searchTerm.trim()}”. This is useful
-              when the country or region exists, but the city, restaurant, hotel,
-              attraction or nature spot you want is not listed yet.
-            </p>
-
-            <button
-              type="button"
-              onClick={openCreatePlaceFromSearch}
-              style={secondaryButton}
-            >
-              Create another place related to this search
-            </button>
-          </div>
-        ) : (
-          <section id="create-place-form" style={helperCard}>
-            <strong>Create another place related to “{searchTerm.trim()}”.</strong>
-
-            <p
-              style={{
-                margin: "10px 0 16px 0",
-                color: "#666",
-                lineHeight: 1.5,
-              }}
-            >
-              Add the exact place you want to share or monitor. Use a neutral name,
-              such as a city, restaurant, hotel, attraction or nature spot.
-            </p>
-
-            <div style={createPlaceForm}>
-              <input
-                value={newPlaceName}
-                onChange={(e) => setNewPlaceName(e.target.value)}
-                placeholder={placeNamePlaceholderByType[placeType]}
-                style={input}
-              />
-
-              <input
-                value={newPlaceCity}
-                onChange={(e) => setNewPlaceCity(e.target.value)}
-                placeholder={cityPlaceholderByType[placeType]}
-                style={input}
-              />
-
-              <input
-                value={newPlaceCountry}
-                onChange={(e) => setNewPlaceCountry(e.target.value)}
-                placeholder={countryPlaceholderByType[placeType]}
-                style={input}
-              />
-
-              <button
-                onClick={handleCreatePlace}
-                disabled={!canCreatePlace || creatingPlace}
-                style={{
-                  ...primaryButton,
-                  opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
-                  cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
-                }}
-              >
-                {creatingPlace ? "Creating..." : "Create this place"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowCreatePlaceForm(false)}
-                style={secondaryButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </section>
-        )}
-      </section>
+      </div>
+    )}
+  </section>
     ) : (
       <section style={helperCard}>
           <strong>No exact place found for “{searchTerm.trim()}”.</strong>

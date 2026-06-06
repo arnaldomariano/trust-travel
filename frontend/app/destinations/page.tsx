@@ -31,6 +31,7 @@ export default function DestinationsPage() {
   "country" | "city" | "attraction" | "hotel" | "restaurant" | "nature" | "other"
 >("city");
 
+  const [selectedCountryPlace, setSelectedCountryPlace] = useState<any>(null);
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [showShareForm, setShowShareForm] = useState(false);
   const [createdPlaceId, setCreatedPlaceId] = useState<number | null>(null);
@@ -218,6 +219,39 @@ const relatedNonCountryPlaces = filteredPlaces.filter(
 );
 
 const hasCountryMatch = countryMatches.length > 0;
+
+const placesInsideSelectedCountry = selectedCountryPlace
+  ? places
+      .filter((place) => {
+        if (place.place_type === "country") return false;
+
+        const selectedCountryName = normalizeText(selectedCountryPlace.name);
+        const placeCountry = normalizeText(place.destination_country);
+        const placeDestinationName = normalizeText(place.destination_name);
+
+        return (
+          placeCountry === selectedCountryName ||
+          placeDestinationName === selectedCountryName
+        );
+      })
+      .sort((a, b) => {
+        const typeOrder: Record<string, number> = {
+          city: 1,
+          nature: 2,
+          attraction: 3,
+          restaurant: 4,
+          hotel: 5,
+          other: 6,
+        };
+
+        const orderA = typeOrder[a.place_type] || 99;
+        const orderB = typeOrder[b.place_type] || 99;
+
+        if (orderA !== orderB) return orderA - orderB;
+
+        return (a.name || "").localeCompare(b.name || "");
+      })
+  : [];
 
 
   const canCreatePlace = !!newPlaceName.trim();
@@ -415,6 +449,95 @@ if (isUpdateMode) {
     }
   };
 
+    // =========================
+    // Select country as search context
+    // =========================
+    const handleSelectCountry = (place: any) => {
+      // In normal exploration mode, opening a country should go directly
+      // to the country experiences page.
+      if (!isExperienceMode && !isUpdateMode) {
+        router.push(`/places/${place.id}/experiences`);
+        return;
+      }
+
+      // In creation modes, keep the country as context so the user can decide
+      // whether to share/post about the country or choose a city/region.
+      setSelectedCountryPlace(place);
+      setSelectedPlace(null);
+      setCreatedPlaceId(null);
+      setShowShareForm(false);
+      setShowCreatePlaceForm(false);
+      setExperienceShared(false);
+      setSharedExperience(null);
+      setEditingExperience(false);
+      setTitle("");
+      setComment("");
+      setRating(null);
+      setImageFile(null);
+      setTripContext("prefer_not_to_say");
+      setTripStyle("prefer_not_to_say");
+
+      setTimeout(() => {
+        document
+          .getElementById("country-context")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    };
+
+    // =========================
+    // Share directly about selected country
+    // =========================
+    const handleShareAboutCountry = () => {
+      if (!selectedCountryPlace) return;
+
+      setSelectedPlace(selectedCountryPlace);
+      setCreatedPlaceId(null);
+      setShowShareForm(true);
+      setShowCreatePlaceForm(false);
+      setExperienceShared(false);
+      setSharedExperience(null);
+      setEditingExperience(false);
+      setTitle("");
+      setComment("");
+      setRating(null);
+      setImageFile(null);
+      setTripContext("prefer_not_to_say");
+      setTripStyle("prefer_not_to_say");
+
+      setTimeout(() => {
+        document
+          .getElementById("share-experience-form")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    };
+
+    // =========================
+    // Create city/region inside selected country
+    // =========================
+    const openCreateCityInSelectedCountry = () => {
+      if (!selectedCountryPlace) return;
+
+      setPlaceType("city");
+      setSelectedPlace(null);
+      setCreatedPlaceId(null);
+      setShowShareForm(false);
+      setExperienceShared(false);
+      setSharedExperience(null);
+      setEditingExperience(false);
+
+      setNewPlaceName("");
+      setNewPlaceCity("");
+      setNewPlaceCountry(selectedCountryPlace.name || "");
+
+      setShowCreatePlaceForm(true);
+
+      setTimeout(() => {
+        document
+          .getElementById("create-place-form")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    };
+
   // =========================
   // Select an existing place
   // =========================
@@ -458,6 +581,7 @@ if (isUpdateMode) {
   // Change selected place
   // =========================
   const handleChangePlace = () => {
+    setSelectedCountryPlace(null);
     setSelectedPlace(null);
     setCreatedPlaceId(null);
     setTitle("");
@@ -477,6 +601,7 @@ if (isUpdateMode) {
   // Reset share flow
   // =========================
   const resetShareFlow = () => {
+    setSelectedCountryPlace(null);
     setSelectedPlace(null);
     setCreatedPlaceId(null);
     setSearchTerm("");
@@ -693,6 +818,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 type="button"
                 onClick={() => {
                   setPlaceType(value as typeof placeType);
+                  setSelectedCountryPlace(null);
                   setSelectedPlace(null);
                   setSearchTerm("");
                   setNewPlaceName("");
@@ -728,11 +854,15 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         <input
           value={searchTerm}
           onChange={(e) => {
-            setSearchTerm(e.target.value);
+              setSearchTerm(e.target.value);
 
-            if (selectedPlace) {
-              setSelectedPlace(null);
-              setShowCreatePlaceForm(false);
+              if (selectedCountryPlace) {
+                setSelectedCountryPlace(null);
+              }
+
+              if (selectedPlace) {
+                setSelectedPlace(null);
+                setShowCreatePlaceForm(false);
               setTitle("");
               setComment("");
               setRating(null);
@@ -796,7 +926,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         {countryMatches.map((place) => (
           <button
             key={place.id}
-            onClick={() => handleSelectExistingPlace(place)}
+            onClick={() => handleSelectCountry(place)}
             style={{
               padding: "18px",
               border: "1px solid #d7f0df",
@@ -1000,6 +1130,170 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           </div>
         </section>
       )}
+
+           {selectedCountryPlace && !selectedPlace && (
+      <section
+        id="country-context"
+        style={{
+          marginTop: "28px",
+          padding: "22px",
+          border: "1px solid #d7f0df",
+          borderRadius: "16px",
+          background: "#f2fbf5",
+          maxWidth: "620px",
+        }}
+      >
+        <div style={{ fontSize: "13px", color: "#166534", fontWeight: 700 }}>
+          Country selected
+        </div>
+
+        <h2 style={{ margin: "6px 0 0 0" }}>
+          {isExperienceMode
+            ? `You are sharing within ${selectedCountryPlace.name}`
+            : isUpdateMode
+            ? `You are posting about ${selectedCountryPlace.name}`
+            : `You are exploring ${selectedCountryPlace.name}`}
+        </h2>
+
+        <p style={{ color: "#555", lineHeight: 1.5 }}>
+          {isExperienceMode
+            ? "Start with the country, then choose a city or region inside it. You can also share an experience about the country in general."
+            : isUpdateMode
+            ? "Start with the country, then choose a city or region inside it. You can also post an alert, event or useful information about the country in general."
+            : "Read country-level experiences, choose a city or region, or create another place inside this country."}
+        </p>
+
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+              type="button"
+              onClick={() => {
+                if (isUpdateMode) {
+                  router.push(`/create?place=${selectedCountryPlace.id}`);
+                  return;
+                }
+
+                if (isExperienceMode) {
+                  handleShareAboutCountry();
+                  return;
+                }
+
+                router.push(`/places/${selectedCountryPlace.id}/experiences`);
+              }}
+              style={primaryButton}
+            >
+              {isExperienceMode
+                ? `Share experience about ${selectedCountryPlace.name}`
+                : isUpdateMode
+                ? `Post alert, event or info about ${selectedCountryPlace.name}`
+                : `View experiences in ${selectedCountryPlace.name}`}
+            </button>
+
+          <button
+            type="button"
+            onClick={openCreateCityInSelectedCountry}
+            style={secondaryButton}
+          >
+            Create another city/region in {selectedCountryPlace.name}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedCountryPlace(null)}
+            style={secondaryButton}
+          >
+            Change country
+          </button>
+        </div>
+
+        {placesInsideSelectedCountry.length > 0 && (
+          <div style={{ marginTop: "20px", display: "grid", gap: "10px" }}>
+            <div style={{ fontWeight: 700 }}>
+              Cities / regions already listed in {selectedCountryPlace.name}
+            </div>
+
+            {placesInsideSelectedCountry.map((place) => (
+              <button
+                key={place.id}
+                type="button"
+                onClick={() => handleSelectExistingPlace(place)}
+                style={{
+                  padding: "14px",
+                  border: "1px solid #ddd",
+                  borderRadius: "12px",
+                  background: "white",
+                  color: "#111",
+                  textAlign: "left",
+                  cursor: "pointer",
+                }}
+              >
+                <strong>{place.name}</strong>
+
+                <div style={{ marginTop: "4px", color: "#666", fontSize: "13px" }}>
+                  {getPlaceTypeLabel(place.place_type)} · {getPlaceLocationText(place)}
+                </div>
+
+                <div style={{ marginTop: "8px", fontSize: "13px", color: "#111" }}>
+                  Share experience about this place →
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {showCreatePlaceForm && (
+          <section id="create-place-form" style={{ marginTop: "20px" }}>
+            <strong>Create a city or region in {selectedCountryPlace.name}</strong>
+
+            <p
+              style={{
+                margin: "10px 0 16px 0",
+                color: "#555",
+                lineHeight: 1.5,
+              }}
+            >
+              Add the city or region first. Hotels, restaurants, attractions and
+              nature spots can be added later inside that city or region.
+            </p>
+
+            <div style={createPlaceForm}>
+              <input
+                value={newPlaceName}
+                onChange={(e) => setNewPlaceName(e.target.value)}
+                placeholder="City or region name, e.g. Bali, Jakarta, Lombok"
+                style={input}
+              />
+
+              <input
+                value={newPlaceCountry}
+                onChange={(e) => setNewPlaceCountry(e.target.value)}
+                placeholder="Country"
+                style={input}
+              />
+
+              <button
+                onClick={handleCreatePlace}
+                disabled={!canCreatePlace || creatingPlace}
+                style={{
+                  ...primaryButton,
+                  opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
+                  cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
+                }}
+              >
+                {creatingPlace ? "Creating..." : "Create city/region"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowCreatePlaceForm(false)}
+                style={secondaryButton}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        )}
+      </section>
+    )}
 
      {selectedPlace && !showShareForm && (
       <section

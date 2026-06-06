@@ -404,6 +404,60 @@ const saveUpdateChanges = async (postId: number) => {
 };
 
 // =========================
+// Delete experience
+// =========================
+const deleteExperience = async (experienceId: number) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this experience? This action cannot be undone."
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`${API_URL}/api/experiences/${experienceId}/`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      let message = "Error deleting experience.";
+
+      try {
+        const data = await res.json();
+        message = data.detail || message;
+      } catch {
+        // Keep default message if response has no JSON body.
+      }
+
+      alert(message);
+      return;
+    }
+
+    setExperiences((prev) =>
+      prev.filter((experience) => experience.id !== experienceId)
+    );
+
+    setExtraPhotosByExperience((prev) => {
+      const copy = { ...prev };
+      delete copy[experienceId];
+      return copy;
+    });
+
+    if (editingExperienceId === experienceId) {
+      cancelEditingExperience();
+    }
+
+    if (openGalleryFor === experienceId) {
+      setOpenGalleryFor(null);
+    }
+  } catch (error) {
+    console.error("Failed to delete experience:", error);
+    alert("Error deleting experience.");
+  }
+};
+
+
+// =========================
 // Delete event/info/alert
 // =========================
 const deleteUpdate = async (postId: number) => {
@@ -915,20 +969,29 @@ const formatTripValue = (value: string) => {
                       </div>
                     )}
                     <div style={actions}>
-                      <Link
-                          href={`/experiences/${experience.id}`}
-                          style={secondaryLink}
-                        >
-                          View experience
-                        </Link>
+                          <Link
+                            href={`/experiences/${experience.id}`}
+                            style={secondaryLink}
+                          >
+                            View experience
+                          </Link>
 
-                      <button
-                        style={secondaryButton}
-                        onClick={() => startEditingExperience(experience)}
-                      >
-                        Edit
-                      </button>
-                    </div>
+                          <button
+                            type="button"
+                            style={secondaryButton}
+                            onClick={() => startEditingExperience(experience)}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            style={dangerButton}
+                            onClick={() => deleteExperience(experience.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                   </>
                 )}
               </article>

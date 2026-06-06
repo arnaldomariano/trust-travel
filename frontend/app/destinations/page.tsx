@@ -29,12 +29,13 @@ export default function DestinationsPage() {
 
   const [placeType, setPlaceType] = useState<
   "country" | "city" | "attraction" | "hotel" | "restaurant" | "nature" | "other"
->("city");
+  >("country");
 
   const [selectedCountryPlace, setSelectedCountryPlace] = useState<any>(null);
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [showShareForm, setShowShareForm] = useState(false);
   const [createdPlaceId, setCreatedPlaceId] = useState<number | null>(null);
+  const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
 
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
@@ -214,9 +215,15 @@ const countryMatches = filteredPlaces.filter(
   (place) => place.place_type === "country"
 );
 
-const relatedNonCountryPlaces = filteredPlaces.filter(
-  (place) => place.place_type !== "country"
-);
+const relatedNonCountryPlaces = filteredPlaces.filter((place) => {
+  if (place.place_type === "country") return false;
+
+  // When the user is searching by country, keep the first result focused
+  // on the country itself. Cities/regions will appear after selecting the country.
+  if (placeType === "country") return false;
+
+  return true;
+});
 
 const hasCountryMatch = countryMatches.length > 0;
 
@@ -343,6 +350,24 @@ const selectedPlaceReviewsCount =
 const selectedPlaceHasNoExperiences =
   !!selectedPlace && selectedPlaceReviewsCount === 0;
 
+const primaryPlaceTypeOptions = [
+  ["country", "Country"],
+  ["city", "City / Region"],
+] as const;
+
+const specificPlaceTypeOptions = [
+  ["attraction", "Tourist attraction"],
+  ["hotel", "Hotel"],
+  ["restaurant", "Restaurant / Café"],
+  ["nature", "Beach / Nature"],
+  ["other", "Other"],
+] as const;
+
+const placeTypeOptionsToShow =
+  selectedCountryPlace || selectedPlace
+    ? [...primaryPlaceTypeOptions, ...specificPlaceTypeOptions]
+    : primaryPlaceTypeOptions;
+
   // =========================
 // Open create-place form from an existing search
 // =========================
@@ -394,7 +419,12 @@ const openCreatePlaceFromSearch = () => {
         body: JSON.stringify({
           name: newPlaceName.trim(),
           place_type: placeType,
-          city: placeType === "country" ? "" : newPlaceCity.trim(),
+          city:
+            placeType === "country"
+              ? ""
+              : placeType === "city"
+              ? newPlaceCity.trim() || newPlaceName.trim()
+              : newPlaceCity.trim(),
           country:
             placeType === "country"
               ? newPlaceName.trim()
@@ -467,6 +497,7 @@ if (isUpdateMode) {
       setCreatedPlaceId(null);
       setShowShareForm(false);
       setShowCreatePlaceForm(false);
+      setShowRelatedPlaces(false);
       setExperienceShared(false);
       setSharedExperience(null);
       setEditingExperience(false);
@@ -584,6 +615,7 @@ if (isUpdateMode) {
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
     setCreatedPlaceId(null);
+    setShowRelatedPlaces(false);
     setTitle("");
     setComment("");
     setRating(null);
@@ -799,20 +831,28 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         </p>
 
         <div style={{ marginBottom: "22px" }}>
+
+        {!selectedCountryPlace && !selectedPlace && (
+          <p
+            style={{
+              margin: "10px 0 0 0",
+              color: "#666",
+              fontSize: "13px",
+              lineHeight: 1.5,
+            }}
+          >
+            Start with a country or city/region. Specific places such as hotels,
+            restaurants, attractions and nature spots are easier to add after the main
+            destination is clear.
+          </p>
+        )}
+
           <div style={{ fontWeight: 600, marginBottom: "10px" }}>
             What do you want to search or share about?
           </div>
 
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {[
-              ["country", "Country"],
-              ["city", "City / Region"],
-              ["attraction", "Tourist attraction"],
-              ["hotel", "Hotel"],
-              ["restaurant", "Restaurant / Café"],
-              ["nature", "Beach / Nature"],
-              ["other", "Other"],
-            ].map(([value, label]) => (
+            {placeTypeOptionsToShow.map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -834,6 +874,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   setShowShareForm(false);
                   setTripContext("prefer_not_to_say");
                   setTripStyle("prefer_not_to_say");
+                  setShowCreatePlaceForm(false);
                 }}
                 style={{
                   padding: "8px 12px",
@@ -1211,32 +1252,51 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               Cities / regions already listed in {selectedCountryPlace.name}
             </div>
 
-            {placesInsideSelectedCountry.map((place) => (
-              <button
-                key={place.id}
-                type="button"
-                onClick={() => handleSelectExistingPlace(place)}
-                style={{
-                  padding: "14px",
-                  border: "1px solid #ddd",
-                  borderRadius: "12px",
-                  background: "white",
-                  color: "#111",
-                  textAlign: "left",
-                  cursor: "pointer",
-                }}
-              >
-                <strong>{place.name}</strong>
+            <p style={{ margin: 0, color: "#555", fontSize: "14px", lineHeight: 1.5 }}>
+              Keep the country experience general, or open the list below if you want to
+              share about a specific city or region.
+            </p>
 
-                <div style={{ marginTop: "4px", color: "#666", fontSize: "13px" }}>
-                  {getPlaceTypeLabel(place.place_type)} · {getPlaceLocationText(place)}
-                </div>
+            <button
+              type="button"
+              onClick={() => setShowRelatedPlaces((current) => !current)}
+              style={secondaryButton}
+            >
+              {showRelatedPlaces
+                ? "Hide cities / regions"
+                : `Show cities / regions in ${selectedCountryPlace.name} (${placesInsideSelectedCountry.length})`}
+            </button>
 
-                <div style={{ marginTop: "8px", fontSize: "13px", color: "#111" }}>
-                  Share experience about this place →
-                </div>
-              </button>
-            ))}
+            {showRelatedPlaces && (
+              <div style={{ display: "grid", gap: "8px" }}>
+                {placesInsideSelectedCountry.map((place) => (
+                  <button
+                    key={place.id}
+                    type="button"
+                    onClick={() => handleSelectExistingPlace(place)}
+                    style={{
+                      padding: "12px 14px",
+                      border: "1px solid #ddd",
+                      borderRadius: "12px",
+                      background: "white",
+                      color: "#111",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "12px",
+                    }}
+                  >
+                    <strong>{place.name}</strong>
+
+                    <span style={{ color: "#666", fontSize: "13px" }}>
+                      {getPlaceTypeLabel(place.place_type)} →
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

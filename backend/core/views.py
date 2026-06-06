@@ -396,27 +396,10 @@ class PlaceExperiencesListView(generics.ListAPIView):
     def get_queryset(self):
         place_id = self.kwargs["place_id"]
 
-        try:
-            place = Place.objects.select_related("destination").get(id=place_id)
-        except Place.DoesNotExist:
-            return Experience.objects.none()
-
-        # If the selected place is a country, show experiences directly linked
-        # to the country and experiences from cities/places inside that country.
-        if place.place_type == "country":
-            country_name = (place.name or "").strip()
-
-            return Experience.objects.filter(
-                Q(place=place)
-                | Q(place__destination__country__iexact=country_name)
-                | Q(place__destination__name__iexact=country_name)
-            ).select_related(
-                "user",
-                "user__profile",
-                "place",
-                "place__destination",
-            ).order_by("-created_at")
-
+        # Important product rule:
+        # A country page shows only general experiences saved directly to that country.
+        # Experiences from cities, regions, hotels, restaurants or attractions inside
+        # the country should be reached through related places, not mixed here.
         return Experience.objects.filter(
             place_id=place_id
         ).select_related(
@@ -428,7 +411,6 @@ class PlaceExperiencesListView(generics.ListAPIView):
 
     def get_serializer_context(self):
         return {"request": self.request}
-
 
 # ============================================================
 # EXPERIENCE REPLIES

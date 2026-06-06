@@ -33,6 +33,7 @@ export default function ExperiencesPage() {
   const [experiences, setExperiences] = useState<any[]>([]);
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
+  const [relatedPlaces, setRelatedPlaces] = useState<any[]>([]);
   const [repliesByExperience, setRepliesByExperience] = useState<Record<number, any[]>>({});
   const [replyTextByExperience, setReplyTextByExperience] = useState<Record<number, string>>({});
   const [showReplyForm, setShowReplyForm] = useState<Record<number, boolean>>({});
@@ -77,6 +78,15 @@ export default function ExperiencesPage() {
 
   const trustedReviewsCount = experiences.filter((e) => e.is_trusted).length;
 
+  const normalizeText = (value?: string) =>
+      (value || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+  const isCountryPage = place?.place_type === "country";
+
   const totalExperiences = experiences.length;
 
   const ratedExperiences = experiences.filter((e) => e.rating);
@@ -97,7 +107,9 @@ export default function ExperiencesPage() {
 }).length;
 
 const pageTitle =
-  place?.place_type === "country" || place?.place_type === "city"
+  place?.place_type === "country"
+    ? `Experiences about ${place?.name || "this country"}`
+    : place?.place_type === "city"
     ? `Experiences in ${place?.name || "this place"}`
     : `Experiences about ${place?.name || "this place"}`;
 
@@ -471,8 +483,63 @@ const loadPlace = async () => {
     );
 
     setDestination(foundDestination);
+
+    if (data.place_type === "country") {
+      const placesRes = await fetch(`${API_URL}/api/places/`);
+
+      if (!placesRes.ok) {
+        setRelatedPlaces([]);
+        return;
+      }
+
+      const placesData = await placesRes.json();
+      const countryName = normalizeText(data.name);
+
+      const related = Array.isArray(placesData)
+        ? placesData
+            .filter((relatedPlace: any) => {
+              if (relatedPlace.id === data.id) return false;
+              if (relatedPlace.place_type === "country") return false;
+
+              const relatedCountry = normalizeText(
+                relatedPlace.destination_country
+              );
+
+              const relatedDestination = normalizeText(
+                relatedPlace.destination_name
+              );
+
+              return (
+                relatedCountry === countryName ||
+                relatedDestination === countryName
+              );
+            })
+            .sort((a: any, b: any) => {
+              const typeOrder: Record<string, number> = {
+                city: 1,
+                nature: 2,
+                attraction: 3,
+                restaurant: 4,
+                hotel: 5,
+                other: 6,
+              };
+
+              const orderA = typeOrder[a.place_type] || 99;
+              const orderB = typeOrder[b.place_type] || 99;
+
+              if (orderA !== orderB) return orderA - orderB;
+
+              return (a.name || "").localeCompare(b.name || "");
+            })
+        : [];
+
+      setRelatedPlaces(related);
+    } else {
+      setRelatedPlaces([]);
+    }
   } catch (err) {
     console.error(err);
+    setRelatedPlaces([]);
   }
 };
 
@@ -1267,6 +1334,28 @@ const renderReportControls = (experience: any) => {
     <main style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
       <h1>{pageTitle}</h1>
 
+          {isCountryPage && (
+        <section style={countryIntroBox}>
+          <div style={countryIntroEyebrow}>Country overview</div>
+
+          <h2 style={countryIntroTitle}>
+            General experiences about {place?.name}
+          </h2>
+
+          <p style={countryIntroText}>
+            Here you will see experiences shared about the country in general:
+            first impressions, culture, costs, safety, accessibility,
+            convenience and overall travel feeling.
+          </p>
+
+          <p style={countryIntroText}>
+            Experiences about specific cities, regions, attractions, hotels or
+            restaurants are kept separate so the country overview stays clear.
+            Use the related places section below to explore those details.
+          </p>
+        </section>
+      )}
+
         <div
       style={{
         display: "flex",
@@ -1347,6 +1436,65 @@ const renderReportControls = (experience: any) => {
         </div>
       </div>
     </div>
+
+        {isCountryPage && relatedPlaces.length > 0 && (
+      <section style={relatedPlacesBox}>
+        <div>
+          <div style={relatedPlacesEyebrow}>Related cities and places</div>
+
+          <h2 style={relatedPlacesTitle}>
+            Explore specific places in {place?.name}
+          </h2>
+
+          <p style={relatedPlacesText}>
+            Here you can navigate to experiences shared about cities, regions
+            and specific places inside this country.
+          </p>
+        </div>
+
+        <div style={relatedPlacesGrid}>
+          {relatedPlaces.map((relatedPlace) => (
+            <article key={relatedPlace.id} style={relatedPlaceCard}>
+              <div style={relatedPlaceType}>
+                {relatedPlace.place_type === "city"
+                  ? "City / Region"
+                  : relatedPlace.place_type === "nature"
+                  ? "Nature"
+                  : relatedPlace.place_type === "attraction"
+                  ? "Tourist attraction"
+                  : relatedPlace.place_type === "restaurant"
+                  ? "Restaurant / Café"
+                  : relatedPlace.place_type === "hotel"
+                  ? "Hotel"
+                  : "Place"}
+              </div>
+
+              <h3 style={relatedPlaceName}>{relatedPlace.name}</h3>
+
+              <div style={relatedPlaceLocation}>
+                {relatedPlace.city || relatedPlace.destination_name || place?.name}
+              </div>
+
+              <div style={relatedPlaceActions}>
+                <Link
+                  href={`/places/${relatedPlace.id}/experiences`}
+                  style={relatedPlacePrimaryLink}
+                >
+                  View experiences
+                </Link>
+
+                <Link
+                  href={`/places/${relatedPlace.id}`}
+                  style={relatedPlaceSecondaryLink}
+                >
+                  View place
+                </Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    )}
 
     {totalExperiences === 0 && (
   <div style={emptyExperienceBox}>
@@ -2540,4 +2688,124 @@ const inlineTripPlanErrorBox = {
   background: "#fff5f5",
   color: "#b91c1c",
   fontSize: "12px",
+};
+
+const countryIntroBox = {
+  marginTop: "14px",
+  marginBottom: "18px",
+  padding: "18px",
+  borderRadius: "16px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  display: "grid",
+  gap: "8px",
+};
+
+const countryIntroEyebrow = {
+  fontSize: "13px",
+  color: "#166534",
+  fontWeight: 700,
+};
+
+const countryIntroTitle = {
+  margin: 0,
+  fontSize: "20px",
+};
+
+const countryIntroText = {
+  margin: 0,
+  color: "#555",
+  lineHeight: 1.6,
+  fontSize: "14px",
+};
+
+const relatedPlacesBox = {
+  marginTop: "20px",
+  marginBottom: "30px",
+  padding: "18px",
+  borderRadius: "16px",
+  border: "1px solid #eee",
+  background: "white",
+  display: "grid",
+  gap: "14px",
+};
+
+const relatedPlacesEyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  fontWeight: 700,
+  marginBottom: "4px",
+};
+
+const relatedPlacesTitle = {
+  margin: 0,
+  fontSize: "20px",
+};
+
+const relatedPlacesText = {
+  margin: "8px 0 0 0",
+  color: "#555",
+  lineHeight: 1.5,
+  fontSize: "14px",
+};
+
+const relatedPlacesGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "12px",
+};
+
+const relatedPlaceCard = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  display: "grid",
+  gap: "8px",
+};
+
+const relatedPlaceType = {
+  fontSize: "12px",
+  color: "#777",
+  fontWeight: 700,
+};
+
+const relatedPlaceName = {
+  margin: 0,
+  fontSize: "18px",
+};
+
+const relatedPlaceLocation = {
+  color: "#666",
+  fontSize: "13px",
+};
+
+const relatedPlaceActions = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+  marginTop: "4px",
+};
+
+const relatedPlacePrimaryLink = {
+  display: "inline-block",
+  padding: "7px 10px",
+  borderRadius: "8px",
+  background: "black",
+  color: "white",
+  textDecoration: "none",
+  fontSize: "12px",
+  fontWeight: 700,
+};
+
+const relatedPlaceSecondaryLink = {
+  display: "inline-block",
+  padding: "7px 10px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  textDecoration: "none",
+  fontSize: "12px",
+  fontWeight: 700,
 };

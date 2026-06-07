@@ -344,6 +344,28 @@ const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
 const isNewlyCreatedPlace = createdPlaceId === selectedPlace?.id;
 
+const getParentCountryName = (place: any) => {
+  if (!place) return "country";
+
+  if (selectedCountryPlace?.name) {
+    return selectedCountryPlace.name;
+  }
+
+  if (place.destination_country) {
+    return place.destination_country;
+  }
+
+  if (place.country) {
+    return place.country;
+  }
+
+  if (place.destination_name && place.destination_name !== place.name) {
+    return place.destination_name;
+  }
+
+  return "country";
+};
+
 const selectedPlaceReviewsCount =
   Number(selectedPlace?.reviews_count ?? selectedPlace?.average_rating_count ?? 0);
 
@@ -1355,7 +1377,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       </section>
     )}
 
-     {selectedPlace && !showShareForm && (
+    {selectedPlace && !showShareForm && (
       <section
         id="selected-place-actions"
         style={{
@@ -1393,14 +1415,14 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           {isUpdateMode ? (
-              <button
-                type="button"
-                onClick={() => router.push(`/create?place=${selectedPlace.id}`)}
-                style={primaryButton}
-              >
-                Post alert, event or info here
-              </button>
-            ) : selectedPlaceHasNoExperiences ? (
+            <button
+              type="button"
+              onClick={() => router.push(`/create?place=${selectedPlace.id}`)}
+              style={primaryButton}
+            >
+              Post alert, event or info here
+            </button>
+          ) : selectedPlaceHasNoExperiences ? (
             <>
               <button
                 type="button"
@@ -1415,7 +1437,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 onClick={() => router.push(`/places/${selectedPlace.id}/experiences`)}
                 style={secondaryButton}
               >
-                View empty experience page
+                Open {selectedPlace.name} page
               </button>
             </>
           ) : (
@@ -1436,6 +1458,18 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 Share your experience
               </button>
             </>
+          )}
+
+          {selectedPlace?.destination && selectedPlace?.destination_name && (
+            <button
+              type="button"
+              onClick={() =>
+                router.push(`/places/${selectedPlace.destination}/experiences`)
+              }
+              style={secondaryButton}
+            >
+              Back to {getParentCountryName(selectedPlace)}
+            </button>
           )}
 
           <button

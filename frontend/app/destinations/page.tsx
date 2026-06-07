@@ -1274,11 +1274,22 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 color: "#666",
                 lineHeight: 1.5,
               }}
-            >
-              Create a neutral {placeTypeLabels[placeType].toLowerCase()} name that other
-              travelers can also use. Avoid using opinions, warnings, or personal advice
-              here. You can add your personal opinion in the experience title later.
-            </p>
+          >
+              We did not find this place in the current Trust Travel database. For now,
+              you can create it manually using a neutral name that other travelers can also
+              reuse. Later, this step can be connected to an external places API to suggest
+              official countries, cities, hotels, restaurants, attractions and nature spots.
+          </p>
+
+            <div style={futureExternalSourceBox}>
+              <strong>Future external place search</strong>
+
+              <p style={futureExternalSourceText}>
+                This area is prepared for a future integration with an external places
+                database. When connected, Trust Travel can show suggested official places
+                here before asking the user to create a new one manually.
+              </p>
+            </div>
 
             {similarPlaces.length > 0 && (
               <div style={duplicateWarningBox}>
@@ -2007,4 +2018,20 @@ const label = {
   fontSize: "13px",
   color: "#666",
   fontWeight: 600,
+};
+
+const futureExternalSourceBox = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px dashed #ddd",
+  background: "#fafafa",
+  color: "#333",
+  marginBottom: "16px",
+};
+
+const futureExternalSourceText = {
+  margin: "8px 0 0 0",
+  color: "#666",
+  fontSize: "13px",
+  lineHeight: 1.5,
 };

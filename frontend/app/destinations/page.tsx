@@ -227,21 +227,31 @@ const relatedNonCountryPlaces = filteredPlaces.filter((place) => {
 
 const hasCountryMatch = countryMatches.length > 0;
 
+const isPlaceInsideCountry = (place: any, countryPlace: any) => {
+  if (!place || !countryPlace) return false;
+  if (place.place_type === "country") return false;
+
+  const selectedCountryName = normalizeText(countryPlace.name);
+  const selectedCountryCode = normalizeText(countryPlace.country_code);
+  const selectedDestinationCountry = normalizeText(countryPlace.destination_country);
+
+  const placeCountry = normalizeText(place.destination_country);
+  const placeDestinationName = normalizeText(place.destination_name);
+  const placeCountryCode = normalizeText(place.country_code);
+
+  return (
+    placeCountry === selectedCountryName ||
+    placeDestinationName === selectedCountryName ||
+    placeCountryCode === selectedCountryCode ||
+    placeCountry === selectedDestinationCountry
+  );
+};
+
 const placesInsideSelectedCountry = selectedCountryPlace
   ? places
-      .filter((place) => {
-        if (place.place_type === "country") return false;
-
-        const selectedCountryName = normalizeText(selectedCountryPlace.name);
-        const placeCountry = normalizeText(place.destination_country);
-        const placeDestinationName = normalizeText(place.destination_name);
-
-        return (
-          placeCountry === selectedCountryName ||
-          placeDestinationName === selectedCountryName
-        );
-      })
+      .filter((place) => isPlaceInsideCountry(place, selectedCountryPlace))
       .sort((a, b) => {
+
         const typeOrder: Record<string, number> = {
           city: 1,
           nature: 2,
@@ -313,6 +323,71 @@ const countryPlaceholderByType: Record<typeof placeType, string> = {
   other: "Country, if relevant",
 };
 
+// =========================
+// Place hierarchy helpers
+// =========================
+
+const isCountryPlace = (place: any) => {
+  return place?.place_type === "country";
+};
+
+const isCityOrRegionPlace = (place: any) => {
+  return place?.place_type === "city";
+};
+
+const isSpecificPlace = (place: any) => {
+  return (
+    !!place &&
+    place.place_type !== "country" &&
+    place.place_type !== "city"
+  );
+};
+
+const getParentCountryName = (place: any) => {
+  if (!place) return "";
+
+  if (isCountryPlace(place)) {
+    return place.name || "";
+  }
+
+  return (
+    place.destination_country ||
+    place.country_name ||
+    ""
+  );
+};
+
+const getParentDestinationName = (place: any) => {
+  if (!place) return "";
+
+  if (isCountryPlace(place)) {
+    return place.name || "";
+  }
+
+  return (
+    place.destination_country ||
+    place.destination_name ||
+    place.country_name ||
+    ""
+  );
+};
+
+const getPlaceHierarchyLabel = (place: any) => {
+  if (!place) return "";
+
+  if (isCountryPlace(place)) {
+    return place.name || "Country";
+  }
+
+  const parentCountry = getParentCountryName(place);
+
+  if (parentCountry) {
+    return `${place.name} · ${parentCountry}`;
+  }
+
+  return place.name || "Place";
+};
+
 const getPlaceTypeLabel = (type?: string) => {
   const labels: Record<string, string> = {
     country: "Country",
@@ -328,46 +403,36 @@ const getPlaceTypeLabel = (type?: string) => {
 };
 
 const getPlaceLocationText = (place: any) => {
-  if (place.place_type === "country") {
-    return place.destination_country || place.name || "Country";
+  if (!place) return "Place";
+
+  if (isCountryPlace(place)) {
+    return place.name || "Country";
   }
 
   const locationParts = [
     place.city || place.destination_name,
-    place.destination_country,
+    getParentCountryName(place),
   ].filter(Boolean);
 
-  return locationParts.join(" · ") || "Place";
+  return locationParts.join(" · ") || getPlaceHierarchyLabel(place);
 };
 
 const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
-const isNewlyCreatedPlace = createdPlaceId === selectedPlace?.id;
-
-const getParentCountryName = (place: any) => {
-  if (!place) return "country";
-
-  if (selectedCountryPlace?.name) {
-    return selectedCountryPlace.name;
-  }
-
-  if (place.destination_country) {
-    return place.destination_country;
-  }
-
-  if (place.country) {
-    return place.country;
-  }
-
-  if (place.destination_name && place.destination_name !== place.name) {
-    return place.destination_name;
-  }
-
-  return "country";
-};
-
 const selectedPlaceReviewsCount =
   Number(selectedPlace?.reviews_count ?? selectedPlace?.average_rating_count ?? 0);
+
+const selectedPlaceParentCountryName = selectedPlace
+  ? getParentCountryName(selectedPlace)
+  : "";
+
+const selectedPlaceParentCountryPlace = selectedPlaceParentCountryName
+  ? places.find(
+      (place) =>
+        isCountryPlace(place) &&
+        normalizeText(place.name) === normalizeText(selectedPlaceParentCountryName)
+    )
+  : null;
 
 const selectedPlaceHasNoExperiences =
   !!selectedPlace && selectedPlaceReviewsCount === 0;
@@ -1460,17 +1525,27 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             </>
           )}
 
-          {selectedPlace?.destination && selectedPlace?.destination_name && (
-            <button
-              type="button"
-              onClick={() =>
-                router.push(`/places/${selectedPlace.destination}/experiences`)
-              }
-              style={secondaryButton}
-            >
-              Back to {getParentCountryName(selectedPlace)}
-            </button>
-          )}
+          {!isCountryPlace(selectedPlace) && selectedPlaceParentCountryName && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedPlaceParentCountryPlace) {
+                    router.push(`/places/${selectedPlaceParentCountryPlace.id}/experiences`);
+                    return;
+                  }
+
+                  setPlaceType("country");
+                  setSearchTerm(selectedPlaceParentCountryName);
+                  setSelectedPlace(null);
+                  setSelectedCountryPlace(null);
+                  setShowShareForm(false);
+                  setShowCreatePlaceForm(false);
+                }}
+                style={secondaryButton}
+              >
+                Back to {selectedPlaceParentCountryName}
+              </button>
+            )}
 
           <button
             type="button"

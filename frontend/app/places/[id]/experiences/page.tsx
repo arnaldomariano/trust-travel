@@ -1575,40 +1575,65 @@ const renderReportControls = (experience: any) => {
       </section>
     )}
 
-    {totalExperiences === 0 && (
-  <div style={emptyExperienceBox}>
-    <div style={emptyExperienceEyebrow}>First experience opportunity</div>
+          {totalExperiences === 0 && (
+      <div style={emptyExperienceBox}>
+        <div style={emptyExperienceEyebrow}>
+          {isCountryPage
+            ? "Country experience opportunity"
+            : "First city experience opportunity"}
+        </div>
 
-    <h2 style={emptyExperienceTitle}>
-      You are the first person to explore this place on Trust Travel.
-    </h2>
+        <h2 style={emptyExperienceTitle}>
+          {isCountryPage
+            ? `No general experiences about ${place?.name || "this country"} yet.`
+            : `No experiences in ${place?.name || "this place"} yet.`}
+        </h2>
 
-    <p style={emptyExperienceText}>
-      There are no shared experiences here yet. If you visited this place,
-      your comment can help future travelers understand what to expect.
-    </p>
+        <p style={emptyExperienceText}>
+          {isCountryPage
+            ? `There are no country-level experiences here yet. If you know ${
+                place?.name || "this country"
+              }, you can share a general impression about culture, costs, safety, accessibility or overall travel feeling.`
+            : `${place?.name || "This place"} is already listed${
+                place?.destination_country
+                  ? ` inside ${place.destination_country}`
+                  : ""
+              }. You can be the first to share an experience here, or go back to the country page to explore broader country-level experiences and other cities or regions.`}
+        </p>
 
-    <div style={emptyExperienceActions}>
-      <button
-          type="button"
-          onClick={() =>
-            router.push(`/destinations?mode=experience&place=${id}&share=true`)
-          }
-          style={emptyExperiencePrimaryButton}
-        >
-          Share the first experience
-        </button>
+        <div style={emptyExperienceActions}>
+          <button
+            type="button"
+            onClick={() =>
+              router.push(`/destinations?mode=experience&place=${id}&share=true`)
+            }
+            style={emptyExperiencePrimaryButton}
+          >
+            {isCountryPage
+              ? "Share the first country experience"
+              : `Share the first experience in ${place?.name || "this place"}`}
+          </button>
 
-      <button
-        type="button"
-        onClick={() => router.push("/destinations?mode=experience")}
-        style={emptyExperienceSecondaryButton}
-      >
-        Search another place
-      </button>
-    </div>
-  </div>
-)}
+          {!isCountryPage && place?.destination && (
+            <button
+              type="button"
+              onClick={() => router.push(`/places/${place.destination}/experiences`)}
+              style={emptyExperienceSecondaryButton}
+            >
+              Back to {place?.destination_country || "country"}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => router.push("/destinations?mode=experience")}
+            style={emptyExperienceSecondaryButton}
+          >
+            Search another place
+          </button>
+        </div>
+      </div>
+    )}
 
     {highlightedExperience && (
       <div

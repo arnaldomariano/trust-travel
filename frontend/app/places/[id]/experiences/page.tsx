@@ -1482,7 +1482,13 @@ const renderReportControls = (experience: any) => {
 
         <button
           type="button"
-          onClick={() => setShowRelatedPlaces((current) => !current)}
+          onClick={() => {
+              if (showRelatedPlaces) {
+                setRelatedPlaceSearch("");
+              }
+
+              setShowRelatedPlaces((current) => !current);
+            }}
           style={relatedPlacesToggleButton}
         >
           {showRelatedPlaces
@@ -2820,44 +2826,6 @@ const relatedPlacesText = {
   color: "#555",
   lineHeight: 1.5,
   fontSize: "14px",
-};
-
-const relatedPlacesGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: "12px",
-};
-
-const relatedPlaceCard = {
-  padding: "14px",
-  borderRadius: "14px",
-  border: "1px solid #eee",
-  background: "#fafafa",
-  display: "grid",
-  gap: "8px",
-};
-
-const relatedPlaceType = {
-  fontSize: "12px",
-  color: "#777",
-  fontWeight: 700,
-};
-
-const relatedPlaceName = {
-  margin: 0,
-  fontSize: "18px",
-};
-
-const relatedPlaceLocation = {
-  color: "#666",
-  fontSize: "13px",
-};
-
-const relatedPlaceActions = {
-  display: "flex",
-  gap: "8px",
-  flexWrap: "wrap" as const,
-  marginTop: "4px",
 };
 
 const relatedPlacePrimaryLink = {

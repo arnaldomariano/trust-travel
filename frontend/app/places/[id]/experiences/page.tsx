@@ -33,7 +33,6 @@ export default function ExperiencesPage() {
   const [experiences, setExperiences] = useState<any[]>([]);
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
-  const [relatedPlaces, setRelatedPlaces] = useState<any[]>([]);
   const [repliesByExperience, setRepliesByExperience] = useState<Record<number, any[]>>({});
   const [replyTextByExperience, setReplyTextByExperience] = useState<Record<number, string>>({});
   const [showReplyForm, setShowReplyForm] = useState<Record<number, boolean>>({});
@@ -41,6 +40,9 @@ export default function ExperiencesPage() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [lastVisit, setLastVisit] = useState<number>(0);
   const [showOtherReviews, setShowOtherReviews] = useState(false);
+  const [relatedPlaces, setRelatedPlaces] = useState<any[]>([]);
+  const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
+
 
   // =====================
   // Trip plan inline picker state
@@ -85,8 +87,6 @@ export default function ExperiencesPage() {
         .replace(/[\u0300-\u036f]/g, "")
         .trim();
 
-  const isCountryPage = place?.place_type === "country";
-
   const totalExperiences = experiences.length;
 
   const ratedExperiences = experiences.filter((e) => e.rating);
@@ -106,12 +106,18 @@ export default function ExperiencesPage() {
   return createdAt >= sevenDaysAgo;
 }).length;
 
-const pageTitle =
-  place?.place_type === "country"
-    ? `Experiences about ${place?.name || "this country"}`
-    : place?.place_type === "city"
-    ? `Experiences in ${place?.name || "this place"}`
-    : `Experiences about ${place?.name || "this place"}`;
+  const pageTitle =
+      place?.place_type === "country"
+        ? `Experiences about ${place?.name || "this country"}`
+        : place?.place_type === "city"
+        ? `Experiences in ${place?.name || "this place"}`
+        : `Experiences about ${place?.name || "this place"}`;
+
+      const isCountryPage = place?.place_type === "country";
+
+  const sortedRelatedPlaces = [...relatedPlaces].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "")
+    );
 
   const recentActivities = experiences
     .filter((e) => new Date(e.created_at).getTime() > lastVisit)
@@ -1437,7 +1443,7 @@ const renderReportControls = (experience: any) => {
       </div>
     </div>
 
-        {isCountryPage && relatedPlaces.length > 0 && (
+    {isCountryPage && relatedPlaces.length > 0 && (
       <section style={relatedPlacesBox}>
         <div>
           <div style={relatedPlacesEyebrow}>Related cities and places</div>
@@ -1447,52 +1453,64 @@ const renderReportControls = (experience: any) => {
           </h2>
 
           <p style={relatedPlacesText}>
-            Here you can navigate to experiences shared about cities, regions
-            and specific places inside this country.
+            Country-level experiences stay focused on general impressions about
+            {place?.name ? ` ${place.name}` : " this country"}. Open the related
+            places list only if you want to explore cities, regions or specific
+            places inside the country.
           </p>
         </div>
 
-        <div style={relatedPlacesGrid}>
-          {relatedPlaces.map((relatedPlace) => (
-            <article key={relatedPlace.id} style={relatedPlaceCard}>
-              <div style={relatedPlaceType}>
-                {relatedPlace.place_type === "city"
-                  ? "City / Region"
-                  : relatedPlace.place_type === "nature"
-                  ? "Nature"
-                  : relatedPlace.place_type === "attraction"
-                  ? "Tourist attraction"
-                  : relatedPlace.place_type === "restaurant"
-                  ? "Restaurant / Café"
-                  : relatedPlace.place_type === "hotel"
-                  ? "Hotel"
-                  : "Place"}
+        <button
+          type="button"
+          onClick={() => setShowRelatedPlaces((current) => !current)}
+          style={relatedPlacesToggleButton}
+        >
+          {showRelatedPlaces
+            ? "Hide related cities and places"
+            : `Show related cities and places (${relatedPlaces.length})`}
+        </button>
+
+        {showRelatedPlaces && (
+          <div style={relatedPlacesList}>
+            {sortedRelatedPlaces.map((relatedPlace) => (
+              <div key={relatedPlace.id} style={relatedPlaceListItem}>
+                <div>
+                  <strong>{relatedPlace.name}</strong>
+
+                  <div style={relatedPlaceSmallMeta}>
+                    {relatedPlace.place_type === "city"
+                      ? "City / Region"
+                      : relatedPlace.place_type === "nature"
+                      ? "Nature"
+                      : relatedPlace.place_type === "attraction"
+                      ? "Tourist attraction"
+                      : relatedPlace.place_type === "restaurant"
+                      ? "Restaurant / Café"
+                      : relatedPlace.place_type === "hotel"
+                      ? "Hotel"
+                      : "Place"}
+                  </div>
+                </div>
+
+                <div style={relatedPlaceCompactActions}>
+                  <Link
+                    href={`/places/${relatedPlace.id}/experiences`}
+                    style={relatedPlacePrimaryLink}
+                  >
+                    View experiences
+                  </Link>
+
+                  <Link
+                    href={`/places/${relatedPlace.id}`}
+                    style={relatedPlaceSecondaryLink}
+                  >
+                    View place
+                  </Link>
+                </div>
               </div>
-
-              <h3 style={relatedPlaceName}>{relatedPlace.name}</h3>
-
-              <div style={relatedPlaceLocation}>
-                {relatedPlace.city || relatedPlace.destination_name || place?.name}
-              </div>
-
-              <div style={relatedPlaceActions}>
-                <Link
-                  href={`/places/${relatedPlace.id}/experiences`}
-                  style={relatedPlacePrimaryLink}
-                >
-                  View experiences
-                </Link>
-
-                <Link
-                  href={`/places/${relatedPlace.id}`}
-                  style={relatedPlaceSecondaryLink}
-                >
-                  View place
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     )}
 
@@ -2808,4 +2826,43 @@ const relatedPlaceSecondaryLink = {
   textDecoration: "none",
   fontSize: "12px",
   fontWeight: 700,
+};
+
+const relatedPlacesToggleButton = {
+  width: "fit-content",
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const relatedPlacesList = {
+  display: "grid",
+  gap: "8px",
+};
+
+const relatedPlaceListItem = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+};
+
+const relatedPlaceSmallMeta = {
+  marginTop: "4px",
+  fontSize: "12px",
+  color: "#777",
+};
+
+const relatedPlaceCompactActions = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
 };

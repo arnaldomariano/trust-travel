@@ -417,6 +417,18 @@ const getPlaceLocationText = (place: any) => {
   return locationParts.join(" · ") || getPlaceHierarchyLabel(place);
 };
 
+const filteredCountryPlaces = filteredPlaces.filter((place) =>
+  isCountryPlace(place)
+);
+
+const filteredCityOrRegionPlaces = filteredPlaces.filter((place) =>
+  isCityOrRegionPlace(place)
+);
+
+const filteredSpecificPlaces = filteredPlaces.filter((place) =>
+  isSpecificPlace(place)
+);
+
 const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
 const selectedPlaceReviewsCount =
@@ -1038,145 +1050,220 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         Start typing based on the type you selected. For example, search for a country,
         city, attraction, hotel, restaurant or nature spot.
       </div>
-        ) : filteredPlaces.length > 0 ? (
-  <section style={{ display: "grid", gap: "14px", maxWidth: "620px" }}>
-    <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
-      We found existing places related to your search. Start with the country when
-      possible, then choose a city, region or specific place below.
-    </p>
+            ) : filteredPlaces.length > 0 ? (
+      <section style={{ display: "grid", gap: "18px", maxWidth: "620px" }}>
+        <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
+          We found existing places related to your search. Results are organized by
+          hierarchy: start with a country, then choose a city or region, and finally
+          a specific place when relevant.
+        </p>
 
-    {hasCountryMatch && (
-      <div style={{ display: "grid", gap: "10px" }}>
-        <div style={{ fontWeight: 700, fontSize: "15px" }}>
-          Country found
-        </div>
+        {filteredCountryPlaces.length > 0 && (
+          <div style={{ display: "grid", gap: "10px" }}>
+            <div style={{ fontWeight: 700, fontSize: "15px" }}>
+              Countries
+            </div>
 
-        {countryMatches.map((place) => (
-          <button
-            key={place.id}
-            onClick={() => handleSelectCountry(place)}
-            style={{
-              padding: "18px",
-              border: "1px solid #d7f0df",
-              borderRadius: "14px",
-              background:
-                selectedPlace?.id === place.id ? "#f2fbf5" : "white",
-              color: "black",
-              textAlign: "left",
-              cursor: "pointer",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "12px",
-                alignItems: "center",
-              }}
-            >
-              <strong>{place.name}</strong>
-
-              <span
+            {filteredCountryPlaces.map((place) => (
+              <button
+                key={place.id}
+                onClick={() => handleSelectCountry(place)}
                 style={{
-                  fontSize: "11px",
-                  color: "#166534",
-                  background: "#f2fbf5",
+                  padding: "18px",
                   border: "1px solid #d7f0df",
-                  borderRadius: "999px",
-                  padding: "4px 8px",
-                  whiteSpace: "nowrap",
+                  borderRadius: "14px",
+                  background:
+                    selectedPlace?.id === place.id ? "#f2fbf5" : "white",
+                  color: "black",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                 }}
               >
-                {getPlaceTypeLabel(place.place_type)}
-              </span>
-            </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    alignItems: "center",
+                  }}
+                >
+                  <strong>{place.name}</strong>
 
-            <div style={{ marginTop: "10px", fontSize: "14px" }}>
-              {isUpdateMode
-                ? "Post alert, event or info about this country →"
-                : isExperienceMode
-                ? "Share experience about this country →"
-                : "Open this country →"}
-            </div>
-          </button>
-        ))}
-      </div>
-    )}
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#166534",
+                      background: "#f2fbf5",
+                      border: "1px solid #d7f0df",
+                      borderRadius: "999px",
+                      padding: "4px 8px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {getPlaceTypeLabel(place.place_type)}
+                  </span>
+                </div>
 
-    {relatedNonCountryPlaces.length > 0 && (
-      <div style={{ display: "grid", gap: "10px" }}>
-        {hasCountryMatch && (
-          <div style={{ fontWeight: 700, fontSize: "15px", marginTop: "8px" }}>
-            Places related to this country
+                <div style={{ marginTop: "8px", color: "#666", fontSize: "14px" }}>
+                  {getPlaceLocationText(place)}
+                </div>
+
+                <div style={{ marginTop: "10px", fontSize: "14px" }}>
+                  {isUpdateMode
+                    ? "Post alert, event or info about this country →"
+                    : isExperienceMode
+                    ? "Share experience about this country →"
+                    : "Open this country →"}
+                </div>
+              </button>
+            ))}
           </div>
         )}
 
-        {relatedNonCountryPlaces.map((place) => (
-          <button
-            key={place.id}
-            onClick={() => handleSelectExistingPlace(place)}
-            style={{
-              padding: "18px",
-              border: "1px solid #eee",
-              borderRadius: "14px",
-              background:
-                selectedPlace?.id === place.id ? "#f5f5f5" : "white",
-              color: "black",
-              textAlign: "left",
-              cursor: "pointer",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "12px",
-                alignItems: "center",
-              }}
-            >
-              <strong>{place.name}</strong>
-
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "#555",
-                  background: "#f5f5f5",
-                  border: "1px solid #e5e5e5",
-                  borderRadius: "999px",
-                  padding: "4px 8px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {getPlaceTypeLabel(place.place_type)}
-              </span>
+        {filteredCityOrRegionPlaces.length > 0 && (
+          <div style={{ display: "grid", gap: "10px" }}>
+            <div style={{ fontWeight: 700, fontSize: "15px", marginTop: "4px" }}>
+              Cities / Regions
             </div>
 
-            {place.place_type !== "country" && (
-              <div
+            {filteredCityOrRegionPlaces.map((place) => (
+              <button
+                key={place.id}
+                onClick={() => handleSelectExistingPlace(place)}
                 style={{
-                  marginTop: "6px",
-                  color: "#666",
-                  fontSize: "14px",
+                  padding: "18px",
+                  border: "1px solid #eee",
+                  borderRadius: "14px",
+                  background:
+                    selectedPlace?.id === place.id ? "#f5f5f5" : "white",
+                  color: "black",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                 }}
               >
-                {getPlaceLocationText(place)}
-              </div>
-            )}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    alignItems: "center",
+                  }}
+                >
+                  <strong>{place.name}</strong>
 
-            <div style={{ marginTop: "10px", fontSize: "14px" }}>
-              {isUpdateMode
-                ? "Post alert, event or info about this place →"
-                : isExperienceMode
-                ? "Share experience about this place →"
-                : "Open this place →"}
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#555",
+                      background: "#f5f5f5",
+                      border: "1px solid #e5e5e5",
+                      borderRadius: "999px",
+                      padding: "4px 8px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {getPlaceTypeLabel(place.place_type)}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "6px",
+                    color: "#666",
+                    fontSize: "14px",
+                  }}
+                >
+                  {getPlaceLocationText(place)}
+                </div>
+
+                <div style={{ marginTop: "10px", fontSize: "14px" }}>
+                  {isUpdateMode
+                    ? "Post alert, event or info about this city/region →"
+                    : isExperienceMode
+                    ? "Share experience about this city/region →"
+                    : "Open this city/region →"}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filteredSpecificPlaces.length > 0 && (
+          <div style={{ display: "grid", gap: "10px" }}>
+            <div style={{ fontWeight: 700, fontSize: "15px", marginTop: "4px" }}>
+              Specific places
             </div>
-          </button>
-        ))}
-      </div>
-    )}
-  </section>
+
+            <p style={{ color: "#666", margin: 0, lineHeight: 1.5, fontSize: "14px" }}>
+              These are hotels, restaurants, attractions, nature spots or other
+              specific places connected to a city, region or country.
+            </p>
+
+            {filteredSpecificPlaces.map((place) => (
+              <button
+                key={place.id}
+                onClick={() => handleSelectExistingPlace(place)}
+                style={{
+                  padding: "18px",
+                  border: "1px solid #eee",
+                  borderRadius: "14px",
+                  background:
+                    selectedPlace?.id === place.id ? "#f5f5f5" : "white",
+                  color: "black",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    alignItems: "center",
+                  }}
+                >
+                  <strong>{place.name}</strong>
+
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#555",
+                      background: "#f5f5f5",
+                      border: "1px solid #e5e5e5",
+                      borderRadius: "999px",
+                      padding: "4px 8px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {getPlaceTypeLabel(place.place_type)}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "6px",
+                    color: "#666",
+                    fontSize: "14px",
+                  }}
+                >
+                  {getPlaceLocationText(place)}
+                </div>
+
+                <div style={{ marginTop: "10px", fontSize: "14px" }}>
+                  {isUpdateMode
+                    ? "Post alert, event or info about this place →"
+                    : isExperienceMode
+                    ? "Share experience about this place →"
+                    : "Open this place →"}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
     ) : (
       <section style={helperCard}>
           <strong>No exact place found for “{searchTerm.trim()}”.</strong>

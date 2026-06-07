@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-
 import { API_URL } from "../../lib/api";
-import { useRouter } from "next/navigation";
 
 export default function PlacePage() {
   const params = useParams();
@@ -45,15 +43,53 @@ export default function PlacePage() {
 
   const router = useRouter();
 
+  const getPlaceTypeLabel = (type?: string) => {
+    const labels: Record<string, string> = {
+      country: "Country",
+      city: "City / Region",
+      attraction: "Tourist attraction",
+      hotel: "Hotel",
+      restaurant: "Restaurant / Café",
+      nature: "Beach / Nature spot",
+      other: "Place",
+    };
+
+    return labels[type || ""] || "Place";
+  };
+
+  const placeTypeLabel = getPlaceTypeLabel(place?.place_type);
+
+  const parentLocationLabel =
+    place?.place_type === "country"
+      ? ""
+      : place?.destination_country ||
+        destination?.country ||
+        place?.destination_name ||
+        destination?.name ||
+        "";
+
+  const breadcrumbParentLabel =
+    place?.place_type === "country"
+      ? "Countries"
+      : parentLocationLabel || "Places";
+
+  const placeIntroText =
+    place?.place_type === "country"
+      ? `Explore country-level experiences, events and useful information shared about ${place?.name || "this country"}.`
+      : place?.place_type === "city"
+      ? `Explore experiences, events and useful information shared specifically about ${place?.name || "this city or region"}.`
+      : `Explore traveler experiences, events and useful information shared about this specific place.`;
+
   const placeLocation =
-      place?.place_type === "country"
-        ? ""
-        : [
-            place?.city || place?.destination_name || destination?.city || destination?.name,
-            place?.destination_country || destination?.country,
-          ]
-            .filter(Boolean)
-            .join(" · ");
+    place?.place_type === "country"
+      ? place?.destination_country || place?.name || ""
+      : [
+          placeTypeLabel,
+          place?.city && place.city !== place?.name ? place.city : null,
+          parentLocationLabel,
+        ]
+          .filter(Boolean)
+          .join(" · ");
 
   const pageTitle =
       place?.place_type === "country" || place?.place_type === "city"
@@ -274,18 +310,18 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
   return (
     <main style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "900px", margin: "0 auto" }}>
-      <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
+            <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
         <Link href="/" style={{ textDecoration: "none", color: "#666" }}>
           Home
         </Link>{" "}
         /{" "}
         <Link
-          href={`/destinations/${place?.destination}`}
+          href="/destinations"
           style={{ textDecoration: "none", color: "#666" }}
         >
-          {place?.destination_name || destination?.name || "Destination"}
+          {breadcrumbParentLabel}
         </Link>{" "}
-        / <span>{place?.name}</span>
+        / <span>{place?.name || "Place"}</span>
       </div>
 
         <section
@@ -298,7 +334,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           }}
         >
           <div style={{ fontSize: "13px", color: "#777", marginBottom: "8px" }}>
-            Place overview
+            {placeTypeLabel} overview
           </div>
 
           <h1 style={{ margin: 0, fontSize: "28px" }}>
@@ -326,7 +362,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
               maxWidth: "620px",
             }}
           >
-            Explore traveler experiences, events and useful information shared about this place.
+            {placeIntroText}
           </p>
 
           <div

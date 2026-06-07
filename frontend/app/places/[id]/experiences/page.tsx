@@ -42,6 +42,7 @@ export default function ExperiencesPage() {
   const [showOtherReviews, setShowOtherReviews] = useState(false);
   const [relatedPlaces, setRelatedPlaces] = useState<any[]>([]);
   const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
+  const [relatedPlaceSearch, setRelatedPlaceSearch] = useState("");
 
 
   // =====================
@@ -118,6 +119,24 @@ export default function ExperiencesPage() {
   const sortedRelatedPlaces = [...relatedPlaces].sort((a, b) =>
       (a.name || "").localeCompare(b.name || "")
     );
+
+const normalizedRelatedPlaceSearch = normalizeText(relatedPlaceSearch);
+
+const filteredRelatedPlaces = normalizedRelatedPlaceSearch
+  ? sortedRelatedPlaces.filter((relatedPlace) => {
+      const name = normalizeText(relatedPlace.name);
+      const city = normalizeText(relatedPlace.city);
+      const destinationName = normalizeText(relatedPlace.destination_name);
+      const destinationCountry = normalizeText(relatedPlace.destination_country);
+
+      return (
+        name.includes(normalizedRelatedPlaceSearch) ||
+        city.includes(normalizedRelatedPlaceSearch) ||
+        destinationName.includes(normalizedRelatedPlaceSearch) ||
+        destinationCountry.includes(normalizedRelatedPlaceSearch)
+      );
+    })
+  : [];
 
   const recentActivities = experiences
     .filter((e) => new Date(e.created_at).getTime() > lastVisit)
@@ -480,6 +499,8 @@ const loadPlace = async () => {
     const res = await fetch(`${API_URL}/api/places/${id}/`);
     const data = await res.json();
     setPlace(data);
+    setRelatedPlaceSearch("");
+    setShowRelatedPlaces(false);
 
     const destRes = await fetch(`${API_URL}/api/destinations/`);
     const destinations = await destRes.json();
@@ -1443,20 +1464,19 @@ const renderReportControls = (experience: any) => {
       </div>
     </div>
 
-    {isCountryPage && relatedPlaces.length > 0 && (
+    {isCountryPage && sortedRelatedPlaces.length > 0 && (
       <section style={relatedPlacesBox}>
         <div>
           <div style={relatedPlacesEyebrow}>Related cities and places</div>
 
           <h2 style={relatedPlacesTitle}>
-            Explore specific places in {place?.name}
+            Search cities and specific places in {place?.name}
           </h2>
 
           <p style={relatedPlacesText}>
-            Country-level experiences stay focused on general impressions about
-            {place?.name ? ` ${place.name}` : " this country"}. Open the related
-            places list only if you want to explore cities, regions or specific
-            places inside the country.
+            Country-level experiences above stay focused on general impressions about{" "}
+            {place?.name}. Search below if you want to explore experiences from a
+            specific city, region or place inside this country.
           </p>
         </div>
 
@@ -1466,49 +1486,84 @@ const renderReportControls = (experience: any) => {
           style={relatedPlacesToggleButton}
         >
           {showRelatedPlaces
-            ? "Hide related cities and places"
-            : `Show related cities and places (${relatedPlaces.length})`}
+            ? "Hide related place search"
+            : `Search cities and places in ${place?.name}`}
         </button>
 
         {showRelatedPlaces && (
-          <div style={relatedPlacesList}>
-            {sortedRelatedPlaces.map((relatedPlace) => (
-              <div key={relatedPlace.id} style={relatedPlaceListItem}>
-                <div>
-                  <strong>{relatedPlace.name}</strong>
+          <div style={relatedPlacesSearchBox}>
+            <input
+              value={relatedPlaceSearch}
+              onChange={(event) => setRelatedPlaceSearch(event.target.value)}
+              placeholder={`Search inside ${place?.name}, e.g. Bali, Java, Yogyakarta`}
+              style={relatedPlacesSearchInput}
+            />
 
-                  <div style={relatedPlaceSmallMeta}>
-                    {relatedPlace.place_type === "city"
-                      ? "City / Region"
-                      : relatedPlace.place_type === "nature"
-                      ? "Nature"
-                      : relatedPlace.place_type === "attraction"
-                      ? "Tourist attraction"
-                      : relatedPlace.place_type === "restaurant"
-                      ? "Restaurant / Café"
-                      : relatedPlace.place_type === "hotel"
-                      ? "Hotel"
-                      : "Place"}
-                  </div>
-                </div>
-
-                <div style={relatedPlaceCompactActions}>
-                  <Link
-                    href={`/places/${relatedPlace.id}/experiences`}
-                    style={relatedPlacePrimaryLink}
-                  >
-                    View experiences
-                  </Link>
-
-                  <Link
-                    href={`/places/${relatedPlace.id}`}
-                    style={relatedPlaceSecondaryLink}
-                  >
-                    View place
-                  </Link>
-                </div>
+            {!relatedPlaceSearch.trim() ? (
+              <div style={relatedPlacesEmptyHint}>
+                Start typing a city, region or specific place name.
               </div>
-            ))}
+            ) : filteredRelatedPlaces.length > 0 ? (
+              <div style={relatedPlacesList}>
+                {filteredRelatedPlaces.map((relatedPlace) => (
+                  <div key={relatedPlace.id} style={relatedPlaceListItem}>
+                    <div>
+                      <strong>{relatedPlace.name}</strong>
+
+                      <div style={relatedPlaceSmallMeta}>
+                        {relatedPlace.place_type === "city"
+                          ? "City / Region"
+                          : relatedPlace.place_type === "nature"
+                          ? "Nature"
+                          : relatedPlace.place_type === "attraction"
+                          ? "Tourist attraction"
+                          : relatedPlace.place_type === "restaurant"
+                          ? "Restaurant / Café"
+                          : relatedPlace.place_type === "hotel"
+                          ? "Hotel"
+                          : "Place"}
+                      </div>
+                    </div>
+
+                    <div style={relatedPlaceCompactActions}>
+                      <Link
+                        href={`/places/${relatedPlace.id}/experiences`}
+                        style={relatedPlacePrimaryLink}
+                      >
+                        View experiences
+                      </Link>
+
+                      <Link
+                        href={`/places/${relatedPlace.id}`}
+                        style={relatedPlaceSecondaryLink}
+                      >
+                        View place
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={relatedPlacesNoResultBox}>
+                <strong>
+                  No related place found for “{relatedPlaceSearch.trim()}” inside{" "}
+                  {place?.name}.
+                </strong>
+
+                <p style={{ margin: "8px 0 0 0", color: "#666", lineHeight: 1.5 }}>
+                  Try another spelling or search from the main place search page.
+                  Later, this step can connect to an external places API.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/destinations?mode=experience")}
+                  style={relatedPlacesSearchMainButton}
+                >
+                  Search from main place page
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -2865,4 +2920,47 @@ const relatedPlaceCompactActions = {
   display: "flex",
   gap: "8px",
   flexWrap: "wrap" as const,
+};
+
+const relatedPlacesSearchBox = {
+  display: "grid",
+  gap: "12px",
+};
+
+const relatedPlacesSearchInput = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+};
+
+const relatedPlacesEmptyHint = {
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  color: "#666",
+  fontSize: "13px",
+};
+
+const relatedPlacesNoResultBox = {
+  padding: "14px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  color: "#111",
+  display: "grid",
+  gap: "8px",
+};
+
+const relatedPlacesSearchMainButton = {
+  width: "fit-content",
+  marginTop: "4px",
+  padding: "8px 12px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  cursor: "pointer",
+  fontWeight: 700,
 };

@@ -36,6 +36,7 @@ export default function DestinationsPage() {
   const [showShareForm, setShowShareForm] = useState(false);
   const [createdPlaceId, setCreatedPlaceId] = useState<number | null>(null);
   const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
+  const [relatedPlaceSearch, setRelatedPlaceSearch] = useState("");
 
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
@@ -159,39 +160,72 @@ const getSearchMatchScore = (place: any) => {
 
   const name = normalizeText(place.name);
   const city = normalizeText(place.city || place.destination_name);
-  const country = normalizeText(place.destination_country || place.destination_city);
 
-  const matchesSelectedType = place.place_type === placeType;
+  const isCountrySearch = placeType === "country";
+  const isCitySearch = placeType === "city";
+  const isSpecificSearch = placeType !== "country" && placeType !== "city";
 
-  // Strongest match: exact place name
-  if (name === normalizedSearchText) {
-    return matchesSelectedType ? 100 : 90;
-  }
+  const isCountry = place.place_type === "country";
+  const isCity = place.place_type === "city";
+  const isSpecific = place.place_type === placeType;
 
-  // Strong match: place name starts with the search
-  if (name.startsWith(normalizedSearchText)) {
-    return matchesSelectedType ? 90 : 80;
-  }
+  // =========================
+  // Country search
+  // =========================
+  // Country mode must only return countries.
+  if (isCountrySearch) {
+    if (!isCountry) return 0;
 
-  // Good match: place name contains the search
-  if (name.includes(normalizedSearchText)) {
-    return matchesSelectedType ? 80 : 70;
-  }
+    if (name === normalizedSearchText) return 100;
+    if (name.startsWith(normalizedSearchText)) return 90;
+    if (name.includes(normalizedSearchText)) return 80;
 
-  // Avoid weak accidental matches like "lag" inside "alagamentos".
-  // Only use secondary fields when the search has at least 4 characters.
-  if (normalizedSearchText.length < 4) {
     return 0;
   }
 
-  // Secondary match: city / region
-  if (city.includes(normalizedSearchText)) {
-    return matchesSelectedType ? 60 : 45;
+  // =========================
+  // City / region search
+  // =========================
+  // City mode may search globally by city/region name.
+  // This is useful when the user knows the city but not the country.
+  // But it must NOT return cities only because the country name matches.
+  if (isCitySearch) {
+    if (!isCity) return 0;
+
+    if (name === normalizedSearchText) return 100;
+    if (name.startsWith(normalizedSearchText)) return 90;
+    if (name.includes(normalizedSearchText)) return 80;
+
+    if (normalizedSearchText.length < 4) return 0;
+
+    if (city.includes(normalizedSearchText)) return 60;
+
+    return 0;
   }
 
-  // Secondary match: country
-  if (country.includes(normalizedSearchText)) {
-    return matchesSelectedType ? 50 : 35;
+  // =========================
+  // Specific place search
+  // =========================
+  // Attractions, hotels, restaurants, nature spots and other specific places
+  // should only be searched after a country context exists.
+  if (isSpecificSearch) {
+    if (!selectedCountryPlace) return 0;
+    if (!isSpecific) return 0;
+
+    const selectedCountryName = normalizeText(selectedCountryPlace.name);
+    const placeCountry = normalizeText(place.destination_country);
+
+    if (placeCountry !== selectedCountryName) return 0;
+
+    if (name === normalizedSearchText) return 100;
+    if (name.startsWith(normalizedSearchText)) return 90;
+    if (name.includes(normalizedSearchText)) return 80;
+
+    if (normalizedSearchText.length < 4) return 0;
+
+    if (city.includes(normalizedSearchText)) return 60;
+
+    return 0;
   }
 
   return 0;
@@ -249,9 +283,15 @@ const isPlaceInsideCountry = (place: any, countryPlace: any) => {
 
 const placesInsideSelectedCountry = selectedCountryPlace
   ? places
-      .filter((place) => isPlaceInsideCountry(place, selectedCountryPlace))
-      .sort((a, b) => {
+      .filter((place) => {
+        if (place.place_type === "country") return false;
 
+        const selectedCountryName = normalizeText(selectedCountryPlace.name);
+        const placeCountry = normalizeText(place.destination_country);
+
+        return placeCountry === selectedCountryName;
+      })
+      .sort((a, b) => {
         const typeOrder: Record<string, number> = {
           city: 1,
           nature: 2,
@@ -270,6 +310,20 @@ const placesInsideSelectedCountry = selectedCountryPlace
       })
   : [];
 
+
+const normalizedRelatedPlaceSearch = normalizeText(relatedPlaceSearch);
+
+const filteredPlacesInsideSelectedCountry = normalizedRelatedPlaceSearch
+  ? placesInsideSelectedCountry.filter((place) => {
+      const name = normalizeText(place.name);
+      const city = normalizeText(place.city || place.destination_name);
+
+      return (
+        name.includes(normalizedRelatedPlaceSearch) ||
+        city.includes(normalizedRelatedPlaceSearch)
+      );
+    })
+  : [];
 
   const canCreatePlace = !!newPlaceName.trim();
 
@@ -417,17 +471,20 @@ const getPlaceLocationText = (place: any) => {
   return locationParts.join(" · ") || getPlaceHierarchyLabel(place);
 };
 
-const filteredCountryPlaces = filteredPlaces.filter((place) =>
-  isCountryPlace(place)
-);
+const filteredCountryPlaces =
+  placeType === "country"
+    ? filteredPlaces.filter((place) => isCountryPlace(place))
+    : [];
 
-const filteredCityOrRegionPlaces = filteredPlaces.filter((place) =>
-  isCityOrRegionPlace(place)
-);
+const filteredCityOrRegionPlaces =
+  placeType === "city"
+    ? filteredPlaces.filter((place) => isCityOrRegionPlace(place))
+    : [];
 
-const filteredSpecificPlaces = filteredPlaces.filter((place) =>
-  isSpecificPlace(place)
-);
+const filteredSpecificPlaces =
+  placeType !== "country" && placeType !== "city"
+    ? filteredPlaces.filter((place) => place.place_type === placeType)
+    : [];
 
 const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
@@ -597,6 +654,7 @@ if (isUpdateMode) {
       setShowShareForm(false);
       setShowCreatePlaceForm(false);
       setShowRelatedPlaces(false);
+      setRelatedPlaceSearch("");
       setExperienceShared(false);
       setSharedExperience(null);
       setEditingExperience(false);
@@ -715,6 +773,7 @@ if (isUpdateMode) {
     setSelectedPlace(null);
     setCreatedPlaceId(null);
     setShowRelatedPlaces(false);
+    setRelatedPlaceSearch("");
     setTitle("");
     setComment("");
     setRating(null);
@@ -748,6 +807,7 @@ if (isUpdateMode) {
     setEditingExperience(false);
     setShowShareForm(false);
     setShowCreatePlaceForm(false);
+    setRelatedPlaceSearch("");
     setTripContext("prefer_not_to_say");
     setTripStyle("prefer_not_to_say");
   };
@@ -1050,12 +1110,18 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         Start typing based on the type you selected. For example, search for a country,
         city, attraction, hotel, restaurant or nature spot.
       </div>
+
+    ) : placeType !== "country" && placeType !== "city" && !selectedCountryPlace ? (
+      <div style={helperCard}>
+        Start by searching and selecting a country first. Then you can choose or create
+        attractions, hotels, restaurants, nature spots or other specific places inside that country.
+      </div>
+
             ) : filteredPlaces.length > 0 ? (
       <section style={{ display: "grid", gap: "18px", maxWidth: "620px" }}>
         <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
-          We found existing places related to your search. Results are organized by
-          hierarchy: start with a country, then choose a city or region, and finally
-          a specific place when relevant.
+          We found existing places related to your search and selected type.
+          Start with a country when needed, then choose a city, region or specific place.
         </p>
 
         {filteredCountryPlaces.length > 0 && (
@@ -1454,7 +1520,19 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
             {showRelatedPlaces && (
               <div style={{ display: "grid", gap: "8px" }}>
-                {placesInsideSelectedCountry.map((place) => (
+                <input
+                  value={relatedPlaceSearch}
+                  onChange={(e) => setRelatedPlaceSearch(e.target.value)}
+                  placeholder={`Search city or region in ${selectedCountryPlace.name}`}
+                  style={input}
+                />
+
+                {!relatedPlaceSearch.trim() ? (
+                  <div style={helperNote}>
+                    Start typing a city or region already listed in {selectedCountryPlace.name}.
+                  </div>
+                ) : filteredPlacesInsideSelectedCountry.length > 0 ? (
+                  filteredPlacesInsideSelectedCountry.map((place) => (
                   <button
                     key={place.id}
                     type="button"
@@ -1479,7 +1557,12 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       {getPlaceTypeLabel(place.place_type)} →
                     </span>
                   </button>
-                ))}
+                  ))
+                ) : (
+                  <div style={helperNote}>
+                    No city or region found inside {selectedCountryPlace.name}. You can create a new one.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1638,6 +1721,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   setSelectedCountryPlace(null);
                   setShowShareForm(false);
                   setShowCreatePlaceForm(false);
+                  setRelatedPlaceSearch("");
                 }}
                 style={secondaryButton}
               >

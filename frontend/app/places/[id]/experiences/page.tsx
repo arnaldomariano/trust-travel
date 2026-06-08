@@ -43,6 +43,7 @@ export default function ExperiencesPage() {
   const [relatedPlaces, setRelatedPlaces] = useState<any[]>([]);
   const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
   const [relatedPlaceSearch, setRelatedPlaceSearch] = useState("");
+  const [showCountryExperiences, setShowCountryExperiences] = useState(false);
 
 
   // =====================
@@ -107,14 +108,17 @@ export default function ExperiencesPage() {
   return createdAt >= sevenDaysAgo;
 }).length;
 
-  const pageTitle =
-      place?.place_type === "country"
-        ? `Experiences about ${place?.name || "this country"}`
-        : place?.place_type === "city"
-        ? `Experiences in ${place?.name || "this place"}`
-        : `Experiences about ${place?.name || "this place"}`;
+const pageTitle =
+  place?.place_type === "country"
+    ? `Experiences about ${place?.name || "this country"}`
+    : place?.place_type === "city"
+    ? `Experiences in ${place?.name || "this place"}`
+    : `Experiences about ${place?.name || "this place"}`;
 
-      const isCountryPage = place?.place_type === "country";
+const isCountryPage = place?.place_type === "country";
+
+const shouldShowExperienceContent =
+  !isCountryPage || showCountryExperiences || !!highlightedExperienceId;
 
   const sortedRelatedPlaces = [...relatedPlaces].sort((a, b) =>
       (a.name || "").localeCompare(b.name || "")
@@ -501,6 +505,7 @@ const loadPlace = async () => {
     setPlace(data);
     setRelatedPlaceSearch("");
     setShowRelatedPlaces(false);
+    setShowCountryExperiences(false);
 
     const destRes = await fetch(`${API_URL}/api/destinations/`);
     const destinations = await destRes.json();
@@ -1384,48 +1389,95 @@ const renderReportControls = (experience: any) => {
       )}
 
         <div
-      style={{
-        display: "flex",
-        gap: "10px",
-        flexWrap: "wrap",
-        marginTop: "12px",
-        marginBottom: "18px",
-      }}
-    >
-      <button
-        type="button"
-        onClick={() =>
-          router.push(`/destinations?mode=experience&place=${id}&share=true`)
-        }
+          style={{
+            display: "flex",
+            gap: "10px",
+            flexWrap: "wrap",
+            marginTop: "12px",
+            marginBottom: "18px",
+          }}
+        >
+          {isCountryPage && (
+            <button
+              type="button"
+              onClick={() => setShowCountryExperiences((current) => !current)}
+              style={{
+                padding: "10px 14px",
+                borderRadius: "10px",
+                border: "1px solid #ddd",
+                background: showCountryExperiences ? "#f5f5f5" : "white",
+                color: "#111",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              {showCountryExperiences
+                ? "Hide country experiences"
+                : "View country experiences"}
+            </button>
+          )}
+
+          {isCountryPage && sortedRelatedPlaces.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowRelatedPlaces(true);
+
+                setTimeout(() => {
+                  document
+                    .getElementById("related-places-section")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 0);
+              }}
+              style={{
+                padding: "10px 14px",
+                borderRadius: "10px",
+                border: "1px solid #ddd",
+                background: "white",
+                color: "#111",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              Search cities and places in {place?.name}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              router.push(`/destinations?mode=experience&place=${id}&share=true`)
+            }
+            style={{
+              padding: "10px 14px",
+              borderRadius: "10px",
+              border: "none",
+              background: "black",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            Share your experience here
+          </button>
+        </div>
+
+    {shouldShowExperienceContent && (
+      <div
         style={{
-          padding: "10px 14px",
-          borderRadius: "10px",
-          border: "none",
-          background: "black",
-          color: "white",
-          cursor: "pointer",
-          fontWeight: 700,
+          marginTop: "14px",
+          marginBottom: "24px",
+          padding: "16px",
+          border: "1px solid #eee",
+          borderRadius: "14px",
+          background: "#fafafa",
+          display: "grid",
+          gap: "10px",
         }}
       >
-        Share your experience here
-      </button>
-    </div>
-
-          <div
-      style={{
-        marginTop: "14px",
-        marginBottom: "24px",
-        padding: "16px",
-        border: "1px solid #eee",
-        borderRadius: "14px",
-        background: "#fafafa",
-        display: "grid",
-        gap: "10px",
-      }}
-    >
-      <div style={{ fontWeight: 600 }}>
-        Overview
-      </div>
+        <div style={{ fontWeight: 600 }}>
+          Overview
+        </div>
 
       <div
         style={{
@@ -1455,17 +1507,18 @@ const renderReportControls = (experience: any) => {
           </div>
         </div>
 
-        <div>
-          <div style={{ fontSize: "12px", color: "#777" }}>Recent activity</div>
-          <div style={{ fontSize: "18px", fontWeight: 700 }}>
-            {recentExperiencesCount}
-          </div>
-        </div>
-      </div>
-    </div>
+                <div>
+                  <div style={{ fontSize: "12px", color: "#777" }}>Recent activity</div>
+                  <div style={{ fontSize: "18px", fontWeight: 700 }}>
+                    {recentExperiencesCount}
+                  </div>
+                </div>
+              </div>
+            </div>
+        )}
 
     {isCountryPage && sortedRelatedPlaces.length > 0 && (
-      <section style={relatedPlacesBox}>
+      <section id="related-places-section" style={relatedPlacesBox}>
         <div>
           <div style={relatedPlacesEyebrow}>Related cities and places</div>
 
@@ -1575,7 +1628,7 @@ const renderReportControls = (experience: any) => {
       </section>
     )}
 
-          {totalExperiences === 0 && (
+     {shouldShowExperienceContent && totalExperiences === 0 && (
       <div style={emptyExperienceBox}>
         <div style={emptyExperienceEyebrow}>
           {isCountryPage
@@ -1635,7 +1688,7 @@ const renderReportControls = (experience: any) => {
       </div>
     )}
 
-    {highlightedExperience && (
+    {shouldShowExperienceContent && highlightedExperience && (
       <div
         style={{
           marginTop: "20px",
@@ -1721,7 +1774,7 @@ const renderReportControls = (experience: any) => {
       </div>
     )}
 
-      {!highlightedExperience && trendingExperiences.length > 0 && (
+      {shouldShowExperienceContent && !highlightedExperience && trendingExperiences.length > 0 && (
         <div
           style={{
             marginTop: "20px",
@@ -1826,7 +1879,7 @@ const renderReportControls = (experience: any) => {
         </div>
       )}
 
-     {trustedActivities.length > 0 && (
+     {shouldShowExperienceContent && trustedActivities.length > 0 && (
       <div
         style={{
           marginTop: "20px",
@@ -1874,8 +1927,9 @@ const renderReportControls = (experience: any) => {
       </div>
     )}
 
-      <div style={{ marginTop: "30px" }}>
-        {trustedExperiences.length > 0 && (
+            {shouldShowExperienceContent && (
+              <div style={{ marginTop: "30px" }}>
+               {trustedExperiences.length > 0 && (
           <>
             <div style={{ fontWeight: "600", marginBottom: "10px" }}>
               Trusted reviews
@@ -2493,8 +2547,9 @@ const renderReportControls = (experience: any) => {
               </>
             )}
           </>
-        )}
-      </div>
+         )}
+        </div>
+      )}
     </main>
   );
 }

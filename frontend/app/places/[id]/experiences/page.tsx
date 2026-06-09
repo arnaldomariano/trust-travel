@@ -45,6 +45,11 @@ export default function ExperiencesPage() {
   const [relatedPlaceSearch, setRelatedPlaceSearch] = useState("");
   const [showCountryExperiences, setShowCountryExperiences] = useState(false);
 
+  const [creatingRelatedPlace, setCreatingRelatedPlace] = useState(false);
+  const [confirmingRelatedPlaceCreate, setConfirmingRelatedPlaceCreate] = useState(false);
+  const [relatedPlaceCreateMessage, setRelatedPlaceCreateMessage] = useState("");
+  const [relatedPlaceCreateError, setRelatedPlaceCreateError] = useState("");
+
 
   // =====================
   // Trip plan inline picker state
@@ -125,6 +130,19 @@ const shouldShowExperienceContent =
     );
 
 const normalizedRelatedPlaceSearch = normalizeText(relatedPlaceSearch);
+
+const formatPlaceNameForCreation = (value: string) => {
+  return value
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => {
+      if (word.length <= 2) return word.toLowerCase();
+
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+};
 
 const filteredRelatedPlaces = normalizedRelatedPlaceSearch
   ? sortedRelatedPlaces.filter((relatedPlace) => {
@@ -593,7 +611,70 @@ useEffect(() => {
   localStorage.setItem("last_visit", String(now));
 }, []);
 
-  // =====================
+// =====================
+// Create related city/region inside country
+// =====================
+
+    const createRelatedCityOrRegion = async () => {
+      const placeName = formatPlaceNameForCreation(relatedPlaceSearch);
+
+      if (!placeName || !place?.name || !isCountryPage) return;
+
+      setCreatingRelatedPlace(true);
+      setRelatedPlaceCreateMessage("");
+      setRelatedPlaceCreateError("");
+
+      try {
+        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: placeName,
+            place_type: "city",
+            city: placeName,
+            country: place.name,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setRelatedPlaceCreateError(
+            data.detail || "Could not create this city or region."
+          );
+          return;
+        }
+
+        setRelatedPlaces((prev) => {
+          const alreadyExists = prev.some(
+            (relatedPlace) => relatedPlace.id === data.id
+          );
+
+          if (alreadyExists) return prev;
+
+          return [...prev, data].sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "")
+          );
+        });
+
+        setRelatedPlaceCreateMessage(
+              `${data.name} was created inside ${place.name}.`
+            );
+
+            setConfirmingRelatedPlaceCreate(false);
+            setRelatedPlaceSearch(data.name || placeName);
+      } catch (error) {
+        console.error("Create related city/region failed:", error);
+        setRelatedPlaceCreateError("Something went wrong while creating this place.");
+      } finally {
+        setCreatingRelatedPlace(false);
+      }
+    };
+
+  //==================
   // Reply actions
   // =====================
 
@@ -1553,7 +1634,12 @@ const renderReportControls = (experience: any) => {
           <div style={relatedPlacesSearchBox}>
             <input
               value={relatedPlaceSearch}
-              onChange={(event) => setRelatedPlaceSearch(event.target.value)}
+              onChange={(event) => {
+                setRelatedPlaceSearch(event.target.value);
+                setConfirmingRelatedPlaceCreate(false);
+                setRelatedPlaceCreateMessage("");
+                setRelatedPlaceCreateError("");
+              }}
               placeholder={`Search inside ${place?.name}, e.g. Bali, Java, Yogyakarta`}
               style={relatedPlacesSearchInput}
             />
@@ -1604,24 +1690,100 @@ const renderReportControls = (experience: any) => {
               </div>
             ) : (
               <div style={relatedPlacesNoResultBox}>
-                <strong>
-                  No related place found for “{relatedPlaceSearch.trim()}” inside{" "}
-                  {place?.name}.
-                </strong>
+                              <strong>
+                                No city or region found for “{relatedPlaceSearch.trim()}” inside{" "}
+                                {place?.name}.
+                              </strong>
 
-                <p style={{ margin: "8px 0 0 0", color: "#666", lineHeight: 1.5 }}>
-                  Try another spelling or search from the main place search page.
-                  Later, this step can connect to an external places API.
-                </p>
+                              <p style={{ margin: "8px 0 0 0", color: "#666", lineHeight: 1.5 }}>
+                                If this is a city, region, local area, beach, trail or small destination that
+                                should belong to {place?.name}, you can create it now as a city/region.
+                                Later, Trust Travel can refine this with external place data, photo metadata
+                                and map markers.
+                              </p>
 
-                <button
-                  type="button"
-                  onClick={() => router.push("/destinations?mode=experience")}
-                  style={relatedPlacesSearchMainButton}
-                >
-                  Search from main place page
-                </button>
-              </div>
+                              {relatedPlaceCreateError && (
+                                <div style={relatedPlaceCreateErrorBox}>
+                                  {relatedPlaceCreateError}
+                                </div>
+                              )}
+
+                              {relatedPlaceCreateMessage && (
+                                <div style={relatedPlaceCreateSuccessBox}>
+                                  {relatedPlaceCreateMessage}
+                                </div>
+                              )}
+
+                              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                                {!confirmingRelatedPlaceCreate ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setConfirmingRelatedPlaceCreate(true);
+                                      setRelatedPlaceCreateMessage("");
+                                      setRelatedPlaceCreateError("");
+                                    }}
+                                    disabled={!relatedPlaceSearch.trim()}
+                                    style={{
+                                      ...relatedPlacesSearchMainButton,
+                                      background: "black",
+                                      color: "white",
+                                      opacity: !relatedPlaceSearch.trim() ? 0.5 : 1,
+                                      cursor: !relatedPlaceSearch.trim() ? "not-allowed" : "pointer",
+                                    }}
+                                  >
+                                    Create “{formatPlaceNameForCreation(relatedPlaceSearch)}” in {place?.name}
+                                  </button>
+                                ) : (
+                                  <div style={relatedPlaceCreateConfirmBox}>
+                                    <strong>
+                                      You are creating a new city/region inside {place?.name}.
+                                    </strong>
+
+                                    <div style={{ color: "#555", lineHeight: 1.5, fontSize: "14px" }}>
+                                      Name: <strong>{formatPlaceNameForCreation(relatedPlaceSearch)}</strong>
+                                      <br />
+                                      Type: <strong>City / Region</strong>
+                                      <br />
+                                      Country: <strong>{place?.name}</strong>
+                                    </div>
+
+                                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                                      <button
+                                        type="button"
+                                        onClick={createRelatedCityOrRegion}
+                                        disabled={creatingRelatedPlace || !relatedPlaceSearch.trim()}
+                                        style={{
+                                          ...relatedPlacesSearchMainButton,
+                                          background: "black",
+                                          color: "white",
+                                          opacity: creatingRelatedPlace ? 0.5 : 1,
+                                          cursor: creatingRelatedPlace ? "not-allowed" : "pointer",
+                                        }}
+                                      >
+                                        {creatingRelatedPlace ? "Saving..." : "Confirm and save"}
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmingRelatedPlaceCreate(false)}
+                                        style={relatedPlacesSearchMainButton}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => router.push("/destinations?mode=experience")}
+                                  style={relatedPlacesSearchMainButton}
+                                >
+                                  Search from main place page
+                                </button>
+                              </div>
+                            </div>
             )}
           </div>
         )}
@@ -3011,4 +3173,32 @@ const relatedPlacesSearchMainButton = {
   color: "#111",
   cursor: "pointer",
   fontWeight: 700,
+};
+
+const relatedPlaceCreateSuccessBox = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #d7f0df",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "13px",
+};
+
+const relatedPlaceCreateErrorBox = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #f3c2c2",
+  background: "#fff5f5",
+  color: "#991b1b",
+  fontSize: "13px",
+};
+
+const relatedPlaceCreateConfirmBox = {
+  padding: "14px",
+  borderRadius: "12px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  display: "grid",
+  gap: "12px",
 };

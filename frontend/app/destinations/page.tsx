@@ -1054,7 +1054,15 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         <input
           value={searchTerm}
           onChange={(e) => {
-              setSearchTerm(e.target.value);
+              const value = e.target.value;
+
+              setSearchTerm(value);
+
+              if (placeType === "country") {
+                setNewPlaceName(value);
+                setNewPlaceCountry(value);
+                setNewPlaceCity("");
+              }
 
               if (selectedCountryPlace) {
                 setSelectedCountryPlace(null);
@@ -1063,16 +1071,16 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               if (selectedPlace) {
                 setSelectedPlace(null);
                 setShowCreatePlaceForm(false);
-              setTitle("");
-              setComment("");
-              setRating(null);
-              setExperienceShared(false);
-              setSharedExperience(null);
-              setEditingExperience(false);
-              setTripContext("prefer_not_to_say");
-              setTripStyle("prefer_not_to_say");
-            }
-          }}
+                setTitle("");
+                setComment("");
+                setRating(null);
+                setExperienceShared(false);
+                setSharedExperience(null);
+                setEditingExperience(false);
+                setTripContext("prefer_not_to_say");
+                setTripStyle("prefer_not_to_say");
+              }
+            }}
         placeholder={searchPlaceholderByType[placeType]}
         style={{
           width: "100%",
@@ -1386,40 +1394,57 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               </div>
             )}
 
-          <div style={createPlaceForm}>
-            <input
-              value={newPlaceName}
-              onChange={(e) => setNewPlaceName(e.target.value)}
-              placeholder={placeNamePlaceholderByType[placeType]}
-              style={input}
-            />
+            <div style={createPlaceForm}>
+              <input
+                value={newPlaceName}
+                onChange={(e) => {
+                  const value = e.target.value;
 
-            <input
-              value={newPlaceCity}
-              onChange={(e) => setNewPlaceCity(e.target.value)}
-              placeholder={cityPlaceholderByType[placeType]}
-              style={input}
-            />
+                  setNewPlaceName(value);
 
-            <input
-              value={newPlaceCountry}
-              onChange={(e) => setNewPlaceCountry(e.target.value)}
-              placeholder={countryPlaceholderByType[placeType]}
-              style={input}
-            />
+                  if (placeType === "country") {
+                    setNewPlaceCountry(value);
+                    setNewPlaceCity("");
+                  }
+                }}
+                placeholder={placeNamePlaceholderByType[placeType]}
+                style={input}
+              />
 
-            <button
-              onClick={handleCreatePlace}
-              disabled={!canCreatePlace || creatingPlace}
-              style={{
-                ...primaryButton,
-                opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
-                cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
-              }}
-            >
-              {creatingPlace ? "Creating..." : "Create this place"}
-            </button>
-          </div>
+              {placeType !== "country" && (
+                <input
+                  value={newPlaceCity}
+                  onChange={(e) => setNewPlaceCity(e.target.value)}
+                  placeholder={cityPlaceholderByType[placeType]}
+                  style={input}
+                />
+              )}
+
+              {placeType !== "country" && (
+                <input
+                  value={newPlaceCountry}
+                  onChange={(e) => setNewPlaceCountry(e.target.value)}
+                  placeholder={countryPlaceholderByType[placeType]}
+                  style={input}
+                />
+              )}
+
+              <button
+                onClick={handleCreatePlace}
+                disabled={!canCreatePlace || creatingPlace}
+                style={{
+                  ...primaryButton,
+                  opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
+                  cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
+                }}
+              >
+                {creatingPlace
+                  ? "Creating..."
+                  : placeType === "country"
+                  ? "Create country"
+                  : "Create this place"}
+              </button>
+            </div>
         </section>
       )}
 

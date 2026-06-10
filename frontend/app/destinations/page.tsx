@@ -114,7 +114,6 @@ useEffect(() => {
   // =========================
   // Search and filtering
   // =========================
-  const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const normalizeText = (value?: string) =>
   (value || "")
@@ -285,42 +284,6 @@ const filteredPlaces = places
     return (a.name || "").localeCompare(b.name || "");
   });
 
-const countryMatches = filteredPlaces.filter(
-  (place) => place.place_type === "country"
-);
-
-const relatedNonCountryPlaces = filteredPlaces.filter((place) => {
-  if (place.place_type === "country") return false;
-
-  // When the user is searching by country, keep the first result focused
-  // on the country itself. Cities/regions will appear after selecting the country.
-  if (placeType === "country") return false;
-
-  return true;
-});
-
-const hasCountryMatch = countryMatches.length > 0;
-
-const isPlaceInsideCountry = (place: any, countryPlace: any) => {
-  if (!place || !countryPlace) return false;
-  if (place.place_type === "country") return false;
-
-  const selectedCountryName = normalizeText(countryPlace.name);
-  const selectedCountryCode = normalizeText(countryPlace.country_code);
-  const selectedDestinationCountry = normalizeText(countryPlace.destination_country);
-
-  const placeCountry = normalizeText(place.destination_country);
-  const placeDestinationName = normalizeText(place.destination_name);
-  const placeCountryCode = normalizeText(place.country_code);
-
-  return (
-    placeCountry === selectedCountryName ||
-    placeDestinationName === selectedCountryName ||
-    placeCountryCode === selectedCountryCode ||
-    placeCountry === selectedDestinationCountry
-  );
-};
-
 const placesInsideSelectedCountry = selectedCountryPlace
   ? places
       .filter((place) => {
@@ -366,16 +329,6 @@ const filteredPlacesInsideSelectedCountry = normalizedRelatedPlaceSearch
   : [];
 
   const canCreatePlace = !!newPlaceName.trim();
-
-  const placeTypeLabels: Record<typeof placeType, string> = {
-  country: "Country",
-  city: "City / Region",
-  attraction: "Tourist attraction",
-  hotel: "Hotel",
-  restaurant: "Restaurant / Café",
-  nature: "Beach / Nature spot",
-  other: "Other",
-};
 
 const searchPlaceholderByType: Record<typeof placeType, string> = {
   country: "Search a country, e.g. Laos, Brazil, Italy",
@@ -563,39 +516,6 @@ const placeTypeOptionsToShow =
   selectedCountryPlace || selectedPlace
     ? [...primaryPlaceTypeOptions, ...specificPlaceTypeOptions]
     : primaryPlaceTypeOptions;
-
-  // =========================
-// Open create-place form from an existing search
-// =========================
-const openCreatePlaceFromSearch = () => {
-  const search = searchTerm.trim();
-
-  setSelectedPlace(null);
-  setCreatedPlaceId(null);
-  setShowShareForm(false);
-  setExperienceShared(false);
-  setSharedExperience(null);
-  setEditingExperience(false);
-
-  setNewPlaceName("");
-
-  if (placeType === "country") {
-    setNewPlaceName(search);
-    setNewPlaceCity("");
-    setNewPlaceCountry(search);
-  } else {
-    setNewPlaceCity("");
-    setNewPlaceCountry(search);
-  }
-
-  setShowCreatePlaceForm(true);
-
-  setTimeout(() => {
-    document
-      .getElementById("create-place-form")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 0);
-};
 
   // =========================
   // Create a basic place
@@ -2127,22 +2047,6 @@ const similarPlaceButton = {
   color: "#111",
   textAlign: "left" as const,
   cursor: "pointer",
-};
-
-const createAnotherPlaceBox = {
-  padding: "16px",
-  borderRadius: "14px",
-  border: "1px solid #ddd",
-  background: "#fafafa",
-  display: "grid",
-  gap: "10px",
-};
-
-const createAnotherPlaceText = {
-  margin: 0,
-  color: "#666",
-  fontSize: "14px",
-  lineHeight: 1.5,
 };
 
 const helperNote = {

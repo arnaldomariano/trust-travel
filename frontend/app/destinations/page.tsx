@@ -126,22 +126,62 @@ useEffect(() => {
 const normalizedSearchText = normalizeText(searchTerm);
 
 const getSimilarityScore = (place: any) => {
-  const placeName = normalizeText(place.name);
-  const placeCity = normalizeText(place.city || place.destination_name);
-  const placeCountry = normalizeText(place.destination_country);
-
   if (!normalizedSearchText) return 0;
 
-  if (placeName === normalizedSearchText) return 100;
-  if (placeName.startsWith(normalizedSearchText)) return 90;
-  if (placeName.includes(normalizedSearchText)) return 80;
+  const placeName = normalizeText(place.name);
+  const placeCity = normalizeText(place.city || place.destination_name);
 
-  if (normalizedSearchText.includes(placeName) && placeName.length >= 4) {
-    return 75;
+  const isCountrySearch = placeType === "country";
+  const isCitySearch = placeType === "city";
+  const isSpecificSearch = placeType !== "country" && placeType !== "city";
+
+  // Country mode must only suggest countries.
+  if (isCountrySearch) {
+    if (place.place_type !== "country") return 0;
+
+    if (placeName === normalizedSearchText) return 100;
+    if (placeName.startsWith(normalizedSearchText)) return 90;
+    if (placeName.includes(normalizedSearchText)) return 80;
+
+    return 0;
   }
 
-  if (placeCity.includes(normalizedSearchText)) return 60;
-  if (placeCountry.includes(normalizedSearchText)) return 50;
+  // City / Region mode must only suggest cities/regions.
+  // It should not suggest a city only because its country matches the search.
+  if (isCitySearch) {
+    if (place.place_type !== "city") return 0;
+
+    if (placeName === normalizedSearchText) return 100;
+    if (placeName.startsWith(normalizedSearchText)) return 90;
+    if (placeName.includes(normalizedSearchText)) return 80;
+
+    if (normalizedSearchText.length >= 4 && placeCity.includes(normalizedSearchText)) {
+      return 60;
+    }
+
+    return 0;
+  }
+
+  // Specific place types should only be suggested after a country is selected.
+  if (isSpecificSearch) {
+    if (!selectedCountryPlace) return 0;
+    if (place.place_type !== placeType) return 0;
+
+    const selectedCountryName = normalizeText(selectedCountryPlace.name);
+    const placeCountry = normalizeText(place.destination_country);
+
+    if (placeCountry !== selectedCountryName) return 0;
+
+    if (placeName === normalizedSearchText) return 100;
+    if (placeName.startsWith(normalizedSearchText)) return 90;
+    if (placeName.includes(normalizedSearchText)) return 80;
+
+    if (normalizedSearchText.length >= 4 && placeCity.includes(normalizedSearchText)) {
+      return 60;
+    }
+
+    return 0;
+  }
 
   return 0;
 };
@@ -1125,8 +1165,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         attractions, hotels, restaurants, nature spots or other specific places inside that country.
       </div>
 
-            ) : filteredPlaces.length > 0 ? (
+    ) : filteredPlaces.length > 0 && !selectedCountryPlace && !selectedPlace ? (
       <section style={{ display: "grid", gap: "18px", maxWidth: "620px" }}>
+
         <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
           We found existing places related to your search and selected type.
           Start with a country when needed, then choose a city, region or specific place.

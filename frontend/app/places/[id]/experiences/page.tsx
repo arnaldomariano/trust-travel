@@ -47,6 +47,7 @@ export default function ExperiencesPage() {
 
   const [creatingRelatedPlace, setCreatingRelatedPlace] = useState(false);
   const [confirmingRelatedPlaceCreate, setConfirmingRelatedPlaceCreate] = useState(false);
+  const [createdRelatedPlace, setCreatedRelatedPlace] = useState<any>(null);
   const [relatedPlaceCreateMessage, setRelatedPlaceCreateMessage] = useState("");
   const [relatedPlaceCreateError, setRelatedPlaceCreateError] = useState("");
 
@@ -620,9 +621,10 @@ useEffect(() => {
 
       if (!placeName || !place?.name || !isCountryPage) return;
 
-      setCreatingRelatedPlace(true);
-      setRelatedPlaceCreateMessage("");
-      setRelatedPlaceCreateError("");
+        setCreatingRelatedPlace(true);
+        setCreatedRelatedPlace(null);
+        setRelatedPlaceCreateMessage("");
+        setRelatedPlaceCreateError("");
 
       try {
         const res = await fetch(`${API_URL}/api/places/create-basic/`, {
@@ -660,12 +662,14 @@ useEffect(() => {
           );
         });
 
-        setRelatedPlaceCreateMessage(
-              `${data.name} was created inside ${place.name}.`
-            );
+        setCreatedRelatedPlace(data);
 
-            setConfirmingRelatedPlaceCreate(false);
-            setRelatedPlaceSearch(data.name || placeName);
+        setRelatedPlaceCreateMessage(
+          `${data.name} was created inside ${place.name}.`
+        );
+
+        setConfirmingRelatedPlaceCreate(false);
+        setRelatedPlaceSearch(data.name || placeName);
       } catch (error) {
         console.error("Create related city/region failed:", error);
         setRelatedPlaceCreateError("Something went wrong while creating this place.");
@@ -1495,32 +1499,6 @@ const renderReportControls = (experience: any) => {
               {showCountryExperiences
                 ? "Hide country experiences"
                 : "View country experiences"}
-            </button>
-          )}
-
-          {isCountryPage && sortedRelatedPlaces.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowRelatedPlaces(true);
-
-                setTimeout(() => {
-                  document
-                    .getElementById("related-places-section")
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }, 0);
-              }}
-              style={{
-                padding: "10px 14px",
-                borderRadius: "10px",
-                border: "1px solid #ddd",
-                background: "white",
-                color: "#111",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              Search cities and places in {place?.name}
             </button>
           )}
 

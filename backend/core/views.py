@@ -227,37 +227,49 @@ class CreateBasicPlaceView(APIView):
         if place_type not in valid_place_types:
             place_type = "city"
 
-        # Optional geographic/external fields.
-        # These are not required now, but prepare the endpoint for maps,
-        # photo metadata, and future external place lookup integrations.
+        if not name:
+            return Response({"detail": "Place name is required."}, status=400)
+
+        if place_type == "country":
+            city = ""
+            country = country or name
+            destination_name = name
+        else:
+            if not country:
+                return Response(
+                    {"detail": "Country is required for this place type."},
+                    status=400,
+                )
+
+            destination_name = city or name
+
         latitude = request.data.get("latitude")
         longitude = request.data.get("longitude")
         external_source = (request.data.get("external_source") or "").strip()
         external_id = (request.data.get("external_id") or "").strip()
 
-        if not name:
-            return Response({"detail": "Place name is required."}, status=400)
-
-        destination_name = city or name
-
-        destination, _ = Destination.objects.get_or_create(
+        destination = Destination.objects.filter(
             name__iexact=destination_name,
-            defaults={
-                "name": destination_name,
-                "country": country,
-                "city": city,
-            },
-        )
+            country__iexact=country,
+        ).first()
+
+        if not destination:
+            destination = Destination.objects.create(
+                name=destination_name,
+                country=country,
+                city=city,
+            )
 
         existing_place = Place.objects.filter(
             name__iexact=name,
+            place_type=place_type,
             destination=destination,
         ).first()
 
         if existing_place:
             serializer = PlaceSerializer(
                 existing_place,
-                context={"request": request}
+                context={"request": request},
             )
             return Response(serializer.data, status=200)
 

@@ -1299,8 +1299,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           </div>
         )}
       </section>
-    ) : (
-      <section style={helperCard}>
+        ) : !selectedCountryPlace && !selectedPlace ? (
+            <section style={helperCard}>
           <strong>No exact place found for “{searchTerm.trim()}”.</strong>
 
           <p
@@ -1406,8 +1406,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   : "Create this place"}
               </button>
             </div>
-        </section>
-      )}
+          </section>
+      ) : null}
 
            {selectedCountryPlace && !selectedPlace && (
       <section

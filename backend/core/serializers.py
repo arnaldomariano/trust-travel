@@ -37,6 +37,27 @@ class DestinationSerializer(serializers.ModelSerializer):
         model = Destination
         fields = "__all__"
 
+    def validate(self, attrs):
+        name = attrs.get("name")
+        country = attrs.get("country")
+
+        if name and country:
+            existing_destination = Destination.objects.filter(
+                name__iexact=name.strip(),
+                country=country,
+            )
+
+            if self.instance:
+                existing_destination = existing_destination.exclude(pk=self.instance.pk)
+
+            if existing_destination.exists():
+                raise serializers.ValidationError(
+                    {
+                        "name": "A destination with this name already exists for this country."
+                    }
+                )
+
+        return attrs
 
 class PlaceSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
@@ -442,10 +463,7 @@ class ContentReportSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
-    update_title = serializers.CharField(
-        source="update.title",
-        read_only=True,
-    )
+    update_title = serializers.SerializerMethodField()
 
     place_name = serializers.CharField(
         source="place.name",

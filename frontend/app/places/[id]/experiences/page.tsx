@@ -430,7 +430,6 @@ const otherExperiences = sortedExperiences.filter(
           console.error("Invalid JSON:", text);
           return [experience.id, []];
         }
-          return [experience.id, Array.isArray(replies) ? replies : []];
         } catch (error) {
           console.error(error);
           return [experience.id, []];
@@ -469,7 +468,6 @@ const otherExperiences = sortedExperiences.filter(
   useEffect(() => {
     if (!id) return;
 
-    const token = localStorage.getItem("access");
 const loadCurrentUser = async () => {
   try {
     const res = await fetch(`${API_URL}/api/me/`, {
@@ -1687,10 +1685,49 @@ const renderReportControls = (experience: any) => {
                               )}
 
                               {relatedPlaceCreateMessage && (
-                                <div style={relatedPlaceCreateSuccessBox}>
-                                  {relatedPlaceCreateMessage}
-                                </div>
-                              )}
+                                  <div style={relatedPlaceCreateSuccessBox}>
+                                    <strong>{relatedPlaceCreateMessage}</strong>
+
+                                    {createdRelatedPlace && (
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          gap: "10px",
+                                          flexWrap: "wrap",
+                                          marginTop: "12px",
+                                        }}
+                                      >
+                                        <Link
+                                          href={`/places/${createdRelatedPlace.id}/experiences`}
+                                          style={relatedPlaceCreateSuccessLink}
+                                        >
+                                          View {createdRelatedPlace.name} page
+                                        </Link>
+
+                                        <Link
+                                          href={`/destinations?mode=experience&place=${createdRelatedPlace.id}&share=true`}
+                                          style={relatedPlaceCreateSuccessLink}
+                                        >
+                                          Share first experience
+                                        </Link>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setRelatedPlaceSearch("");
+                                            setCreatedRelatedPlace(null);
+                                            setRelatedPlaceCreateMessage("");
+                                            setRelatedPlaceCreateError("");
+                                            setConfirmingRelatedPlaceCreate(false);
+                                          }}
+                                          style={relatedPlaceCreateSuccessButton}
+                                        >
+                                          Search another city/place
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
 
                               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                                 {!confirmingRelatedPlaceCreate ? (
@@ -3160,6 +3197,29 @@ const relatedPlaceCreateSuccessBox = {
   background: "#f2fbf5",
   color: "#166534",
   fontSize: "13px",
+};
+
+const relatedPlaceCreateSuccessLink = {
+  display: "inline-block",
+  padding: "8px 12px",
+  borderRadius: "10px",
+  border: "1px solid #166534",
+  background: "#166534",
+  color: "white",
+  textDecoration: "none",
+  fontSize: "13px",
+  fontWeight: 700,
+};
+
+const relatedPlaceCreateSuccessButton = {
+  padding: "8px 12px",
+  borderRadius: "10px",
+  border: "1px solid #d7f0df",
+  background: "white",
+  color: "#166534",
+  cursor: "pointer",
+  fontSize: "13px",
+  fontWeight: 700,
 };
 
 const relatedPlaceCreateErrorBox = {

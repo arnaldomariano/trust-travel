@@ -125,6 +125,14 @@ class Destination(models.Model):
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "country"],
+                name="unique_destination_name_country",
+            )
+        ]
+
     def __str__(self):
         return f"{self.name} ({self.country})" if self.country else self.name
 

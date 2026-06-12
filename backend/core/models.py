@@ -203,6 +203,14 @@ class Place(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["destination", "name"],
+                name="unique_place_name_per_destination",
+            )
+        ]
+
     def __str__(self):
         return self.name
 

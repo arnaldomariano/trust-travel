@@ -241,7 +241,12 @@ class CreateBasicPlaceView(APIView):
                     status=400,
                 )
 
-            destination_name = city or name
+            # For cities, regions, attractions, hotels, restaurants and nature spots,
+            # the Destination should remain the country/main destination.
+            # Example:
+            # Destination: Indonesia
+            # Place: Nias, Bali, Jakarta, Lombok
+            destination_name = country
 
         latitude = request.data.get("latitude")
         longitude = request.data.get("longitude")
@@ -262,7 +267,6 @@ class CreateBasicPlaceView(APIView):
 
         existing_place = Place.objects.filter(
             name__iexact=name,
-            place_type=place_type,
             destination=destination,
         ).first()
 

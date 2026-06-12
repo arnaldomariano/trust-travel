@@ -542,9 +542,11 @@ const placeTypeOptionsToShow =
               ? newPlaceCity.trim() || newPlaceName.trim()
               : newPlaceCity.trim(),
           country:
-            placeType === "country"
-              ? newPlaceName.trim()
-              : newPlaceCountry.trim(),
+              placeType === "country"
+                ? newPlaceName.trim()
+                : selectedCountryPlace
+                ? selectedCountryPlace.name
+                : newPlaceCountry.trim(),
         }),
       });
 
@@ -689,13 +691,18 @@ if (isUpdateMode) {
   // =========================
   // Select an existing place
   // =========================
-  const handleSelectExistingPlace = (place: any) => {
+const handleSelectExistingPlace = (place: any) => {
   if (isUpdateMode) {
     router.push(`/create?place=${place.id}`);
     return;
   }
 
-    const isSameSelectedPlace = selectedPlace?.id === place.id;
+  if (!isExperienceMode) {
+    router.push(`/places/${place.id}/experiences`);
+    return;
+  }
+
+  const isSameSelectedPlace = selectedPlace?.id === place.id;
 
     setSelectedPlace(place);
     setCreatedPlaceId(null);

@@ -44,6 +44,7 @@ export default function ExperiencesPage() {
   const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
   const [relatedPlaceSearch, setRelatedPlaceSearch] = useState("");
   const [showCountryExperiences, setShowCountryExperiences] = useState(false);
+  const [parentCountryPlace, setParentCountryPlace] = useState<any>(null);
 
   const [creatingRelatedPlace, setCreatingRelatedPlace] = useState(false);
   const [confirmingRelatedPlaceCreate, setConfirmingRelatedPlaceCreate] = useState(false);
@@ -533,15 +534,31 @@ const loadPlace = async () => {
 
     setDestination(foundDestination);
 
+    const placesRes = await fetch(`${API_URL}/api/places/`);
+
+    if (!placesRes.ok) {
+      setRelatedPlaces([]);
+      setParentCountryPlace(null);
+      return;
+    }
+
+    const placesData = await placesRes.json();
+
+    const parentCountry =
+      Array.isArray(placesData)
+        ? placesData.find((candidate: any) => {
+            if (candidate.place_type !== "country") return false;
+
+            return (
+              Number(candidate.destination) === Number(data.destination) ||
+              normalizeText(candidate.name) === normalizeText(data.destination_country)
+            );
+          })
+        : null;
+
+    setParentCountryPlace(parentCountry || null);
+
     if (data.place_type === "country") {
-      const placesRes = await fetch(`${API_URL}/api/places/`);
-
-      if (!placesRes.ok) {
-        setRelatedPlaces([]);
-        return;
-      }
-
-      const placesData = await placesRes.json();
       const countryName = normalizeText(data.name);
 
       const related = Array.isArray(placesData)
@@ -1574,7 +1591,7 @@ const renderReportControls = (experience: any) => {
             </div>
         )}
 
-    {isCountryPage && sortedRelatedPlaces.length > 0 && (
+    {isCountryPage && (
       <section id="related-places-section" style={relatedPlacesBox}>
         <div>
           <div style={relatedPlacesEyebrow}>Related cities and places</div>
@@ -1844,13 +1861,15 @@ const renderReportControls = (experience: any) => {
               : `Share the first experience in ${place?.name || "this place"}`}
           </button>
 
-          {!isCountryPage && place?.destination && (
+                    {!isCountryPage && parentCountryPlace && (
             <button
               type="button"
-              onClick={() => router.push(`/places/${place.destination}/experiences`)}
+              onClick={() =>
+                router.push(`/places/${parentCountryPlace.id}/experiences`)
+              }
               style={emptyExperienceSecondaryButton}
             >
-              Back to {place?.destination_country || "country"}
+              Back to {place?.destination_country || parentCountryPlace.name || "country"}
             </button>
           )}
 

@@ -166,6 +166,9 @@ export default function TripPlanDetailPage() {
 
   const [radar, setRadar] = useState<TripRadar | null>(null);
   const [radarLoading, setRadarLoading] = useState(false);
+  const [radarFilter, setRadarFilter] = useState<
+    "all" | "experiences" | "places" | "updates"
+  >("all");
 
   const [editingPlan, setEditingPlan] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
@@ -810,18 +813,50 @@ const resetSuggestionsSearch = async () => {
       </p>
 
       {radar.has_related_content ? (
-        <div style={radarStatsRow}>
-          <span style={radarStatBadge}>
+       <div style={radarStatsRow}>
+          <button
+            type="button"
+            onClick={() => setRadarFilter("all")}
+            style={{
+              ...radarStatButton,
+              ...(radarFilter === "all" ? radarStatButtonActive : {}),
+            }}
+          >
+            All
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRadarFilter("experiences")}
+            style={{
+              ...radarStatButton,
+              ...(radarFilter === "experiences" ? radarStatButtonActive : {}),
+            }}
+          >
             {radar.related_experiences_count} experiences
-          </span>
+          </button>
 
-          <span style={radarStatBadge}>
+          <button
+            type="button"
+            onClick={() => setRadarFilter("places")}
+            style={{
+              ...radarStatButton,
+              ...(radarFilter === "places" ? radarStatButtonActive : {}),
+            }}
+          >
             {radar.related_places_count} places
-          </span>
+          </button>
 
-          <span style={radarStatBadge}>
+          <button
+            type="button"
+            onClick={() => setRadarFilter("updates")}
+            style={{
+              ...radarStatButton,
+              ...(radarFilter === "updates" ? radarStatButtonActive : {}),
+            }}
+          >
             {radar.related_updates_count} updates
-          </span>
+          </button>
         </div>
       ) : (
         <p style={radarText}>
@@ -831,7 +866,8 @@ const resetSuggestionsSearch = async () => {
         </p>
       )}
 
-      {radar.recommended_experiences?.length > 0 && (
+      {(radarFilter === "all" || radarFilter === "experiences") &&
+        radar.recommended_experiences?.length > 0 && (
         <div style={radarSubsection}>
           <h3 style={radarSubsectionTitle}>Recommended experiences</h3>
 
@@ -913,7 +949,8 @@ const resetSuggestionsSearch = async () => {
         </div>
       )}
 
-      {radar.related_places?.length > 0 && (
+      {(radarFilter === "all" || radarFilter === "places") &&
+          radar.related_places?.length > 0 && (
         <div style={radarSubsection}>
           <h3 style={radarSubsectionTitle}>Places to watch</h3>
 
@@ -976,7 +1013,8 @@ const resetSuggestionsSearch = async () => {
             </div>
           )}
 
-          {radar.related_updates?.length > 0 && (
+          {(radarFilter === "all" || radarFilter === "updates") &&
+            radar.related_updates?.length > 0 && (
             <div style={radarSubsection}>
               <h3 style={radarSubsectionTitle}>Alerts, events and useful info</h3>
 
@@ -1785,7 +1823,7 @@ const radarStatsRow = {
   flexWrap: "wrap" as const,
 };
 
-const radarStatBadge = {
+const radarStatButton = {
   display: "inline-block",
   padding: "6px 10px",
   borderRadius: "999px",
@@ -1794,6 +1832,13 @@ const radarStatBadge = {
   color: "#333",
   fontSize: "13px",
   fontWeight: 700,
+  cursor: "pointer",
+};
+
+const radarStatButtonActive = {
+  background: "black",
+  color: "white",
+  border: "1px solid black",
 };
 
 const radarSubsection = {

@@ -43,6 +43,7 @@ from .views import (
     PlannerCountriesAnalyticsView,
     ContentReportListCreateView,
     ContentReportDetailView,
+    TripPlanActivitySummaryView,
 
 )
 
@@ -75,6 +76,12 @@ urlpatterns = [
     path(
         "trip-plans/<int:pk>/experiences/<int:experience_id>/",
         TripPlanExperienceView.as_view(),
+    ),
+
+    path(
+        "trip-plans/activity/",
+        TripPlanActivitySummaryView.as_view(),
+        name="trip-plan-activity-summary",
     ),
 
     path(

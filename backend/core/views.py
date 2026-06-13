@@ -948,6 +948,69 @@ class TripPlanRadarView(APIView):
             }
         )
 
+class TripPlanActivitySummaryView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        plans = TripPlan.objects.filter(user=request.user)
+
+        plans_with_activity_count = 0
+        total_related_count = 0
+
+        for plan in plans:
+            query = (plan.destination_text or plan.title or "").strip()
+
+            if not query:
+                continue
+
+            related_experiences_count = Experience.objects.filter(
+                Q(title__icontains=query)
+                | Q(comment__icontains=query)
+                | Q(place__name__icontains=query)
+                | Q(place__city__icontains=query)
+                | Q(place__destination__name__icontains=query)
+                | Q(place__destination__country__icontains=query)
+                | Q(place__destination__city__icontains=query)
+            ).count()
+
+            related_places_count = Place.objects.filter(
+                Q(name__icontains=query)
+                | Q(city__icontains=query)
+                | Q(destination__name__icontains=query)
+                | Q(destination__country__icontains=query)
+                | Q(destination__city__icontains=query)
+            ).count()
+
+            related_updates_count = Update.objects.filter(
+                Q(title__icontains=query)
+                | Q(text__icontains=query)
+                | Q(category__icontains=query)
+                | Q(place__name__icontains=query)
+                | Q(place__city__icontains=query)
+                | Q(place__destination__name__icontains=query)
+                | Q(place__destination__country__icontains=query)
+                | Q(place__destination__city__icontains=query)
+            ).count()
+
+            plan_related_count = (
+                related_experiences_count
+                + related_places_count
+                + related_updates_count
+            )
+
+            if plan_related_count > 0:
+                plans_with_activity_count += 1
+                total_related_count += plan_related_count
+
+        return Response(
+            {
+                "has_activity": total_related_count > 0,
+                "plans_with_activity_count": plans_with_activity_count,
+                "total_related_count": total_related_count,
+            }
+        )
+
 # ============================================================
 # UPDATE SERIALIZER HELPER
 # ============================================================

@@ -149,6 +149,11 @@ export default function TripPlanDetailPage() {
   const [loading, setLoading] = useState(true);
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
 
+  const [pendingRemove, setPendingRemove] = useState<{
+    type: "experience" | "place";
+    item: SavedItem | SavedPlace;
+  } | null>(null);
+
   const [suggestions, setSuggestions] = useState<TripSuggestion[]>([]);
   const [relatedPlaces, setRelatedPlaces] = useState<RelatedPlace[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -327,15 +332,7 @@ const loadSuggestions = async () => {
 
   const removeExperienceFromPlan = async (item: SavedItem) => {
     if (!plan) return;
-
-    const confirmed = window.confirm(
-      "Remove this experience from your trip plan?"
-    );
-
-    if (!confirmed) return;
-
     clearActionFeedback();
-
     setRemovingItemId(item.id);
 
     try {
@@ -531,12 +528,6 @@ const saveRadarPlaceToPlan = async (place: RadarPlace) => {
 const removePlaceFromPlan = async (savedPlace: SavedPlace) => {
   if (!plan) return;
 
-  const confirmed = window.confirm(
-    "Remove this place from your trip plan?"
-  );
-
-  if (!confirmed) return;
-
   clearActionFeedback();
   setRemovingPlaceId(savedPlace.id);
 
@@ -582,6 +573,26 @@ const removePlaceFromPlan = async (savedPlace: SavedPlace) => {
   } finally {
     setRemovingPlaceId(null);
   }
+};
+
+const confirmPendingRemove = async () => {
+  if (!pendingRemove) return;
+
+  const itemToRemove = pendingRemove;
+  setPendingRemove(null);
+
+  if (itemToRemove.type === "experience") {
+    await removeExperienceFromPlan(itemToRemove.item as SavedItem);
+    return;
+  }
+
+  if (itemToRemove.type === "place") {
+    await removePlaceFromPlan(itemToRemove.item as SavedPlace);
+  }
+};
+
+const cancelPendingRemove = () => {
+  setPendingRemove(null);
 };
 
 const saveTripPlanChanges = async () => {
@@ -1267,7 +1278,12 @@ const resetSuggestionsSearch = async () => {
 
                     <button
                       type="button"
-                      onClick={() => removeExperienceFromPlan(item)}
+                      onClick={() =>
+                        setPendingRemove({
+                          type: "experience",
+                          item,
+                        })
+                      }
                       disabled={removingItemId === item.id}
                       style={{
                         ...dangerButton,
@@ -1350,20 +1366,25 @@ const resetSuggestionsSearch = async () => {
                   </Link>
 
                   <button
-                    type="button"
-                    onClick={() => removePlaceFromPlan(savedPlace)}
-                    disabled={removingPlaceId === savedPlace.id}
-                    style={{
-                      ...dangerButton,
-                      opacity: removingPlaceId === savedPlace.id ? 0.5 : 1,
-                      cursor:
-                        removingPlaceId === savedPlace.id
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
-                  >
-                    {removingPlaceId === savedPlace.id ? "Removing..." : "Remove"}
-                  </button>
+                      type="button"
+                      onClick={() =>
+                        setPendingRemove({
+                          type: "place",
+                          item: savedPlace,
+                        })
+                      }
+                      disabled={removingPlaceId === savedPlace.id}
+                      style={{
+                        ...dangerButton,
+                        opacity: removingPlaceId === savedPlace.id ? 0.5 : 1,
+                        cursor:
+                          removingPlaceId === savedPlace.id
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      {removingPlaceId === savedPlace.id ? "Removing..." : "Remove"}
+                    </button>
                 </div>
               </article>
             ))}
@@ -1622,6 +1643,56 @@ const resetSuggestionsSearch = async () => {
           </div>
         )}
       </section>
+
+        {pendingRemove && (
+          <div style={removeConfirmOverlay}>
+            <section style={removeConfirmBox}>
+              <div>
+                <div style={removeConfirmEyebrow}>
+                  Remove from trip plan
+                </div>
+
+                <h2 style={removeConfirmTitle}>
+                  {pendingRemove.type === "experience"
+                    ? "Remove this experience from your trip?"
+                    : "Remove this place from your trip?"}
+                </h2>
+
+                <p style={removeConfirmText}>
+                  {pendingRemove.type === "experience"
+                    ? "This will only remove the experience from this trip plan. The original experience will remain available on Trust Travel."
+                    : "This will only remove the place from this trip plan. The place and its related experiences will remain available on Trust Travel."}
+                </p>
+
+                <p style={removeConfirmItem}>
+                  {pendingRemove.type === "experience"
+                    ? (pendingRemove.item as SavedItem).title ||
+                      (pendingRemove.item as SavedItem).place ||
+                      "Saved experience"
+                    : (pendingRemove.item as SavedPlace).name || "Saved place"}
+                </p>
+              </div>
+
+              <div style={actions}>
+                <button
+                  type="button"
+                  onClick={cancelPendingRemove}
+                  style={secondaryButton}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={confirmPendingRemove}
+                  style={dangerButton}
+                >
+                  Remove from plan
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
 
     </main>
   );
@@ -2088,3 +2159,55 @@ const alreadySavedBadge = {
   fontWeight: 700,
 };
 
+const removeConfirmBox = {
+  width: "100%",
+  maxWidth: "520px",
+  padding: "20px",
+  borderRadius: "16px",
+  border: "1px solid #f3c2c2",
+  background: "white",
+  display: "grid",
+  gap: "14px",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+};
+
+const removeConfirmEyebrow = {
+  fontSize: "13px",
+  color: "#991b1b",
+  fontWeight: 700,
+  marginBottom: "4px",
+};
+
+const removeConfirmTitle = {
+  margin: 0,
+  fontSize: "20px",
+  color: "#111",
+};
+
+const removeConfirmText = {
+  margin: "8px 0 0 0",
+  color: "#555",
+  lineHeight: 1.5,
+  fontSize: "14px",
+};
+
+const removeConfirmItem = {
+  margin: "10px 0 0 0",
+  padding: "10px 12px",
+  borderRadius: "10px",
+  background: "white",
+  border: "1px solid #f3d1d1",
+  color: "#111",
+  fontWeight: 700,
+};
+
+const removeConfirmOverlay = {
+  position: "fixed" as const,
+  inset: 0,
+  background: "rgba(0, 0, 0, 0.35)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "20px",
+  zIndex: 1000,
+};

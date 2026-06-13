@@ -129,6 +129,12 @@ type RadarUpdate = {
 
 type TripRadar = {
   query: string;
+  destination_text?: string;
+  watch_mode?: "radar_watchlist" | "saved_places" | "destination_text";
+  watched_places_count?: number;
+  explicit_watched_places_count?: number;
+  saved_places_count?: number;
+  watched_places?: RadarPlace[];
   related_experiences_count: number;
   related_places_count: number;
   related_updates_count: number;
@@ -823,6 +829,55 @@ const resetSuggestionsSearch = async () => {
           for this trip, even if they are not saved as trip places.
       </p>
 
+        {radar.watch_mode === "radar_watchlist" &&
+          radar.watched_places &&
+          radar.watched_places.length > 0 && (
+            <div style={radarSubsection}>
+              <h3 style={radarSubsectionTitle}>Radar watchlist</h3>
+
+              <p style={radarSmallText}>
+                These are the places Trust Radar is monitoring for this trip. They do not
+                need to be saved as trip places.
+              </p>
+
+              <div style={radarMiniList}>
+                {radar.watched_places.map((place) => (
+                  <article key={place.id} style={radarMiniCard}>
+                    <div style={label}>Watched by Trust Radar</div>
+
+                    <h4 style={radarMiniTitle}>{place.name}</h4>
+
+                    <div style={placeText}>
+                      {place.place_type}
+                      {place.destination_name && place.destination_name !== place.name
+                        ? ` · ${place.destination_name}`
+                        : ""}
+                      {place.destination_country
+                        ? ` · ${place.destination_country}`
+                        : ""}
+                    </div>
+
+                    <div style={actions}>
+                      <Link
+                        href={`/places/${place.id}`}
+                        style={secondaryLink}
+                      >
+                        View place
+                      </Link>
+
+                      <Link
+                        href={`/places/${place.id}/experiences`}
+                        style={primaryLink}
+                      >
+                        View experiences
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+
       {radar.has_related_content ? (
        <div style={radarStatsRow}>
           <button
@@ -1339,12 +1394,12 @@ const resetSuggestionsSearch = async () => {
       </section>
 
         <section style={section}>
-          <h2 style={sectionTitle}>Places watched by Trust Radar</h2>
+          <h2 style={sectionTitle}>Saved places</h2>
 
         {!plan.saved_places || plan.saved_places.length === 0 ? (
           <div style={emptyBox}>
             <p style={{ marginTop: 0 }}>
-              This trip does not have any watched places yet.
+              This trip does not have any saved places yet.
             </p>
 
             <p style={helperText}>

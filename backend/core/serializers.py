@@ -11,6 +11,9 @@ from .models import (
     Profile,
     Update,
     ContentReport,
+    TripPlan,
+    SavedItem,
+    SavedPlace,
     generate_recovery_code,
 )
 
@@ -666,3 +669,72 @@ class ContentReportSerializer(serializers.ModelSerializer):
                 )
 
         return attrs
+
+class TripPlanSerializer(serializers.ModelSerializer):
+    saved_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TripPlan
+        fields = [
+            "id",
+            "title",
+            "destination_text",
+            "description",
+            "start_date",
+            "end_date",
+            "saved_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "saved_count",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_saved_count(self, obj):
+        return obj.saved_items.count()
+
+class SavedItemSerializer(serializers.ModelSerializer):
+    experience_detail = ExperienceSerializer(
+        source="experience",
+        read_only=True,
+    )
+
+    class Meta:
+        model = SavedItem
+        fields = [
+            "id",
+            "trip_plan",
+            "experience",
+            "experience_detail",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "experience_detail",
+        ]
+
+class SavedPlaceSerializer(serializers.ModelSerializer):
+    place_detail = PlaceSerializer(
+        source="place",
+        read_only=True,
+    )
+
+    class Meta:
+        model = SavedPlace
+        fields = [
+            "id",
+            "trip_plan",
+            "place",
+            "place_detail",
+            "note",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "place_detail",
+        ]

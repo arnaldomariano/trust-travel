@@ -816,6 +816,138 @@ class TripPlanPlaceView(APIView):
             }
         )
 
+class TripPlanRadarView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            plan = TripPlan.objects.get(id=pk, user=request.user)
+        except TripPlan.DoesNotExist:
+            return Response({"detail": "Trip plan not found."}, status=404)
+
+        destination_text = (plan.destination_text or "").strip()
+
+        if not destination_text:
+            return Response(
+                {
+                    "trip_plan": serialize_trip_plan(plan),
+                    "destination_text": "",
+                    "matched_places": [],
+                    "recommended_experiences": [],
+                    "updates": [],
+                    "saved_experience_ids": [],
+                    "saved_place_ids": [],
+                    "detail": "This trip plan does not have a destination yet.",
+                }
+            )
+
+        saved_experience_ids = list(
+            SavedItem.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("experience_id", flat=True)
+        )
+
+        saved_place_ids = list(
+            SavedPlace.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("place_id", flat=True)
+        )
+
+        matched_places = Place.objects.filter(
+            Q(name__icontains=destination_text)
+            | Q(city__icontains=destination_text)
+            | Q(destination__name__icontains=destination_text)
+            | Q(destination__country__icontains=destination_text)
+        ).select_related(
+            "destination"
+        ).distinct().order_by(
+            "place_type",
+            "name",
+        )
+
+        matched_place_ids = list(matched_places.values_list("id", flat=True))
+
+        recommended_experiences = Experience.objects.filter(
+            place_id__in=matched_place_ids
+        ).exclude(
+            id__in=saved_experience_ids
+        ).select_related(
+            "place",
+            "place__destination",
+            "user",
+        ).order_by(
+            "-created_at"
+        )[:20]
+
+        updates = Update.objects.filter(
+            place_id__in=matched_place_ids
+        ).select_related(
+            "place",
+            "user",
+        ).order_by(
+            "-created_at"
+        )[:20]
+
+        return Response(
+            {
+                "trip_plan": serialize_trip_plan(plan),
+                "destination_text": destination_text,
+                "matched_places": [
+                    {
+                        "id": place.id,
+                        "name": place.name,
+                        "place_type": place.place_type,
+                        "city": place.city,
+                        "destination_id": place.destination_id,
+                        "destination_name": place.destination.name if place.destination else "",
+                        "destination_country": place.destination.country if place.destination else "",
+                        "is_saved": place.id in saved_place_ids,
+                    }
+                    for place in matched_places[:30]
+                ],
+                "recommended_experiences": [
+                    {
+                        "id": experience.id,
+                        "title": experience.title,
+                        "comment": experience.comment,
+                        "rating": experience.rating,
+                        "place_id": experience.place_id,
+                        "place_name": experience.place.name if experience.place else "",
+                        "destination_name": (
+                            experience.place.destination.name
+                            if experience.place and experience.place.destination
+                            else ""
+                        ),
+                        "user": experience.user.username if experience.user else "",
+                        "created_at": experience.created_at,
+                        "is_saved": experience.id in saved_experience_ids,
+                    }
+                    for experience in recommended_experiences
+                ],
+                "updates": [
+                    {
+                        "id": update.id,
+                        "type": update.type,
+                        "category": update.category,
+                        "title": update.title,
+                        "text": update.text,
+                        "priority": update.priority,
+                        "event_date": update.event_date,
+                        "external_link": update.external_link,
+                        "place_id": update.place_id,
+                        "place_name": update.place.name if update.place else "",
+                        "created_at": update.created_at,
+                    }
+                    for update in updates
+                ],
+                "saved_experience_ids": saved_experience_ids,
+                "saved_place_ids": saved_place_ids,
+            }
+        )
+
 # ============================================================
 # UPDATE SERIALIZER HELPER
 # ============================================================
@@ -1053,12 +1185,49 @@ class TripPlanRadarView(APIView):
 
         if not query:
             return Response({
+                "trip_plan": serialize_trip_plan(plan),
                 "query": "",
                 "related_experiences_count": 0,
                 "related_places_count": 0,
                 "related_updates_count": 0,
                 "has_related_content": False,
+                "related_places": [],
+                "recommended_experiences": [],
+                "related_updates": [],
+                "saved_experience_ids": [],
+                "saved_place_ids": [],
             })
+
+        saved_experience_ids = list(
+            SavedItem.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("experience_id", flat=True)
+        )
+
+        saved_place_ids = list(
+            SavedPlace.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("place_id", flat=True)
+        )
+
+        related_places = Place.objects.filter(
+            Q(name__icontains=query)
+            | Q(city__icontains=query)
+            | Q(destination__name__icontains=query)
+            | Q(destination__country__icontains=query)
+            | Q(destination__city__icontains=query)
+        ).select_related(
+            "destination"
+        ).distinct().order_by(
+            "place_type",
+            "name",
+        )
+
+        related_place_ids = list(
+            related_places.values_list("id", flat=True)
+        )
 
         related_experiences = Experience.objects.filter(
             Q(title__icontains=query)
@@ -1068,15 +1237,18 @@ class TripPlanRadarView(APIView):
             | Q(place__destination__name__icontains=query)
             | Q(place__destination__country__icontains=query)
             | Q(place__destination__city__icontains=query)
+            | Q(place_id__in=related_place_ids)
+        ).select_related(
+            "place",
+            "place__destination",
+            "user",
+        ).distinct().order_by(
+            "-created_at"
         )
 
-        related_places = Place.objects.filter(
-            Q(name__icontains=query)
-            | Q(city__icontains=query)
-            | Q(destination__name__icontains=query)
-            | Q(destination__country__icontains=query)
-            | Q(destination__city__icontains=query)
-        )
+        recommended_experiences = related_experiences.exclude(
+            id__in=saved_experience_ids
+        )[:20]
 
         related_updates = Update.objects.filter(
             Q(title__icontains=query)
@@ -1087,6 +1259,13 @@ class TripPlanRadarView(APIView):
             | Q(place__destination__name__icontains=query)
             | Q(place__destination__country__icontains=query)
             | Q(place__destination__city__icontains=query)
+            | Q(place_id__in=related_place_ids)
+        ).select_related(
+            "place",
+            "place__destination",
+            "user",
+        ).distinct().order_by(
+            "-created_at"
         )
 
         related_experiences_count = related_experiences.count()
@@ -1094,6 +1273,7 @@ class TripPlanRadarView(APIView):
         related_updates_count = related_updates.count()
 
         return Response({
+            "trip_plan": serialize_trip_plan(plan),
             "query": query,
             "related_experiences_count": related_experiences_count,
             "related_places_count": related_places_count,
@@ -1103,7 +1283,76 @@ class TripPlanRadarView(APIView):
                 or related_places_count > 0
                 or related_updates_count > 0
             ),
+            "saved_experience_ids": saved_experience_ids,
+            "saved_place_ids": saved_place_ids,
+            "related_places": [
+                {
+                    "id": place.id,
+                    "name": place.name,
+                    "place_type": place.place_type,
+                    "city": place.city,
+                    "destination_id": place.destination_id,
+                    "destination_name": place.destination.name if place.destination else "",
+                    "destination_country": place.destination.country if place.destination else "",
+                    "is_saved": place.id in saved_place_ids,
+                    "created_at": place.created_at,
+                }
+                for place in related_places[:30]
+            ],
+            "recommended_experiences": [
+                {
+                    "id": experience.id,
+                    "title": experience.title,
+                    "comment": experience.comment,
+                    "rating": experience.rating,
+                    "place_id": experience.place_id,
+                    "place_name": experience.place.name if experience.place else "",
+                    "destination_name": (
+                        experience.place.destination.name
+                        if experience.place and experience.place.destination
+                        else ""
+                    ),
+                    "destination_country": (
+                        experience.place.destination.country
+                        if experience.place and experience.place.destination
+                        else ""
+                    ),
+                    "user": experience.user.username if experience.user else "",
+                    "created_at": experience.created_at,
+                    "is_saved": experience.id in saved_experience_ids,
+                }
+                for experience in recommended_experiences
+            ],
+            "related_updates": [
+                {
+                    "id": update.id,
+                    "type": update.type,
+                    "category": update.category,
+                    "title": update.title,
+                    "text": update.text,
+                    "priority": update.priority,
+                    "event_date": update.event_date,
+                    "external_link": update.external_link,
+                    "source_name": update.source_name,
+                    "source_url": update.source_url,
+                    "place_id": update.place_id,
+                    "place_name": update.place.name if update.place else "",
+                    "destination_name": (
+                        update.place.destination.name
+                        if update.place and update.place.destination
+                        else ""
+                    ),
+                    "destination_country": (
+                        update.place.destination.country
+                        if update.place and update.place.destination
+                        else ""
+                    ),
+                    "created_at": update.created_at,
+                }
+                for update in related_updates[:20]
+            ],
         })
+
 # ============================================================
 # UPDATE FEED
 # ============================================================

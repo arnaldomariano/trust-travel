@@ -957,6 +957,8 @@ class TripPlanActivitySummaryView(APIView):
 
         plans_with_activity_count = 0
         total_related_count = 0
+        total_unsaved_related_count = 0
+        plans_activity = []
 
         for plan in plans:
             query = (plan.destination_text or plan.title or "").strip()
@@ -964,7 +966,7 @@ class TripPlanActivitySummaryView(APIView):
             if not query:
                 continue
 
-            related_experiences_count = Experience.objects.filter(
+            related_experiences = Experience.objects.filter(
                 Q(title__icontains=query)
                 | Q(comment__icontains=query)
                 | Q(place__name__icontains=query)
@@ -972,17 +974,17 @@ class TripPlanActivitySummaryView(APIView):
                 | Q(place__destination__name__icontains=query)
                 | Q(place__destination__country__icontains=query)
                 | Q(place__destination__city__icontains=query)
-            ).count()
+            )
 
-            related_places_count = Place.objects.filter(
+            related_places = Place.objects.filter(
                 Q(name__icontains=query)
                 | Q(city__icontains=query)
                 | Q(destination__name__icontains=query)
                 | Q(destination__country__icontains=query)
                 | Q(destination__city__icontains=query)
-            ).count()
+            )
 
-            related_updates_count = Update.objects.filter(
+            related_updates = Update.objects.filter(
                 Q(title__icontains=query)
                 | Q(text__icontains=query)
                 | Q(category__icontains=query)
@@ -991,7 +993,33 @@ class TripPlanActivitySummaryView(APIView):
                 | Q(place__destination__name__icontains=query)
                 | Q(place__destination__country__icontains=query)
                 | Q(place__destination__city__icontains=query)
+            )
+
+            related_experiences_count = related_experiences.count()
+            related_places_count = related_places.count()
+            related_updates_count = related_updates.count()
+
+            saved_experience_ids = SavedItem.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("experience_id", flat=True)
+
+            saved_place_ids = SavedPlace.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).values_list("place_id", flat=True)
+
+            unsaved_experiences_count = related_experiences.exclude(
+                id__in=saved_experience_ids
             ).count()
+
+            unsaved_places_count = related_places.exclude(
+                id__in=saved_place_ids
+            ).count()
+
+            # Updates are not saved directly yet, so for now every related update
+            # is treated as radar activity.
+            unsaved_updates_count = related_updates_count
 
             plan_related_count = (
                 related_experiences_count
@@ -999,18 +1027,44 @@ class TripPlanActivitySummaryView(APIView):
                 + related_updates_count
             )
 
-            if plan_related_count > 0:
+            plan_unsaved_related_count = (
+                unsaved_experiences_count
+                + unsaved_places_count
+                + unsaved_updates_count
+            )
+
+            if plan_unsaved_related_count > 0:
                 plans_with_activity_count += 1
-                total_related_count += plan_related_count
+
+            total_related_count += plan_related_count
+            total_unsaved_related_count += plan_unsaved_related_count
+
+            if plan_related_count > 0:
+                plans_activity.append(
+                    {
+                        "id": plan.id,
+                        "title": plan.title,
+                        "destination_text": plan.destination_text,
+                        "related_count": plan_related_count,
+                        "unsaved_related_count": plan_unsaved_related_count,
+                        "related_experiences_count": related_experiences_count,
+                        "related_places_count": related_places_count,
+                        "related_updates_count": related_updates_count,
+                        "unsaved_experiences_count": unsaved_experiences_count,
+                        "unsaved_places_count": unsaved_places_count,
+                        "unsaved_updates_count": unsaved_updates_count,
+                    }
+                )
 
         return Response(
             {
-                "has_activity": total_related_count > 0,
+                "has_activity": total_unsaved_related_count > 0,
                 "plans_with_activity_count": plans_with_activity_count,
                 "total_related_count": total_related_count,
+                "total_unsaved_related_count": total_unsaved_related_count,
+                "plans": plans_activity,
             }
         )
-
 # ============================================================
 # UPDATE SERIALIZER HELPER
 # ============================================================

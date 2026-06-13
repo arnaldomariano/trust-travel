@@ -62,10 +62,11 @@ export default function HomePage() {
   const [showCreateMenu, setShowCreateMenu] = useState(false);
 
   const [tripPlanActivity, setTripPlanActivity] = useState<{
-  has_activity: boolean;
-  plans_with_activity_count: number;
-  total_related_count: number;
-} | null>(null);
+      has_activity: boolean;
+      plans_with_activity_count: number;
+      total_related_count: number;
+      total_unsaved_related_count?: number;
+  } | null>(null);
 
 
 // Anonymous users see the public landing screen.
@@ -733,7 +734,7 @@ const getActivityMetaText = (item: any) => {
 
               {tripPlanActivity?.has_activity && (
                 <span
-                  title={`${tripPlanActivity.total_related_count} related trip updates`}
+                  title={`${tripPlanActivity.total_unsaved_related_count ?? tripPlanActivity.total_related_count} unsaved radar suggestions`}
                   style={{
                     minWidth: "18px",
                     height: "18px",

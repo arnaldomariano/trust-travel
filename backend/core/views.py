@@ -961,64 +961,137 @@ class TripPlanActivitySummaryView(APIView):
         plans_activity = []
 
         for plan in plans:
-            query = (plan.destination_text or plan.title or "").strip()
-
-            if not query:
-                continue
-
-            related_experiences = Experience.objects.filter(
-                Q(title__icontains=query)
-                | Q(comment__icontains=query)
-                | Q(place__name__icontains=query)
-                | Q(place__city__icontains=query)
-                | Q(place__destination__name__icontains=query)
-                | Q(place__destination__country__icontains=query)
-                | Q(place__destination__city__icontains=query)
-            )
-
-            related_places = Place.objects.filter(
-                Q(name__icontains=query)
-                | Q(city__icontains=query)
-                | Q(destination__name__icontains=query)
-                | Q(destination__country__icontains=query)
-                | Q(destination__city__icontains=query)
-            )
-
-            related_updates = Update.objects.filter(
-                Q(title__icontains=query)
-                | Q(text__icontains=query)
-                | Q(category__icontains=query)
-                | Q(place__name__icontains=query)
-                | Q(place__city__icontains=query)
-                | Q(place__destination__name__icontains=query)
-                | Q(place__destination__country__icontains=query)
-                | Q(place__destination__city__icontains=query)
-            )
-
-            related_experiences_count = related_experiences.count()
-            related_places_count = related_places.count()
-            related_updates_count = related_updates.count()
+            saved_places = SavedPlace.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).select_related("place", "place__destination")
 
             saved_experience_ids = SavedItem.objects.filter(
                 user=request.user,
                 trip_plan=plan,
             ).values_list("experience_id", flat=True)
 
-            saved_place_ids = SavedPlace.objects.filter(
-                user=request.user,
-                trip_plan=plan,
-            ).values_list("place_id", flat=True)
+            saved_place_ids = saved_places.values_list("place_id", flat=True)
+
+            watched_places_activity = []
+
+            # ------------------------------------------------------------
+            # Preferred mode:
+            # If the trip plan has saved places, Trust Radar watches those
+            # places instead of searching broadly by destination_text.
+            # ------------------------------------------------------------
+            if saved_places.exists():
+                watch_mode = "saved_places"
+
+                related_experiences = Experience.objects.filter(
+                    place_id__in=saved_place_ids
+                )
+
+                related_updates = Update.objects.filter(
+                    place_id__in=saved_place_ids
+                )
+
+                # Related places here means the places being watched.
+                related_places = Place.objects.filter(
+                    id__in=saved_place_ids
+                )
+
+                for saved_place in saved_places:
+                    place = saved_place.place
+
+                    place_experiences_count = Experience.objects.filter(
+                        place=place
+                    ).exclude(
+                        id__in=saved_experience_ids
+                    ).count()
+
+                    place_updates_count = Update.objects.filter(
+                        place=place
+                    ).count()
+
+                    place_related_count = (
+                        place_experiences_count
+                        + place_updates_count
+                    )
+
+                    watched_places_activity.append(
+                        {
+                            "id": place.id,
+                            "name": place.name,
+                            "city": place.city,
+                            "place_type": place.place_type,
+                            "destination_name": place.destination.name
+                            if place.destination
+                            else None,
+                            "destination_country": place.destination.country
+                            if place.destination
+                            else None,
+                            "unsaved_experiences_count": place_experiences_count,
+                            "updates_count": place_updates_count,
+                            "related_count": place_related_count,
+                        }
+                    )
+
+            # ------------------------------------------------------------
+            # Fallback mode:
+            # If the trip plan has no saved places yet, keep the previous
+            # broad search using destination_text or title.
+            # ------------------------------------------------------------
+            else:
+                watch_mode = "destination_text"
+                query = (plan.destination_text or plan.title or "").strip()
+
+                if not query:
+                    continue
+
+                related_experiences = Experience.objects.filter(
+                    Q(title__icontains=query)
+                    | Q(comment__icontains=query)
+                    | Q(place__name__icontains=query)
+                    | Q(place__city__icontains=query)
+                    | Q(place__destination__name__icontains=query)
+                    | Q(place__destination__country__icontains=query)
+                    | Q(place__destination__city__icontains=query)
+                )
+
+                related_places = Place.objects.filter(
+                    Q(name__icontains=query)
+                    | Q(city__icontains=query)
+                    | Q(destination__name__icontains=query)
+                    | Q(destination__country__icontains=query)
+                    | Q(destination__city__icontains=query)
+                )
+
+                related_updates = Update.objects.filter(
+                    Q(title__icontains=query)
+                    | Q(text__icontains=query)
+                    | Q(category__icontains=query)
+                    | Q(place__name__icontains=query)
+                    | Q(place__city__icontains=query)
+                    | Q(place__destination__name__icontains=query)
+                    | Q(place__destination__country__icontains=query)
+                    | Q(place__destination__city__icontains=query)
+                )
+
+            related_experiences_count = related_experiences.count()
+            related_places_count = related_places.count()
+            related_updates_count = related_updates.count()
 
             unsaved_experiences_count = related_experiences.exclude(
                 id__in=saved_experience_ids
             ).count()
 
-            unsaved_places_count = related_places.exclude(
-                id__in=saved_place_ids
-            ).count()
+            # If we are watching saved places, these places are already saved.
+            # So unsaved places only make sense in fallback mode.
+            if saved_places.exists():
+                unsaved_places_count = 0
+            else:
+                unsaved_places_count = related_places.exclude(
+                    id__in=saved_place_ids
+                ).count()
 
-            # Updates are not saved directly yet, so for now every related update
-            # is treated as radar activity.
+            # Updates are not saved directly yet, so every related update
+            # is treated as radar activity for now.
             unsaved_updates_count = related_updates_count
 
             plan_related_count = (
@@ -1045,6 +1118,9 @@ class TripPlanActivitySummaryView(APIView):
                         "id": plan.id,
                         "title": plan.title,
                         "destination_text": plan.destination_text,
+                        "watch_mode": watch_mode,
+                        "watched_places_count": saved_places.count(),
+                        "watched_places": watched_places_activity,
                         "related_count": plan_related_count,
                         "unsaved_related_count": plan_unsaved_related_count,
                         "related_experiences_count": related_experiences_count,
@@ -1065,6 +1141,7 @@ class TripPlanActivitySummaryView(APIView):
                 "plans": plans_activity,
             }
         )
+
 # ============================================================
 # UPDATE SERIALIZER HELPER
 # ============================================================

@@ -61,6 +61,12 @@ export default function HomePage() {
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [showCreateMenu, setShowCreateMenu] = useState(false);
 
+  const [tripPlanActivity, setTripPlanActivity] = useState<{
+  has_activity: boolean;
+  plans_with_activity_count: number;
+  total_related_count: number;
+} | null>(null);
+
 
 // Anonymous users see the public landing screen.
 // Logged-in users see the feed.
@@ -127,6 +133,29 @@ export default function HomePage() {
       window.removeEventListener("connectionsUpdated", handler);
     };
   }, [isLoggedIn]);
+
+useEffect(() => {
+  const loadTripPlanActivity = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/trip-plans/activity/`, {
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        setTripPlanActivity(null);
+        return;
+      }
+
+      const data = await res.json();
+      setTripPlanActivity(data);
+    } catch (error) {
+      console.error("Trip plan activity fetch error:", error);
+      setTripPlanActivity(null);
+    }
+  };
+
+  loadTripPlanActivity();
+}, []);
 
   // =========================
   // Group updates by user/public code
@@ -692,9 +721,37 @@ const getActivityMetaText = (item: any) => {
             <button
               type="button"
               onClick={() => router.push("/trip-plans")}
-              style={secondaryButton}
+              style={{
+                ...secondaryButton,
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
             >
-              My trips
+              <span>My trips</span>
+
+              {tripPlanActivity?.has_activity && (
+                <span
+                  title={`${tripPlanActivity.total_related_count} related trip updates`}
+                  style={{
+                    minWidth: "18px",
+                    height: "18px",
+                    padding: "0 6px",
+                    borderRadius: "999px",
+                    background: "black",
+                    color: "white",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  {tripPlanActivity.plans_with_activity_count}
+                </span>
+              )}
             </button>
 
             <div style={{ position: "relative" }}>

@@ -25,6 +25,7 @@ export default function TripPlansPage() {
   const [plans, setPlans] = useState<TripPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const [title, setTitle] = useState("");
   const [destinationText, setDestinationText] = useState("");
@@ -113,6 +114,7 @@ export default function TripPlansPage() {
       setDescription("");
       setStartDate("");
       setEndDate("");
+      setShowCreateForm(false);
 
       if (returnTo) {
         router.push(returnTo);
@@ -155,7 +157,18 @@ export default function TripPlansPage() {
         </p>
       </section>
 
-      <section style={formCard}>
+      <div style={topActions}>
+          <button
+            type="button"
+            onClick={() => setShowCreateForm((current) => !current)}
+            style={showCreateForm ? secondaryButton : primaryButton}
+          >
+            {showCreateForm ? "Hide new trip plan form" : "Create new trip plan"}
+          </button>
+      </div>
+
+      {showCreateForm && (
+          <section style={formCard}>
           <div>
             <strong>Create a new trip plan</strong>
             <p style={helperText}>
@@ -238,17 +251,13 @@ export default function TripPlansPage() {
 
         <button
           type="button"
-          onClick={createPlan}
-          disabled={creating || !title.trim()}
-          style={{
-            ...primaryButton,
-            opacity: creating || !title.trim() ? 0.5 : 1,
-            cursor: creating || !title.trim() ? "not-allowed" : "pointer",
-          }}
+          onClick={() => setShowCreateForm(false)}
+          style={secondaryButton}
         >
-          {creating ? "Creating..." : "Create trip plan"}
+          Cancel
         </button>
       </section>
+    )}
 
       <section style={listSection}>
         <h2 style={sectionTitle}>Your plans</h2>
@@ -497,4 +506,11 @@ const requiredHint = {
   color: "#b91c1c",
   fontSize: "12px",
   marginTop: "4px",
+};
+
+const topActions = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+  marginBottom: "22px",
 };

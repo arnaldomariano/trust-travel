@@ -83,12 +83,61 @@ type RelatedPlace = {
   already_saved_in_plan: boolean;
 };
 
+type RadarPlace = {
+  id: number;
+  name: string;
+  place_type: string;
+  city: string;
+  destination_id: number;
+  destination_name: string;
+  destination_country: string;
+  is_saved: boolean;
+  created_at: string;
+};
+
+type RadarExperience = {
+  id: number;
+  title: string;
+  comment: string;
+  rating: number | null;
+  place_id: number;
+  place_name: string;
+  destination_name: string;
+  destination_country: string;
+  user: string;
+  created_at: string;
+  is_saved: boolean;
+};
+
+type RadarUpdate = {
+  id: number;
+  type: string;
+  category: string;
+  title: string;
+  text: string;
+  priority: string;
+  event_date: string | null;
+  external_link: string;
+  source_name: string;
+  source_url: string;
+  place_id: number;
+  place_name: string;
+  destination_name: string;
+  destination_country: string;
+  created_at: string;
+};
+
 type TripRadar = {
   query: string;
   related_experiences_count: number;
   related_places_count: number;
   related_updates_count: number;
   has_related_content: boolean;
+  saved_experience_ids: number[];
+  saved_place_ids: number[];
+  related_places: RadarPlace[];
+  recommended_experiences: RadarExperience[];
+  related_updates: RadarUpdate[];
 };
 
 export default function TripPlanDetailPage() {
@@ -356,6 +405,7 @@ const addSuggestionToPlan = async (suggestion: TripSuggestion) => {
 
     await loadPlan();
     await loadSuggestions();
+    await loadRadar();
 
     setActionMessage("Experience added to this trip plan.");
 
@@ -397,6 +447,78 @@ const savePlaceToPlan = async (place: RelatedPlace) => {
     setActionMessage(`${place.name} saved to this trip plan.`);
   } catch (error) {
     console.error("Failed to save place to trip plan:", error);
+    setActionError("Error saving place to this trip plan.");
+  } finally {
+    setSavingPlaceId(null);
+  }
+};
+
+const saveRadarExperienceToPlan = async (experience: RadarExperience) => {
+  if (!plan) return;
+
+  clearActionFeedback();
+  setAddingSuggestionId(experience.id);
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/trip-plans/${plan.id}/experiences/${experience.id}/`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Add radar experience to trip plan error:", data);
+      setActionError(data.detail || "Error adding experience to this trip plan.");
+      return;
+    }
+
+    await loadPlan();
+    await loadSuggestions();
+    await loadRadar();
+
+    setActionMessage("Experience added to this trip plan.");
+  } catch (error) {
+    console.error("Failed to add radar experience to trip plan:", error);
+    setActionError("Error adding experience to this trip plan.");
+  } finally {
+    setAddingSuggestionId(null);
+  }
+};
+
+const saveRadarPlaceToPlan = async (place: RadarPlace) => {
+  if (!plan) return;
+
+  clearActionFeedback();
+  setSavingPlaceId(place.id);
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/trip-plans/${plan.id}/places/${place.id}/`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Save radar place to trip plan error:", data);
+      setActionError(data.detail || "Error saving place to this trip plan.");
+      return;
+    }
+
+    await loadPlan();
+    await loadSuggestions();
+    await loadRadar();
+
+    setActionMessage(`${place.name} saved to this trip plan.`);
+  } catch (error) {
+    console.error("Failed to save radar place to trip plan:", error);
     setActionError("Error saving place to this trip plan.");
   } finally {
     setSavingPlaceId(null);
@@ -670,46 +792,241 @@ const resetSuggestionsSearch = async () => {
 
       </section>
 
-    <section style={radarBox}>
-      <div style={radarHeaderRow}>
-        <div>
-          <div style={radarEyebrow}>Trust Radar</div>
-          <h2 style={radarTitle}>Watching this trip</h2>
+<section style={radarBox}>
+  <div style={radarHeaderRow}>
+    <div>
+      <div style={radarEyebrow}>Trust Radar</div>
+      <h2 style={radarTitle}>Watching this trip</h2>
+    </div>
+
+    {radarLoading && <span style={radarMutedText}>Checking...</span>}
+  </div>
+
+  {radar && radar.query ? (
+    <>
+      <p style={radarText}>
+        Trust Radar is watching <strong>{radar.query}</strong> for related
+        experiences, places, alerts and updates.
+      </p>
+
+      {radar.has_related_content ? (
+        <div style={radarStatsRow}>
+          <span style={radarStatBadge}>
+            {radar.related_experiences_count} experiences
+          </span>
+
+          <span style={radarStatBadge}>
+            {radar.related_places_count} places
+          </span>
+
+          <span style={radarStatBadge}>
+            {radar.related_updates_count} updates
+          </span>
         </div>
+      ) : (
+        <p style={radarText}>
+          No related content found yet. When travelers share experiences, alerts,
+          events or useful information about this trip, Trust Radar will help
+          surface it here.
+        </p>
+      )}
 
-        {radarLoading && (
-          <span style={radarMutedText}>Checking...</span>
-        )}
-      </div>
+      {radar.recommended_experiences?.length > 0 && (
+        <div style={radarSubsection}>
+          <h3 style={radarSubsectionTitle}>Recommended experiences</h3>
 
-      {radar && radar.query ? (
-        <>
-          <p style={radarText}>
-              Trust Radar is watching <strong>{radar.query}</strong> for related
-              experiences, places, alerts and updates.
-            </p>
+          <p style={radarSmallText}>
+            Experiences related to this trip that are not saved in your plan yet.
+          </p>
 
-          {radar.has_related_content ? (
-            <div style={radarStatsRow}>
-              <span style={radarStatBadge}>
-                {radar.related_experiences_count} experiences
-              </span>
+          <div style={radarMiniList}>
+            {radar.recommended_experiences.slice(0, 4).map((experience) => (
+              <article key={experience.id} style={radarMiniCard}>
+                <div style={label}>Experience</div>
 
-              <span style={radarStatBadge}>
-                {radar.related_places_count} places
-              </span>
+                <h4 style={radarMiniTitle}>
+                  {experience.title || experience.place_name || "Experience"}
+                </h4>
 
-              <span style={radarStatBadge}>
-                {radar.related_updates_count} updates
-              </span>
+                <div style={placeText}>
+                  {experience.place_name}
+                  {experience.destination_name &&
+                  experience.destination_name !== experience.place_name
+                    ? ` · ${experience.destination_name}`
+                    : ""}
+                </div>
+
+                {experience.rating && (
+                  <div style={rating}>
+                    {"★".repeat(experience.rating)}
+                    {"☆".repeat(5 - experience.rating)}
+                  </div>
+                )}
+
+                <p style={radarMiniText}>
+                  {(experience.comment || "").slice(0, 180)}
+                  {(experience.comment || "").length > 180 ? "..." : ""}
+                </p>
+
+                <div style={actions}>
+                  <Link
+                    href={`/experiences/${experience.id}`}
+                    style={secondaryLink}
+                  >
+                    View experience
+                  </Link>
+
+                  <Link
+                    href={`/places/${experience.place_id}/experiences?highlight=${experience.id}`}
+                    style={secondaryLink}
+                  >
+                    View in place
+                  </Link>
+
+                  {experience.is_saved ? (
+                    <span style={alreadySavedBadge}>
+                      Already saved
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => saveRadarExperienceToPlan(experience)}
+                      disabled={addingSuggestionId === experience.id}
+                      style={{
+                        ...primaryButton,
+                        opacity: addingSuggestionId === experience.id ? 0.5 : 1,
+                        cursor:
+                          addingSuggestionId === experience.id
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      {addingSuggestionId === experience.id
+                        ? "Adding..."
+                        : "Add to this trip"}
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {radar.related_places?.length > 0 && (
+        <div style={radarSubsection}>
+          <h3 style={radarSubsectionTitle}>Places to watch</h3>
+
+          <p style={radarSmallText}>
+            Places related to this trip. Save the ones you may want to follow.
+          </p>
+
+              <div style={radarMiniList}>
+                {radar.related_places.slice(0, 6).map((place) => (
+                  <article key={place.id} style={radarMiniCard}>
+                    <div style={label}>Place</div>
+
+                    <h4 style={radarMiniTitle}>{place.name}</h4>
+
+                    <div style={placeText}>
+                      {place.place_type}
+                      {place.destination_name && place.destination_name !== place.name
+                        ? ` · ${place.destination_name}`
+                        : ""}
+                      {place.destination_country
+                        ? ` · ${place.destination_country}`
+                        : ""}
+                    </div>
+
+                    <div style={actions}>
+                      <Link
+                        href={`/places/${place.id}/experiences`}
+                        style={primaryLink}
+                      >
+                        View experiences
+                      </Link>
+
+                      {place.is_saved ? (
+                        <span style={alreadySavedBadge}>
+                          Already saved
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => saveRadarPlaceToPlan(place)}
+                          disabled={savingPlaceId === place.id}
+                          style={{
+                            ...secondaryButton,
+                            opacity: savingPlaceId === place.id ? 0.5 : 1,
+                            cursor:
+                              savingPlaceId === place.id
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {savingPlaceId === place.id
+                            ? "Saving..."
+                            : "Save place"}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
-          ) : (
-            <p style={radarText}>
-              No related content found yet. When travelers share experiences, alerts,
-              events or useful information about this trip, Trust Radar will help surface it here.
-            </p>
           )}
 
+          {radar.related_updates?.length > 0 && (
+            <div style={radarSubsection}>
+              <h3 style={radarSubsectionTitle}>Alerts, events and useful info</h3>
+
+              <p style={radarSmallText}>
+                Updates related to this trip destination.
+              </p>
+
+              <div style={radarMiniList}>
+                {radar.related_updates.slice(0, 4).map((update) => (
+                  <article key={update.id} style={radarMiniCard}>
+                    <div style={label}>
+                      {update.type} · {update.category}
+                    </div>
+
+                    <h4 style={radarMiniTitle}>
+                      {update.title || update.place_name || "Update"}
+                    </h4>
+
+                    <div style={placeText}>
+                      {update.place_name}
+                      {update.destination_name &&
+                      update.destination_name !== update.place_name
+                        ? ` · ${update.destination_name}`
+                        : ""}
+                    </div>
+
+                    <p style={radarMiniText}>
+                      {(update.text || "").slice(0, 180)}
+                      {(update.text || "").length > 180 ? "..." : ""}
+                    </p>
+
+                    {update.event_date && (
+                      <div style={radarSmallText}>
+                        Date: {new Date(update.event_date).toLocaleDateString()}
+                      </div>
+                    )}
+
+                    <div style={actions}>
+                      <Link
+                        href={`/places/${update.place_id}/experiences`}
+                        style={secondaryLink}
+                      >
+                        Open place
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <p style={radarText}>
@@ -1477,6 +1794,50 @@ const radarStatBadge = {
   color: "#333",
   fontSize: "13px",
   fontWeight: 700,
+};
+
+const radarSubsection = {
+  display: "grid",
+  gap: "10px",
+  marginTop: "8px",
+};
+
+const radarSubsectionTitle = {
+  margin: 0,
+  fontSize: "17px",
+};
+
+const radarSmallText = {
+  margin: 0,
+  color: "#666",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+
+const radarMiniList = {
+  display: "grid",
+  gap: "10px",
+};
+
+const radarMiniCard = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "white",
+  display: "grid",
+  gap: "8px",
+};
+
+const radarMiniTitle = {
+  margin: 0,
+  fontSize: "16px",
+};
+
+const radarMiniText = {
+  margin: 0,
+  color: "#333",
+  fontSize: "14px",
+  lineHeight: 1.5,
 };
 
 const editPlanBox = {

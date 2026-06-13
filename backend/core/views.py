@@ -1,11 +1,13 @@
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
 
 
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
@@ -23,6 +25,7 @@ from .models import (
     ExperienceReply,
     SavedItem,
     SavedPlace,
+    TripPlanWatchedPlace,
     TripPlan,
     Update,
     Profile,
@@ -816,6 +819,70 @@ class TripPlanPlaceView(APIView):
             }
         )
 
+class TripPlanWatchedPlaceView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, place_id):
+        trip_plan = get_object_or_404(
+            TripPlan,
+            pk=pk,
+            user=request.user,
+        )
+
+        place = get_object_or_404(
+            Place,
+            pk=place_id,
+        )
+
+        watched_place, created = TripPlanWatchedPlace.objects.get_or_create(
+            user=request.user,
+            trip_plan=trip_plan,
+            place=place,
+        )
+
+        return Response(
+            {
+                "id": watched_place.id,
+                "trip_plan_id": trip_plan.id,
+                "place_id": place.id,
+                "name": place.name,
+                "place_type": place.place_type,
+                "city": place.city,
+                "destination": place.destination.name if place.destination else "",
+                "destination_country": place.destination.country if place.destination else "",
+                "created": created,
+                "detail": "Place added to Trust Radar watchlist.",
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    def delete(self, request, pk, place_id):
+        trip_plan = get_object_or_404(
+            TripPlan,
+            pk=pk,
+            user=request.user,
+        )
+
+        watched_place = TripPlanWatchedPlace.objects.filter(
+            user=request.user,
+            trip_plan=trip_plan,
+            place_id=place_id,
+        ).first()
+
+        if not watched_place:
+            return Response(
+                {"detail": "This place is not being watched by Trust Radar."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        watched_place.delete()
+
+        return Response(
+            {"detail": "Place removed from Trust Radar watchlist."},
+            status=status.HTTP_200_OK,
+        )
+
 class TripPlanRadarView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -827,20 +894,6 @@ class TripPlanRadarView(APIView):
             return Response({"detail": "Trip plan not found."}, status=404)
 
         destination_text = (plan.destination_text or "").strip()
-
-        if not destination_text:
-            return Response(
-                {
-                    "trip_plan": serialize_trip_plan(plan),
-                    "destination_text": "",
-                    "matched_places": [],
-                    "recommended_experiences": [],
-                    "updates": [],
-                    "saved_experience_ids": [],
-                    "saved_place_ids": [],
-                    "detail": "This trip plan does not have a destination yet.",
-                }
-            )
 
         saved_experience_ids = list(
             SavedItem.objects.filter(
@@ -856,17 +909,86 @@ class TripPlanRadarView(APIView):
             ).values_list("place_id", flat=True)
         )
 
-        matched_places = Place.objects.filter(
-            Q(name__icontains=destination_text)
-            | Q(city__icontains=destination_text)
-            | Q(destination__name__icontains=destination_text)
-            | Q(destination__country__icontains=destination_text)
-        ).select_related(
-            "destination"
-        ).distinct().order_by(
-            "place_type",
-            "name",
+        watched_places = TripPlanWatchedPlace.objects.filter(
+            user=request.user,
+            trip_plan=plan,
+        ).select_related("place", "place__destination")
+
+        watched_place_ids = list(
+            watched_places.values_list("place_id", flat=True)
         )
+
+        saved_places = SavedPlace.objects.filter(
+            user=request.user,
+            trip_plan=plan,
+        ).select_related("place", "place__destination")
+
+        saved_place_watch_ids = list(
+            saved_places.values_list("place_id", flat=True)
+        )
+
+        # ------------------------------------------------------------
+        # 1. Preferred mode: explicit Radar watchlist
+        # ------------------------------------------------------------
+        if watched_place_ids:
+            watch_mode = "radar_watchlist"
+            query = "Radar watchlist"
+
+            matched_places = Place.objects.filter(
+                id__in=watched_place_ids
+            ).select_related("destination").order_by("place_type", "name")
+
+        # ------------------------------------------------------------
+        # 2. Secondary mode: saved places as automatic watchlist
+        # ------------------------------------------------------------
+        elif saved_place_watch_ids:
+            watch_mode = "saved_places"
+            query = "Saved places"
+
+            matched_places = Place.objects.filter(
+                id__in=saved_place_watch_ids
+            ).select_related("destination").order_by("place_type", "name")
+
+        # ------------------------------------------------------------
+        # 3. Final fallback: broad destination search
+        # ------------------------------------------------------------
+        else:
+            watch_mode = "destination_text"
+            query = destination_text
+
+            if not destination_text:
+                return Response(
+                    {
+                        "trip_plan": serialize_trip_plan(plan),
+                        "query": "",
+                        "destination_text": "",
+                        "watch_mode": watch_mode,
+                        "watched_places_count": 0,
+                        "watched_places": [],
+                        "related_experiences_count": 0,
+                        "related_places_count": 0,
+                        "related_updates_count": 0,
+                        "has_related_content": False,
+                        "related_places": [],
+                        "recommended_experiences": [],
+                        "related_updates": [],
+                        "saved_experience_ids": saved_experience_ids,
+                        "saved_place_ids": saved_place_ids,
+                        "detail": "This trip plan does not have a destination or watched places yet.",
+                    }
+                )
+
+            matched_places = Place.objects.filter(
+                Q(name__icontains=destination_text)
+                | Q(city__icontains=destination_text)
+                | Q(destination__name__icontains=destination_text)
+                | Q(destination__country__icontains=destination_text)
+            ).select_related(
+                "destination"
+            ).distinct().order_by(
+                "place_type",
+                "name",
+            )
 
         matched_place_ids = list(matched_places.values_list("id", flat=True))
 
@@ -886,27 +1008,70 @@ class TripPlanRadarView(APIView):
             place_id__in=matched_place_ids
         ).select_related(
             "place",
+            "place__destination",
             "user",
         ).order_by(
             "-created_at"
         )[:20]
 
+        related_places = list(matched_places[:30])
+
         return Response(
             {
                 "trip_plan": serialize_trip_plan(plan),
+                "query": query,
                 "destination_text": destination_text,
-                "matched_places": [
+                "watch_mode": watch_mode,
+                "watched_places_count": len(watched_place_ids)
+                if watched_place_ids
+                else len(saved_place_watch_ids),
+                "explicit_watched_places_count": len(watched_place_ids),
+                "saved_places_count": len(saved_place_ids),
+                "watched_places": [
                     {
                         "id": place.id,
                         "name": place.name,
                         "place_type": place.place_type,
                         "city": place.city,
                         "destination_id": place.destination_id,
-                        "destination_name": place.destination.name if place.destination else "",
-                        "destination_country": place.destination.country if place.destination else "",
+                        "destination_name": place.destination.name
+                        if place.destination
+                        else "",
+                        "destination_country": place.destination.country
+                        if place.destination
+                        else "",
                         "is_saved": place.id in saved_place_ids,
                     }
-                    for place in matched_places[:30]
+                    for place in related_places
+                ],
+                "related_experiences_count": recommended_experiences.count()
+                if hasattr(recommended_experiences, "count")
+                else len(recommended_experiences),
+                "related_places_count": len(related_places),
+                "related_updates_count": updates.count()
+                if hasattr(updates, "count")
+                else len(updates),
+                "has_related_content": (
+                    len(related_places) > 0
+                    or len(recommended_experiences) > 0
+                    or len(updates) > 0
+                ),
+                "related_places": [
+                    {
+                        "id": place.id,
+                        "name": place.name,
+                        "place_type": place.place_type,
+                        "city": place.city,
+                        "destination_id": place.destination_id,
+                        "destination_name": place.destination.name
+                        if place.destination
+                        else "",
+                        "destination_country": place.destination.country
+                        if place.destination
+                        else "",
+                        "is_saved": place.id in saved_place_ids,
+                    }
+                    for place in related_places
                 ],
                 "recommended_experiences": [
                     {
@@ -915,19 +1080,28 @@ class TripPlanRadarView(APIView):
                         "comment": experience.comment,
                         "rating": experience.rating,
                         "place_id": experience.place_id,
-                        "place_name": experience.place.name if experience.place else "",
+                        "place_name": experience.place.name
+                        if experience.place
+                        else "",
                         "destination_name": (
                             experience.place.destination.name
                             if experience.place and experience.place.destination
                             else ""
                         ),
-                        "user": experience.user.username if experience.user else "",
+                        "destination_country": (
+                            experience.place.destination.country
+                            if experience.place and experience.place.destination
+                            else ""
+                        ),
+                        "user": experience.user.username
+                        if experience.user
+                        else "",
                         "created_at": experience.created_at,
                         "is_saved": experience.id in saved_experience_ids,
                     }
                     for experience in recommended_experiences
                 ],
-                "updates": [
+                "related_updates": [
                     {
                         "id": update.id,
                         "type": update.type,
@@ -937,8 +1111,22 @@ class TripPlanRadarView(APIView):
                         "priority": update.priority,
                         "event_date": update.event_date,
                         "external_link": update.external_link,
+                        "source_name": update.source_name,
+                        "source_url": update.source_url,
                         "place_id": update.place_id,
-                        "place_name": update.place.name if update.place else "",
+                        "place_name": update.place.name
+                        if update.place
+                        else "",
+                        "destination_name": (
+                            update.place.destination.name
+                            if update.place and update.place.destination
+                            else ""
+                        ),
+                        "destination_country": (
+                            update.place.destination.country
+                            if update.place and update.place.destination
+                            else ""
+                        ),
                         "created_at": update.created_at,
                     }
                     for update in updates
@@ -966,21 +1154,85 @@ class TripPlanActivitySummaryView(APIView):
                 trip_plan=plan,
             ).select_related("place", "place__destination")
 
+            watched_places = TripPlanWatchedPlace.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).select_related("place", "place__destination")
+
             saved_experience_ids = SavedItem.objects.filter(
                 user=request.user,
                 trip_plan=plan,
             ).values_list("experience_id", flat=True)
 
             saved_place_ids = saved_places.values_list("place_id", flat=True)
+            watched_place_ids = watched_places.values_list("place_id", flat=True)
 
             watched_places_activity = []
 
             # ------------------------------------------------------------
             # Preferred mode:
-            # If the trip plan has saved places, Trust Radar watches those
-            # places instead of searching broadly by destination_text.
+            # Trust Radar uses the explicit Radar watchlist first.
+            # These are places the user chose to monitor, even if they are
+            # not saved as trip places.
             # ------------------------------------------------------------
-            if saved_places.exists():
+            if watched_places.exists():
+                watch_mode = "radar_watchlist"
+
+                related_experiences = Experience.objects.filter(
+                    place_id__in=watched_place_ids
+                )
+
+                related_updates = Update.objects.filter(
+                    place_id__in=watched_place_ids
+                )
+
+                related_places = Place.objects.filter(
+                    id__in=watched_place_ids
+                )
+
+                for watched_place in watched_places:
+                    place = watched_place.place
+
+                    place_experiences_count = Experience.objects.filter(
+                        place=place
+                    ).exclude(
+                        id__in=saved_experience_ids
+                    ).count()
+
+                    place_updates_count = Update.objects.filter(
+                        place=place
+                    ).count()
+
+                    place_related_count = (
+                        place_experiences_count
+                        + place_updates_count
+                    )
+
+                    watched_places_activity.append(
+                        {
+                            "id": place.id,
+                            "name": place.name,
+                            "city": place.city,
+                            "place_type": place.place_type,
+                            "destination_name": place.destination.name
+                            if place.destination
+                            else None,
+                            "destination_country": place.destination.country
+                            if place.destination
+                            else None,
+                            "unsaved_experiences_count": place_experiences_count,
+                            "updates_count": place_updates_count,
+                            "related_count": place_related_count,
+                            "is_saved_place": place.id in list(saved_place_ids),
+                        }
+                    )
+
+            # ------------------------------------------------------------
+            # Secondary mode:
+            # If there is no explicit Radar watchlist yet, use saved places
+            # as an automatic watchlist.
+            # ------------------------------------------------------------
+            elif saved_places.exists():
                 watch_mode = "saved_places"
 
                 related_experiences = Experience.objects.filter(
@@ -991,7 +1243,6 @@ class TripPlanActivitySummaryView(APIView):
                     place_id__in=saved_place_ids
                 )
 
-                # Related places here means the places being watched.
                 related_places = Place.objects.filter(
                     id__in=saved_place_ids
                 )
@@ -1029,13 +1280,14 @@ class TripPlanActivitySummaryView(APIView):
                             "unsaved_experiences_count": place_experiences_count,
                             "updates_count": place_updates_count,
                             "related_count": place_related_count,
+                            "is_saved_place": True,
                         }
                     )
 
             # ------------------------------------------------------------
-            # Fallback mode:
-            # If the trip plan has no saved places yet, keep the previous
-            # broad search using destination_text or title.
+            # Final fallback:
+            # If there are no watched places and no saved places, keep the
+            # previous broad search using destination_text or title.
             # ------------------------------------------------------------
             else:
                 watch_mode = "destination_text"
@@ -1081,9 +1333,9 @@ class TripPlanActivitySummaryView(APIView):
                 id__in=saved_experience_ids
             ).count()
 
-            # If we are watching saved places, these places are already saved.
-            # So unsaved places only make sense in fallback mode.
-            if saved_places.exists():
+            # In radar_watchlist mode, related places are watched places.
+            # They should not be counted as unsaved place suggestions.
+            if watched_places.exists() or saved_places.exists():
                 unsaved_places_count = 0
             else:
                 unsaved_places_count = related_places.exclude(
@@ -1112,14 +1364,18 @@ class TripPlanActivitySummaryView(APIView):
             total_related_count += plan_related_count
             total_unsaved_related_count += plan_unsaved_related_count
 
-            if plan_related_count > 0:
+            if plan_related_count > 0 or watched_places.exists():
                 plans_activity.append(
                     {
                         "id": plan.id,
                         "title": plan.title,
                         "destination_text": plan.destination_text,
                         "watch_mode": watch_mode,
-                        "watched_places_count": saved_places.count(),
+                        "watched_places_count": watched_places.count()
+                        if watched_places.exists()
+                        else saved_places.count(),
+                        "explicit_watched_places_count": watched_places.count(),
+                        "saved_places_count": saved_places.count(),
                         "watched_places": watched_places_activity,
                         "related_count": plan_related_count,
                         "unsaved_related_count": plan_unsaved_related_count,
@@ -1363,188 +1619,6 @@ class TripPlanSuggestionsView(APIView):
         return Response({
             "experiences": experience_results,
             "places": place_results,
-        })
-
-class TripPlanRadarView(APIView):
-    authentication_classes = [CookieJWTAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, pk):
-        try:
-            plan = TripPlan.objects.get(id=pk, user=request.user)
-        except TripPlan.DoesNotExist:
-            return Response({"detail": "Trip plan not found."}, status=404)
-
-        query = (plan.destination_text or plan.title or "").strip()
-
-        if not query:
-            return Response({
-                "trip_plan": serialize_trip_plan(plan),
-                "query": "",
-                "related_experiences_count": 0,
-                "related_places_count": 0,
-                "related_updates_count": 0,
-                "has_related_content": False,
-                "related_places": [],
-                "recommended_experiences": [],
-                "related_updates": [],
-                "saved_experience_ids": [],
-                "saved_place_ids": [],
-            })
-
-        saved_experience_ids = list(
-            SavedItem.objects.filter(
-                user=request.user,
-                trip_plan=plan,
-            ).values_list("experience_id", flat=True)
-        )
-
-        saved_place_ids = list(
-            SavedPlace.objects.filter(
-                user=request.user,
-                trip_plan=plan,
-            ).values_list("place_id", flat=True)
-        )
-
-        related_places = Place.objects.filter(
-            Q(name__icontains=query)
-            | Q(city__icontains=query)
-            | Q(destination__name__icontains=query)
-            | Q(destination__country__icontains=query)
-            | Q(destination__city__icontains=query)
-        ).select_related(
-            "destination"
-        ).distinct().order_by(
-            "place_type",
-            "name",
-        )
-
-        related_place_ids = list(
-            related_places.values_list("id", flat=True)
-        )
-
-        related_experiences = Experience.objects.filter(
-            Q(title__icontains=query)
-            | Q(comment__icontains=query)
-            | Q(place__name__icontains=query)
-            | Q(place__city__icontains=query)
-            | Q(place__destination__name__icontains=query)
-            | Q(place__destination__country__icontains=query)
-            | Q(place__destination__city__icontains=query)
-            | Q(place_id__in=related_place_ids)
-        ).select_related(
-            "place",
-            "place__destination",
-            "user",
-        ).distinct().order_by(
-            "-created_at"
-        )
-
-        recommended_experiences = related_experiences.exclude(
-            id__in=saved_experience_ids
-        )[:20]
-
-        related_updates = Update.objects.filter(
-            Q(title__icontains=query)
-            | Q(text__icontains=query)
-            | Q(category__icontains=query)
-            | Q(place__name__icontains=query)
-            | Q(place__city__icontains=query)
-            | Q(place__destination__name__icontains=query)
-            | Q(place__destination__country__icontains=query)
-            | Q(place__destination__city__icontains=query)
-            | Q(place_id__in=related_place_ids)
-        ).select_related(
-            "place",
-            "place__destination",
-            "user",
-        ).distinct().order_by(
-            "-created_at"
-        )
-
-        related_experiences_count = related_experiences.count()
-        related_places_count = related_places.count()
-        related_updates_count = related_updates.count()
-
-        return Response({
-            "trip_plan": serialize_trip_plan(plan),
-            "query": query,
-            "related_experiences_count": related_experiences_count,
-            "related_places_count": related_places_count,
-            "related_updates_count": related_updates_count,
-            "has_related_content": (
-                related_experiences_count > 0
-                or related_places_count > 0
-                or related_updates_count > 0
-            ),
-            "saved_experience_ids": saved_experience_ids,
-            "saved_place_ids": saved_place_ids,
-            "related_places": [
-                {
-                    "id": place.id,
-                    "name": place.name,
-                    "place_type": place.place_type,
-                    "city": place.city,
-                    "destination_id": place.destination_id,
-                    "destination_name": place.destination.name if place.destination else "",
-                    "destination_country": place.destination.country if place.destination else "",
-                    "is_saved": place.id in saved_place_ids,
-                    "created_at": place.created_at,
-                }
-                for place in related_places[:30]
-            ],
-            "recommended_experiences": [
-                {
-                    "id": experience.id,
-                    "title": experience.title,
-                    "comment": experience.comment,
-                    "rating": experience.rating,
-                    "place_id": experience.place_id,
-                    "place_name": experience.place.name if experience.place else "",
-                    "destination_name": (
-                        experience.place.destination.name
-                        if experience.place and experience.place.destination
-                        else ""
-                    ),
-                    "destination_country": (
-                        experience.place.destination.country
-                        if experience.place and experience.place.destination
-                        else ""
-                    ),
-                    "user": experience.user.username if experience.user else "",
-                    "created_at": experience.created_at,
-                    "is_saved": experience.id in saved_experience_ids,
-                }
-                for experience in recommended_experiences
-            ],
-            "related_updates": [
-                {
-                    "id": update.id,
-                    "type": update.type,
-                    "category": update.category,
-                    "title": update.title,
-                    "text": update.text,
-                    "priority": update.priority,
-                    "event_date": update.event_date,
-                    "external_link": update.external_link,
-                    "source_name": update.source_name,
-                    "source_url": update.source_url,
-                    "place_id": update.place_id,
-                    "place_name": update.place.name if update.place else "",
-                    "destination_name": (
-                        update.place.destination.name
-                        if update.place and update.place.destination
-                        else ""
-                    ),
-                    "destination_country": (
-                        update.place.destination.country
-                        if update.place and update.place.destination
-                        else ""
-                    ),
-                    "created_at": update.created_at,
-                }
-                for update in related_updates[:20]
-            ],
         })
 
 # ============================================================

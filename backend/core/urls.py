@@ -39,6 +39,7 @@ from .views import (
     TripPlanPlaceView,
     TripPlanSuggestionsView,
     TripPlanRadarView,
+    TripPlanWatchedPlaceView,
     SummaryAnalyticsView,
     PlannerCountriesAnalyticsView,
     ContentReportListCreateView,
@@ -87,6 +88,11 @@ urlpatterns = [
     path(
         "trip-plans/<int:pk>/places/<int:place_id>/",
         TripPlanPlaceView.as_view(),
+    ),
+
+    path(
+        "trip-plans/<int:pk>/watched-places/<int:place_id>/",
+        TripPlanWatchedPlaceView.as_view(),
     ),
 
     path(

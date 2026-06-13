@@ -819,8 +819,8 @@ const resetSuggestionsSearch = async () => {
   {radar && radar.query ? (
     <>
       <p style={radarText}>
-        Trust Radar is watching <strong>{radar.query}</strong> for related
-        experiences, places, alerts and updates.
+          Trust Radar uses your Radar watchlist first. You can monitor specific places
+          for this trip, even if they are not saved as trip places.
       </p>
 
       {radar.has_related_content ? (
@@ -1338,25 +1338,26 @@ const resetSuggestionsSearch = async () => {
         )}
       </section>
 
-      <section style={section}>
-        <h2 style={sectionTitle}>Saved places</h2>
+        <section style={section}>
+          <h2 style={sectionTitle}>Places watched by Trust Radar</h2>
 
         {!plan.saved_places || plan.saved_places.length === 0 ? (
           <div style={emptyBox}>
             <p style={{ marginTop: 0 }}>
-              This plan does not have any saved places yet.
+              This trip does not have any watched places yet.
             </p>
 
             <p style={helperText}>
-              Save places you may want to visit, even before there are experiences about
-              them. Trust Radar will help you notice when related content appears.
+              Save places you want Trust Radar to monitor for this trip. These can be
+              cities, beaches, neighborhoods, surf points, attractions, restaurants or
+              other places that matter to your plans.
             </p>
           </div>
         ) : (
           <div style={list}>
             {plan.saved_places.map((savedPlace) => (
               <article key={savedPlace.id} style={placeSuggestionCard}>
-                <div style={label}>Saved place</div>
+                <div style={label}>Watched place</div>
 
                 <h3 style={experienceTitle}>{savedPlace.name}</h3>
 
@@ -1372,16 +1373,17 @@ const resetSuggestionsSearch = async () => {
 
                 {savedPlace.has_related_content ? (
                   <div style={alreadyRelatedText}>
-                    Trust Radar found {savedPlace.related_experiences_count} related experience
-                    {savedPlace.related_experiences_count === 1 ? "" : "s"} and{" "}
-                    {savedPlace.related_updates_count} update
-                    {savedPlace.related_updates_count === 1 ? "" : "s"} for this place.
+                      Trust Radar is watching this place and found{" "}
+                      {savedPlace.related_experiences_count} related experience
+                      {savedPlace.related_experiences_count === 1 ? "" : "s"} and{" "}
+                      {savedPlace.related_updates_count} update
+                      {savedPlace.related_updates_count === 1 ? "" : "s"} connected to it.
                   </div>
                 ) : (
                   <div style={watchingPlaceText}>
-                      No related content yet. Trust Radar is watching this place for future
-                      experiences, alerts and updates.
-                    </div>
+                      Trust Radar is watching this place. New experiences, alerts, events or useful
+                      updates connected to it can appear here later.
+                  </div>
                 )}
 
                 <div style={actions}>
@@ -1591,16 +1593,16 @@ const resetSuggestionsSearch = async () => {
 
             {relatedPlaces.length > 0 && (
               <div style={suggestionGroup}>
-                <h3 style={suggestionGroupTitle}>Places to watch with Trust Radar</h3>
+                <h3 style={suggestionGroupTitle}>Add places to your Radar watchlist</h3>
 
                 <p style={watchPlacesIntro}>
-                  Save places you may want to visit, even if they do not have experiences yet.
-                  Trust Radar will watch for future experiences, alerts, events and useful updates.
+                  Choose the places you want Trust Radar to monitor for this trip. This helps
+                  reduce noise and keeps the Radar focused on locations that really matter to you.
                 </p>
 
                 {relatedPlaces.map((place) => (
                   <article key={place.place_id} style={placeSuggestionCard}>
-                    <div style={label}>Place monitored by Trust Radar</div>
+                    <div style={label}>Place suggestion</div>
 
                     <h3 style={experienceTitle}>{place.name}</h3>
 
@@ -1665,7 +1667,7 @@ const resetSuggestionsSearch = async () => {
                           >
                             {savingPlaceId === place.place_id
                               ? "Saving..."
-                              : "Save place to this trip"}
+                              : "Watch this place"}
                           </button>
                         )}
 

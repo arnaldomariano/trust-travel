@@ -970,57 +970,91 @@ const resetSuggestionsSearch = async () => {
           </p>
 
               <div style={radarMiniList}>
-                {radar.related_places.slice(0, 6).map((place) => (
-                  <article key={place.id} style={radarMiniCard}>
-                    <div style={label}>Place</div>
+                  {radar.related_places.slice(0, 6).map((place) => {
+                    const savedPlaceForRadarPlace = plan.saved_places?.find(
+                      (savedPlace) => savedPlace.place_id === place.id
+                    );
 
-                    <h4 style={radarMiniTitle}>{place.name}</h4>
+                    return (
+                      <article key={place.id} style={radarMiniCard}>
+                        <div style={label}>Place</div>
 
-                    <div style={placeText}>
-                      {place.place_type}
-                      {place.destination_name && place.destination_name !== place.name
-                        ? ` · ${place.destination_name}`
-                        : ""}
-                      {place.destination_country
-                        ? ` · ${place.destination_country}`
-                        : ""}
-                    </div>
+                        <h4 style={radarMiniTitle}>{place.name}</h4>
 
-                    <div style={actions}>
-                      <Link
-                        href={`/places/${place.id}/experiences`}
-                        style={primaryLink}
-                      >
-                        View experiences
-                      </Link>
+                        <div style={placeText}>
+                          {place.place_type}
+                          {place.destination_name && place.destination_name !== place.name
+                            ? ` · ${place.destination_name}`
+                            : ""}
+                          {place.destination_country
+                            ? ` · ${place.destination_country}`
+                            : ""}
+                        </div>
 
-                      {place.is_saved ? (
-                        <span style={alreadySavedBadge}>
-                          Already saved
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => saveRadarPlaceToPlan(place)}
-                          disabled={savingPlaceId === place.id}
-                          style={{
-                            ...secondaryButton,
-                            opacity: savingPlaceId === place.id ? 0.5 : 1,
-                            cursor:
-                              savingPlaceId === place.id
-                                ? "not-allowed"
-                                : "pointer",
-                          }}
-                        >
-                          {savingPlaceId === place.id
-                            ? "Saving..."
-                            : "Save place"}
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                ))}
-              </div>
+                        <div style={actions}>
+                          <Link
+                            href={`/places/${place.id}/experiences`}
+                            style={primaryLink}
+                          >
+                            View experiences
+                          </Link>
+
+                          {place.is_saved ? (
+                            <>
+                              <span style={alreadySavedBadge}>
+                                Already saved
+                              </span>
+
+                              {savedPlaceForRadarPlace && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPendingRemove({
+                                      type: "place",
+                                      item: savedPlaceForRadarPlace,
+                                    })
+                                  }
+                                  disabled={removingPlaceId === savedPlaceForRadarPlace.id}
+                                  style={{
+                                    ...dangerButton,
+                                    opacity:
+                                      removingPlaceId === savedPlaceForRadarPlace.id ? 0.5 : 1,
+                                    cursor:
+                                      removingPlaceId === savedPlaceForRadarPlace.id
+                                        ? "not-allowed"
+                                        : "pointer",
+                                  }}
+                                >
+                                  {removingPlaceId === savedPlaceForRadarPlace.id
+                                    ? "Removing..."
+                                    : "Remove from trip"}
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => saveRadarPlaceToPlan(place)}
+                              disabled={savingPlaceId === place.id}
+                              style={{
+                                ...secondaryButton,
+                                opacity: savingPlaceId === place.id ? 0.5 : 1,
+                                cursor:
+                                  savingPlaceId === place.id
+                                    ? "not-allowed"
+                                    : "pointer",
+                              }}
+                            >
+                              {savingPlaceId === place.id
+                                ? "Saving..."
+                                : "Save place"}
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
             </div>
           )}
 

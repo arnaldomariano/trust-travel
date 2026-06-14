@@ -488,6 +488,7 @@ class TripPlan(models.Model):
     def __str__(self):
         return f"{self.user} - {self.title}"
 
+
 # ===================== Saved Place =====================
 class SavedPlace(models.Model):
     user = models.ForeignKey(
@@ -527,22 +528,55 @@ class SavedPlace(models.Model):
     def __str__(self):
         return f"{self.user} saved place {self.place_id} in plan {self.trip_plan_id}"
 
+
+# ===================== Trip Plan Activity Seen =====================
+class TripPlanActivitySeen(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="trip_plan_activity_seen"
+    )
+
+    trip_plan = models.ForeignKey(
+        TripPlan,
+        on_delete=models.CASCADE,
+        related_name="activity_seen_records"
+    )
+
+    last_seen_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "trip_plan"],
+                name="unique_trip_plan_activity_seen"
+            )
+        ]
+        ordering = ["-last_seen_at"]
+
+    def __str__(self):
+        return f"{self.user} saw activity for plan {self.trip_plan_id} at {self.last_seen_at}"
+
+# ===================== Trip Plan Watched Place =====================
 class TripPlanWatchedPlace(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name="watched_trip_places",
     )
+
     trip_plan = models.ForeignKey(
         TripPlan,
         on_delete=models.CASCADE,
         related_name="watched_places",
     )
+
     place = models.ForeignKey(
         Place,
         on_delete=models.CASCADE,
         related_name="trip_plan_watchers",
     )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

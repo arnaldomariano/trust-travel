@@ -26,6 +26,7 @@ from .models import (
     SavedItem,
     SavedPlace,
     TripPlanWatchedPlace,
+    TripPlanActivitySeen,
     TripPlan,
     Update,
     Profile,
@@ -1149,6 +1150,13 @@ class TripPlanActivitySummaryView(APIView):
         plans_activity = []
 
         for plan in plans:
+            seen_record = TripPlanActivitySeen.objects.filter(
+                user=request.user,
+                trip_plan=plan,
+            ).first()
+
+            last_seen_at = seen_record.last_seen_at if seen_record else None
+
             saved_places = SavedPlace.objects.filter(
                 user=request.user,
                 trip_plan=plan,
@@ -1184,18 +1192,35 @@ class TripPlanActivitySummaryView(APIView):
                     id__in=watched_place_ids
                 )
 
+                if last_seen_at:
+                    related_experiences = related_experiences.filter(
+                        created_at__gt=last_seen_at
+                    )
+                    related_updates = related_updates.filter(
+                        created_at__gt=last_seen_at
+                    )
+
                 for watched_place in watched_places:
                     place = watched_place.place
 
-                    place_experiences_count = Experience.objects.filter(
+                    place_experiences = Experience.objects.filter(
                         place=place
                     ).exclude(
                         id__in=saved_experience_ids
-                    ).count()
+                    )
 
-                    place_updates_count = Update.objects.filter(
-                        place=place
-                    ).count()
+                    place_updates = Update.objects.filter(place=place)
+
+                    if last_seen_at:
+                        place_experiences = place_experiences.filter(
+                            created_at__gt=last_seen_at
+                        )
+                        place_updates = place_updates.filter(
+                            created_at__gt=last_seen_at
+                        )
+
+                    place_experiences_count = place_experiences.count()
+                    place_updates_count = place_updates.count()
 
                     place_related_count = (
                         place_experiences_count
@@ -1236,18 +1261,35 @@ class TripPlanActivitySummaryView(APIView):
                     id__in=saved_place_ids
                 )
 
+                if last_seen_at:
+                    related_experiences = related_experiences.filter(
+                        created_at__gt=last_seen_at
+                    )
+                    related_updates = related_updates.filter(
+                        created_at__gt=last_seen_at
+                    )
+
                 for saved_place in saved_places:
                     place = saved_place.place
 
-                    place_experiences_count = Experience.objects.filter(
+                    place_experiences = Experience.objects.filter(
                         place=place
                     ).exclude(
                         id__in=saved_experience_ids
-                    ).count()
+                    )
 
-                    place_updates_count = Update.objects.filter(
-                        place=place
-                    ).count()
+                    place_updates = Update.objects.filter(place=place)
+
+                    if last_seen_at:
+                        place_experiences = place_experiences.filter(
+                            created_at__gt=last_seen_at
+                        )
+                        place_updates = place_updates.filter(
+                            created_at__gt=last_seen_at
+                        )
+
+                    place_experiences_count = place_experiences.count()
+                    place_updates_count = place_updates.count()
 
                     place_related_count = (
                         place_experiences_count
@@ -1309,6 +1351,17 @@ class TripPlanActivitySummaryView(APIView):
                     | Q(place__destination__city__icontains=query)
                 )
 
+                if last_seen_at:
+                    related_experiences = related_experiences.filter(
+                        created_at__gt=last_seen_at
+                    )
+                    related_places = related_places.filter(
+                        created_at__gt=last_seen_at
+                    )
+                    related_updates = related_updates.filter(
+                        created_at__gt=last_seen_at
+                    )
+
             related_experiences_count = related_experiences.count()
             related_places_count = related_places.count()
             related_updates_count = related_updates.count()
@@ -1351,6 +1404,7 @@ class TripPlanActivitySummaryView(APIView):
                         "title": plan.title,
                         "destination_text": plan.destination_text,
                         "watch_mode": watch_mode,
+                        "last_seen_at": last_seen_at,
                         "watched_places_count": watched_places.count()
                         if watched_places.exists()
                         else saved_places.count(),
@@ -1378,6 +1432,32 @@ class TripPlanActivitySummaryView(APIView):
             }
         )
 
+
+class TripPlanActivitySeenView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        plans = TripPlan.objects.filter(user=request.user)
+        now = timezone.now()
+
+        marked_count = 0
+
+        for plan in plans:
+            TripPlanActivitySeen.objects.update_or_create(
+                user=request.user,
+                trip_plan=plan,
+                defaults={"last_seen_at": now},
+            )
+            marked_count += 1
+
+        return Response(
+            {
+                "status": "ok",
+                "marked_seen_count": marked_count,
+                "last_seen_at": now,
+            }
+        )
 
 class TripPlanActivityItemsView(APIView):
     authentication_classes = [CookieJWTAuthentication]

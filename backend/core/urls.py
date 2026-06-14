@@ -46,6 +46,7 @@ from .views import (
     ContentReportDetailView,
     TripPlanActivitySummaryView,
     TripPlanActivityItemsView,
+    TripPlanActivitySeenView,
 )
 
 
@@ -89,6 +90,12 @@ urlpatterns = [
         "trip-plans/activity/items/",
         TripPlanActivityItemsView.as_view(),
         name="trip-plan-activity-items",
+    ),
+
+    path(
+        "trip-plans/activity/seen/",
+        TripPlanActivitySeenView.as_view(),
+        name="trip-plan-activity-seen",
     ),
 
     path(

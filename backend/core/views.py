@@ -300,6 +300,61 @@ class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
 
+class PlaceSearchView(APIView):
+    def get(self, request):
+        query = (request.query_params.get("q") or "").strip()
+        country = (request.query_params.get("country") or "").strip()
+
+        if len(query) < 2:
+            return Response(
+                {
+                    "count": 0,
+                    "results": [],
+                    "detail": "Type at least 2 characters to search.",
+                }
+            )
+
+        places = Place.objects.select_related("destination").filter(
+            Q(name__icontains=query)
+            | Q(city__icontains=query)
+            | Q(place_type__icontains=query)
+            | Q(destination__name__icontains=query)
+            | Q(destination__country__icontains=query)
+            | Q(destination__city__icontains=query)
+        )
+
+        if country:
+            places = places.filter(
+                Q(destination__name__iexact=country)
+                | Q(destination__country__iexact=country)
+            )
+
+        places = places.order_by("place_type", "name")[:20]
+
+        results = []
+
+        for place in places:
+            destination = place.destination
+
+            results.append(
+                {
+                    "id": place.id,
+                    "name": place.name,
+                    "place_type": place.place_type,
+                    "city": place.city,
+                    "destination": destination.id if destination else None,
+                    "destination_name": destination.name if destination else "",
+                    "destination_country": destination.country if destination else "",
+                    "destination_city": destination.city if destination else "",
+                }
+            )
+
+        return Response(
+            {
+                "count": len(results),
+                "results": results,
+            }
+        )
 
 class CountryContextView(APIView):
     def get(self, request, pk):

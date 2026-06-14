@@ -720,16 +720,22 @@ const getActivityMetaText = (item: any) => {
           {/* Quick planning + Search / Create / Share menu */}
           <div style={topActionButtons}>
             <button
-              type="button"
-              onClick={() => router.push("/trip-plans")}
-              style={{
-                ...secondaryButton,
-                position: "relative",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      tripPlanActivity?.has_activity
+                        ? "/trip-plans/activity"
+                        : "/trip-plans"
+                    )
+                  }
+                  style={{
+                    ...secondaryButton,
+                    position: "relative",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
               <span>My trips</span>
 
               {tripPlanActivity?.has_activity && (

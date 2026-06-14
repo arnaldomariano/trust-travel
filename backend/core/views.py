@@ -301,6 +301,105 @@ class PlaceDetailView(generics.RetrieveAPIView):
     serializer_class = PlaceSerializer
 
 
+class CountryContextView(APIView):
+    def get(self, request, pk):
+        country_place = Place.objects.select_related("destination").filter(
+            pk=pk
+        ).first()
+
+        if not country_place:
+            return Response(
+                {"detail": "Place not found."},
+                status=404,
+            )
+
+        if country_place.place_type != "country":
+            return Response(
+                {
+                    "detail": "Country context is only available for places with place_type='country'."
+                },
+                status=400,
+            )
+
+        destination = country_place.destination
+
+        child_places = Place.objects.filter(
+            destination=destination
+        ).exclude(
+            id=country_place.id
+        ).order_by(
+            "place_type",
+            "name",
+        )
+
+        general_experiences = Experience.objects.filter(
+            place=country_place
+        ).select_related(
+            "user",
+            "place",
+            "place__destination",
+        ).order_by(
+            "-created_at"
+        )
+
+        child_places_data = []
+
+        for place in child_places:
+            child_places_data.append(
+                {
+                    "id": place.id,
+                    "name": place.name,
+                    "place_type": place.place_type,
+                    "city": place.city,
+                    "description": place.description,
+                    "image_url": place.image_url,
+                    "average_rating": getattr(place, "average_rating", None),
+                    "reviews_count": getattr(place, "reviews_count", None),
+                    "created_at": place.created_at,
+                }
+            )
+
+        general_experiences_data = []
+
+        for experience in general_experiences:
+            general_experiences_data.append(
+                {
+                    "id": experience.id,
+                    "title": getattr(experience, "title", ""),
+                    "comment": getattr(experience, "comment", ""),
+                    "rating": getattr(experience, "rating", None),
+                    "image_url": getattr(experience, "image_url", ""),
+                    "trip_context": getattr(experience, "trip_context", ""),
+                    "trip_style": getattr(experience, "trip_style", ""),
+                    "created_at": experience.created_at,
+                    "user": experience.user.username if experience.user else None,
+                    "place_id": country_place.id,
+                    "place_name": country_place.name,
+                }
+            )
+
+        return Response(
+            {
+                "country_place": {
+                    "id": country_place.id,
+                    "name": country_place.name,
+                    "place_type": country_place.place_type,
+                    "city": country_place.city,
+                    "description": country_place.description,
+                    "image_url": country_place.image_url,
+                    "destination_id": destination.id if destination else None,
+                    "destination_name": destination.name if destination else "",
+                    "destination_country": destination.country if destination else "",
+                    "created_at": country_place.created_at,
+                },
+                "general_experiences": general_experiences_data,
+                "child_places": child_places_data,
+                "child_places_count": child_places.count(),
+                "general_experiences_count": general_experiences.count(),
+            }
+        )
+
+
 class DestinationPlacesListView(generics.ListAPIView):
     serializer_class = PlaceSerializer
 

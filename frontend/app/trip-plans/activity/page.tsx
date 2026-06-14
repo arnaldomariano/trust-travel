@@ -45,36 +45,53 @@ export default function TripPlanActivityPage() {
   const [filter, setFilter] = useState<ActivityFilter>("all");
   const [error, setError] = useState("");
 
-  const loadActivity = async () => {
-    setLoading(true);
-    setError("");
+  const markActivityAsSeen = async () => {
+  try {
+    const res = await fetch(`${API_URL}/api/trip-plans/activity/seen/`, {
+      method: "POST",
+      credentials: "include",
+    });
 
-    try {
-      const res = await fetch(`${API_URL}/api/trip-plans/activity/items/`, {
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Failed to load trip activity:", res.status, text);
-        setError("Could not load Trip Radar activity.");
-        return;
-      }
-
-      const data = await res.json();
-
-      setActivity({
-        count: data.count || 0,
-        items: Array.isArray(data.items) ? data.items : [],
-      });
-    } catch (error) {
-      console.error("Trip activity fetch error:", error);
-      setError("Could not load Trip Radar activity.");
-    } finally {
-      setLoading(false);
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Failed to mark trip activity as seen:", res.status, text);
     }
-  };
+  } catch (error) {
+    console.error("Trip activity seen error:", error);
+  }
+};
 
+  const loadActivity = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const res = await fetch(`${API_URL}/api/trip-plans/activity/items/`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("Failed to load trip activity:", res.status, text);
+          setError("Could not load Trip Radar activity.");
+          return;
+        }
+
+        const data = await res.json();
+
+        setActivity({
+          count: data.count || 0,
+          items: Array.isArray(data.items) ? data.items : [],
+        });
+
+        await markActivityAsSeen();
+      } catch (error) {
+        console.error("Trip activity fetch error:", error);
+        setError("Could not load Trip Radar activity.");
+      } finally {
+        setLoading(false);
+      }
+    };
   useEffect(() => {
     loadActivity();
   }, []);

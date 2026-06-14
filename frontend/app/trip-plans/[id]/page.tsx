@@ -143,6 +143,7 @@ export default function TripPlanDetailPage() {
   const [radarPlaceSearch, setRadarPlaceSearch] = useState("");
   const [radarPlaceResults, setRadarPlaceResults] = useState<PlaceSearchResult[]>([]);
   const [radarPlaceSearchLoading, setRadarPlaceSearchLoading] = useState(false);
+  const [radarPlaceHasSearched, setRadarPlaceHasSearched] = useState(false);
   const [watchingPlaceId, setWatchingPlaceId] = useState<number | null>(null);
   const [unwatchingPlaceId, setUnwatchingPlaceId] = useState<number | null>(null);
   const [pendingRadarRemove, setPendingRadarRemove] = useState<RadarPlace | null>(null);
@@ -276,6 +277,8 @@ export default function TripPlanDetailPage() {
 
     const query = radarPlaceSearch.trim();
 
+    setRadarPlaceHasSearched(true);
+
     if (query.length < 2) {
       setRadarPlaceResults([]);
       setActionError("Type at least 2 characters to search for a place.");
@@ -285,7 +288,19 @@ export default function TripPlanDetailPage() {
     setRadarPlaceSearchLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/places/`, {
+      const params = new URLSearchParams({
+        q: query,
+      });
+
+      if (plan?.destination_text) {
+        params.set("country", plan.destination_text);
+      }
+
+      const searchUrl = `${API_URL}/api/places/search/?${params.toString()}`;
+
+      console.log("Radar place search URL:", searchUrl);
+
+      const res = await fetch(searchUrl, {
         credentials: "include",
       });
 
@@ -293,49 +308,33 @@ export default function TripPlanDetailPage() {
         const text = await res.text();
         console.error("Failed to search places:", res.status, text);
         setActionError("Could not search places right now.");
+        setRadarPlaceResults([]);
         return;
       }
 
       const data = await res.json();
-      const places: PlaceSearchResult[] = Array.isArray(data)
-        ? data
-        : Array.isArray(data.results)
-          ? data.results
-          : [];
 
-      const normalizedQuery = normalizeText(query);
+      console.log("Radar place search response:", data);
 
-      const matches = places
-        .filter((place) => {
-          const searchableText = [
-            place.name,
-            place.city,
-            place.place_type,
-            place.destination_name,
-            place.destination_country,
-            place.destination_city,
-          ]
-            .map(normalizeText)
-            .join(" ");
+      const places: PlaceSearchResult[] = Array.isArray(data.results)
+        ? data.results
+        : [];
 
-          return searchableText.includes(normalizedQuery);
-        })
-        .slice(0, 8);
+      setRadarPlaceResults(places.slice(0, 8));
 
-      setRadarPlaceResults(matches);
-
-      if (matches.length === 0) {
-          setActionMessage("");
+      if (places.length === 0) {
+        setActionMessage("");
       }
     } catch (error) {
       console.error("Place search error:", error);
       setActionError("Could not search places right now.");
+      setRadarPlaceResults([]);
     } finally {
       setRadarPlaceSearchLoading(false);
     }
   };
 
-  const watchRadarPlace = async (place: { id: number; name: string }) => {
+const watchRadarPlace = async (place: { id: number; name: string }) => {
     if (!plan) return;
 
     clearActionFeedback();
@@ -795,10 +794,16 @@ export default function TripPlanDetailPage() {
               searchPlacesForRadar();
             }}
           >
-            <input
+                        <input
               type="text"
               value={radarPlaceSearch}
-              onChange={(event) => setRadarPlaceSearch(event.target.value)}
+              onChange={(event) => {
+                setRadarPlaceSearch(event.target.value);
+                setRadarPlaceResults([]);
+                setRadarPlaceHasSearched(false);
+                setActionMessage("");
+                setActionError("");
+              }}
               placeholder="Search place to monitor..."
               style={radarSearchInput}
             />
@@ -816,9 +821,11 @@ export default function TripPlanDetailPage() {
             </button>
           </form>
 
-            {radarPlaceSearch.trim().length >= 2 &&
+            {radarPlaceHasSearched &&
+              radarPlaceSearch.trim().length >= 2 &&
               !radarPlaceSearchLoading &&
               radarPlaceResults.length === 0 && (
+
                 <div style={radarCreateBox}>
                   <span>
                     No place found for “{radarPlaceSearch.trim()}”.

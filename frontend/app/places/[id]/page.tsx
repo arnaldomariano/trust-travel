@@ -18,6 +18,16 @@ export default function PlacePage() {
 
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
+  const [countryContext, setCountryContext] = useState<any>(null);
+  const [loadingCountryContext, setLoadingCountryContext] = useState(false);
+
+  const [showCreateChildPlaceForm, setShowCreateChildPlaceForm] = useState(false);
+  const [newChildPlaceName, setNewChildPlaceName] = useState("");
+  const [newChildPlaceCity, setNewChildPlaceCity] = useState("");
+  const [creatingChildPlace, setCreatingChildPlace] = useState(false);
+  const [createdChildPlace, setCreatedChildPlace] = useState<any>(null);
+  const [searchInsideCountry, setSearchInsideCountry] = useState("");
+
   const [showRatings, setShowRatings] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -102,6 +112,34 @@ export default function PlacePage() {
   const rating2 = experiences.filter((e) => e.rating === 2).length;
   const rating1 = experiences.filter((e) => e.rating === 1).length;
 
+  const loadCountryContext = async (countryPlaceId: string | number) => {
+    setLoadingCountryContext(true);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/places/${countryPlaceId}/country-context/`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to load country context:", res.status, text);
+        setCountryContext(null);
+        return;
+      }
+
+      const data = await res.json();
+      setCountryContext(data);
+    } catch (error) {
+      console.error("Country context error:", error);
+      setCountryContext(null);
+    } finally {
+      setLoadingCountryContext(false);
+    }
+  };
+
 useEffect(() => {
   const checkLogin = async () => {
     try {
@@ -176,6 +214,12 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       .then((data) => {
         setPlace(data);
 
+        if (data.place_type === "country") {
+          loadCountryContext(data.id);
+        } else {
+          setCountryContext(null);
+        }
+
         fetch(`${API_URL}/api/destinations/`)
           .then((res) => res.json())
           .then((destinations) => {
@@ -236,6 +280,87 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       if (filter === "all") return true;
       return item.content_type === filter;
     });
+
+    const countryChildPlaces = countryContext?.child_places || [];
+
+    const filteredCountryChildPlaces = countryChildPlaces.filter((childPlace: any) => {
+      const search = searchInsideCountry.trim().toLowerCase();
+
+      if (!search) return false;
+
+      const name = (childPlace.name || "").toLowerCase();
+      const city = (childPlace.city || "").toLowerCase();
+      const type = (childPlace.place_type || "").toLowerCase();
+
+      return (
+        name.includes(search) ||
+        city.includes(search) ||
+        type.includes(search)
+      );
+    });
+
+    const handleCreateChildPlace = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!place || place.place_type !== "country") return;
+
+      const name = newChildPlaceName.trim();
+      const city = newChildPlaceCity.trim() || name;
+      const countryName =
+        place.destination_country ||
+        destination?.country ||
+        place.name;
+
+      if (!name) {
+        alert("Please enter the city, island or region name.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+          `You are creating a new city, island or region inside ${place.name}: ${name}. Continue?`
+      );
+
+      if (!confirmed) return;
+
+      setCreatingChildPlace(true);
+      setCreatedChildPlace(null);
+
+      try {
+        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            city,
+            country: countryName,
+            place_type: "city",
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Failed to create city/region:", data);
+          alert(data.detail || "Error creating city or region.");
+          return;
+        }
+
+        setCreatedChildPlace(data);
+        setNewChildPlaceName("");
+        setNewChildPlaceCity("");
+        setShowCreateChildPlaceForm(false);
+
+        await loadCountryContext(place.id);
+      } catch (error) {
+        console.error("Create child place failed:", error);
+        alert("Error creating city or region.");
+      } finally {
+        setCreatingChildPlace(false);
+      }
+    };
 
     const handleSubmitUpdate = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -439,6 +564,359 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
           </div>
         </section>
+
+        {place?.place_type === "country" && (
+          <section
+            style={{
+              marginBottom: "28px",
+              padding: "22px",
+              border: "1px solid #eee",
+              borderRadius: "16px",
+              backgroundColor: "white",
+            }}
+          >
+            <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+              Country structure
+            </div>
+
+            <h2 style={{ marginTop: 0, marginBottom: "8px", fontSize: "22px" }}>
+              Cities, islands and regions inside {place.name}
+            </h2>
+            <p
+              style={{
+                marginTop: 0,
+                marginBottom: "18px",
+                color: "#666",
+                lineHeight: 1.5,
+                maxWidth: "680px",
+              }}
+            >
+            Here you can explore broad travel areas inside {place.name}, such as
+            cities, islands, provinces or regions. Country-level experiences stay
+            separate from city or region-specific experiences.
+            </p>
+
+                        <div
+              style={{
+                display: "grid",
+                gap: "8px",
+                marginBottom: "18px",
+                maxWidth: "620px",
+              }}
+            >
+              <label style={label}>Search inside {place.name}</label>
+
+              <input
+                value={searchInsideCountry}
+                onChange={(e) => setSearchInsideCountry(e.target.value)}
+                placeholder={`Search cities, islands or regions inside ${place.name}`}
+                style={input}
+              />
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "#777",
+                  fontSize: "13px",
+                  lineHeight: 1.5,
+                }}
+              >
+                Search first if you already have a city, island or region in mind.
+              </p>
+            </div>
+
+            {showCreateChildPlaceForm && (
+              <form
+                onSubmit={handleCreateChildPlace}
+                style={{
+                  display: "grid",
+                  gap: "12px",
+                  padding: "16px",
+                  border: "1px solid #eee",
+                  borderRadius: "14px",
+                  backgroundColor: "#fafafa",
+                  marginBottom: "18px",
+                  maxWidth: "620px",
+                }}
+              >
+                <div>
+                  <strong>Create city, island or region inside {place.name}</strong>
+
+                  <p
+                    style={{
+                      margin: "6px 0 0 0",
+                      color: "#666",
+                      fontSize: "14px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Use this for broad travel areas inside this country, such as cities,
+                    islands, provinces or regions. Specific beaches, restaurants, hotels
+                    and attractions should be added later inside a city or region.
+                  </p>
+                </div>
+
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <label style={label}>City, island or region name</label>
+
+                  <input
+                    value={newChildPlaceName}
+                    onChange={(e) => setNewChildPlaceName(e.target.value)}
+                    placeholder="Example: Bali, Nias, Jakarta, Lombok, Tuscany"
+                    style={input}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <label style={label}>Optional display label</label>
+
+                  <input
+                    value={newChildPlaceCity}
+                    onChange={(e) => setNewChildPlaceCity(e.target.value)}
+                    placeholder="Optional. Leave blank to use the same name."
+                    style={input}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={creatingChildPlace || !newChildPlaceName.trim()}
+                  style={{
+                    ...primaryButton,
+                    opacity:
+                      creatingChildPlace || !newChildPlaceName.trim()
+                        ? 0.5
+                        : 1,
+                    cursor:
+                      creatingChildPlace || !newChildPlaceName.trim()
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                {creatingChildPlace
+                  ? "Creating..."
+                  : `Create city/island/region inside ${place.name}`}
+                </button>
+              </form>
+            )}
+
+            <div
+              style={{
+                borderTop: "1px solid #eee",
+                paddingTop: "16px",
+                marginTop: "6px",
+                marginBottom: "18px",
+                display: "flex",
+                justifyContent: "flex-start",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setShowCreateChildPlaceForm((prev) => !prev)
+                }
+                style={{
+                  ...secondaryButton,
+                  fontSize: "13px",
+                  padding: "8px 12px",
+                }}
+              >
+                {showCreateChildPlaceForm
+                  ? "Cancel"
+                  : `Add city, island or region inside ${place.name}`}
+              </button>
+            </div>
+
+            {createdChildPlace && (
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #c7f0d8",
+                  borderRadius: "14px",
+                  backgroundColor: "#f2fbf5",
+                  marginBottom: "18px",
+                }}
+              >
+                <strong>{createdChildPlace.name} was created.</strong>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                    marginTop: "12px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(`/places/${createdChildPlace.id}`)
+                    }
+                    style={primaryButton}
+                  >
+                    View page
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/destinations?place=${createdChildPlace.id}&share=true`
+                      )
+                    }
+                    style={secondaryButton}
+                  >
+                    Share first experience
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCreatedChildPlace(null)}
+                    style={secondaryButton}
+                  >
+                    Stay here
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {loadingCountryContext ? (
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #eee",
+                  borderRadius: "12px",
+                  color: "#777",
+                  backgroundColor: "#fafafa",
+                }}
+              >
+                Loading cities, islands and regions...
+              </div>
+
+            ) : searchInsideCountry.trim() && filteredCountryChildPlaces.length > 0 ? (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+                  gap: "12px",
+                  marginBottom: "18px",
+                }}
+              >
+                {filteredCountryChildPlaces.map((childPlace: any) => (
+                  <div
+                    key={childPlace.id}
+                    style={{
+                      padding: "14px",
+                      border: "1px solid #eee",
+                      borderRadius: "14px",
+                      backgroundColor: "#fafafa",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#777",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      {getPlaceTypeLabel(childPlace.place_type)}
+                    </div>
+
+                    <h3
+                      style={{
+                        margin: 0,
+                        marginBottom: "6px",
+                        fontSize: "17px",
+                      }}
+                    >
+                      {childPlace.name}
+                    </h3>
+
+                    {childPlace.city && (
+                      <div
+                        style={{
+                          color: "#666",
+                          fontSize: "13px",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        {childPlace.city}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                        marginTop: "10px",
+                      }}
+                    >
+                      <Link
+                        href={`/places/${childPlace.id}`}
+                        style={{
+                          display: "inline-block",
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          backgroundColor: "#111",
+                          color: "white",
+                          textDecoration: "none",
+                          fontSize: "13px",
+                        }}
+                      >
+                        View page
+                      </Link>
+
+                      <Link
+                        href={`/destinations?place=${childPlace.id}&share=true`}
+                        style={{
+                          display: "inline-block",
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          border: "1px solid #ddd",
+                          backgroundColor: "white",
+                          color: "#111",
+                          textDecoration: "none",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Share experience
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+            ) : searchInsideCountry.trim() ? (
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #eee",
+                  borderRadius: "12px",
+                  color: "#777",
+                  backgroundColor: "#fafafa",
+                  marginBottom: "18px",
+                }}
+              >
+                No city, island or region found for “{searchInsideCountry}”.
+              </div>
+            ) : (
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #eee",
+                  borderRadius: "12px",
+                  color: "#777",
+                  backgroundColor: "#fafafa",
+                  marginBottom: "18px",
+                }}
+              >
+                Use the search above to find cities, islands or regions inside{" "}
+                {place.name}.
+              </div>
+            )}
+          </section>
+        )}
 
         {showUpdateForm && (
           <section

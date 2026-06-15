@@ -28,6 +28,19 @@ export default function PlacePage() {
   const [createdChildPlace, setCreatedChildPlace] = useState<any>(null);
   const [searchInsideCountry, setSearchInsideCountry] = useState("");
 
+  const [searchInsideCity, setSearchInsideCity] = useState("");
+  const [specificPlaceResults, setSpecificPlaceResults] = useState<any[]>([]);
+  const [specificPlaceSearchLoading, setSpecificPlaceSearchLoading] = useState(false);
+  const [specificPlaceHasSearched, setSpecificPlaceHasSearched] = useState(false);
+
+  const [showCreateSpecificPlaceForm, setShowCreateSpecificPlaceForm] = useState(false);
+  const [newSpecificPlaceName, setNewSpecificPlaceName] = useState("");
+  const [newSpecificPlaceType, setNewSpecificPlaceType] = useState<
+    "nature" | "restaurant" | "hotel" | "attraction" | "other"
+  >("nature");
+  const [creatingSpecificPlace, setCreatingSpecificPlace] = useState(false);
+  const [createdSpecificPlace, setCreatedSpecificPlace] = useState<any>(null);
+
   const [showRatings, setShowRatings] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -359,6 +372,145 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         alert("Error creating city or region.");
       } finally {
         setCreatingChildPlace(false);
+      }
+    };
+
+    const handleSearchSpecificPlaces = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!place || place.place_type !== "city") return;
+
+      const query = searchInsideCity.trim();
+
+      setSpecificPlaceHasSearched(true);
+      setSpecificPlaceResults([]);
+
+      if (query.length < 2) {
+        alert("Type at least 2 characters to search inside this city or region.");
+        return;
+      }
+
+      const countryName =
+        place.destination_country ||
+        destination?.country ||
+        destination?.name ||
+        "";
+
+      setSpecificPlaceSearchLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          q: query,
+        });
+
+        if (countryName) {
+          params.set("country", countryName);
+        }
+
+        const res = await fetch(
+          `${API_URL}/api/places/search/?${params.toString()}`,
+          {
+            credentials: "include",
+          }
+        );
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("Specific place search failed:", res.status, text);
+          alert("Could not search specific places right now.");
+          return;
+        }
+
+        const data = await res.json();
+        const results = Array.isArray(data.results) ? data.results : [];
+
+        const filtered = results.filter((result: any) => {
+          const resultCity = String(result.city || "").toLowerCase().trim();
+          const currentCity = String(place.name || "").toLowerCase().trim();
+
+          const resultType = String(result.place_type || "").toLowerCase();
+
+          return (
+            resultCity === currentCity &&
+            resultType !== "country" &&
+            resultType !== "city"
+          );
+        });
+
+        setSpecificPlaceResults(filtered);
+      } catch (error) {
+        console.error("Specific place search error:", error);
+        alert("Could not search specific places right now.");
+      } finally {
+        setSpecificPlaceSearchLoading(false);
+      }
+    };
+
+    const handleCreateSpecificPlace = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!place || place.place_type !== "city") return;
+
+      const name = newSpecificPlaceName.trim();
+
+      if (!name) {
+        alert("Please enter the specific place name.");
+        return;
+      }
+
+      const countryName =
+        place.destination_country ||
+        destination?.country ||
+        destination?.name ||
+        "";
+
+      if (!countryName) {
+        alert("Could not identify the country for this city or region.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `You are creating a new specific place inside ${place.name}: ${name}. Continue?`
+      );
+
+      if (!confirmed) return;
+
+      setCreatingSpecificPlace(true);
+      setCreatedSpecificPlace(null);
+
+      try {
+        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            city: place.name,
+            country: countryName,
+            place_type: newSpecificPlaceType,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Failed to create specific place:", data);
+          alert(data.detail || "Error creating specific place.");
+          return;
+        }
+
+        setCreatedSpecificPlace(data);
+        setNewSpecificPlaceName("");
+        setNewSpecificPlaceType("nature");
+        setShowCreateSpecificPlaceForm(false);
+        setSpecificPlaceResults((prev) => [data, ...prev]);
+      } catch (error) {
+        console.error("Create specific place failed:", error);
+        alert("Error creating specific place.");
+      } finally {
+        setCreatingSpecificPlace(false);
       }
     };
 
@@ -913,6 +1065,378 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
               >
                 Use the search above to find cities, islands or regions inside{" "}
                 {place.name}.
+              </div>
+            )}
+          </section>
+        )}
+
+        {place?.place_type === "city" && (
+          <section
+            style={{
+              marginBottom: "28px",
+              padding: "22px",
+              border: "1px solid #eee",
+              borderRadius: "16px",
+              backgroundColor: "white",
+            }}
+          >
+            <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+              City / region structure
+            </div>
+
+            <h2 style={{ marginTop: 0, marginBottom: "8px", fontSize: "22px" }}>
+              Specific places inside {place.name}
+            </h2>
+
+            <p
+              style={{
+                marginTop: 0,
+                marginBottom: "18px",
+                color: "#666",
+                lineHeight: 1.5,
+                maxWidth: "680px",
+              }}
+            >
+              Search for beaches, restaurants, hotels, tourist attractions,
+              nature spots or other specific places inside {place.name}. This
+              keeps city-level experiences separate from place-specific
+              experiences.
+            </p>
+
+            <form
+              onSubmit={handleSearchSpecificPlaces}
+              style={{
+                display: "grid",
+                gap: "8px",
+                marginBottom: "18px",
+                maxWidth: "620px",
+              }}
+            >
+              <label style={label}>Search inside {place.name}</label>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <input
+                  value={searchInsideCity}
+                  onChange={(e) => {
+                    setSearchInsideCity(e.target.value);
+                    setSpecificPlaceResults([]);
+                    setSpecificPlaceHasSearched(false);
+                  }}
+                  placeholder={`Search beaches, restaurants, hotels or attractions inside ${place.name}`}
+                  style={{
+                    ...input,
+                    flex: 1,
+                    minWidth: "220px",
+                  }}
+                />
+
+                <button
+                  type="submit"
+                  disabled={specificPlaceSearchLoading}
+                  style={{
+                    ...secondaryButton,
+                    opacity: specificPlaceSearchLoading ? 0.5 : 1,
+                    cursor: specificPlaceSearchLoading ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {specificPlaceSearchLoading ? "Searching..." : "Search"}
+                </button>
+              </div>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "#777",
+                  fontSize: "13px",
+                  lineHeight: 1.5,
+                }}
+              >
+                Search first if you already have a specific place in mind.
+              </p>
+            </form>
+
+            {specificPlaceHasSearched && specificPlaceResults.length > 0 && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+                  gap: "12px",
+                  marginBottom: "18px",
+                }}
+              >
+                {specificPlaceResults.map((specificPlace: any) => (
+                  <div
+                    key={specificPlace.id}
+                    style={{
+                      padding: "14px",
+                      border: "1px solid #eee",
+                      borderRadius: "14px",
+                      backgroundColor: "#fafafa",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#777",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      {getPlaceTypeLabel(specificPlace.place_type)}
+                    </div>
+
+                    <h3
+                      style={{
+                        margin: 0,
+                        marginBottom: "6px",
+                        fontSize: "17px",
+                      }}
+                    >
+                      {specificPlace.name}
+                    </h3>
+
+                    <div
+                      style={{
+                        color: "#666",
+                        fontSize: "13px",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      {specificPlace.city || place.name}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                        marginTop: "10px",
+                      }}
+                    >
+                      <Link
+                        href={`/places/${specificPlace.id}`}
+                        style={{
+                          display: "inline-block",
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          backgroundColor: "#111",
+                          color: "white",
+                          textDecoration: "none",
+                          fontSize: "13px",
+                        }}
+                      >
+                        View page
+                      </Link>
+
+                      <Link
+                        href={`/destinations?place=${specificPlace.id}&share=true`}
+                        style={{
+                          display: "inline-block",
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          border: "1px solid #ddd",
+                          backgroundColor: "white",
+                          color: "#111",
+                          textDecoration: "none",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Share experience
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {specificPlaceHasSearched &&
+              !specificPlaceSearchLoading &&
+              specificPlaceResults.length === 0 && (
+                <div
+                  style={{
+                    padding: "14px",
+                    border: "1px solid #eee",
+                    borderRadius: "12px",
+                    color: "#777",
+                    backgroundColor: "#fafafa",
+                    marginBottom: "18px",
+                  }}
+                >
+                  No specific place found inside {place.name} for “{searchInsideCity}”.
+                </div>
+              )}
+
+            {showCreateSpecificPlaceForm && (
+              <form
+                onSubmit={handleCreateSpecificPlace}
+                style={{
+                  display: "grid",
+                  gap: "12px",
+                  padding: "16px",
+                  border: "1px solid #eee",
+                  borderRadius: "14px",
+                  backgroundColor: "#fafafa",
+                  marginBottom: "18px",
+                  maxWidth: "620px",
+                }}
+              >
+                <div>
+                  <strong>Create specific place inside {place.name}</strong>
+
+                  <p
+                    style={{
+                      margin: "6px 0 0 0",
+                      color: "#666",
+                      fontSize: "14px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Use this for beaches, restaurants, hotels, tourist
+                    attractions, nature spots or other specific places inside
+                    this city, island or region.
+                  </p>
+                </div>
+
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <label style={label}>Specific place name</label>
+
+                  <input
+                    value={newSpecificPlaceName}
+                    onChange={(e) => setNewSpecificPlaceName(e.target.value)}
+                    placeholder="Example: Kuta Beach, Colosseum, Central Market"
+                    style={input}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <label style={label}>Place type</label>
+
+                  <select
+                    value={newSpecificPlaceType}
+                    onChange={(e) =>
+                      setNewSpecificPlaceType(
+                        e.target.value as
+                          | "nature"
+                          | "restaurant"
+                          | "hotel"
+                          | "attraction"
+                          | "other"
+                      )
+                    }
+                    style={input}
+                  >
+                    <option value="nature">Beach / Nature spot</option>
+                    <option value="restaurant">Restaurant / Café</option>
+                    <option value="hotel">Hotel / Stay</option>
+                    <option value="attraction">Tourist attraction</option>
+                    <option value="other">Other specific place</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={creatingSpecificPlace || !newSpecificPlaceName.trim()}
+                  style={{
+                    ...primaryButton,
+                    opacity:
+                      creatingSpecificPlace || !newSpecificPlaceName.trim()
+                        ? 0.5
+                        : 1,
+                    cursor:
+                      creatingSpecificPlace || !newSpecificPlaceName.trim()
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  {creatingSpecificPlace
+                    ? "Creating..."
+                    : `Create specific place inside ${place.name}`}
+                </button>
+              </form>
+            )}
+
+            <div
+              style={{
+                borderTop: "1px solid #eee",
+                paddingTop: "16px",
+                marginTop: "6px",
+                marginBottom: "18px",
+                display: "flex",
+                justifyContent: "flex-start",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setShowCreateSpecificPlaceForm((prev) => !prev)
+                }
+                style={{
+                  ...secondaryButton,
+                  fontSize: "13px",
+                  padding: "8px 12px",
+                }}
+              >
+                {showCreateSpecificPlaceForm
+                  ? "Cancel"
+                  : `Add specific place inside ${place.name}`}
+              </button>
+            </div>
+
+            {createdSpecificPlace && (
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #c7f0d8",
+                  borderRadius: "14px",
+                  backgroundColor: "#f2fbf5",
+                  marginBottom: "18px",
+                }}
+              >
+                <strong>{createdSpecificPlace.name} was created.</strong>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                    marginTop: "12px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(`/places/${createdSpecificPlace.id}`)
+                    }
+                    style={primaryButton}
+                  >
+                    View page
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/destinations?place=${createdSpecificPlace.id}&share=true`
+                      )
+                    }
+                    style={secondaryButton}
+                  >
+                    Share first experience
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCreatedSpecificPlace(null)}
+                    style={secondaryButton}
+                  >
+                    Stay here
+                  </button>
+                </div>
               </div>
             )}
           </section>

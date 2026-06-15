@@ -161,15 +161,18 @@ const getSimilarityScore = (place: any) => {
     return 0;
   }
 
-  // Specific place types should only be suggested after a country is selected.
+  // Specific place types can be searched globally.
+  // If a country is selected, restrict results to that country.
+  // If no country is selected, show global results with clear context.
   if (isSpecificSearch) {
-    if (!selectedCountryPlace) return 0;
     if (place.place_type !== placeType) return 0;
 
-    const selectedCountryName = normalizeText(selectedCountryPlace.name);
-    const placeCountry = normalizeText(place.destination_country);
+    if (selectedCountryPlace) {
+      const selectedCountryName = normalizeText(selectedCountryPlace.name);
+      const placeCountry = normalizeText(place.destination_country);
 
-    if (placeCountry !== selectedCountryName) return 0;
+      if (placeCountry !== selectedCountryName) return 0;
+    }
 
     if (placeName === normalizedSearchText) return 100;
     if (placeName.startsWith(normalizedSearchText)) return 90;
@@ -245,16 +248,18 @@ const getSearchMatchScore = (place: any) => {
   // =========================
   // Specific place search
   // =========================
-  // Attractions, hotels, restaurants, nature spots and other specific places
-  // should only be searched after a country context exists.
+  // Specific places can be searched globally.
+  // If a country is selected, restrict results to that country.
+  // If no country is selected, show results with full context.
   if (isSpecificSearch) {
-    if (!selectedCountryPlace) return 0;
     if (!isSpecific) return 0;
 
-    const selectedCountryName = normalizeText(selectedCountryPlace.name);
-    const placeCountry = normalizeText(place.destination_country);
+    if (selectedCountryPlace) {
+      const selectedCountryName = normalizeText(selectedCountryPlace.name);
+      const placeCountry = normalizeText(place.destination_country);
 
-    if (placeCountry !== selectedCountryName) return 0;
+      if (placeCountry !== selectedCountryName) return 0;
+    }
 
     if (name === normalizedSearchText) return 100;
     if (name.startsWith(normalizedSearchText)) return 90;
@@ -512,10 +517,10 @@ const specificPlaceTypeOptions = [
   ["other", "Other"],
 ] as const;
 
-const placeTypeOptionsToShow =
-  selectedCountryPlace || selectedPlace
-    ? [...primaryPlaceTypeOptions, ...specificPlaceTypeOptions]
-    : primaryPlaceTypeOptions;
+const placeTypeOptionsToShow = [
+  ...primaryPlaceTypeOptions,
+  ...specificPlaceTypeOptions,
+];
 
   // =========================
   // Create a basic place
@@ -967,9 +972,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               lineHeight: 1.5,
             }}
           >
-            Start with a country or city/region. Specific places such as hotels,
-            restaurants, attractions and nature spots are easier to add after the main
-            destination is clear.
+            Search by country, city/region or specific place. When results have
+            similar names, check the type, city/region and country before selecting.
+            To create a new specific place, it is better to start from the city/region page.
           </p>
         )}
 
@@ -1086,10 +1091,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         city, attraction, hotel, restaurant or nature spot.
       </div>
 
-    ) : placeType !== "country" && placeType !== "city" && !selectedCountryPlace ? (
+    ) : !searchTerm.trim() ? (
       <div style={helperCard}>
-        Start by searching and selecting a country first. Then you can choose or create
-        attractions, hotels, restaurants, nature spots or other specific places inside that country.
+        Start typing based on the type you selected. For example, search for a country,
+        city, attraction, hotel, restaurant or nature spot.
       </div>
 
     ) : filteredPlaces.length > 0 && !selectedCountryPlace && !selectedPlace ? (

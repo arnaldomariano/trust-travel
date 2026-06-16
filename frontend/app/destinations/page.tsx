@@ -275,16 +275,73 @@ const getSearchMatchScore = (place: any) => {
   return 0;
 };
 
+const getUnifiedSearchScore = (place: any) => {
+  if (!normalizedSearchText) return 0;
+
+  const name = normalizeText(place.name);
+  const city = normalizeText(place.city || place.destination_name);
+  const country = normalizeText(
+    place.destination_country ||
+      place.country_name ||
+      place.destination_name
+  );
+
+    const typeLabelByType: Record<string, string> = {
+    country: "Country",
+    city: "City / Region",
+    attraction: "Tourist attraction",
+    hotel: "Hotel",
+    restaurant: "Restaurant / Café",
+    nature: "Beach / Nature spot",
+    other: "Other",
+  };
+
+  const type = normalizeText(typeLabelByType[place.place_type] || "Place");
+
+  if (name === normalizedSearchText) return 100;
+  if (name.startsWith(normalizedSearchText)) return 90;
+  if (name.includes(normalizedSearchText)) return 80;
+
+  if (normalizedSearchText.length >= 4 && city.includes(normalizedSearchText)) {
+    return 65;
+  }
+
+  if (normalizedSearchText.length >= 4 && country.includes(normalizedSearchText)) {
+    return 55;
+  }
+
+  if (normalizedSearchText.length >= 4 && type.includes(normalizedSearchText)) {
+    return 45;
+  }
+
+  return 0;
+};
+
 const filteredPlaces = places
   .map((place) => ({
     ...place,
-    searchMatchScore: getSearchMatchScore(place),
+    searchMatchScore: getUnifiedSearchScore(place),
   }))
   .filter((place) => place.searchMatchScore > 0)
   .sort((a, b) => {
     if (a.searchMatchScore !== b.searchMatchScore) {
       return b.searchMatchScore - a.searchMatchScore;
     }
+
+    const typeOrder: Record<string, number> = {
+      country: 1,
+      city: 2,
+      nature: 3,
+      attraction: 4,
+      restaurant: 5,
+      hotel: 6,
+      other: 7,
+    };
+
+    const orderA = typeOrder[a.place_type] || 99;
+    const orderB = typeOrder[b.place_type] || 99;
+
+    if (orderA !== orderB) return orderA - orderB;
 
     return (a.name || "").localeCompare(b.name || "");
   });
@@ -317,7 +374,6 @@ const placesInsideSelectedCountry = selectedCountryPlace
         return (a.name || "").localeCompare(b.name || "");
       })
   : [];
-
 
 const normalizedRelatedPlaceSearch = normalizeText(relatedPlaceSearch);
 
@@ -479,20 +535,17 @@ const getPlaceLocationText = (place: any) => {
   return locationParts.join(" · ") || getPlaceHierarchyLabel(place);
 };
 
-const filteredCountryPlaces =
-  placeType === "country"
-    ? filteredPlaces.filter((place) => isCountryPlace(place))
-    : [];
+const filteredCountryPlaces = filteredPlaces.filter((place) =>
+  isCountryPlace(place)
+);
 
-const filteredCityOrRegionPlaces =
-  placeType === "city"
-    ? filteredPlaces.filter((place) => isCityOrRegionPlace(place))
-    : [];
+const filteredCityOrRegionPlaces = filteredPlaces.filter((place) =>
+  isCityOrRegionPlace(place)
+);
 
-const filteredSpecificPlaces =
-  placeType !== "country" && placeType !== "city"
-    ? filteredPlaces.filter((place) => place.place_type === placeType)
-    : [];
+const filteredSpecificPlaces = filteredPlaces.filter((place) =>
+  isSpecificPlace(place)
+);
 
 const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
@@ -706,45 +759,13 @@ if (isUpdateMode) {
   // =========================
   // Select an existing place
   // =========================
-const handleSelectExistingPlace = (place: any) => {
-  if (isUpdateMode) {
-    router.push(`/create?place=${place.id}`);
-    return;
-  }
+  const handleSelectExistingPlace = (place: any) => {
+    if (isUpdateMode) {
+      router.push(`/create?place=${place.id}`);
+      return;
+    }
 
-  if (!isExperienceMode) {
-    router.push(`/places/${place.id}/experiences`);
-    return;
-  }
-
-  const isSameSelectedPlace = selectedPlace?.id === place.id;
-
-    setSelectedPlace(place);
-    setCreatedPlaceId(null);
-
-    // In experience mode, the first click selects the place.
-    // If the place is already selected, clicking again opens the experience form.
-    setShowShareForm(isExperienceMode && isSameSelectedPlace);
-
-    setExperienceShared(false);
-    setSharedExperience(null);
-    setEditingExperience(false);
-      setTitle("");
-      setComment("");
-      setRating(null);
-      setImageFile(null);
-      setTripContext("prefer_not_to_say");
-      setTripStyle("prefer_not_to_say");
-
-      setTimeout(() => {
-        document
-          .getElementById(
-            isExperienceMode && isSameSelectedPlace
-              ? "share-experience-form"
-              : "selected-place-actions"
-          )
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
+   router.push(`/places/${place.id}/experiences`);
     };
 
   // =========================
@@ -964,73 +985,13 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         </h1>
 
         <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
-          {isExperienceMode
-            ? "Search for the place you visited. You can read existing experiences first — then share your own review."
-            : isUpdateMode
-            ? "Search for the place related to your event, alert or useful information."
-            : "Search by country, city, attraction, hotel, restaurant or nature spot. You can read existing experiences first — and share your own if you want."}
+          Search freely by country, city, region, beach, hotel, restaurant,
+          attraction or nature spot. Trust Travel will show the place type and
+          location context so you can choose the correct result before sharing.
         </p>
 
         <div style={{ marginBottom: "22px" }}>
 
-        {!selectedCountryPlace && !selectedPlace && (
-          <p
-            style={{
-              margin: "10px 0 0 0",
-              color: "#666",
-              fontSize: "13px",
-              lineHeight: 1.5,
-            }}
-          >
-            Search by country, city/region or specific place. When results have
-            similar names, check the type, city/region and country before selecting.
-            To create a new specific place, it is better to start from the city/region page.
-          </p>
-        )}
-
-          <div style={{ fontWeight: 600, marginBottom: "10px" }}>
-            What do you want to search or share about?
-          </div>
-
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {placeTypeOptionsToShow.map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => {
-                  setPlaceType(value as typeof placeType);
-                  setSelectedCountryPlace(null);
-                  setSelectedPlace(null);
-                  setSearchTerm("");
-                  setNewPlaceName("");
-                  setNewPlaceCity("");
-                  setNewPlaceCountry("");
-                  setTitle("");
-                  setComment("");
-                  setRating(null);
-                  setImageFile(null);
-                  setExperienceShared(false);
-                  setSharedExperience(null);
-                  setEditingExperience(false);
-                  setShowShareForm(false);
-                  setTripContext("prefer_not_to_say");
-                  setTripStyle("prefer_not_to_say");
-                  setShowCreatePlaceForm(false);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "999px",
-                  border: "1px solid #ddd",
-                  background: placeType === value ? "#111" : "white",
-                  color: placeType === value ? "white" : "#111",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
         <input
@@ -1063,7 +1024,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 setTripStyle("prefer_not_to_say");
               }
             }}
-        placeholder={searchPlaceholderByType[placeType]}
+        placeholder="Search country, city, beach, hotel, restaurant or attraction..."
         style={{
           width: "100%",
           maxWidth: "520px",
@@ -1095,24 +1056,15 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           </>
         )}
       </div>
-    ) : !searchTerm.trim() ? (
-      <div style={helperCard}>
-        Start typing based on the type you selected. For example, search for a country,
-        city, attraction, hotel, restaurant or nature spot.
-      </div>
 
-    ) : !searchTerm.trim() ? (
-      <div style={helperCard}>
-        Start typing based on the type you selected. For example, search for a country,
-        city, attraction, hotel, restaurant or nature spot.
-      </div>
+    ) : !searchTerm.trim() ? null
 
-    ) : filteredPlaces.length > 0 && !selectedCountryPlace && !selectedPlace ? (
+      : filteredPlaces.length > 0 && !selectedCountryPlace && !selectedPlace ? (
       <section style={{ display: "grid", gap: "18px", maxWidth: "620px" }}>
 
         <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
-          We found existing places related to your search and selected type.
-          Start with a country when needed, then choose a city, region or specific place.
+          We found existing places related to your search. Check the type,
+          city/region and country before selecting the correct result.
         </p>
 
         {filteredCountryPlaces.length > 0 && (

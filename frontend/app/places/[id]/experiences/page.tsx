@@ -127,6 +127,60 @@ const isCountryPage = place?.place_type === "country";
 const shouldShowExperienceContent =
   !isCountryPage || showCountryExperiences || !!highlightedExperienceId;
 
+  const isCityPage = place?.place_type === "city";
+
+const isSpecificPlacePage =
+  !!place &&
+  place.place_type !== "country" &&
+  place.place_type !== "city";
+
+const getPlaceTypeLabel = (type?: string) => {
+  const labels: Record<string, string> = {
+    country: "Country",
+    city: "City / Region",
+    attraction: "Tourist attraction",
+    hotel: "Hotel",
+    restaurant: "Restaurant / Café",
+    nature: "Beach / Nature spot",
+    other: "Place",
+  };
+
+  return labels[type || ""] || "Place";
+};
+
+const placeTypeLabel = getPlaceTypeLabel(place?.place_type);
+
+const placeContextLabel = [
+  place?.city && place.city !== place?.name ? place.city : null,
+  place?.destination_country || destination?.country || destination?.name,
+]
+  .filter(Boolean)
+  .join(" · ");
+
+const emptyExperienceEyebrowText = isCountryPage
+  ? "Country experience opportunity"
+  : isCityPage
+  ? "City / region experience opportunity"
+  : "Specific place experience opportunity";
+
+const emptyExperienceTitleText = isCountryPage
+  ? `No general experiences about ${place?.name || "this country"} yet.`
+  : isCityPage
+  ? `No experiences in ${place?.name || "this city or region"} yet.`
+  : `No experiences about ${place?.name || "this place"} yet.`;
+
+const emptyExperienceBodyText = isCountryPage
+  ? `There are no country-level experiences here yet. If you know ${
+      place?.name || "this country"
+    }, you can share a general impression about culture, costs, safety, accessibility or overall travel feeling.`
+  : isCityPage
+  ? `${place?.name || "This city or region"} is already listed${
+      place?.destination_country ? ` inside ${place.destination_country}` : ""
+    }. You can be the first to share an experience here, or go back to the country page to explore broader country-level experiences and other cities or regions.`
+  : `${place?.name || "This place"} is listed as a ${placeTypeLabel}${
+      placeContextLabel ? ` in ${placeContextLabel}` : ""
+    }. You can be the first to share an experience about this specific place.`;
+
   const sortedRelatedPlaces = [...relatedPlaces].sort((a, b) =>
       (a.name || "").localeCompare(b.name || "")
     );
@@ -1517,23 +1571,25 @@ const renderReportControls = (experience: any) => {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() =>
-              router.push(`/destinations?mode=experience&place=${id}&share=true`)
-            }
-            style={{
-              padding: "10px 14px",
-              borderRadius: "10px",
-              border: "none",
-              background: "black",
-              color: "white",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            Share your experience here
-          </button>
+          {totalExperiences > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                router.push(`/destinations?mode=experience&place=${id}&share=true`)
+              }
+              style={{
+                padding: "10px 14px",
+                borderRadius: "10px",
+                border: "none",
+                background: "black",
+                color: "white",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              Share your experience here
+            </button>
+          )}
         </div>
 
     {shouldShowExperienceContent && (
@@ -1825,27 +1881,15 @@ const renderReportControls = (experience: any) => {
      {shouldShowExperienceContent && totalExperiences === 0 && (
       <div style={emptyExperienceBox}>
         <div style={emptyExperienceEyebrow}>
-          {isCountryPage
-            ? "Country experience opportunity"
-            : "First city experience opportunity"}
+          {emptyExperienceEyebrowText}
         </div>
 
         <h2 style={emptyExperienceTitle}>
-          {isCountryPage
-            ? `No general experiences about ${place?.name || "this country"} yet.`
-            : `No experiences in ${place?.name || "this place"} yet.`}
+          {emptyExperienceTitleText}
         </h2>
 
         <p style={emptyExperienceText}>
-          {isCountryPage
-            ? `There are no country-level experiences here yet. If you know ${
-                place?.name || "this country"
-              }, you can share a general impression about culture, costs, safety, accessibility or overall travel feeling.`
-            : `${place?.name || "This place"} is already listed${
-                place?.destination_country
-                  ? ` inside ${place.destination_country}`
-                  : ""
-              }. You can be the first to share an experience here, or go back to the country page to explore broader country-level experiences and other cities or regions.`}
+          {emptyExperienceBodyText}
         </p>
 
         <div style={emptyExperienceActions}>
@@ -1858,10 +1902,12 @@ const renderReportControls = (experience: any) => {
           >
             {isCountryPage
               ? "Share the first country experience"
-              : `Share the first experience in ${place?.name || "this place"}`}
+              : isCityPage
+              ? `Share the first experience in ${place?.name || "this city or region"}`
+              : `Share the first experience about ${place?.name || "this place"}`}
           </button>
 
-                    {!isCountryPage && parentCountryPlace && (
+          {!isCountryPage && parentCountryPlace && (
             <button
               type="button"
               onClick={() =>

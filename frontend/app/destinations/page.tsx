@@ -333,7 +333,13 @@ const filteredPlacesInsideSelectedCountry = normalizedRelatedPlaceSearch
     })
   : [];
 
-  const canCreatePlace = !!newPlaceName.trim();
+  const canCreatePlace =
+    !!newPlaceName.trim() &&
+    (
+      placeType === "country" ||
+      placeType === "city" ||
+      !!selectedCountryPlace
+    );
 
 const searchPlaceholderByType: Record<typeof placeType, string> = {
   country: "Search a country, e.g. Laos, Brazil, Italy",
@@ -438,6 +444,10 @@ const getPlaceHierarchyLabel = (place: any) => {
   }
 
   return place.name || "Place";
+};
+
+const isSpecificPlaceType = (type: string) => {
+  return type !== "country" && type !== "city";
 };
 
 const getPlaceTypeLabel = (type?: string) => {
@@ -1315,18 +1325,32 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             <section style={helperCard}>
           <strong>No exact place found for “{searchTerm.trim()}”.</strong>
 
-          <p
-              style={{
-                margin: "10px 0 16px 0",
-                color: "#666",
-                lineHeight: 1.5,
-              }}
+                    <p
+            style={{
+              margin: "10px 0 16px 0",
+              color: "#666",
+              lineHeight: 1.5,
+            }}
           >
-              We did not find this place in the current Trust Travel database. For now,
-              you can create it manually using a neutral name that other travelers can also
-              reuse. Later, this step can be connected to an external places API to suggest
-              official countries, cities, hotels, restaurants, attractions and nature spots.
+            We did not find this place in the current Trust Travel database.
+            Before creating it, check if you selected the right level.
           </p>
+
+          {placeType === "city" && (
+            <div style={helperNote}>
+              If this is a beach, hotel, restaurant, attraction or nature spot,
+              select the correct specific-place type above instead of creating it
+              as a city or region.
+            </div>
+          )}
+
+          {isSpecificPlaceType(placeType) && !selectedCountryPlace && (
+            <div style={helperNote}>
+              Specific places should usually be created from the city or region
+              page. For example: open Bali first, then add Padang Padang as a
+              Beach / Nature spot inside Bali.
+            </div>
+          )}
 
             <div style={futureExternalSourceBox}>
               <strong>Future external place search</strong>
@@ -1367,56 +1391,71 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               </div>
             )}
 
-            <div style={createPlaceForm}>
-              <input
-                value={newPlaceName}
-                onChange={(e) => {
-                  const value = e.target.value;
+                        <div style={createPlaceForm}>
+              {isSpecificPlaceType(placeType) && !selectedCountryPlace ? (
+                <div style={helperNote}>
+                  To create a new specific place, first open or create the
+                  country and city/region. Then use the city/region page to add
+                  the beach, hotel, restaurant, attraction or nature spot inside it.
+                </div>
+              ) : (
+                <>
+                  <input
+                    value={newPlaceName}
+                    onChange={(e) => {
+                      const value = e.target.value;
 
-                  setNewPlaceName(value);
+                      setNewPlaceName(value);
 
-                  if (placeType === "country") {
-                    setNewPlaceCountry(value);
-                    setNewPlaceCity("");
-                  }
-                }}
-                placeholder={placeNamePlaceholderByType[placeType]}
-                style={input}
-              />
+                      if (placeType === "country") {
+                        setNewPlaceCountry(value);
+                        setNewPlaceCity("");
+                      }
+                    }}
+                    placeholder={placeNamePlaceholderByType[placeType]}
+                    style={input}
+                  />
 
-              {placeType !== "country" && (
-                <input
-                  value={newPlaceCity}
-                  onChange={(e) => setNewPlaceCity(e.target.value)}
-                  placeholder={cityPlaceholderByType[placeType]}
-                  style={input}
-                />
+                  {placeType !== "country" && (
+                    <input
+                      value={newPlaceCity}
+                      onChange={(e) => setNewPlaceCity(e.target.value)}
+                      placeholder={cityPlaceholderByType[placeType]}
+                      style={input}
+                    />
+                  )}
+
+                  {placeType !== "country" && (
+                    <input
+                      value={newPlaceCountry}
+                      onChange={(e) => setNewPlaceCountry(e.target.value)}
+                      placeholder={countryPlaceholderByType[placeType]}
+                      style={input}
+                    />
+                  )}
+
+                  <button
+                    onClick={handleCreatePlace}
+                    disabled={!canCreatePlace || creatingPlace}
+                    style={{
+                      ...primaryButton,
+                      opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
+                      cursor:
+                        canCreatePlace && !creatingPlace
+                          ? "pointer"
+                          : "not-allowed",
+                    }}
+                  >
+                    {creatingPlace
+                      ? "Creating..."
+                      : placeType === "country"
+                      ? "Create country"
+                      : placeType === "city"
+                      ? "Create city/region"
+                      : "Create this specific place"}
+                  </button>
+                </>
               )}
-
-              {placeType !== "country" && (
-                <input
-                  value={newPlaceCountry}
-                  onChange={(e) => setNewPlaceCountry(e.target.value)}
-                  placeholder={countryPlaceholderByType[placeType]}
-                  style={input}
-                />
-              )}
-
-              <button
-                onClick={handleCreatePlace}
-                disabled={!canCreatePlace || creatingPlace}
-                style={{
-                  ...primaryButton,
-                  opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
-                  cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
-                }}
-              >
-                {creatingPlace
-                  ? "Creating..."
-                  : placeType === "country"
-                  ? "Create country"
-                  : "Create this place"}
-              </button>
             </div>
           </section>
       ) : null}

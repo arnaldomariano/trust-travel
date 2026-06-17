@@ -700,15 +700,85 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
               {filter === "update" ? "Show all activity" : "Events & info"}
             </button>
 
-            <button
-              onClick={() => setShowUpdateForm(!showUpdateForm)}
-              style={secondaryButton}
-            >
-              {showUpdateForm ? "Cancel info post" : "Share event or info"}
-            </button>
-
           </div>
         </section>
+
+        {filter === "update" && (
+          <section
+            style={{
+              marginBottom: "28px",
+              padding: "22px",
+              border: "1px solid #eee",
+              borderRadius: "16px",
+              backgroundColor: "white",
+              maxWidth: "760px",
+            }}
+          >
+            <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+              Place information
+            </div>
+
+            <h2 style={{ margin: 0, fontSize: "22px" }}>Events & info</h2>
+
+            <p
+              style={{
+                marginTop: "8px",
+                marginBottom: "18px",
+                color: "#666",
+                lineHeight: 1.5,
+              }}
+            >
+              View events, alerts and useful information shared about this place — or add
+              a new update.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap",
+                marginBottom: "18px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowUpdateForm((prev) => !prev)}
+                style={primaryButton}
+              >
+                {showUpdateForm ? "Cancel new update" : "Share event, alert or info"}
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: "12px",
+              }}
+            >
+              <div style={insightStatCard}>
+                <div style={overviewStatLabel}>Events</div>
+                <div style={overviewStatValue}>
+                  {updates.filter((u) => u.type === "event").length}
+                </div>
+              </div>
+
+              <div style={insightStatCard}>
+                <div style={overviewStatLabel}>Alerts</div>
+                <div style={overviewStatValue}>
+                  {updates.filter((u) => u.type === "alert").length}
+                </div>
+              </div>
+
+              <div style={insightStatCard}>
+                <div style={overviewStatLabel}>Useful info</div>
+                <div style={overviewStatValue}>
+                  {updates.filter((u) => u.type === "info").length}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {place?.place_type === "country" && (
           <section
@@ -1783,65 +1853,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                       Coming soon: breakdown by traveler profile, nationality, age group,
                       trip type and travel style.
                     </p>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {filter === "update" && (
-              <section
-                style={{
-                  marginBottom: "22px",
-                  padding: "22px",
-                  border: "1px solid #eee",
-                  borderRadius: "16px",
-                  backgroundColor: "white",
-                  maxWidth: "760px",
-                }}
-              >
-                <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
-                  Place information
-                </div>
-
-                <h2 style={{ margin: 0, fontSize: "22px" }}>Events & info</h2>
-
-                <p
-                  style={{
-                    marginTop: "8px",
-                    marginBottom: "18px",
-                    color: "#666",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Follow events, alerts and useful information shared about this place.
-                </p>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                    gap: "12px",
-                  }}
-                >
-                  <div style={insightStatCard}>
-                    <div style={overviewStatLabel}>Events</div>
-                    <div style={overviewStatValue}>
-                      {updates.filter((u) => u.type === "event").length}
-                    </div>
-                  </div>
-
-                  <div style={insightStatCard}>
-                    <div style={overviewStatLabel}>Alerts</div>
-                    <div style={overviewStatValue}>
-                      {updates.filter((u) => u.type === "alert").length}
-                    </div>
-                  </div>
-
-                  <div style={insightStatCard}>
-                    <div style={overviewStatLabel}>Useful info</div>
-                    <div style={overviewStatValue}>
-                      {updates.filter((u) => u.type === "info").length}
-                    </div>
                   </div>
                 </div>
               </section>

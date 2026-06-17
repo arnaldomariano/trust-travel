@@ -49,6 +49,10 @@ const getProfessionBadge = (profession?: string | null) => {
   return "PRO";
 };
 
+const getPlaceFlowUrl = () => {
+  return "/destinations";
+};
+
 export default function HomePage() {
   const { username, isLoggedIn, loading } = useAuth();
   const router = useRouter();
@@ -59,7 +63,7 @@ export default function HomePage() {
   const [openUser, setOpenUser] = useState<string | null>(null);
   const [openProfileContextUser, setOpenProfileContextUser] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
-  const [showCreateMenu, setShowCreateMenu] = useState(false);
+
 
   const [tripPlanActivity, setTripPlanActivity] = useState<{
       has_activity: boolean;
@@ -717,7 +721,7 @@ const getActivityMetaText = (item: any) => {
             )}
           </div>
 
-          {/* Quick planning + Search / Create / Share menu */}
+          {/* Quick planning + unified place flow */}
           <div style={topActionButtons}>
             <button
                   type="button"
@@ -761,64 +765,13 @@ const getActivityMetaText = (item: any) => {
               )}
             </button>
 
-            <div style={{ position: "relative" }}>
-              <button
-                type="button"
-                onClick={() => setShowCreateMenu((prev) => !prev)}
-                style={primaryButton}
-              >
-                Search / Create / Share
-              </button>
-
-              {showCreateMenu && (
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: "44px",
-                    minWidth: "260px",
-                    padding: "8px",
-                    border: "1px solid #eee",
-                    borderRadius: "12px",
-                    background: "white",
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                    zIndex: 10,
-                    display: "grid",
-                    gap: "6px",
-                  }}
-                >
-                  <button
-                    onClick={() => {
-                      setShowCreateMenu(false);
-                      router.push("/destinations");
-                    }}
-                    style={menuItemButton}
-                  >
-                    🔎 Search or choose a place
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowCreateMenu(false);
-                      router.push("/destinations?mode=experience");
-                    }}
-                    style={menuItemButton}
-                  >
-                    ⭐ Share an experience
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowCreateMenu(false);
-                      router.push("/destinations?mode=update");
-                    }}
-                    style={menuItemButton}
-                  >
-                    ℹ️ Share event, alert or info
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => router.push(getPlaceFlowUrl())}
+              style={primaryButton}
+            >
+              Find a place
+            </button>
           </div>
         </div>
       {/* Feed content */}
@@ -931,33 +884,10 @@ function EmptyFeedCard({
       ? "Share practical information, a local detail, or a small tip that could help another traveler."
       : "Share a place you visited recently, a restaurant you liked, an event you heard about, or invite trusted friends to build your network.";
 
- const actionLabel =
-  activeFilter === "event"
-    ? "Post an event"
-    : activeFilter === "alert"
-    ? "Post an alert"
-    : activeFilter === "experience"
-    ? "Share an experience"
-    : activeFilter === "info"
-    ? "Post a tip"
-    : "Start posting";
+const actionLabel = "Find a place";
 
-  const handlePrimaryAction = () => {
-      if (activeFilter === "experience") {
-        router.push("/destinations?mode=experience");
-        return;
-      }
-
-      if (
-        activeFilter === "event" ||
-        activeFilter === "alert" ||
-        activeFilter === "info"
-      ) {
-        router.push("/destinations?mode=update");
-        return;
-      }
-
-      router.push("/destinations");
+ const handlePrimaryAction = () => {
+  router.push(getPlaceFlowUrl());
     };
 
   return (
@@ -1089,18 +1019,6 @@ const emptyActions = {
   display: "flex",
   gap: "10px",
   flexWrap: "wrap" as const,
-};
-
-const menuItemButton = {
-  width: "100%",
-  padding: "10px 12px",
-  border: "none",
-  borderRadius: "8px",
-  background: "white",
-  color: "black",
-  textAlign: "left" as const,
-  cursor: "pointer",
-  fontSize: "14px",
 };
 
 const trustBadge = {

@@ -1078,7 +1078,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             </div>
 
             <h2 style={{ marginTop: 0, marginBottom: "8px", fontSize: "22px" }}>
-              Specific places inside {place.name}
+              Find or add specific places inside {place.name}
             </h2>
 
             <p
@@ -1090,10 +1090,10 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                 maxWidth: "680px",
               }}
             >
-              Search for beaches, restaurants, hotels, tourist attractions,
-              nature spots or other specific places inside {place.name}. This
-              keeps city-level experiences separate from place-specific
-              experiences.
+              Looking for a beach, hotel, restaurant, attraction or nature spot inside{" "}
+              {place.name}? Search here before creating a new place. This helps avoid
+              duplicates and keeps city-level experiences separate from experiences about
+              specific places.
             </p>
 
             <form
@@ -1121,7 +1121,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                     setSpecificPlaceResults([]);
                     setSpecificPlaceHasSearched(false);
                   }}
-                  placeholder={`Search beaches, restaurants, hotels or attractions inside ${place.name}`}
+                  placeholder={`Example: beach, hotel, restaurant, viewpoint or attraction inside ${place.name}`}
                   style={{
                     ...input,
                     flex: 1,
@@ -1142,7 +1142,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                 </button>
               </div>
 
-              <p
+                          <p
                 style={{
                   margin: 0,
                   color: "#777",
@@ -1150,8 +1150,10 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                   lineHeight: 1.5,
                 }}
               >
-                Search first if you already have a specific place in mind.
+                Search first if you already know the specific place. If it does not appear,
+                you can add it below inside {place.name}.
               </p>
+
             </form>
 
             {specificPlaceHasSearched && specificPlaceResults.length > 0 && (

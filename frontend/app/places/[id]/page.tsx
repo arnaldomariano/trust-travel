@@ -683,14 +683,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
               onClick={() => router.push(`/places/${id}/experiences`)}
               style={primaryButton}
             >
-              View experiences
-            </button>
-
-            <button
-              onClick={() => router.push(`/destinations?place=${place?.id}&share=true`)}
-              style={secondaryButton}
-            >
-              Share experience
+              Experiences
             </button>
 
             <button

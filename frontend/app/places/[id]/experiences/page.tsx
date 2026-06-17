@@ -544,9 +544,7 @@ const loadCurrentUser = async () => {
 
 const loadExperiences = async () => {
   try {
-    const res = await fetch(`${API_URL}/api/places/${id}/experiences/`, {
-      credentials: "include",
-    });
+    const res = await fetch(`${API_URL}/api/places/${id}/experiences/`);
 
     if (!res.ok) {
       const text = await res.text();

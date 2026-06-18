@@ -228,28 +228,103 @@ class CreateBasicPlaceView(APIView):
             "other",
         ]
 
-        if place_type not in valid_place_types:
-            place_type = "city"
+        specific_place_types = [
+            "attraction",
+            "hotel",
+            "restaurant",
+            "nature",
+            "other",
+        ]
+
+        content_like_words = [
+            "evite",
+            "alerta",
+            "alert",
+            "alagamento",
+            "alagamentos",
+            "inverno",
+            "fechado",
+            "closed",
+            "danger",
+            "perigo",
+            "urgente",
+            "urgent",
+            "promoção",
+            "promotion",
+        ]
 
         if not name:
             return Response({"detail": "Place name is required."}, status=400)
+
+        if place_type not in valid_place_types:
+            return Response(
+                {"detail": "Invalid place type."},
+                status=400,
+            )
+
+        normalized_name = name.lower()
+
+        if any(word in normalized_name for word in content_like_words):
+            return Response(
+                {
+                    "detail": (
+                        "This looks like an alert, event or information title, "
+                        "not a place name. Please select the place first, then "
+                        "share the alert, event or information."
+                    )
+                },
+                status=400,
+            )
 
         if place_type == "country":
             city = ""
             country = country or name
             destination_name = name
-        else:
+
+        elif place_type == "city":
             if not country:
                 return Response(
-                    {"detail": "Country is required for this place type."},
+                    {"detail": "Country is required for cities and regions."},
                     status=400,
                 )
 
-            # For cities, regions, attractions, hotels, restaurants and nature spots,
-            # the Destination should remain the country/main destination.
-            # Example:
-            # Destination: Indonesia
-            # Place: Nias, Bali, Jakarta, Lombok
+            # City/region records must use the official city/region name as both
+            # the Place name and city field. Popular names should become aliases later,
+            # not primary Place names.
+            city = name
+            destination_name = country
+
+        elif place_type in specific_place_types:
+            if not country:
+                return Response(
+                    {"detail": "Country is required for specific places."},
+                    status=400,
+                )
+
+            if not city:
+                return Response(
+                    {
+                        "detail": (
+                            "City or region is required for specific places. "
+                            "Create or select the city/region first, then add "
+                            "the specific place inside it."
+                        )
+                    },
+                    status=400,
+                )
+
+            if name.strip().lower() == city.strip().lower():
+                return Response(
+                    {
+                        "detail": (
+                            "Specific place name cannot be the same as the city "
+                            "or region name. Use place_type='city' for cities "
+                            "and regions."
+                        )
+                    },
+                    status=400,
+                )
+
             destination_name = country
 
         latitude = request.data.get("latitude")
@@ -266,7 +341,7 @@ class CreateBasicPlaceView(APIView):
             destination = Destination.objects.create(
                 name=destination_name,
                 country=country,
-                city=city,
+                city="",
             )
 
         existing_place = Place.objects.filter(

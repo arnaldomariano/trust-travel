@@ -585,6 +585,37 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       }
     };
 
+const handleToggleEventsInfo = () => {
+  if (filter === "update") {
+    setFilter("all");
+    setShowUpdateForm(false);
+    return;
+  }
+
+  setFilter("update");
+
+  setTimeout(() => {
+    document
+      .getElementById("events-info-section")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+};
+
+    const handleToggleUpdateForm = () => {
+      if (showUpdateForm) {
+        setShowUpdateForm(false);
+        return;
+      }
+
+      setShowUpdateForm(true);
+
+      setTimeout(() => {
+        document
+          .getElementById("place-update-form-section")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    };
+
   return (
     <main style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "900px", margin: "0 auto" }}>
             <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
@@ -693,19 +724,21 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
               {showRatings ? "Hide ratings" : "Ratings & insights"}
             </button>
 
-            <button
-              onClick={() => setFilter(filter === "update" ? "all" : "update")}
-              style={secondaryButton}
-            >
-              {filter === "update" ? "Show all activity" : "Events & info"}
-            </button>
+                <button
+                  onClick={handleToggleEventsInfo}
+                  style={secondaryButton}
+                >
+                  {filter === "update" ? "Hide events & info" : "Events & info"}
+                </button>
 
           </div>
         </section>
 
-        {filter === "update" && (
-          <section
-            style={{
+           {filter === "update" && (
+
+             <section
+              id="events-info-section"
+              style={{
               marginBottom: "28px",
               padding: "22px",
               border: "1px solid #eee",
@@ -740,13 +773,13 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
                 marginBottom: "18px",
               }}
             >
-              <button
-                type="button"
-                onClick={() => setShowUpdateForm((prev) => !prev)}
-                style={primaryButton}
-              >
-                {showUpdateForm ? "Cancel new update" : "Share event, alert or info"}
-              </button>
+             <button
+              type="button"
+              onClick={handleToggleUpdateForm}
+              style={primaryButton}
+            >
+              {showUpdateForm ? "Cancel new update" : "Share event, alert or info"}
+            </button>
             </div>
 
             <div
@@ -1509,6 +1542,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         {showUpdateForm && (
           <section
+            id="place-update-form-section"
             style={{
               marginBottom: "28px",
               padding: "22px",

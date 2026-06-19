@@ -726,27 +726,25 @@ if (isUpdateMode) {
   };
 
     const openGuidedCreateFlow = () => {
-      const initialName = formatPlaceNameForCreation(searchTerm);
-
-      setCreateFlowOpen(true);
-      setCreateFlowError("");
-      setCreateSelectedCountry(null);
-      setCreateCountrySearch("");
-      setCreateCitySearch(initialName);
-      setShowCreatePlaceForm(false);
-    };
+  setCreateFlowOpen(true);
+  setCreateFlowError("");
+  setCreateSelectedCountry(null);
+  setCreateCountrySearch("");
+  setCreateCitySearch("");
+  setShowCreatePlaceForm(false);
+  };
 
     const selectCreateFlowCountry = (countryPlace: any) => {
-      setCreateSelectedCountry(countryPlace);
-      setCreateFlowError("");
-      setCreateCitySearch(formatPlaceNameForCreation(searchTerm));
+  setCreateSelectedCountry(countryPlace);
+  setCreateFlowError("");
+  setCreateCitySearch("");
 
-      setTimeout(() => {
-        document
-          .getElementById("guided-create-city-step")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
-    };
+  setTimeout(() => {
+    document
+      .getElementById("guided-create-city-step")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+  };
 
     const createCountryForFlow = async () => {
       const countryName = formatPlaceNameForCreation(createCountrySearch);
@@ -790,7 +788,7 @@ if (isUpdateMode) {
         });
 
         setCreateSelectedCountry(data);
-        setCreateCitySearch(formatPlaceNameForCreation(searchTerm));
+        setCreateCitySearch("");
       } catch (error) {
         console.error("Guided country creation failed:", error);
         setCreateFlowError("Something went wrong while creating the country.");
@@ -845,7 +843,7 @@ if (isUpdateMode) {
           return [data, ...prev];
         });
 
-        router.push(`/places/${data.id}/experiences`);
+        router.push(`/places/${data.id}`);
       } catch (error) {
         console.error("Guided city creation failed:", error);
         setCreateFlowError("Something went wrong while creating the city or region.");
@@ -1606,9 +1604,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 </h3>
 
                 <p style={guidedCreateText}>
-                  Now choose the city, island or region. Specific places such as
-                  beaches, hotels, restaurants and attractions can be added from
-                  that city or region page.
+                  Now choose the city, island or region where this place belongs. Do not use
+                  this step for restaurants, hotels, beaches, alerts or event titles. Specific
+                  places will be added after the city or region is selected.
                 </p>
 
                 <input
@@ -1617,7 +1615,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                     setCreateCitySearch(event.target.value);
                     setCreateFlowError("");
                   }}
-                  placeholder="City, island or region, e.g. Bali, Lombok, Rome"
+                  placeholder="City, island or region only, e.g. Recife, Rome, Bali"
                   style={input}
                 />
 
@@ -1627,7 +1625,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       <button
                         key={cityPlace.id}
                         type="button"
-                        onClick={() => router.push(`/places/${cityPlace.id}/experiences`)}
+                        onClick={() => router.push(`/places/${cityPlace.id}`)}
                         style={guidedCreateResultButton}
                       >
                         <span>
@@ -1658,7 +1656,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   >
                     {creatingCreateFlowCity
                       ? "Creating city / region..."
-                      : `Create “${formatPlaceNameForCreation(createCitySearch)}” inside ${createSelectedCountry.name}`}
+                      : `Create city/region “${formatPlaceNameForCreation(createCitySearch)}” inside ${createSelectedCountry.name}`}
                   </button>
                 )}
               </div>

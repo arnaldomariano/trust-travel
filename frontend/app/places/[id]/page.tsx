@@ -80,6 +80,20 @@ export default function PlacePage() {
     return labels[type || ""] || "Place";
   };
 
+  const getUpdateDateLabel = (type?: string) => {
+      if (type === "event") return "Event date";
+      if (type === "alert") return "Alert date";
+      if (type === "info") return "Info date";
+
+      return "Related date";
+  };
+
+  const formatUpdateDateTime = (value?: string | null) => {
+      if (!value) return null;
+
+      return new Date(value).toLocaleString();
+  };
+
   const placeTypeLabel = getPlaceTypeLabel(place?.place_type);
 
   const parentLocationLabel =
@@ -1648,7 +1662,11 @@ const handleToggleEventsInfo = () => {
 
                 <div style={{ display: "grid", gap: "6px" }}>
                   <label style={label}>
-                    {updateType === "event" ? "Event date" : "Related date"}
+                    {updateType === "event"
+                      ? "Event date and time"
+                      : updateType === "alert"
+                      ? "Alert related date/time"
+                      : "Info related date/time"}
                   </label>
 
                   <input
@@ -1657,6 +1675,21 @@ const handleToggleEventsInfo = () => {
                     onChange={(e) => setUpdateEventDate(e.target.value)}
                     style={input}
                   />
+
+                  <div style={dateTimeHelperBox}>
+                    <strong>
+                      {updateType === "event"
+                        ? "When does this event happen?"
+                        : updateType === "alert"
+                        ? "When is this alert relevant?"
+                        : "When is this information relevant?"}
+                    </strong>
+
+                    <span>
+                      Use this field when the information has a specific date or time. Avoid
+                      repeating the date only inside the text.
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2039,6 +2072,17 @@ const handleToggleEventsInfo = () => {
                   </>
                 ) : (
                   <>
+                    {item.event_date && (
+                      <div style={updateDateMiniBox}>
+                        <span style={updateDateMiniIcon}>📅</span>
+
+                        <span>
+                          <strong>{getUpdateDateLabel(item.type)}:</strong>{" "}
+                          {formatUpdateDateTime(item.event_date)}
+                        </span>
+                      </div>
+                    )}
+
                     <div style={{ fontWeight: "500", lineHeight: "1.5" }}>
                       {item.text}
                     </div>
@@ -2120,6 +2164,23 @@ const secondaryButton = {
   fontSize: "14px",
 };
 
+const updateDateMiniBox = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "8px",
+  padding: "7px 10px",
+  borderRadius: "999px",
+  border: "1px solid #eee",
+  backgroundColor: "#fafafa",
+  color: "#555",
+  fontSize: "13px",
+  marginBottom: "10px",
+};
+
+const updateDateMiniIcon = {
+  fontSize: "14px",
+};
+
 const input = {
   padding: "10px 12px",
   borderRadius: "10px",
@@ -2131,4 +2192,16 @@ const label = {
   fontSize: "13px",
   color: "#666",
   fontWeight: 600,
+};
+
+const dateTimeHelperBox = {
+  display: "grid",
+  gap: "4px",
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #eee",
+  backgroundColor: "#fafafa",
+  color: "#555",
+  fontSize: "12px",
+  lineHeight: 1.45,
 };

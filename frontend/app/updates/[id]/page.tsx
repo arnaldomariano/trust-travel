@@ -96,6 +96,14 @@ export default function UpdateDetailPage() {
     return "•";
   };
 
+  const getDateLabel = (type?: string) => {
+      if (type === "event") return "Event date and time";
+      if (type === "alert") return "Alert related date/time";
+      if (type === "info") return "Info related date/time";
+
+      return "Related date/time";
+  };
+
   const getPriorityLabel = (priority?: string) => {
       if (priority === "urgent") return "Urgent";
       if (priority === "high") return "High";
@@ -254,16 +262,26 @@ export default function UpdateDetailPage() {
             </span>
           )}
 
-          {update.event_date && (
-            <span>
-              Related date: {formatDateTime(update.event_date)}
-            </span>
-          )}
-
           <span>
             Published: {formatDateTime(update.created_at)}
           </span>
         </div>
+
+        {update.event_date && (
+          <section style={dateHighlightBox}>
+            <div style={dateHighlightIcon}>📅</div>
+
+            <div>
+              <div style={dateHighlightLabel}>
+                {getDateLabel(update.type)}
+              </div>
+
+              <div style={dateHighlightValue}>
+                {formatDateTime(update.event_date)}
+              </div>
+            </div>
+          </section>
+        )}
 
         <p style={text}>{update.text}</p>
 
@@ -514,4 +532,40 @@ const sourceRow = {
 const inlineLink = {
   color: "#111",
   fontWeight: 600,
+};
+
+const dateHighlightBox = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  padding: "14px",
+  border: "1px solid #eee",
+  borderRadius: "14px",
+  background: "#fafafa",
+  marginBottom: "22px",
+};
+
+const dateHighlightIcon = {
+  width: "38px",
+  height: "38px",
+  borderRadius: "50%",
+  background: "white",
+  border: "1px solid #eee",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "18px",
+};
+
+const dateHighlightLabel = {
+  color: "#666",
+  fontSize: "13px",
+  fontWeight: 600,
+  marginBottom: "4px",
+};
+
+const dateHighlightValue = {
+  color: "#111",
+  fontSize: "17px",
+  fontWeight: 700,
 };

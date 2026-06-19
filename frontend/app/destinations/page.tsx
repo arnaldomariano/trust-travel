@@ -1177,9 +1177,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         </h1>
 
         <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
-          Search freely by country, city, region, beach, hotel, restaurant,
-          attraction or nature spot. Trust Travel will show the place type and
-          location context so you can choose the correct result before sharing.
+          Search for the exact place first. If it does not exist yet, Trust Travel will
+          guide you through the correct hierarchy: country → city/region → specific
+          place. This helps avoid duplicates and keeps city/region experiences separate
+          from reviews about restaurants, hotels, attractions and nature spots.
         </p>
 
         <div style={{ marginBottom: "22px" }}>
@@ -1479,18 +1480,19 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             lineHeight: 1.5,
           }}
         >
-          We did not find this place in the current Trust Travel database. Before
-          creating something new, choose the correct hierarchy: country first, then
-          city or region, and later the specific place if needed.
+          We did not find this place in the current Trust Travel database. If this is a
+          restaurant, hotel, beach, attraction or nature spot, choose the country and
+          then the city/region first. The specific place can be added from the
+          city/region page.
         </p>
 
         <div style={futureExternalSourceBox}>
           <strong>Future external place search</strong>
 
           <p style={futureExternalSourceText}>
-            This area is prepared for a future integration with an external places
-            database. When connected, Trust Travel can show suggested official places
-            here before asking the user to create a new one manually.
+              This area is prepared for a future integration with an external places
+              database. When connected, Trust Travel can suggest official places here
+              before asking the user to create one manually.
           </p>
         </div>
 
@@ -1605,8 +1607,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
                 <p style={guidedCreateText}>
                   Now choose the city, island or region where this place belongs. Do not use
-                  this step for restaurants, hotels, beaches, alerts or event titles. Specific
-                  places will be added after the city or region is selected.
+                  this step for restaurants, hotels, beaches, alerts or event titles. After the
+                  city or region is selected, you can add the specific place from its page.
                 </p>
 
                 <input

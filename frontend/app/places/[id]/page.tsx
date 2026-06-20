@@ -44,6 +44,8 @@ export default function PlacePage() {
   const [createdSpecificPlace, setCreatedSpecificPlace] = useState<any>(null);
 
   const [showRatings, setShowRatings] = useState(false);
+  const [ratingsSummary, setRatingsSummary] = useState<any>(null);
+  const [loadingRatingsSummary, setLoadingRatingsSummary] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const [showUpdateForm, setShowUpdateForm] = useState(false);
@@ -221,6 +223,29 @@ const placeHierarchyItems =
   const rating2 = experiences.filter((e) => e.rating === 2).length;
   const rating1 = experiences.filter((e) => e.rating === 1).length;
 
+  const loadRatingsSummary = async (placeId: string | number) => {
+      setLoadingRatingsSummary(true);
+
+      try {
+        const res = await fetch(`${API_URL}/api/places/${placeId}/ratings-summary/`);
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("Failed to load ratings summary:", res.status, text);
+          setRatingsSummary(null);
+          return;
+        }
+
+        const data = await res.json();
+        setRatingsSummary(data);
+      } catch (error) {
+        console.error("Ratings summary error:", error);
+        setRatingsSummary(null);
+      } finally {
+        setLoadingRatingsSummary(false);
+      }
+  };
+
   const loadCountryContext = async (countryPlaceId: string | number) => {
     setLoadingCountryContext(true);
 
@@ -268,6 +293,8 @@ useEffect(() => {
 
   useEffect(() => {
     if (!id) return;
+
+    loadRatingsSummary(id);
 
     fetch(`${API_URL}/api/places/${id}/experiences/`)
       .then((res) => res.json())
@@ -355,79 +382,59 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
   }, [id]);
 
   const ratedExperiences = experiences.filter((e) => e.rating);
-  const averageRating = ratedExperiences.length
-    ? (
-        ratedExperiences.reduce((sum, e) => sum + e.rating, 0) /
-        ratedExperiences.length
-      ).toFixed(1)
-    : null;
 
-  const roundedStars = ratedExperiences.length
-    ? Math.round(
-        ratedExperiences.reduce((sum, e) => sum + e.rating, 0) /
-          ratedExperiences.length
-      )
-    : 0;
+  const averageRating =
+      ratingsSummary?.overall?.average !== null &&
+      ratingsSummary?.overall?.average !== undefined
+        ? Number(ratingsSummary.overall.average).toFixed(1)
+        : null;
 
-  const ratingCount = (stars: number) =>
-    experiences.filter((e) => e.rating === stars).length;
+    const roundedStars = averageRating ? Math.round(Number(averageRating)) : 0;
 
-  const maxCount = Math.max(
-    ratingCount(5),
-    ratingCount(4),
-    ratingCount(3),
-    ratingCount(2),
-    ratingCount(1),
-    1
+    const ratingCount = (stars: number) => {
+      const distribution = ratingsSummary?.overall?.distribution || {};
+      return Number(distribution[String(stars)] || 0);
+    };
+
+    const maxCount = Math.max(
+      ratingCount(5),
+      ratingCount(4),
+      ratingCount(3),
+      ratingCount(2),
+      ratingCount(1),
+      1
   );
 
-  const getPracticalRatingStats = (fieldName: string) => {
-  const values = experiences
-    .map((experience) => experience[fieldName])
-    .filter((value) => value !== null && value !== undefined && value !== "");
+    const practicalRatingStats = [
+      {
+        key: "safety",
+        label: "Safety",
+        description: "How safe travelers felt here.",
+        ...(ratingsSummary?.practical?.safety || { average: null, count: 0 }),
+      },
+      {
+        key: "cost",
+        label: "Cost",
+        description: "How travelers evaluate cost and value.",
+        ...(ratingsSummary?.practical?.cost || { average: null, count: 0 }),
+      },
+      {
+        key: "accessibility",
+        label: "Accessibility",
+        description: "How easy this place is to access or navigate.",
+        ...(ratingsSummary?.practical?.accessibility || { average: null, count: 0 }),
+      },
+      {
+        key: "convenience",
+        label: "Convenience",
+        description: "How practical or convenient the experience felt.",
+        ...(ratingsSummary?.practical?.convenience || { average: null, count: 0 }),
+      },
+    ];
 
-  if (values.length === 0) {
-    return {
-      average: null,
-      count: 0,
-    };
-  }
-
-  const average =
-    values.reduce((sum, value) => sum + Number(value), 0) / values.length;
-
-  return {
-    average: average.toFixed(1),
-    count: values.length,
-  };
-};
-
-const practicalRatingStats = [
-  {
-    label: "Safety",
-    description: "How safe travelers felt here.",
-    ...getPracticalRatingStats("safety_rating"),
-  },
-  {
-    label: "Cost",
-    description: "How travelers evaluate cost and value.",
-    ...getPracticalRatingStats("cost_rating"),
-  },
-  {
-    label: "Accessibility",
-    description: "How easy this place is to access or navigate.",
-    ...getPracticalRatingStats("accessibility_rating"),
-  },
-  {
-    label: "Convenience",
-    description: "How practical or convenient the experience felt.",
-    ...getPracticalRatingStats("convenience_rating"),
-  },
-];
-
-const availablePracticalRatingStats = practicalRatingStats.filter(
-  (stat) => stat.average !== null
-);
+    const availablePracticalRatingStats = practicalRatingStats.filter(
+      (stat) => stat.average !== null && stat.average !== undefined
+    );
 
     // =========================
     // Build mixed activity feed
@@ -880,7 +887,7 @@ const handleToggleEventsInfo = () => {
             <div style={overviewStatCard}>
               <div style={overviewStatLabel}>Experiences</div>
               <div style={overviewStatValue}>
-                {experiences.length}
+                {ratingsSummary?.overall?.total_reviews ?? experiences.length}
               </div>
             </div>
 
@@ -2012,6 +2019,12 @@ const handleToggleEventsInfo = () => {
                   </p>
                 </div>
 
+                {loadingRatingsSummary && (
+                  <div style={ratingsLoadingBox}>
+                    Loading ratings summary...
+                  </div>
+                )}
+
                 <div
                   style={{
                     display: "grid",
@@ -2037,7 +2050,7 @@ const handleToggleEventsInfo = () => {
                   <div style={insightStatCard}>
                     <div style={overviewStatLabel}>Rated experiences</div>
                     <div style={overviewStatValue}>
-                      {ratedExperiences.length}
+                      {ratingsSummary?.overall?.rated_count ?? ratedExperiences.length}
                     </div>
                   </div>
                 </div>
@@ -2611,4 +2624,14 @@ const practicalRatingsMiniBadge = {
   border: "1px solid #eee",
   backgroundColor: "white",
   fontSize: "12px",
+};
+
+const ratingsLoadingBox = {
+  marginBottom: "16px",
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #eee",
+  backgroundColor: "#fafafa",
+  color: "#666",
+  fontSize: "13px",
 };

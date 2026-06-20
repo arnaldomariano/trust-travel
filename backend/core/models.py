@@ -360,6 +360,15 @@ class Experience(models.Model):
     rating = models.IntegerField(null=True, blank=True)
     comment = models.TextField()
 
+    # Optional structured practical ratings.
+    # These fields are used for future ratings insights, place comparisons,
+    # and trust-quality analytics. They are optional so old and simple
+    # experiences continue to work normally.
+    safety_rating = models.IntegerField(null=True, blank=True)
+    cost_rating = models.IntegerField(null=True, blank=True)
+    accessibility_rating = models.IntegerField(null=True, blank=True)
+    convenience_rating = models.IntegerField(null=True, blank=True)
+
     # Optional trip-specific context.
     # These fields describe the situation of this specific experience,
     # not the user's permanent profile.

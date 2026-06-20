@@ -49,9 +49,38 @@ export default function DestinationsPage() {
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState<number | null>(null);
+
+  const [safetyRating, setSafetyRating] = useState<number | null>(null);
+  const [costRating, setCostRating] = useState<number | null>(null);
+  const [accessibilityRating, setAccessibilityRating] = useState<number | null>(null);
+  const [convenienceRating, setConvenienceRating] = useState<number | null>(null);
+
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [tripContext, setTripContext] = useState("prefer_not_to_say");
   const [tripStyle, setTripStyle] = useState("prefer_not_to_say");
+
+  const resetStructuredRatings = () => {
+      setSafetyRating(null);
+      setCostRating(null);
+      setAccessibilityRating(null);
+      setConvenienceRating(null);
+    };
+
+    const handleOptionalRatingChange = (
+      value: string,
+      setter: (value: number | null) => void
+    ) => {
+      if (!value) {
+        setter(null);
+        return;
+      }
+
+      const numeric = Number(value);
+
+      if (numeric >= 1 && numeric <= 5) {
+        setter(numeric);
+      }
+  };
 
   const [submittingExperience, setSubmittingExperience] = useState(false);
   const [experienceShared, setExperienceShared] = useState(false);
@@ -108,9 +137,10 @@ useEffect(() => {
   setTitle("");
   setComment("");
   setRating(null);
+  resetStructuredRatings();
   setImageFile(null);
   setTripContext("prefer_not_to_say");
-   setTripStyle("prefer_not_to_say");
+  setTripStyle("prefer_not_to_say");
 
   setTimeout(() => {
     document
@@ -865,6 +895,7 @@ if (isUpdateMode) {
       setTitle("");
       setComment("");
       setRating(null);
+      resetStructuredRatings();
       setImageFile(null);
       setTripContext("prefer_not_to_say");
       setTripStyle("prefer_not_to_say");
@@ -892,6 +923,7 @@ if (isUpdateMode) {
       setTitle("");
       setComment("");
       setRating(null);
+      resetStructuredRatings();
       setImageFile(null);
       setTripContext("prefer_not_to_say");
       setTripStyle("prefer_not_to_say");
@@ -959,6 +991,7 @@ if (isUpdateMode) {
     setTitle("");
     setComment("");
     setRating(null);
+    resetStructuredRatings();
     setImageFile(null);
     setExperienceShared(false);
     setSharedExperience(null);
@@ -983,6 +1016,7 @@ if (isUpdateMode) {
     setTitle("");
     setComment("");
     setRating(null);
+    resetStructuredRatings();
     setImageFile(null);
     setExperienceShared(false);
     setSharedExperience(null);
@@ -1003,6 +1037,12 @@ const startEditingExperience = () => {
   setTitle(sharedExperience.title || "");
   setComment(sharedExperience.comment || "");
   setRating(sharedExperience.rating || null);
+
+  setSafetyRating(sharedExperience.safety_rating || null);
+  setCostRating(sharedExperience.cost_rating || null);
+  setAccessibilityRating(sharedExperience.accessibility_rating || null);
+  setConvenienceRating(sharedExperience.convenience_rating || null);
+
   setImageFile(null);
   setTripContext(sharedExperience.trip_context || "prefer_not_to_say");
   setTripStyle(sharedExperience.trip_style || "prefer_not_to_say");
@@ -1042,6 +1082,23 @@ formData.append("place", String(selectedPlace.id));
 formData.append("title", title.trim());
 formData.append("rating", String(rating));
 formData.append("comment", comment.trim());
+
+if (safetyRating) {
+  formData.append("safety_rating", String(safetyRating));
+}
+
+if (costRating) {
+  formData.append("cost_rating", String(costRating));
+}
+
+if (accessibilityRating) {
+  formData.append("accessibility_rating", String(accessibilityRating));
+}
+
+if (convenienceRating) {
+  formData.append("convenience_rating", String(convenienceRating));
+}
+
 formData.append("trip_context", tripContext);
 formData.append("trip_style", tripStyle);
 
@@ -1068,6 +1125,7 @@ const res = await fetch(`${API_URL}/api/experiences/`, {
       setTitle("");
       setComment("");
       setRating(null);
+      resetStructuredRatings();
       setImageFile(null);
       setExperienceShared(true);
       setTripContext("prefer_not_to_say");
@@ -1113,13 +1171,17 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-      title: title.trim(),
-      rating,
-      comment: comment.trim(),
-      place: selectedPlace.id,
-      trip_context: tripContext,
-      trip_style: tripStyle,
-    }),
+          title: title.trim(),
+          rating,
+          comment: comment.trim(),
+          place: selectedPlace.id,
+          safety_rating: safetyRating,
+          cost_rating: costRating,
+          accessibility_rating: accessibilityRating,
+          convenience_rating: convenienceRating,
+          trip_context: tripContext,
+          trip_style: tripStyle,
+      }),
     });
 
     const data = await res.json();
@@ -1134,6 +1196,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
     setTitle("");
     setComment("");
     setRating(null);
+    resetStructuredRatings();
     setEditingExperience(false);
     setExperienceShared(true);
     setTripContext("prefer_not_to_say");
@@ -1200,6 +1263,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 setTitle("");
                 setComment("");
                 setRating(null);
+                resetStructuredRatings();
                 setExperienceShared(false);
                 setSharedExperience(null);
                 setEditingExperience(false);
@@ -2072,6 +2136,34 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       Rating: {"★".repeat(sharedExperience.rating)}
                       {"☆".repeat(5 - sharedExperience.rating)}
                     </div>
+
+                    {[
+                      ["Safety", sharedExperience.safety_rating],
+                      ["Cost", sharedExperience.cost_rating],
+                      ["Accessibility", sharedExperience.accessibility_rating],
+                      ["Convenience", sharedExperience.convenience_rating],
+                    ].some(([, value]) => value) && (
+                      <div style={structuredRatingsPreviewBox}>
+                        <strong>Practical ratings</strong>
+
+                        <div style={structuredRatingsPreviewGrid}>
+                          {[
+                            ["Safety", sharedExperience.safety_rating],
+                            ["Cost", sharedExperience.cost_rating],
+                            ["Accessibility", sharedExperience.accessibility_rating],
+                            ["Convenience", sharedExperience.convenience_rating],
+                          ]
+                            .filter(([, value]) => value)
+                            .map(([label, value]) => (
+                              <span key={label} style={structuredRatingsPreviewBadge}>
+                                {label}: {"★".repeat(Number(value))}
+                                {"☆".repeat(5 - Number(value))}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 )}
 
@@ -2149,6 +2241,91 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   placeholder="Rating from 1 to 5"
                   style={input}
                 />
+
+                <section style={structuredRatingsBox}>
+                  <div>
+                    <strong>Optional practical ratings</strong>
+
+                    <p style={structuredRatingsIntro}>
+                      These ratings are optional. They help future travelers compare places by
+                      practical criteria, without replacing your overall rating.
+                    </p>
+                  </div>
+
+                  <div style={structuredRatingsGrid}>
+                    <label style={structuredRatingField}>
+                      Safety
+                      <select
+                        value={safetyRating ?? ""}
+                        onChange={(e) =>
+                          handleOptionalRatingChange(e.target.value, setSafetyRating)
+                        }
+                        style={input}
+                      >
+                        <option value="">Not rated</option>
+                        <option value="1">1 — Poor</option>
+                        <option value="2">2 — Limited</option>
+                        <option value="3">3 — Okay</option>
+                        <option value="4">4 — Good</option>
+                        <option value="5">5 — Excellent</option>
+                      </select>
+                    </label>
+
+                    <label style={structuredRatingField}>
+                      Cost
+                      <select
+                        value={costRating ?? ""}
+                        onChange={(e) =>
+                          handleOptionalRatingChange(e.target.value, setCostRating)
+                        }
+                        style={input}
+                      >
+                        <option value="">Not rated</option>
+                        <option value="1">1 — Very expensive / poor value</option>
+                        <option value="2">2 — Expensive</option>
+                        <option value="3">3 — Fair</option>
+                        <option value="4">4 — Good value</option>
+                        <option value="5">5 — Excellent value</option>
+                      </select>
+                    </label>
+
+                    <label style={structuredRatingField}>
+                      Accessibility
+                      <select
+                        value={accessibilityRating ?? ""}
+                        onChange={(e) =>
+                          handleOptionalRatingChange(e.target.value, setAccessibilityRating)
+                        }
+                        style={input}
+                      >
+                        <option value="">Not rated</option>
+                        <option value="1">1 — Very difficult</option>
+                        <option value="2">2 — Difficult</option>
+                        <option value="3">3 — Acceptable</option>
+                        <option value="4">4 — Easy</option>
+                        <option value="5">5 — Very easy</option>
+                      </select>
+                    </label>
+
+                    <label style={structuredRatingField}>
+                      Convenience
+                      <select
+                        value={convenienceRating ?? ""}
+                        onChange={(e) =>
+                          handleOptionalRatingChange(e.target.value, setConvenienceRating)
+                        }
+                        style={input}
+                      >
+                        <option value="">Not rated</option>
+                        <option value="1">1 — Poor</option>
+                        <option value="2">2 — Limited</option>
+                        <option value="3">3 — Okay</option>
+                        <option value="4">4 — Convenient</option>
+                        <option value="5">5 — Very convenient</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
 
                 <div
                   style={{
@@ -2426,4 +2603,61 @@ const createFlowErrorBox = {
   background: "#fff5f5",
   color: "#991b1b",
   fontSize: "13px",
+};
+
+const structuredRatingsBox = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  display: "grid",
+  gap: "12px",
+};
+
+const structuredRatingsIntro = {
+  margin: "6px 0 0 0",
+  color: "#666",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+
+const structuredRatingsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+  gap: "12px",
+};
+
+const structuredRatingField = {
+  display: "grid",
+  gap: "6px",
+  fontSize: "13px",
+  color: "#555",
+  fontWeight: 600,
+};
+
+const structuredRatingsPreviewBox = {
+  marginTop: "12px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "white",
+  display: "grid",
+  gap: "8px",
+  color: "#555",
+  fontSize: "13px",
+};
+
+const structuredRatingsPreviewGrid = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+};
+
+const structuredRatingsPreviewBadge = {
+  display: "inline-block",
+  padding: "4px 8px",
+  borderRadius: "999px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  fontSize: "12px",
 };

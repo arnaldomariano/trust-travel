@@ -19,6 +19,10 @@ type MyExperience = {
   title: string;
   comment: string;
   rating: number | null;
+  safety_rating?: number | null;
+  cost_rating?: number | null;
+  accessibility_rating?: number | null;
+  convenience_rating?: number | null;
   trip_context: string;
   trip_style: string;
   image_url?: string | null;
@@ -57,8 +61,38 @@ const [editingExperienceId, setEditingExperienceId] = useState<number | null>(nu
 const [editTitle, setEditTitle] = useState("");
 const [editComment, setEditComment] = useState("");
 const [editRating, setEditRating] = useState<number | null>(null);
+
+const [editSafetyRating, setEditSafetyRating] = useState<number | null>(null);
+const [editCostRating, setEditCostRating] = useState<number | null>(null);
+const [editAccessibilityRating, setEditAccessibilityRating] = useState<number | null>(null);
+const [editConvenienceRating, setEditConvenienceRating] = useState<number | null>(null);
+
 const [editTripContext, setEditTripContext] = useState("prefer_not_to_say");
 const [editTripStyle, setEditTripStyle] = useState("prefer_not_to_say");
+
+const resetEditStructuredRatings = () => {
+  setEditSafetyRating(null);
+  setEditCostRating(null);
+  setEditAccessibilityRating(null);
+  setEditConvenienceRating(null);
+};
+
+const handleOptionalRatingChange = (
+  value: string,
+  setter: (value: number | null) => void
+) => {
+  if (!value) {
+    setter(null);
+    return;
+  }
+
+  const numeric = Number(value);
+
+  if (numeric >= 1 && numeric <= 5) {
+    setter(numeric);
+  }
+};
+
 const [imageAction, setImageAction] = useState<"keep" | "replace" | "remove">("keep");
 const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 
@@ -164,6 +198,12 @@ const startEditingExperience = (experience: MyExperience) => {
   setEditTitle(experience.title || "");
   setEditComment(experience.comment || "");
   setEditRating(experience.rating || null);
+
+  setEditSafetyRating(experience.safety_rating || null);
+  setEditCostRating(experience.cost_rating || null);
+  setEditAccessibilityRating(experience.accessibility_rating || null);
+  setEditConvenienceRating(experience.convenience_rating || null);
+
   setEditTripContext(experience.trip_context || "prefer_not_to_say");
   setEditTripStyle(experience.trip_style || "prefer_not_to_say");
   setEditImageFile(null);
@@ -184,6 +224,7 @@ const cancelEditingExperience = () => {
   setEditTitle("");
   setEditComment("");
   setEditRating(null);
+  resetEditStructuredRatings();
   setEditTripContext("prefer_not_to_say");
   setEditTripStyle("prefer_not_to_say");
   setEditImageFile(null);
@@ -223,6 +264,31 @@ const saveEditedExperience = async (experienceId: number) => {
     formData.append("title", editTitle.trim());
     formData.append("comment", editComment.trim());
     formData.append("rating", String(editRating));
+
+    if (editSafetyRating) {
+      formData.append("safety_rating", String(editSafetyRating));
+    } else {
+      formData.append("safety_rating", "");
+    }
+
+    if (editCostRating) {
+      formData.append("cost_rating", String(editCostRating));
+    } else {
+      formData.append("cost_rating", "");
+    }
+
+    if (editAccessibilityRating) {
+      formData.append("accessibility_rating", String(editAccessibilityRating));
+    } else {
+      formData.append("accessibility_rating", "");
+    }
+
+    if (editConvenienceRating) {
+      formData.append("convenience_rating", String(editConvenienceRating));
+    } else {
+      formData.append("convenience_rating", "");
+    }
+
     formData.append("trip_context", editTripContext);
     formData.append("trip_style", editTripStyle);
 
@@ -252,15 +318,19 @@ const saveEditedExperience = async (experienceId: number) => {
       prev.map((experience) =>
         experience.id === experienceId
           ? {
-              ...experience,
-              title: data.title,
-              comment: data.comment,
-              rating: data.rating,
-              trip_context: data.trip_context,
-              trip_style: data.trip_style,
-              image_url: data.image_url,
-              updated_at: data.updated_at,
-            }
+            ...experience,
+            title: data.title,
+            comment: data.comment,
+            rating: data.rating,
+            safety_rating: data.safety_rating,
+            cost_rating: data.cost_rating,
+            accessibility_rating: data.accessibility_rating,
+            convenience_rating: data.convenience_rating,
+            trip_context: data.trip_context,
+            trip_style: data.trip_style,
+            image_url: data.image_url,
+            updated_at: data.updated_at,
+          }
           : experience
       )
     );
@@ -614,6 +684,91 @@ const formatTripValue = (value: string) => {
                         style={input}
                       />
 
+                      <section style={structuredRatingsBox}>
+                          <div>
+                            <strong>Optional practical ratings</strong>
+
+                            <p style={structuredRatingsIntro}>
+                              These ratings are optional and help future travelers compare this place by
+                              practical criteria.
+                            </p>
+                          </div>
+
+                          <div style={structuredRatingsGrid}>
+                            <label style={structuredRatingField}>
+                              Safety
+                              <select
+                                value={editSafetyRating ?? ""}
+                                onChange={(e) =>
+                                  handleOptionalRatingChange(e.target.value, setEditSafetyRating)
+                                }
+                                style={input}
+                              >
+                                <option value="">Not rated</option>
+                                <option value="1">1 — Poor</option>
+                                <option value="2">2 — Limited</option>
+                                <option value="3">3 — Okay</option>
+                                <option value="4">4 — Good</option>
+                                <option value="5">5 — Excellent</option>
+                              </select>
+                            </label>
+
+                            <label style={structuredRatingField}>
+                              Cost
+                              <select
+                                value={editCostRating ?? ""}
+                                onChange={(e) =>
+                                  handleOptionalRatingChange(e.target.value, setEditCostRating)
+                                }
+                                style={input}
+                              >
+                                <option value="">Not rated</option>
+                                <option value="1">1 — Very expensive / poor value</option>
+                                <option value="2">2 — Expensive</option>
+                                <option value="3">3 — Fair</option>
+                                <option value="4">4 — Good value</option>
+                                <option value="5">5 — Excellent value</option>
+                              </select>
+                            </label>
+
+                            <label style={structuredRatingField}>
+                              Accessibility
+                              <select
+                                value={editAccessibilityRating ?? ""}
+                                onChange={(e) =>
+                                  handleOptionalRatingChange(e.target.value, setEditAccessibilityRating)
+                                }
+                                style={input}
+                              >
+                                <option value="">Not rated</option>
+                                <option value="1">1 — Very difficult</option>
+                                <option value="2">2 — Difficult</option>
+                                <option value="3">3 — Acceptable</option>
+                                <option value="4">4 — Easy</option>
+                                <option value="5">5 — Very easy</option>
+                              </select>
+                            </label>
+
+                            <label style={structuredRatingField}>
+                              Convenience
+                              <select
+                                value={editConvenienceRating ?? ""}
+                                onChange={(e) =>
+                                  handleOptionalRatingChange(e.target.value, setEditConvenienceRating)
+                                }
+                                style={input}
+                              >
+                                <option value="">Not rated</option>
+                                <option value="1">1 — Poor</option>
+                                <option value="2">2 — Limited</option>
+                                <option value="3">3 — Okay</option>
+                                <option value="4">4 — Convenient</option>
+                                <option value="5">5 — Very convenient</option>
+                              </select>
+                            </label>
+                          </div>
+                        </section>
+
                         <div
                           style={{
                             display: "grid",
@@ -830,6 +985,33 @@ const formatTripValue = (value: string) => {
                       <div style={{ color: "#f5b50a", marginBottom: "16px" }}>
                         {"★".repeat(experience.rating)}
                         {"☆".repeat(5 - experience.rating)}
+                      </div>
+                    )}
+
+                    {[
+                      ["Safety", experience.safety_rating],
+                      ["Cost", experience.cost_rating],
+                      ["Accessibility", experience.accessibility_rating],
+                      ["Convenience", experience.convenience_rating],
+                    ].some(([, value]) => value) && (
+                      <div style={structuredRatingsPreviewBox}>
+                        <strong>Practical ratings</strong>
+
+                        <div style={structuredRatingsPreviewGrid}>
+                          {[
+                            ["Safety", experience.safety_rating],
+                            ["Cost", experience.cost_rating],
+                            ["Accessibility", experience.accessibility_rating],
+                            ["Convenience", experience.convenience_rating],
+                          ]
+                            .filter(([, value]) => value)
+                            .map(([label, value]) => (
+                              <span key={label} style={structuredRatingsPreviewBadge}>
+                                {label}: {"★".repeat(Number(value))}
+                                {"☆".repeat(5 - Number(value))}
+                              </span>
+                            ))}
+                        </div>
                       </div>
                     )}
 
@@ -1338,4 +1520,61 @@ const tripMetaBadge = {
   borderRadius: "999px",
   padding: "4px 8px",
   background: "#fafafa",
+};
+
+const structuredRatingsBox = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  display: "grid",
+  gap: "12px",
+};
+
+const structuredRatingsIntro = {
+  margin: "6px 0 0 0",
+  color: "#666",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+
+const structuredRatingsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+  gap: "12px",
+};
+
+const structuredRatingField = {
+  display: "grid",
+  gap: "6px",
+  fontSize: "13px",
+  color: "#555",
+  fontWeight: 600,
+};
+
+const structuredRatingsPreviewBox = {
+  marginBottom: "16px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  display: "grid",
+  gap: "8px",
+  color: "#555",
+  fontSize: "13px",
+};
+
+const structuredRatingsPreviewGrid = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+};
+
+const structuredRatingsPreviewBadge = {
+  display: "inline-block",
+  padding: "4px 8px",
+  borderRadius: "999px",
+  border: "1px solid #eee",
+  background: "white",
+  fontSize: "12px",
 };

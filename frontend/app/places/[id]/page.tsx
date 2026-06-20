@@ -112,10 +112,29 @@ export default function PlacePage() {
 
   const placeIntroText =
     place?.place_type === "country"
-      ? `Explore country-level experiences, events and useful information shared about ${place?.name || "this country"}.`
+      ? `This is the country-level hub for ${place?.name || "this country"}. Use it for general country experiences, country-wide alerts, events and broad travel context.`
       : place?.place_type === "city"
-      ? `Explore experiences, events and useful information shared specifically about ${place?.name || "this city or region"}.`
-      : `Explore traveler experiences, events and useful information shared about this specific place.`;
+      ? `This is the city/region hub for ${place?.name || "this city or region"}. Use it for city-level experiences, local updates and for finding or adding specific places inside it.`
+      : `This is the specific-place hub for ${place?.name || "this place"}. Use it for reviews, ratings, events, alerts and useful information about this exact place.`;
+
+  const placeHubGuidance =
+  place?.place_type === "country"
+    ? [
+        "Read or share general experiences about the country.",
+        "Find cities, islands and regions inside this country.",
+        "Post country-wide events, alerts or useful information.",
+      ]
+    : place?.place_type === "city"
+    ? [
+        "Read or share experiences about the city or region.",
+        "Find or add specific places such as restaurants, hotels, attractions or nature spots.",
+        "Post local events, alerts or useful information.",
+      ]
+    : [
+        "Read or share reviews about this exact place.",
+        "Check ratings and traveler feedback.",
+        "Post events, alerts or useful information tied to this place.",
+      ];
 
   const placeLocation =
     place?.place_type === "country"
@@ -315,15 +334,17 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
       if (!search) return false;
 
-      const name = (childPlace.name || "").toLowerCase();
-      const city = (childPlace.city || "").toLowerCase();
       const type = (childPlace.place_type || "").toLowerCase();
 
-      return (
-        name.includes(search) ||
-        city.includes(search) ||
-        type.includes(search)
-      );
+      // On a country hub, only show cities, islands and regions.
+      // Specific places such as restaurants, hotels, attractions and beaches
+      // should be searched from inside the city/region hub.
+      if (type !== "city") return false;
+
+      const name = (childPlace.name || "").toLowerCase();
+      const city = (childPlace.city || "").toLowerCase();
+
+      return name.includes(search) || city.includes(search);
     });
 
     const handleCreateChildPlace = async (e: React.FormEvent) => {
@@ -686,6 +707,21 @@ const handleToggleEventsInfo = () => {
           >
             {placeIntroText}
           </p>
+
+          <div style={hubGuidanceBox}>
+              <div style={hubGuidanceTitle}>
+                What this hub is for
+              </div>
+
+              <div style={hubGuidanceList}>
+                {placeHubGuidance.map((item) => (
+                  <div key={item} style={hubGuidanceItem}>
+                    <span>•</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+          </div>
 
           <div
             style={{
@@ -2203,5 +2239,34 @@ const dateTimeHelperBox = {
   backgroundColor: "#fafafa",
   color: "#555",
   fontSize: "12px",
+  lineHeight: 1.45,
+};
+
+const hubGuidanceBox = {
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  backgroundColor: "#fafafa",
+  marginBottom: "18px",
+  maxWidth: "680px",
+};
+
+const hubGuidanceTitle = {
+  fontSize: "13px",
+  color: "#555",
+  fontWeight: 700,
+  marginBottom: "8px",
+};
+
+const hubGuidanceList = {
+  display: "grid",
+  gap: "6px",
+};
+
+const hubGuidanceItem = {
+  display: "flex",
+  gap: "8px",
+  color: "#666",
+  fontSize: "13px",
   lineHeight: 1.45,
 };

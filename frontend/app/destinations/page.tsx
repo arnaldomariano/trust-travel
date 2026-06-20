@@ -284,43 +284,34 @@ const getSearchMatchScore = (place: any) => {
 };
 
 const getUnifiedSearchScore = (place: any) => {
-  if (!normalizedSearchText) return 0;
+  const search = normalizeText(searchTerm);
 
-  const name = normalizeText(place.name);
-  const city = normalizeText(place.city || place.destination_name);
-  const country = normalizeText(
-    place.destination_country ||
-      place.country_name ||
-      place.destination_name
-  );
+  if (!search) return 0;
 
-    const typeLabelByType: Record<string, string> = {
-    country: "Country",
-    city: "City / Region",
-    attraction: "Tourist attraction",
-    hotel: "Hotel",
-    restaurant: "Restaurant / Café",
-    nature: "Beach / Nature spot",
-    other: "Other",
-  };
+  const name = normalizeText(place.name || "");
+  const city = normalizeText(place.city || "");
+  const type = normalizeText(place.place_type || "");
 
-  const type = normalizeText(typeLabelByType[place.place_type] || "Place");
+  if (name === search) return 100;
+  if (name.startsWith(search)) return 90;
 
-  if (name === normalizedSearchText) return 100;
-  if (name.startsWith(normalizedSearchText)) return 90;
-  if (name.includes(normalizedSearchText)) return 80;
+  // Avoid noisy results for very short searches.
+  // Example: "Can" should not match "Vaticano" just because the letters appear inside the word.
+  if (search.length >= 4 && name.includes(search)) return 80;
 
-  if (normalizedSearchText.length >= 4 && city.includes(normalizedSearchText)) {
+  // Only city/region records should match by city name.
+  // Specific places should appear only when the user searches their own name.
+  if (
+    search.length >= 4 &&
+    place.place_type === "city" &&
+    city.includes(search)
+  ) {
     return 65;
   }
 
-  if (normalizedSearchText.length >= 4 && country.includes(normalizedSearchText)) {
-    return 55;
-  }
-
-  if (normalizedSearchText.length >= 4 && type.includes(normalizedSearchText)) {
-    return 45;
-  }
+  // Keep type matching only for longer searches.
+  // Example: "restaurant", "hotel", "nature".
+  if (search.length >= 5 && type.includes(search)) return 45;
 
   return 0;
 };

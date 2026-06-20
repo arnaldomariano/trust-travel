@@ -19,6 +19,8 @@ export default function PlacePage() {
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
   const [countryContext, setCountryContext] = useState<any>(null);
+  const [allPlaces, setAllPlaces] = useState<any[]>([]);
+
   const [loadingCountryContext, setLoadingCountryContext] = useState(false);
 
   const [showCreateChildPlaceForm, setShowCreateChildPlaceForm] = useState(false);
@@ -94,6 +96,13 @@ export default function PlacePage() {
       return new Date(value).toLocaleString();
   };
 
+  const normalizeText = (value?: string | null) =>
+      String(value || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
   const placeTypeLabel = getPlaceTypeLabel(place?.place_type);
 
   const parentLocationLabel =
@@ -147,12 +156,59 @@ export default function PlacePage() {
           .filter(Boolean)
           .join(" · ");
 
-  const placeHierarchyItems =
+  const countryPlaceForHierarchy = allPlaces.find(
+  (p) =>
+    p.place_type === "country" &&
+    normalizeText(p.name) === normalizeText(parentLocationLabel)
+);
+
+const cityPlaceForHierarchy = allPlaces.find(
+  (p) =>
+    p.place_type === "city" &&
+    normalizeText(p.name) === normalizeText(place?.city) &&
+    normalizeText(p.destination_country || p.destination_name) ===
+      normalizeText(parentLocationLabel)
+);
+
+const placeHierarchyItems =
   place?.place_type === "country"
-    ? [place?.name].filter(Boolean)
+    ? [
+        {
+          label: place?.name,
+          href: null,
+        },
+      ].filter((item) => item.label)
     : place?.place_type === "city"
-    ? [parentLocationLabel, place?.name].filter(Boolean)
-    : [parentLocationLabel, place?.city, place?.name].filter(Boolean);
+    ? [
+        {
+          label: parentLocationLabel,
+          href: countryPlaceForHierarchy
+            ? `/places/${countryPlaceForHierarchy.id}`
+            : null,
+        },
+        {
+          label: place?.name,
+          href: null,
+        },
+      ].filter((item) => item.label)
+    : [
+        {
+          label: parentLocationLabel,
+          href: countryPlaceForHierarchy
+            ? `/places/${countryPlaceForHierarchy.id}`
+            : null,
+        },
+        {
+          label: place?.city,
+          href: cityPlaceForHierarchy
+            ? `/places/${cityPlaceForHierarchy.id}`
+            : null,
+        },
+        {
+          label: place?.name,
+          href: null,
+        },
+      ].filter((item) => item.label);
 
   const pageTitle =
       place?.place_type === "country" || place?.place_type === "city"
@@ -261,6 +317,18 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       })
       .catch((err) => console.error("PHOTOS ERROR:", err));
 
+    fetch(`${API_URL}/api/places/`)
+      .then((res) => res.json())
+      .then((data) => {
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data.results)
+          ? data.results
+          : [];
+
+        setAllPlaces(list);
+      })
+      .catch((err) => console.error("PLACES LIST ERROR:", err));
 
     fetch(`${API_URL}/api/places/${id}/`)
       .then((res) => res.json())
@@ -710,9 +778,16 @@ const handleToggleEventsInfo = () => {
 
                 <div style={hierarchyPath}>
                   {placeHierarchyItems.map((item, index) => (
-                    <span key={`${item}-${index}`} style={hierarchyItem}>
+                    <span key={`${item.label}-${index}`} style={hierarchyItem}>
                       {index > 0 && <span style={hierarchySeparator}>→</span>}
-                      <span>{item}</span>
+
+                      {item.href ? (
+                        <Link href={item.href} style={hierarchyLink}>
+                          {item.label}
+                        </Link>
+                      ) : (
+                        <span>{item.label}</span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -2343,3 +2418,11 @@ const hierarchySeparator = {
   color: "#999",
   fontWeight: 400,
 };
+
+const hierarchyLink = {
+  color: "#111",
+  textDecoration: "underline",
+  textUnderlineOffset: "3px",
+  fontWeight: 700,
+};
+

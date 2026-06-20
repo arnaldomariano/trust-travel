@@ -4,6 +4,7 @@ from .views import (
     DestinationListView,
     PlaceListView,
     ExperienceListView,
+    PlaceRatingsSummaryView,
     ExperiencePhotoListCreateView,
     ExperienceDetailView,
     DestinationPlacesListView,
@@ -58,7 +59,15 @@ urlpatterns = [
     path("places/search/", PlaceSearchView.as_view()),
     path("places/create-basic/", CreateBasicPlaceView.as_view()),
     path("places/<int:pk>/country-context/", CountryContextView.as_view()),
+
+    path(
+        "places/<int:place_id>/ratings-summary/",
+        PlaceRatingsSummaryView.as_view(),
+        name="place-ratings-summary",
+    ),
+
     path("places/<int:pk>/", PlaceDetailView.as_view()),
+
     path("places/<int:place_id>/updates/", PlaceUpdatesListView.as_view()),
     path("places/<int:place_id>/photos/", PlacePhotosView.as_view()),
     path("destinations/<int:destination_id>/places/", DestinationPlacesListView.as_view()),

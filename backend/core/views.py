@@ -375,6 +375,86 @@ class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
 
+class PlaceRatingsSummaryView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, place_id):
+        place = Place.objects.select_related("destination").filter(
+            id=place_id
+        ).first()
+
+        if not place:
+            return Response(
+                {"detail": "Place not found."},
+                status=404,
+            )
+
+        experiences = Experience.objects.filter(place=place)
+
+        rated_experiences = experiences.exclude(rating__isnull=True)
+
+        ratings = list(
+            rated_experiences.values_list("rating", flat=True)
+        )
+
+        if ratings:
+            overall_average = round(sum(ratings) / len(ratings), 1)
+        else:
+            overall_average = None
+
+        distribution = {
+            "5": rated_experiences.filter(rating=5).count(),
+            "4": rated_experiences.filter(rating=4).count(),
+            "3": rated_experiences.filter(rating=3).count(),
+            "2": rated_experiences.filter(rating=2).count(),
+            "1": rated_experiences.filter(rating=1).count(),
+        }
+
+        def practical_stats(field_name):
+            values = list(
+                experiences
+                .exclude(**{f"{field_name}__isnull": True})
+                .values_list(field_name, flat=True)
+            )
+
+            if not values:
+                return {
+                    "average": None,
+                    "count": 0,
+                }
+
+            return {
+                "average": round(sum(values) / len(values), 1),
+                "count": len(values),
+            }
+
+        return Response(
+            {
+                "place": {
+                    "id": place.id,
+                    "name": place.name,
+                    "place_type": place.place_type,
+                    "city": place.city,
+                    "destination": place.destination.name if place.destination else "",
+                    "destination_country": (
+                        place.destination.country if place.destination else ""
+                    ),
+                },
+                "overall": {
+                    "average": overall_average,
+                    "total_reviews": experiences.count(),
+                    "rated_count": rated_experiences.count(),
+                    "distribution": distribution,
+                },
+                "practical": {
+                    "safety": practical_stats("safety_rating"),
+                    "cost": practical_stats("cost_rating"),
+                    "accessibility": practical_stats("accessibility_rating"),
+                    "convenience": practical_stats("convenience_rating"),
+                },
+            }
+        )
+
 class PlaceSearchView(APIView):
     def get(self, request):
         query = (request.query_params.get("q") or "").strip()

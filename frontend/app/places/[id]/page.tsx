@@ -147,6 +147,13 @@ export default function PlacePage() {
           .filter(Boolean)
           .join(" · ");
 
+  const placeHierarchyItems =
+  place?.place_type === "country"
+    ? [place?.name].filter(Boolean)
+    : place?.place_type === "city"
+    ? [parentLocationLabel, place?.name].filter(Boolean)
+    : [parentLocationLabel, place?.city, place?.name].filter(Boolean);
+
   const pageTitle =
       place?.place_type === "country" || place?.place_type === "city"
         ? `Experiences in ${place?.name || "this place"}`
@@ -332,7 +339,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     const filteredCountryChildPlaces = countryChildPlaces.filter((childPlace: any) => {
       const search = searchInsideCountry.trim().toLowerCase();
 
-      if (!search) return false;
+      // Avoid showing a long list while the user is still typing.
+      if (search.length < 4) return false;
 
       const type = (childPlace.place_type || "").toLowerCase();
 
@@ -696,6 +704,21 @@ const handleToggleEventsInfo = () => {
             </div>
           )}
 
+          {placeHierarchyItems.length > 0 && (
+              <div style={hierarchyBox}>
+                <div style={hierarchyLabel}>Place hierarchy</div>
+
+                <div style={hierarchyPath}>
+                  {placeHierarchyItems.map((item, index) => (
+                    <span key={`${item}-${index}`} style={hierarchyItem}>
+                      {index > 0 && <span style={hierarchySeparator}>→</span>}
+                      <span>{item}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
           <p
             style={{
               marginTop: "14px",
@@ -912,14 +935,14 @@ const handleToggleEventsInfo = () => {
               />
 
               <p
-                style={{
-                  margin: 0,
-                  color: "#777",
-                  fontSize: "13px",
-                  lineHeight: 1.5,
-                }}
-              >
-                Search first if you already have a city, island or region in mind.
+                  style={{
+                    margin: 0,
+                    color: "#777",
+                    fontSize: "13px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Type at least 4 characters to search for a city, island or region inside this country.
               </p>
             </div>
 
@@ -1091,7 +1114,7 @@ const handleToggleEventsInfo = () => {
                 Loading cities, islands and regions...
               </div>
 
-            ) : searchInsideCountry.trim() && filteredCountryChildPlaces.length > 0 ? (
+            ) : searchInsideCountry.trim().length >= 4 && filteredCountryChildPlaces.length > 0 ? (
               <div
                 style={{
                   display: "grid",
@@ -1185,6 +1208,19 @@ const handleToggleEventsInfo = () => {
                 ))}
               </div>
 
+            ) : searchInsideCountry.trim() && searchInsideCountry.trim().length < 4 ? (
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid #eee",
+                  borderRadius: "12px",
+                  color: "#777",
+                  backgroundColor: "#fafafa",
+                  marginBottom: "18px",
+                }}
+              >
+                Keep typing to search inside {place.name}. Use at least 4 characters.
+              </div>
             ) : searchInsideCountry.trim() ? (
               <div
                 style={{
@@ -1196,7 +1232,7 @@ const handleToggleEventsInfo = () => {
                   marginBottom: "18px",
                 }}
               >
-                No city, island or region found for “{searchInsideCountry}”.
+               No city, island or region found for “{searchInsideCountry}”.
               </div>
             ) : (
               <div
@@ -2269,4 +2305,41 @@ const hubGuidanceItem = {
   color: "#666",
   fontSize: "13px",
   lineHeight: 1.45,
+};
+
+const hierarchyBox = {
+  marginTop: "14px",
+  padding: "12px 14px",
+  border: "1px solid #eee",
+  borderRadius: "14px",
+  backgroundColor: "#fafafa",
+  maxWidth: "680px",
+};
+
+const hierarchyLabel = {
+  fontSize: "12px",
+  color: "#777",
+  fontWeight: 600,
+  marginBottom: "6px",
+};
+
+const hierarchyPath = {
+  display: "flex",
+  flexWrap: "wrap" as const,
+  gap: "6px",
+  alignItems: "center",
+  color: "#333",
+  fontSize: "14px",
+  fontWeight: 600,
+};
+
+const hierarchyItem = {
+  display: "inline-flex",
+  gap: "6px",
+  alignItems: "center",
+};
+
+const hierarchySeparator = {
+  color: "#999",
+  fontWeight: 400,
 };

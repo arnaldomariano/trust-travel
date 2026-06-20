@@ -869,7 +869,7 @@ const handleToggleEventsInfo = () => {
               onClick={() => setShowRatings(!showRatings)}
               style={secondaryButton}
             >
-              {showRatings ? "Hide ratings" : "Ratings & insights"}
+              {showRatings ? "Hide ratings & insights" : "Show ratings & insights"}
             </button>
 
                 <button
@@ -878,8 +878,14 @@ const handleToggleEventsInfo = () => {
                 >
                   {filter === "update" ? "Hide events & info" : "Events & info"}
                 </button>
+            </div>
 
-          </div>
+        <div style={actionHelperBox}>
+          <strong>Want to rate or review this place?</strong>{" "}
+          Use <strong>Experiences</strong>. Ratings are submitted together with a shared experience.
+          The ratings & insights area only summarizes what travelers have already shared.
+        </div>
+
         </section>
 
            {filter === "update" && (
@@ -2424,5 +2430,17 @@ const hierarchyLink = {
   textDecoration: "underline",
   textUnderlineOffset: "3px",
   fontWeight: 700,
+};
+
+const actionHelperBox = {
+  marginTop: "12px",
+  padding: "12px 14px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  backgroundColor: "#fafafa",
+  color: "#555",
+  fontSize: "13px",
+  lineHeight: 1.5,
+  maxWidth: "680px",
 };
 

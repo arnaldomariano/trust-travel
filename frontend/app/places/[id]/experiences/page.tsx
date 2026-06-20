@@ -181,7 +181,37 @@ const emptyExperienceBodyText = isCountryPage
       placeContextLabel ? ` in ${placeContextLabel}` : ""
     }. You can be the first to share an experience about this specific place.`;
 
-  const sortedRelatedPlaces = [...relatedPlaces].sort((a, b) =>
+const experienceScopeEyebrowText = isCountryPage
+  ? "Country-level experience"
+  : isCityPage
+  ? "City / region-level experience"
+  : "Specific-place experience";
+
+const experienceScopeTitleText = isCountryPage
+  ? `You are viewing experiences about ${place?.name || "this country"}`
+  : isCityPage
+  ? `You are viewing experiences in ${place?.name || "this city or region"}`
+  : `You are viewing experiences about ${place?.name || "this place"}`;
+
+const experienceScopeBodyText = isCountryPage
+  ? `Use this page for broad impressions about the country: culture, costs, safety, accessibility, convenience, general travel feeling or country-wide observations.`
+  : isCityPage
+  ? `Use this page for experiences about the city or region as a whole: atmosphere, mobility, safety, events, general costs or overall local impressions.`
+  : `Use this page for experiences about this exact place: service, visit quality, food, stay, access, safety, price, comfort or practical details tied to this location.`;
+
+const experienceScopeWarningText = isCountryPage
+  ? `If your experience is mainly about a city, hotel, restaurant, attraction or beach, search or create that more specific place first.`
+  : isCityPage
+  ? `If your experience is mainly about a restaurant, hotel, attraction, beach or nature spot, use the specific-place page instead of the city page.`
+  : `This review will be attached to this exact place, not only to the city or country.`;
+
+const shareExperienceButtonText = isCountryPage
+  ? "Share country-level experience"
+  : isCityPage
+  ? "Share city/region-level experience"
+  : "Share experience about this exact place";
+
+const sortedRelatedPlaces = [...relatedPlaces].sort((a, b) =>
       (a.name || "").localeCompare(b.name || "")
     );
 
@@ -1540,6 +1570,25 @@ const renderReportControls = (experience: any) => {
         </section>
       )}
 
+      <section style={experienceScopeBox}>
+          <div style={experienceScopeEyebrow}>
+            {experienceScopeEyebrowText}
+          </div>
+
+          <h2 style={experienceScopeTitle}>
+            {experienceScopeTitleText}
+          </h2>
+
+          <p style={experienceScopeText}>
+            {experienceScopeBodyText}
+          </p>
+
+          <div style={experienceScopeWarningBox}>
+            <strong>Before sharing:</strong>{" "}
+            <span>{experienceScopeWarningText}</span>
+          </div>
+        </section>
+
         <div
           style={{
             display: "flex",
@@ -1585,7 +1634,7 @@ const renderReportControls = (experience: any) => {
                 fontWeight: 700,
               }}
             >
-              Share your experience here
+              {shareExperienceButtonText}
             </button>
           )}
         </div>
@@ -1899,10 +1948,10 @@ const renderReportControls = (experience: any) => {
             style={emptyExperiencePrimaryButton}
           >
             {isCountryPage
-              ? "Share the first country experience"
+              ? "Share the first country-level experience"
               : isCityPage
-              ? `Share the first experience in ${place?.name || "this city or region"}`
-              : `Share the first experience about ${place?.name || "this place"}`}
+              ? `Share the first city/region-level experience`
+              : `Share the first experience about this exact place`}
           </button>
 
           {!isCountryPage && parentCountryPlace && (
@@ -3303,3 +3352,45 @@ const relatedPlaceCreateConfirmBox = {
   display: "grid",
   gap: "12px",
 };
+
+const experienceScopeBox = {
+  marginTop: "16px",
+  marginBottom: "18px",
+  padding: "18px",
+  borderRadius: "16px",
+  border: "1px solid #eee",
+  background: "white",
+  display: "grid",
+  gap: "8px",
+};
+
+const experienceScopeEyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  fontWeight: 700,
+};
+
+const experienceScopeTitle = {
+  margin: 0,
+  fontSize: "20px",
+  lineHeight: 1.25,
+};
+
+const experienceScopeText = {
+  margin: 0,
+  color: "#555",
+  lineHeight: 1.6,
+  fontSize: "14px",
+};
+
+const experienceScopeWarningBox = {
+  marginTop: "6px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  color: "#555",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+

@@ -381,6 +381,54 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     1
   );
 
+  const getPracticalRatingStats = (fieldName: string) => {
+  const values = experiences
+    .map((experience) => experience[fieldName])
+    .filter((value) => value !== null && value !== undefined && value !== "");
+
+  if (values.length === 0) {
+    return {
+      average: null,
+      count: 0,
+    };
+  }
+
+  const average =
+    values.reduce((sum, value) => sum + Number(value), 0) / values.length;
+
+  return {
+    average: average.toFixed(1),
+    count: values.length,
+  };
+};
+
+const practicalRatingStats = [
+  {
+    label: "Safety",
+    description: "How safe travelers felt here.",
+    ...getPracticalRatingStats("safety_rating"),
+  },
+  {
+    label: "Cost",
+    description: "How travelers evaluate cost and value.",
+    ...getPracticalRatingStats("cost_rating"),
+  },
+  {
+    label: "Accessibility",
+    description: "How easy this place is to access or navigate.",
+    ...getPracticalRatingStats("accessibility_rating"),
+  },
+  {
+    label: "Convenience",
+    description: "How practical or convenient the experience felt.",
+    ...getPracticalRatingStats("convenience_rating"),
+  },
+];
+
+const availablePracticalRatingStats = practicalRatingStats.filter(
+  (stat) => stat.average !== null
+);
+
     // =========================
     // Build mixed activity feed
     // =========================
@@ -2050,6 +2098,47 @@ const handleToggleEventsInfo = () => {
                     })}
                   </div>
 
+                  {availablePracticalRatingStats.length > 0 && (
+                      <div>
+                        <h3 style={{ marginTop: 0, marginBottom: "14px", fontSize: "17px" }}>
+                          Practical ratings
+                        </h3>
+
+                        <p
+                          style={{
+                            marginTop: 0,
+                            marginBottom: "14px",
+                            color: "#666",
+                            lineHeight: 1.5,
+                            fontSize: "14px",
+                          }}
+                        >
+                          These averages are based only on experiences where travelers filled in each
+                          optional practical rating.
+                        </p>
+
+                        <div style={practicalRatingsInsightGrid}>
+                          {availablePracticalRatingStats.map((stat) => (
+                            <div key={stat.label} style={practicalRatingsInsightCard}>
+                              <div style={overviewStatLabel}>{stat.label}</div>
+
+                              <div style={overviewStatValue}>
+                                {stat.average} ★
+                              </div>
+
+                              <div style={practicalRatingsInsightDescription}>
+                                {stat.description}
+                              </div>
+
+                              <div style={practicalRatingsInsightCount}>
+                                Based on {stat.count} {stat.count === 1 ? "experience" : "experiences"}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                   <div
                     style={{
                       padding: "16px",
@@ -2192,6 +2281,33 @@ const handleToggleEventsInfo = () => {
                     <div style={{ marginTop: "8px", color: "#777", fontSize: "13px" }}>
                       Rating: {"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}
                     </div>
+
+                    {[
+                      ["Safety", item.safety_rating],
+                      ["Cost", item.cost_rating],
+                      ["Accessibility", item.accessibility_rating],
+                      ["Convenience", item.convenience_rating],
+                    ].some(([, value]) => value) && (
+                      <div style={practicalRatingsMiniBox}>
+                        <strong>Practical ratings</strong>
+
+                        <div style={practicalRatingsMiniGrid}>
+                          {[
+                            ["Safety", item.safety_rating],
+                            ["Cost", item.cost_rating],
+                            ["Accessibility", item.accessibility_rating],
+                            ["Convenience", item.convenience_rating],
+                          ]
+                            .filter(([, value]) => value)
+                            .map(([label, value]) => (
+                              <span key={label} style={practicalRatingsMiniBadge}>
+                                {label}: {"★".repeat(Number(value))}
+                                {"☆".repeat(5 - Number(value))}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div style={{ marginTop: "6px", color: "#777", fontSize: "13px" }}>
                       Shared by {item.user || "Unknown user"} •{" "}
@@ -2444,3 +2560,55 @@ const actionHelperBox = {
   maxWidth: "680px",
 };
 
+const practicalRatingsInsightGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: "12px",
+};
+
+const practicalRatingsInsightCard = {
+  padding: "16px",
+  border: "1px solid #eee",
+  borderRadius: "14px",
+  backgroundColor: "#fafafa",
+};
+
+const practicalRatingsInsightDescription = {
+  marginTop: "6px",
+  color: "#666",
+  fontSize: "12px",
+  lineHeight: 1.4,
+};
+
+const practicalRatingsInsightCount = {
+  marginTop: "8px",
+  color: "#777",
+  fontSize: "12px",
+};
+
+const practicalRatingsMiniBox = {
+  marginTop: "10px",
+  padding: "10px 12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  backgroundColor: "#fafafa",
+  display: "grid",
+  gap: "8px",
+  color: "#555",
+  fontSize: "12px",
+};
+
+const practicalRatingsMiniGrid = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+};
+
+const practicalRatingsMiniBadge = {
+  display: "inline-block",
+  padding: "4px 8px",
+  borderRadius: "999px",
+  border: "1px solid #eee",
+  backgroundColor: "white",
+  fontSize: "12px",
+};

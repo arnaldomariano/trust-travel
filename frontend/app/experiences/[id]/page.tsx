@@ -406,6 +406,13 @@ const authorLabel = authorFlag
     const tripContextLabel = formatTripValue(experience.trip_context);
     const tripStyleLabel = formatTripValue(experience.trip_style);
 
+    const practicalRatings = [
+      ["Safety", experience.safety_rating],
+      ["Cost", experience.cost_rating],
+      ["Accessibility", experience.accessibility_rating],
+      ["Convenience", experience.convenience_rating],
+    ].filter(([, value]) => value);
+
       return (
 
     <main style={page}>
@@ -465,6 +472,21 @@ const authorLabel = authorFlag
             {"★".repeat(experience.rating)}
             {"☆".repeat(5 - experience.rating)}
           </div>
+        )}
+
+        {practicalRatings.length > 0 && (
+          <section style={practicalRatingsBox}>
+            <strong>Practical ratings</strong>
+
+            <div style={practicalRatingsGrid}>
+              {practicalRatings.map(([label, value]) => (
+                <span key={label} style={practicalRatingBadge}>
+                  {label}: {"★".repeat(Number(value))}
+                  {"☆".repeat(5 - Number(value))}
+                </span>
+              ))}
+            </div>
+          </section>
         )}
 
         {(tripContextLabel || tripStyleLabel) && (
@@ -1158,4 +1180,31 @@ const tripPlanErrorBox = {
   background: "#fff5f5",
   color: "#b91c1c",
   fontSize: "13px",
+};
+
+const practicalRatingsBox = {
+  marginTop: "14px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  display: "grid",
+  gap: "8px",
+  color: "#555",
+  fontSize: "13px",
+};
+
+const practicalRatingsGrid = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap" as const,
+};
+
+const practicalRatingBadge = {
+  display: "inline-block",
+  padding: "4px 8px",
+  borderRadius: "999px",
+  border: "1px solid #eee",
+  background: "white",
+  fontSize: "12px",
 };

@@ -257,6 +257,18 @@ export default function EvaluationsPage() {
       (stat) => stat.average !== null && stat.average !== undefined
   );
 
+  const ratingDistribution = ratingsSummary?.overall?.distribution || {};
+
+  const ratingRows = [5, 4, 3, 2, 1].map((stars) => ({
+      stars,
+      count: Number(ratingDistribution[String(stars)] || 0),
+  }));
+
+  const maxRatingCount = Math.max(
+      ...ratingRows.map((row) => row.count),
+      1
+  );
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-6xl px-6 py-10">
@@ -534,6 +546,51 @@ export default function EvaluationsPage() {
                             <p className="mt-2 text-2xl font-bold text-white">
                               {ratingsSummary.overall?.rated_count ?? 0}
                             </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-sm font-semibold text-white">
+                                Rating distribution
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                Breakdown of rated experiences by star level.
+                              </p>
+                            </div>
+
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              5 to 1 stars
+                            </p>
+                          </div>
+
+                          <div className="mt-4 space-y-3">
+                            {ratingRows.map((row) => {
+                              const percentage = (row.count / maxRatingCount) * 100;
+
+                              return (
+                                <div
+                                  key={row.stars}
+                                  className="grid grid-cols-[48px_1fr_32px] items-center gap-3"
+                                >
+                                  <div className="text-sm font-medium text-slate-300">
+                                    {row.stars} ★
+                                  </div>
+
+                                  <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                                    <div
+                                      className="h-full rounded-full bg-sky-400"
+                                      style={{ width: `${percentage}%` }}
+                                    />
+                                  </div>
+
+                                  <div className="text-right text-sm text-slate-400">
+                                    {row.count}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
 

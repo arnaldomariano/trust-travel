@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { API_URL } from "../lib/api";
 
 type AnalysisType =
   | "all"
@@ -12,6 +13,16 @@ type AnalysisType =
   | "attraction"
   | "nature"
   | "other";
+
+type Place = {
+  id: number;
+  name: string;
+  place_type?: string;
+  city?: string | null;
+  destination_name?: string | null;
+  destination_country?: string | null;
+  destination_city?: string | null;
+};
 
 const analysisTypes: {
   value: AnalysisType;
@@ -60,13 +71,108 @@ const analysisTypes: {
   },
 ];
 
+function normalizeText(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function formatPlaceType(placeType: string | undefined) {
+  if (!placeType) return "Place";
+
+  const labels: Record<string, string> = {
+    country: "Country",
+    city: "City / Region",
+    hotel: "Hotel",
+    restaurant: "Restaurant",
+    attraction: "Attraction",
+    nature: "Nature",
+    other: "Other",
+  };
+
+  return labels[placeType] || "Place";
+}
+
+function getPlaceContext(place: Place) {
+  const parts = [
+    formatPlaceType(place.place_type),
+    place.city,
+    place.destination_name,
+    place.destination_country,
+  ]
+    .filter(Boolean)
+    .map((item) => String(item));
+
+  return Array.from(new Set(parts)).join(" · ");
+}
+
 export default function EvaluationsPage() {
   const [selectedType, setSelectedType] = useState<AnalysisType>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [loadingPlaces, setLoadingPlaces] = useState(true);
+  const [placesError, setPlacesError] = useState("");
+
+  useEffect(() => {
+    async function fetchPlaces() {
+      try {
+        setLoadingPlaces(true);
+        setPlacesError("");
+
+        const response = await fetch(`${API_URL}/api/places/`);
+
+        if (!response.ok) {
+          throw new Error("Could not load places.");
+        }
+
+        const data = await response.json();
+        setPlaces(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error(error);
+        setPlacesError("Could not load places from the backend.");
+      } finally {
+        setLoadingPlaces(false);
+      }
+    }
+
+    fetchPlaces();
+  }, []);
 
   const selectedTypeInfo = useMemo(() => {
     return analysisTypes.find((item) => item.value === selectedType);
   }, [selectedType]);
+
+  const filteredPlaces = useMemo(() => {
+    const normalizedSearch = normalizeText(searchTerm);
+
+    if (!normalizedSearch) {
+      return [];
+    }
+
+    return places
+      .filter((place) => {
+        const matchesType =
+          selectedType === "all" || place.place_type === selectedType;
+
+        if (!matchesType) return false;
+
+        const searchableText = normalizeText(
+          [
+            place.name,
+            place.city,
+            place.destination_name,
+            place.destination_country,
+            place.destination_city,
+            place.place_type,
+          ].join(" ")
+        );
+
+        return searchableText.includes(normalizedSearch);
+      })
+      .slice(0, 8);
+  }, [places, searchTerm, selectedType]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -111,7 +217,7 @@ export default function EvaluationsPage() {
             </div>
 
             <div className="rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm text-sky-200">
-              Early structure
+              Connected to places
             </div>
           </div>
 
@@ -162,6 +268,59 @@ export default function EvaluationsPage() {
                 );
               })}
             </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <h3 className="text-sm font-semibold text-white">
+              Matching places
+            </h3>
+
+            {loadingPlaces && (
+              <p className="mt-3 text-sm text-slate-400">
+                Loading places...
+              </p>
+            )}
+
+            {!loadingPlaces && placesError && (
+              <p className="mt-3 text-sm text-red-300">
+                {placesError}
+              </p>
+            )}
+
+            {!loadingPlaces && !placesError && !searchTerm.trim() && (
+              <p className="mt-3 text-sm text-slate-400">
+                Start typing to see matching places from the Trust Travel database.
+              </p>
+            )}
+
+            {!loadingPlaces &&
+              !placesError &&
+              searchTerm.trim() &&
+              filteredPlaces.length === 0 && (
+                <p className="mt-3 text-sm text-slate-400">
+                  No matching place found for this search and active filter.
+                </p>
+              )}
+
+            {filteredPlaces.length > 0 && (
+              <div className="mt-4 grid gap-3">
+                {filteredPlaces.map((place) => (
+                  <button
+                    key={place.id}
+                    type="button"
+                    className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 text-left transition hover:border-sky-500/60"
+                  >
+                    <div className="font-semibold text-white">
+                      {place.name}
+                    </div>
+
+                    <div className="mt-1 text-sm text-slate-400">
+                      {getPlaceContext(place)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

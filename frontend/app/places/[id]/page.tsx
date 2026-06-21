@@ -798,19 +798,25 @@ const handleToggleEventsInfo = () => {
 
   return (
     <main style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "900px", margin: "0 auto" }}>
-            <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
-        <Link href="/" style={{ textDecoration: "none", color: "#666" }}>
-          Home
-        </Link>{" "}
-        /{" "}
-        <Link
-          href="/destinations"
-          style={{ textDecoration: "none", color: "#666" }}
-        >
-          {breadcrumbParentLabel}
-        </Link>{" "}
-        / <span>{place?.name || "Place"}</span>
-      </div>
+       <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
+          <Link href="/" style={{ textDecoration: "none", color: "#666" }}>
+            Home
+          </Link>
+
+          {placeHierarchyItems.map((item, index) => (
+            <span key={`${item.label}-breadcrumb-${index}`}>
+              {" "}
+              /{" "}
+              {item.href ? (
+                <Link href={item.href} style={{ textDecoration: "none", color: "#666" }}>
+                  {item.label}
+                </Link>
+              ) : (
+                <span>{item.label}</span>
+              )}
+            </span>
+          ))}
+        </div>
 
         <section
           style={{

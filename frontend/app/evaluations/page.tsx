@@ -489,18 +489,40 @@ export default function EvaluationsPage() {
             </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
-            <div className="mb-3 text-2xl">📍</div>
-            <h2 className="text-lg font-semibold text-white">
-              Places comparison
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Compare different destinations and specific places by practical
-              criteria such as safety, cost, accessibility and convenience.
-            </p>
-            <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-              Future module
-            </p>
-          </div>
+              <div className="mb-3 text-2xl">📍</div>
+
+              <h2 className="text-lg font-semibold text-white">
+                Places comparison
+              </h2>
+
+              {selectedPlace ? (
+                <>
+                  <p className="mt-2 text-sm font-semibold text-slate-200">
+                    {selectedPlace.name}
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    This place can later be compared with similar places by safety,
+                    cost, accessibility, convenience and overall traveler feedback.
+                  </p>
+
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
+                    Comparison target selected
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Compare different destinations and specific places by practical
+                    criteria such as safety, cost, accessibility and convenience.
+                  </p>
+
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Waiting for selection
+                  </p>
+                </>
+              )}
+            </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
             <div className="mb-3 text-2xl">🛡️</div>

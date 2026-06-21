@@ -109,11 +109,12 @@ function getPlaceContext(place: Place) {
 }
 
 export default function EvaluationsPage() {
-  const [selectedType, setSelectedType] = useState<AnalysisType>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [places, setPlaces] = useState<Place[]>([]);
-  const [loadingPlaces, setLoadingPlaces] = useState(true);
-  const [placesError, setPlacesError] = useState("");
+    const [selectedType, setSelectedType] = useState<AnalysisType>("all");
+    const [searchTerm, setSearchTerm] = useState("");
+    const [places, setPlaces] = useState<Place[]>([]);
+    const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+    const [loadingPlaces, setLoadingPlaces] = useState(true);
+    const [placesError, setPlacesError] = useState("");
 
   useEffect(() => {
     async function fetchPlaces() {
@@ -233,7 +234,10 @@ export default function EvaluationsPage() {
               id="evaluation-search"
               type="text"
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setSelectedPlace(null);
+              }}
               placeholder="Example: Brazil, Rome, Nias, Colosseum, Padang Padang Beach, Hotel X..."
               className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400"
             />
@@ -306,9 +310,15 @@ export default function EvaluationsPage() {
               <div className="mt-4 grid gap-3">
                 {filteredPlaces.map((place) => (
                   <button
-                    key={place.id}
-                    type="button"
-                    className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 text-left transition hover:border-sky-500/60"
+                      key={place.id}
+                      type="button"
+                      onClick={() => setSelectedPlace(place)}
+                      className={[
+                        "rounded-xl border p-4 text-left transition hover:border-sky-500/60",
+                        selectedPlace?.id === place.id
+                          ? "border-sky-400 bg-sky-500/15"
+                          : "border-slate-800 bg-slate-900/80",
+                      ].join(" ")}
                   >
                     <div className="font-semibold text-white">
                       {place.name}
@@ -374,15 +384,33 @@ export default function EvaluationsPage() {
           </h2>
 
           <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-            <p className="text-sm text-slate-400">Search target</p>
-            <p className="mt-1 text-lg font-semibold text-white">
-              {searchTerm.trim() ? searchTerm : "No target selected yet"}
-            </p>
+              <p className="text-sm text-slate-400">Search target</p>
+              <p className="mt-1 text-lg font-semibold text-white">
+                {searchTerm.trim() ? searchTerm : "No target selected yet"}
+              </p>
 
-            <p className="mt-4 text-sm text-slate-400">Active filter</p>
-            <p className="mt-1 text-lg font-semibold text-white">
-              {selectedTypeInfo?.label}
-            </p>
+              <p className="mt-4 text-sm text-slate-400">Active filter</p>
+              <p className="mt-1 text-lg font-semibold text-white">
+                {selectedTypeInfo?.label}
+              </p>
+
+              <p className="mt-4 text-sm text-slate-400">Selected place</p>
+
+              {selectedPlace ? (
+                <div className="mt-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
+                  <p className="text-lg font-semibold text-white">
+                    {selectedPlace.name}
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-300">
+                    {getPlaceContext(selectedPlace)}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1 text-lg font-semibold text-white">
+                  No place selected yet
+                </p>
+              )}
           </div>
 
           <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-300">

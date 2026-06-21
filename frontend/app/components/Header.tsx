@@ -152,6 +152,10 @@ useEffect(() => {
                       Insights
                     </MenuLink>
 
+                    <MenuLink href="/evaluations" onClick={() => setMenuOpen(false)}>
+                      Evaluations
+                    </MenuLink>
+
                     {canAccessReports && (
                       <MenuLink href="/admin/reports" onClick={() => setMenuOpen(false)}>
                         Reports

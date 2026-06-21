@@ -172,6 +172,20 @@ const cityPlaceForHierarchy = allPlaces.find(
       normalizeText(parentLocationLabel)
 );
 
+const hierarchyLevelLabel =
+  place?.place_type === "country"
+    ? "Country hub"
+    : place?.place_type === "city"
+    ? "City / Region hub"
+    : "Specific place hub";
+
+const hierarchyLevelDescription =
+  place?.place_type === "country"
+    ? "You are viewing the broad country layer. Cities, islands, regions and specific places are organized below this level."
+    : place?.place_type === "city"
+    ? "You are viewing a city or region layer. Restaurants, hotels, attractions, nature spots and other specific places are organized below this level."
+    : "You are viewing a specific place layer. Ratings, experiences, events, alerts and practical information should refer to this exact place.";
+
 const placeHierarchyItems =
   place?.place_type === "country"
     ? [
@@ -848,6 +862,39 @@ const handleToggleEventsInfo = () => {
                 </div>
               </div>
             )}
+
+            <div
+              style={{
+                marginTop: "12px",
+                marginBottom: "6px",
+                padding: "14px",
+                border: "1px solid #dbeafe",
+                borderRadius: "14px",
+                backgroundColor: "#eff6ff",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  color: "#1d4ed8",
+                  marginBottom: "6px",
+                }}
+              >
+                {hierarchyLevelLabel}
+              </div>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "#1e3a8a",
+                  fontSize: "14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                {hierarchyLevelDescription}
+              </p>
+            </div>
 
           <p
             style={{

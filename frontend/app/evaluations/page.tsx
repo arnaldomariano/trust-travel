@@ -24,6 +24,21 @@ type Place = {
   destination_city?: string | null;
 };
 
+type RatingsSummary = {
+  overall?: {
+    average?: number | string | null;
+    total_reviews?: number;
+    rated_count?: number;
+    distribution?: Record<string, number>;
+  };
+  practical?: {
+    safety?: { average?: number | string | null; count?: number };
+    cost?: { average?: number | string | null; count?: number };
+    accessibility?: { average?: number | string | null; count?: number };
+    convenience?: { average?: number | string | null; count?: number };
+  };
+};
+
 const analysisTypes: {
   value: AnalysisType;
   label: string;
@@ -113,6 +128,9 @@ export default function EvaluationsPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [places, setPlaces] = useState<Place[]>([]);
     const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+    const [ratingsSummary, setRatingsSummary] = useState<RatingsSummary | null>(null);
+    const [loadingRatingsSummary, setLoadingRatingsSummary] = useState(false);
+    const [ratingsSummaryError, setRatingsSummaryError] = useState("");
     const [loadingPlaces, setLoadingPlaces] = useState(true);
     const [placesError, setPlacesError] = useState("");
 
@@ -140,6 +158,31 @@ export default function EvaluationsPage() {
 
     fetchPlaces();
   }, []);
+
+  const loadRatingsSummary = async (placeId: number) => {
+      try {
+        setLoadingRatingsSummary(true);
+        setRatingsSummaryError("");
+        setRatingsSummary(null);
+
+        const response = await fetch(
+          `${API_URL}/api/places/${placeId}/ratings-summary/`
+        );
+
+        if (!response.ok) {
+          throw new Error("Could not load ratings summary.");
+        }
+
+        const data = await response.json();
+        setRatingsSummary(data);
+      } catch (error) {
+        console.error(error);
+        setRatingsSummaryError("Could not load ratings summary for this place.");
+        setRatingsSummary(null);
+      } finally {
+        setLoadingRatingsSummary(false);
+      }
+  };
 
   const selectedTypeInfo = useMemo(() => {
     return analysisTypes.find((item) => item.value === selectedType);
@@ -174,6 +217,45 @@ export default function EvaluationsPage() {
       })
       .slice(0, 8);
   }, [places, searchTerm, selectedType]);
+
+  const averageRating =
+      ratingsSummary?.overall?.average !== null &&
+      ratingsSummary?.overall?.average !== undefined
+        ? Number(ratingsSummary.overall.average).toFixed(1)
+        : null;
+
+  const practicalRatingStats = [
+      {
+        key: "safety",
+        label: "Safety",
+        ...(ratingsSummary?.practical?.safety || { average: null, count: 0 }),
+      },
+      {
+        key: "cost",
+        label: "Cost",
+        ...(ratingsSummary?.practical?.cost || { average: null, count: 0 }),
+      },
+      {
+        key: "accessibility",
+        label: "Accessibility",
+        ...(ratingsSummary?.practical?.accessibility || {
+          average: null,
+          count: 0,
+        }),
+      },
+      {
+        key: "convenience",
+        label: "Convenience",
+        ...(ratingsSummary?.practical?.convenience || {
+          average: null,
+          count: 0,
+        }),
+      },
+    ];
+
+  const availablePracticalRatingStats = practicalRatingStats.filter(
+      (stat) => stat.average !== null && stat.average !== undefined
+  );
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -237,7 +319,10 @@ export default function EvaluationsPage() {
               onChange={(event) => {
                   setSearchTerm(event.target.value);
                   setSelectedPlace(null);
+                  setRatingsSummary(null);
+                  setRatingsSummaryError("");
               }}
+
               placeholder="Example: Brazil, Rome, Nias, Colosseum, Padang Padang Beach, Hotel X..."
               className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400"
             />
@@ -312,7 +397,10 @@ export default function EvaluationsPage() {
                   <button
                       key={place.id}
                       type="button"
-                      onClick={() => setSelectedPlace(place)}
+                      onClick={() => {
+                          setSelectedPlace(place);
+                          loadRatingsSummary(place.id);
+                      }}
                       className={[
                         "rounded-xl border p-4 text-left transition hover:border-sky-500/60",
                         selectedPlace?.id === place.id
@@ -397,19 +485,99 @@ export default function EvaluationsPage() {
               <p className="mt-4 text-sm text-slate-400">Selected place</p>
 
               {selectedPlace ? (
-                <div className="mt-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
-                  <p className="text-lg font-semibold text-white">
-                    {selectedPlace.name}
-                  </p>
+                  <div className="mt-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
+                    <p className="text-lg font-semibold text-white">
+                      {selectedPlace.name}
+                    </p>
 
-                  <p className="mt-1 text-sm text-slate-300">
-                    {getPlaceContext(selectedPlace)}
+                    <p className="mt-1 text-sm text-slate-300">
+                      {getPlaceContext(selectedPlace)}
+                    </p>
+
+                    {loadingRatingsSummary && (
+                      <p className="mt-4 text-sm text-slate-300">
+                        Loading ratings summary...
+                      </p>
+                    )}
+
+                    {!loadingRatingsSummary && ratingsSummaryError && (
+                      <p className="mt-4 text-sm text-red-300">
+                        {ratingsSummaryError}
+                      </p>
+                    )}
+
+                    {!loadingRatingsSummary && ratingsSummary && (
+                      <div className="mt-5">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Average rating
+                            </p>
+                            <p className="mt-2 text-2xl font-bold text-white">
+                              {averageRating ? `${averageRating} ★` : "—"}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Total reviews
+                            </p>
+                            <p className="mt-2 text-2xl font-bold text-white">
+                              {ratingsSummary.overall?.total_reviews ?? 0}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Rated experiences
+                            </p>
+                            <p className="mt-2 text-2xl font-bold text-white">
+                              {ratingsSummary.overall?.rated_count ?? 0}
+                            </p>
+                          </div>
+                        </div>
+
+                        {availablePracticalRatingStats.length > 0 && (
+                          <div className="mt-5">
+                            <p className="text-sm font-semibold text-white">
+                              Practical ratings
+                            </p>
+
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              {availablePracticalRatingStats.map((stat) => (
+                                <div
+                                  key={stat.key}
+                                  className="rounded-xl border border-slate-700 bg-slate-950/70 p-4"
+                                >
+                                  <p className="text-sm text-slate-400">
+                                    {stat.label}
+                                  </p>
+
+                                  <p className="mt-1 text-xl font-semibold text-white">
+                                    {Number(stat.average).toFixed(1)} ★
+                                  </p>
+
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {stat.count ?? 0} evaluation(s)
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {availablePracticalRatingStats.length === 0 && (
+                          <p className="mt-4 text-sm text-slate-400">
+                            No practical ratings available for this place yet.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    No place selected yet
                   </p>
-                </div>
-              ) : (
-                <p className="mt-1 text-lg font-semibold text-white">
-                  No place selected yet
-                </p>
               )}
           </div>
 

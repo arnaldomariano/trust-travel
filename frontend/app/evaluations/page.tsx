@@ -525,18 +525,91 @@ export default function EvaluationsPage() {
             </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
-            <div className="mb-3 text-2xl">🛡️</div>
-            <h2 className="text-lg font-semibold text-white">
-              Trust quality signals
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Prepare the foundation for future quality indicators, including
-              trusted evaluations and possible quality seals.
-            </p>
-            <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-              Future concept
-            </p>
-          </div>
+              <div className="mb-3 text-2xl">🛡️</div>
+
+              <h2 className="text-lg font-semibold text-white">
+                Trust quality signals
+              </h2>
+
+              {selectedPlace && ratingsSummary ? (
+                <>
+                  <p className="mt-2 text-sm font-semibold text-slate-200">
+                    {selectedPlace.name}
+                  </p>
+
+                  {Number(ratingsSummary.overall?.rated_count ?? 0) === 0 ? (
+                    <>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        This place does not have enough rated experiences yet to generate
+                        trust quality signals.
+                      </p>
+
+                      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Needs evaluations
+                      </p>
+                    </>
+                  ) : Number(ratingsSummary.overall?.rated_count ?? 0) < 5 ? (
+                    <>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        This place has early rating activity. More evaluations are needed
+                        before stronger trust quality indicators can be considered.
+                      </p>
+
+                      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
+                        Early signal
+                      </p>
+                    </>
+                  ) : averageRating && Number(averageRating) >= 4 ? (
+                    <>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        This place has a positive evaluation pattern and may become a
+                        candidate for stronger quality indicators in the future.
+                      </p>
+
+                      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-emerald-300">
+                        Strong positive signal
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        This place has enough rating activity to begin showing trust
+                        patterns, but the current average is still mixed.
+                      </p>
+
+                      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-amber-300">
+                        Mixed signal
+                      </p>
+                    </>
+                  )}
+                </>
+              ) : selectedPlace && loadingRatingsSummary ? (
+                <>
+                  <p className="mt-2 text-sm font-semibold text-slate-200">
+                    {selectedPlace.name}
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Loading trust quality signals...
+                  </p>
+
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Loading
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Prepare the foundation for future quality indicators, including
+                    trusted evaluations and possible quality seals.
+                  </p>
+
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Waiting for selection
+                  </p>
+                </>
+              )}
+            </div>
         </section>
 
         <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">

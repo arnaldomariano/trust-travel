@@ -1101,9 +1101,10 @@ const handleToggleEventsInfo = () => {
                 maxWidth: "680px",
               }}
             >
-            Here you can explore broad travel areas inside {place.name}, such as
-            cities, islands, provinces or regions. Country-level experiences stay
-            separate from city or region-specific experiences.
+              Use this section to move from the country layer into cities, islands,
+              provinces or regions inside {place.name}. Search first before creating a new
+              city or region, so country-level experiences stay separate from local
+              experiences.
             </p>
 
                         <div
@@ -1468,10 +1469,10 @@ const handleToggleEventsInfo = () => {
                 maxWidth: "680px",
               }}
             >
-              Looking for a beach, hotel, restaurant, attraction or nature spot inside{" "}
-              {place.name}? Search here before creating a new place. This helps avoid
-              duplicates and keeps city-level experiences separate from experiences about
-              specific places.
+              Use this section to move from the city or region layer into specific places
+              inside {place.name}, such as beaches, hotels, restaurants, attractions or
+              nature spots. Search first before creating a new place, so city-level
+              experiences stay separate from experiences about exact locations.
             </p>
 
             <form
@@ -1529,7 +1530,7 @@ const handleToggleEventsInfo = () => {
                 }}
               >
                 Search first if you already know the specific place. If it does not appear,
-                you can add it below inside {place.name}.
+                you can add it below as a specific place inside {place.name}.
               </p>
 
             </form>

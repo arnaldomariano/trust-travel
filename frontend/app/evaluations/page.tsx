@@ -334,8 +334,7 @@ export default function EvaluationsPage() {
                 setRatingsSummary(null);
                 setRatingsSummaryError("");
               }}
-              placeholder="Brazil, Nias, Coliseu..."
-              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400"
+              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white caret-sky-300 outline-none placeholder:text-slate-500 shadow-[inset_0_0_0_9999px_rgba(2,6,23,1)] [-webkit-text-fill-color:white] focus:border-sky-400 focus:bg-slate-950"
             />
 
             <div className="mt-6">

@@ -436,18 +436,57 @@ export default function EvaluationsPage() {
 
         <section className="mt-8 grid gap-5 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
-            <div className="mb-3 text-2xl">⭐</div>
-            <h2 className="text-lg font-semibold text-white">
-              Ratings overview
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Review average ratings, number of evaluations and rating
-              distribution for selected places.
-            </p>
-            <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-              Coming next
-            </p>
-          </div>
+              <div className="mb-3 text-2xl">⭐</div>
+
+              <h2 className="text-lg font-semibold text-white">
+                Ratings overview
+              </h2>
+
+              {selectedPlace && ratingsSummary ? (
+                <>
+                  <p className="mt-2 text-sm font-semibold text-slate-200">
+                    {selectedPlace.name}
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    {averageRating
+                      ? `${averageRating} ★ based on ${
+                          ratingsSummary.overall?.rated_count ?? 0
+                        } rated experience(s).`
+                      : "This place does not have rated experiences yet."}
+                  </p>
+
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
+                    Live summary
+                  </p>
+                </>
+              ) : selectedPlace && loadingRatingsSummary ? (
+                <>
+                  <p className="mt-2 text-sm font-semibold text-slate-200">
+                    {selectedPlace.name}
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Loading ratings summary...
+                  </p>
+
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Loading
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Select a place to review average rating, number of evaluations and
+                    rating distribution.
+                  </p>
+
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Waiting for selection
+                  </p>
+                </>
+              )}
+            </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
             <div className="mb-3 text-2xl">📍</div>

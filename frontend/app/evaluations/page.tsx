@@ -124,15 +124,16 @@ function getPlaceContext(place: Place) {
 }
 
 export default function EvaluationsPage() {
-    const [selectedType, setSelectedType] = useState<AnalysisType>("all");
-    const [searchTerm, setSearchTerm] = useState("");
-    const [places, setPlaces] = useState<Place[]>([]);
-    const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
-    const [ratingsSummary, setRatingsSummary] = useState<RatingsSummary | null>(null);
-    const [loadingRatingsSummary, setLoadingRatingsSummary] = useState(false);
-    const [ratingsSummaryError, setRatingsSummaryError] = useState("");
-    const [loadingPlaces, setLoadingPlaces] = useState(true);
-    const [placesError, setPlacesError] = useState("");
+  const [selectedType, setSelectedType] = useState<AnalysisType>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [ratingsSummary, setRatingsSummary] =
+    useState<RatingsSummary | null>(null);
+  const [loadingRatingsSummary, setLoadingRatingsSummary] = useState(false);
+  const [ratingsSummaryError, setRatingsSummaryError] = useState("");
+  const [loadingPlaces, setLoadingPlaces] = useState(true);
+  const [placesError, setPlacesError] = useState("");
 
   useEffect(() => {
     async function fetchPlaces() {
@@ -160,28 +161,28 @@ export default function EvaluationsPage() {
   }, []);
 
   const loadRatingsSummary = async (placeId: number) => {
-      try {
-        setLoadingRatingsSummary(true);
-        setRatingsSummaryError("");
-        setRatingsSummary(null);
+    try {
+      setLoadingRatingsSummary(true);
+      setRatingsSummaryError("");
+      setRatingsSummary(null);
 
-        const response = await fetch(
-          `${API_URL}/api/places/${placeId}/ratings-summary/`
-        );
+      const response = await fetch(
+        `${API_URL}/api/places/${placeId}/ratings-summary/`
+      );
 
-        if (!response.ok) {
-          throw new Error("Could not load ratings summary.");
-        }
-
-        const data = await response.json();
-        setRatingsSummary(data);
-      } catch (error) {
-        console.error(error);
-        setRatingsSummaryError("Could not load ratings summary for this place.");
-        setRatingsSummary(null);
-      } finally {
-        setLoadingRatingsSummary(false);
+      if (!response.ok) {
+        throw new Error("Could not load ratings summary.");
       }
+
+      const data = await response.json();
+      setRatingsSummary(data);
+    } catch (error) {
+      console.error(error);
+      setRatingsSummaryError("Could not load ratings summary for this place.");
+      setRatingsSummary(null);
+    } finally {
+      setLoadingRatingsSummary(false);
+    }
   };
 
   const selectedTypeInfo = useMemo(() => {
@@ -219,64 +220,63 @@ export default function EvaluationsPage() {
   }, [places, searchTerm, selectedType]);
 
   const averageRating =
-      ratingsSummary?.overall?.average !== null &&
-      ratingsSummary?.overall?.average !== undefined
-        ? Number(ratingsSummary.overall.average).toFixed(1)
-        : null;
+    ratingsSummary?.overall?.average !== null &&
+    ratingsSummary?.overall?.average !== undefined
+      ? Number(ratingsSummary.overall.average).toFixed(1)
+      : null;
 
   const practicalRatingStats = [
-      {
-        key: "safety",
-        label: "Safety",
-        ...(ratingsSummary?.practical?.safety || { average: null, count: 0 }),
-      },
-      {
-        key: "cost",
-        label: "Cost",
-        ...(ratingsSummary?.practical?.cost || { average: null, count: 0 }),
-      },
-      {
-        key: "accessibility",
-        label: "Accessibility",
-        ...(ratingsSummary?.practical?.accessibility || {
-          average: null,
-          count: 0,
-        }),
-      },
-      {
-        key: "convenience",
-        label: "Convenience",
-        ...(ratingsSummary?.practical?.convenience || {
-          average: null,
-          count: 0,
-        }),
-      },
-    ];
+    {
+      key: "safety",
+      label: "Safety",
+      ...(ratingsSummary?.practical?.safety || { average: null, count: 0 }),
+    },
+    {
+      key: "cost",
+      label: "Cost",
+      ...(ratingsSummary?.practical?.cost || { average: null, count: 0 }),
+    },
+    {
+      key: "accessibility",
+      label: "Accessibility",
+      ...(ratingsSummary?.practical?.accessibility || {
+        average: null,
+        count: 0,
+      }),
+    },
+    {
+      key: "convenience",
+      label: "Convenience",
+      ...(ratingsSummary?.practical?.convenience || {
+        average: null,
+        count: 0,
+      }),
+    },
+  ];
 
   const availablePracticalRatingStats = practicalRatingStats.filter(
-      (stat) => stat.average !== null && stat.average !== undefined
+    (stat) => stat.average !== null && stat.average !== undefined
   );
 
   const ratingDistribution = ratingsSummary?.overall?.distribution || {};
 
   const ratingRows = [5, 4, 3, 2, 1].map((stars) => ({
-      stars,
-      count: Number(ratingDistribution[String(stars)] || 0),
+    stars,
+    count: Number(ratingDistribution[String(stars)] || 0),
   }));
 
   const maxRatingCount = Math.max(
-      ...ratingRows.map((row) => row.count),
-      1
+    ...ratingRows.map((row) => row.count),
+    1
   );
+
+  const ratedCount = Number(ratingsSummary?.overall?.rated_count ?? 0);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-7xl px-5 py-8 md:px-8">
         <div className="mb-8">
-          <Link
-            href="/"
-            className="text-sm text-sky-400 hover:text-sky-300"
-          >
+          <Link href="/" className="text-sm text-sky-400 hover:text-sky-300">
             ← Back to home
           </Link>
 
@@ -291,37 +291,37 @@ export default function EvaluationsPage() {
 
             <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">
               Search freely first, then refine the analysis by place type.
-              This area will centralize structured evaluations across Trust Travel,
+              This area centralizes structured evaluations across Trust Travel,
               helping users compare countries, cities, hotels, restaurants,
               attractions and other places from one dedicated analytics space.
             </p>
           </div>
         </div>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-white">
-                Search an evaluation target
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+        <div className="grid gap-8 lg:grid-cols-[340px_1fr] lg:items-start">
+          <aside className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg lg:sticky lg:top-6">
+            <div className="mb-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-white">
+                  Search target
+                </h2>
+
+                <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs text-sky-200">
+                  Places
+                </span>
+              </div>
+
+              <p className="mt-2 text-sm leading-6 text-slate-400">
                 Type a country, city, hotel, restaurant, attraction, beach,
-                trail or any other place. You can refine the result by category
-                after searching.
+                trail or any other place.
               </p>
             </div>
 
-            <div className="rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm text-sky-200">
-              Connected to places
-            </div>
-          </div>
-
-          <div className="mt-6">
             <label
               htmlFor="evaluation-search"
               className="text-sm font-medium text-slate-200"
             >
-              Search target
+              Search
             </label>
 
             <input
@@ -329,89 +329,86 @@ export default function EvaluationsPage() {
               type="text"
               value={searchTerm}
               onChange={(event) => {
-                  setSearchTerm(event.target.value);
-                  setSelectedPlace(null);
-                  setRatingsSummary(null);
-                  setRatingsSummaryError("");
+                setSearchTerm(event.target.value);
+                setSelectedPlace(null);
+                setRatingsSummary(null);
+                setRatingsSummaryError("");
               }}
-
-              placeholder="Example: Brazil, Rome, Nias, Colosseum, Padang Padang Beach, Hotel X..."
+              placeholder="Brazil, Nias, Coliseu..."
               className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400"
             />
-          </div>
 
-          <div className="mt-6">
-            <p className="text-sm font-medium text-slate-200">
-              Refine by type
-            </p>
+            <div className="mt-6">
+              <p className="text-sm font-medium text-slate-200">
+                Refine by type
+              </p>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {analysisTypes.map((item) => {
-                const isSelected = selectedType === item.value;
+              <div className="mt-3 grid gap-2">
+                {analysisTypes.map((item) => {
+                  const isSelected = selectedType === item.value;
 
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setSelectedType(item.value)}
-                    className={[
-                      "rounded-2xl border p-4 text-left transition",
-                      isSelected
-                        ? "border-sky-400 bg-sky-500/15 text-white"
-                        : "border-slate-800 bg-slate-950/50 text-slate-300 hover:border-slate-600",
-                    ].join(" ")}
-                  >
-                    <div className="font-semibold">{item.label}</div>
-                    <p className="mt-2 text-xs leading-5 text-slate-400">
-                      {item.description}
-                    </p>
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setSelectedType(item.value)}
+                      className={[
+                        "rounded-xl border px-4 py-3 text-left transition",
+                        isSelected
+                          ? "border-sky-400 bg-sky-500/15 text-white"
+                          : "border-slate-800 bg-slate-950/50 text-slate-300 hover:border-slate-600",
+                      ].join(" ")}
+                    >
+                      <div className="text-sm font-semibold">{item.label}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                Active filter: {selectedTypeInfo?.label}
+              </p>
             </div>
-          </div>
 
-          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-            <h3 className="text-sm font-semibold text-white">
-              Matching places
-            </h3>
+            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <h3 className="text-sm font-semibold text-white">
+                Matching places
+              </h3>
 
-            {loadingPlaces && (
-              <p className="mt-3 text-sm text-slate-400">
-                Loading places...
-              </p>
-            )}
-
-            {!loadingPlaces && placesError && (
-              <p className="mt-3 text-sm text-red-300">
-                {placesError}
-              </p>
-            )}
-
-            {!loadingPlaces && !placesError && !searchTerm.trim() && (
-              <p className="mt-3 text-sm text-slate-400">
-                Start typing to see matching places from the Trust Travel database.
-              </p>
-            )}
-
-            {!loadingPlaces &&
-              !placesError &&
-              searchTerm.trim() &&
-              filteredPlaces.length === 0 && (
+              {loadingPlaces && (
                 <p className="mt-3 text-sm text-slate-400">
-                  No matching place found for this search and active filter.
+                  Loading places...
                 </p>
               )}
 
-            {filteredPlaces.length > 0 && (
-              <div className="mt-4 grid gap-3">
-                {filteredPlaces.map((place) => (
-                  <button
+              {!loadingPlaces && placesError && (
+                <p className="mt-3 text-sm text-red-300">{placesError}</p>
+              )}
+
+              {!loadingPlaces && !placesError && !searchTerm.trim() && (
+                <p className="mt-3 text-sm text-slate-400">
+                  Start typing to see matching places.
+                </p>
+              )}
+
+              {!loadingPlaces &&
+                !placesError &&
+                searchTerm.trim() &&
+                filteredPlaces.length === 0 && (
+                  <p className="mt-3 text-sm text-slate-400">
+                    No matching place found for this search and active filter.
+                  </p>
+                )}
+
+              {filteredPlaces.length > 0 && (
+                <div className="mt-4 grid gap-3">
+                  {filteredPlaces.map((place) => (
+                    <button
                       key={place.id}
                       type="button"
                       onClick={() => {
-                          setSelectedPlace(place);
-                          loadRatingsSummary(place.id);
+                        setSelectedPlace(place);
+                        loadRatingsSummary(place.id);
                       }}
                       className={[
                         "rounded-xl border p-4 text-left transition hover:border-sky-500/60",
@@ -419,218 +416,222 @@ export default function EvaluationsPage() {
                           ? "border-sky-400 bg-sky-500/15"
                           : "border-slate-800 bg-slate-900/80",
                       ].join(" ")}
-                  >
-                    <div className="font-semibold text-white">
-                      {place.name}
-                    </div>
+                    >
+                      <div className="font-semibold text-white">
+                        {place.name}
+                      </div>
 
-                    <div className="mt-1 text-sm text-slate-400">
-                      {getPlaceContext(place)}
-                    </div>
-                  </button>
-                ))}
+                      <div className="mt-1 text-sm text-slate-400">
+                        {getPlaceContext(place)}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+
+          <section className="space-y-8">
+            <div className="grid gap-5 md:grid-cols-3">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
+                <div className="mb-3 text-2xl">⭐</div>
+
+                <h2 className="text-lg font-semibold text-white">
+                  Ratings overview
+                </h2>
+
+                {selectedPlace && ratingsSummary ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-slate-200">
+                      {selectedPlace.name}
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      {averageRating
+                        ? `${averageRating} ★ based on ${
+                            ratingsSummary.overall?.rated_count ?? 0
+                          } rated experience(s).`
+                        : "This place does not have rated experiences yet."}
+                    </p>
+
+                    <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
+                      Live summary
+                    </p>
+                  </>
+                ) : selectedPlace && loadingRatingsSummary ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-slate-200">
+                      {selectedPlace.name}
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      Loading ratings summary...
+                    </p>
+
+                    <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Loading
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      Select a place to review average rating, number of
+                      evaluations and rating distribution.
+                    </p>
+
+                    <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Waiting for selection
+                    </p>
+                  </>
+                )}
               </div>
-            )}
-          </div>
-        </section>
 
-        <section className="mt-8 grid gap-5 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
-              <div className="mb-3 text-2xl">⭐</div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
+                <div className="mb-3 text-2xl">📍</div>
 
-              <h2 className="text-lg font-semibold text-white">
-                Ratings overview
-              </h2>
+                <h2 className="text-lg font-semibold text-white">
+                  Places comparison
+                </h2>
 
-              {selectedPlace && ratingsSummary ? (
-                <>
-                  <p className="mt-2 text-sm font-semibold text-slate-200">
-                    {selectedPlace.name}
-                  </p>
+                {selectedPlace ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-slate-200">
+                      {selectedPlace.name}
+                    </p>
 
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    {averageRating
-                      ? `${averageRating} ★ based on ${
-                          ratingsSummary.overall?.rated_count ?? 0
-                        } rated experience(s).`
-                      : "This place does not have rated experiences yet."}
-                  </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      This place can later be compared with similar places by
+                      safety, cost, accessibility, convenience and overall
+                      traveler feedback.
+                    </p>
 
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
-                    Live summary
-                  </p>
-                </>
-              ) : selectedPlace && loadingRatingsSummary ? (
-                <>
-                  <p className="mt-2 text-sm font-semibold text-slate-200">
-                    {selectedPlace.name}
-                  </p>
+                    <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
+                      Comparison target selected
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      Compare different destinations and specific places by
+                      practical criteria.
+                    </p>
 
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Loading ratings summary...
-                  </p>
+                    <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Waiting for selection
+                    </p>
+                  </>
+                )}
+              </div>
 
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Loading
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Select a place to review average rating, number of evaluations and
-                    rating distribution.
-                  </p>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
+                <div className="mb-3 text-2xl">🛡️</div>
 
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Waiting for selection
-                  </p>
-                </>
-              )}
+                <h2 className="text-lg font-semibold text-white">
+                  Trust quality signals
+                </h2>
+
+                {selectedPlace && ratingsSummary ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-slate-200">
+                      {selectedPlace.name}
+                    </p>
+
+                    {ratedCount === 0 ? (
+                      <>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
+                          This place does not have enough rated experiences yet
+                          to generate trust quality signals.
+                        </p>
+
+                        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                          Needs evaluations
+                        </p>
+                      </>
+                    ) : ratedCount < 5 ? (
+                      <>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
+                          This place has early rating activity. More evaluations
+                          are needed before stronger trust indicators can be
+                          considered.
+                        </p>
+
+                        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
+                          Early signal
+                        </p>
+                      </>
+                    ) : averageRating && Number(averageRating) >= 4 ? (
+                      <>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
+                          This place has a positive evaluation pattern and may
+                          become a candidate for stronger quality indicators.
+                        </p>
+
+                        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-emerald-300">
+                          Strong positive signal
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
+                          This place has enough rating activity to begin showing
+                          trust patterns, but the current average is still
+                          mixed.
+                        </p>
+
+                        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-amber-300">
+                          Mixed signal
+                        </p>
+                      </>
+                    )}
+                  </>
+                ) : selectedPlace && loadingRatingsSummary ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-slate-200">
+                      {selectedPlace.name}
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      Loading trust quality signals...
+                    </p>
+
+                    <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Loading
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      Prepare the foundation for future quality indicators,
+                      including trusted evaluations and possible quality seals.
+                    </p>
+
+                    <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Waiting for selection
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
-              <div className="mb-3 text-2xl">📍</div>
-
-              <h2 className="text-lg font-semibold text-white">
-                Places comparison
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+              <h2 className="text-xl font-semibold text-white">
+                Selected analysis scope
               </h2>
 
-              {selectedPlace ? (
-                <>
-                  <p className="mt-2 text-sm font-semibold text-slate-200">
-                    {selectedPlace.name}
-                  </p>
+              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-sm text-slate-400">Search target</p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {searchTerm.trim() ? searchTerm : "No target selected yet"}
+                </p>
 
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    This place can later be compared with similar places by safety,
-                    cost, accessibility, convenience and overall traveler feedback.
-                  </p>
+                <p className="mt-4 text-sm text-slate-400">Active filter</p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {selectedTypeInfo?.label}
+                </p>
 
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
-                    Comparison target selected
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Compare different destinations and specific places by practical
-                    criteria such as safety, cost, accessibility and convenience.
-                  </p>
+                <p className="mt-4 text-sm text-slate-400">Selected place</p>
 
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Waiting for selection
-                  </p>
-                </>
-              )}
-            </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg">
-              <div className="mb-3 text-2xl">🛡️</div>
-
-              <h2 className="text-lg font-semibold text-white">
-                Trust quality signals
-              </h2>
-
-              {selectedPlace && ratingsSummary ? (
-                <>
-                  <p className="mt-2 text-sm font-semibold text-slate-200">
-                    {selectedPlace.name}
-                  </p>
-
-                  {Number(ratingsSummary.overall?.rated_count ?? 0) === 0 ? (
-                    <>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">
-                        This place does not have enough rated experiences yet to generate
-                        trust quality signals.
-                      </p>
-
-                      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-                        Needs evaluations
-                      </p>
-                    </>
-                  ) : Number(ratingsSummary.overall?.rated_count ?? 0) < 5 ? (
-                    <>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">
-                        This place has early rating activity. More evaluations are needed
-                        before stronger trust quality indicators can be considered.
-                      </p>
-
-                      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-sky-300">
-                        Early signal
-                      </p>
-                    </>
-                  ) : averageRating && Number(averageRating) >= 4 ? (
-                    <>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">
-                        This place has a positive evaluation pattern and may become a
-                        candidate for stronger quality indicators in the future.
-                      </p>
-
-                      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-emerald-300">
-                        Strong positive signal
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">
-                        This place has enough rating activity to begin showing trust
-                        patterns, but the current average is still mixed.
-                      </p>
-
-                      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-amber-300">
-                        Mixed signal
-                      </p>
-                    </>
-                  )}
-                </>
-              ) : selectedPlace && loadingRatingsSummary ? (
-                <>
-                  <p className="mt-2 text-sm font-semibold text-slate-200">
-                    {selectedPlace.name}
-                  </p>
-
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Loading trust quality signals...
-                  </p>
-
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Loading
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Prepare the foundation for future quality indicators, including
-                    trusted evaluations and possible quality seals.
-                  </p>
-
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Waiting for selection
-                  </p>
-                </>
-              )}
-            </div>
-        </section>
-
-        <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <h2 className="text-xl font-semibold text-white">
-            Selected analysis scope
-          </h2>
-
-          <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-sm text-slate-400">Search target</p>
-              <p className="mt-1 text-lg font-semibold text-white">
-                {searchTerm.trim() ? searchTerm : "No target selected yet"}
-              </p>
-
-              <p className="mt-4 text-sm text-slate-400">Active filter</p>
-              <p className="mt-1 text-lg font-semibold text-white">
-                {selectedTypeInfo?.label}
-              </p>
-
-              <p className="mt-4 text-sm text-slate-400">Selected place</p>
-
-              {selectedPlace ? (
+                {selectedPlace ? (
                   <div className="mt-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
                     <p className="text-lg font-semibold text-white">
                       {selectedPlace.name}
@@ -701,7 +702,8 @@ export default function EvaluationsPage() {
 
                           <div className="mt-4 space-y-3">
                             {ratingRows.map((row) => {
-                              const percentage = (row.count / maxRatingCount) * 100;
+                              const percentage =
+                                (row.count / maxRatingCount) * 100;
 
                               return (
                                 <div
@@ -769,30 +771,31 @@ export default function EvaluationsPage() {
                   <p className="mt-1 text-lg font-semibold text-white">
                     No place selected yet
                   </p>
-              )}
-          </div>
+                )}
+              </div>
 
-          <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-300">
-            In the next versions, this section can fetch real evaluation data
-            from the backend and show rating summaries, practical criteria,
-            comparisons and trust-based signals for the selected target. The
-            default filter is All, so users are not forced to classify a place
-            before searching.
-          </p>
-        </section>
+              <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-300">
+                This section fetches real evaluation data from the backend and
+                shows rating summaries, distribution and trust-based signals for
+                the selected target.
+              </p>
+            </section>
 
-        <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <h2 className="text-xl font-semibold text-white">
-            Why this page exists
-          </h2>
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+              <h2 className="text-xl font-semibold text-white">
+                Why this page exists
+              </h2>
 
-          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
-            Place pages should remain focused on discovery, experiences, updates
-            and lightweight rating summaries. Deeper analysis belongs here, in a
-            centralized area where users can filter and compare evaluations
-            without losing the context of their trip planning.
-          </p>
-        </section>
+              <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
+                Place pages should remain focused on discovery, experiences,
+                updates and lightweight rating summaries. Deeper analysis
+                belongs here, in a centralized area where users can filter and
+                compare evaluations without losing the context of their trip
+                planning.
+              </p>
+            </section>
+          </section>
+        </div>
       </div>
     </main>
   );

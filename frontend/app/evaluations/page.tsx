@@ -273,8 +273,8 @@ export default function EvaluationsPage() {
   const ratedCount = Number(ratingsSummary?.overall?.rated_count ?? 0);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-7xl px-5 py-8 md:px-8">
+    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8">
         <div className="mb-8">
           <Link href="/" className="text-sm text-sky-400 hover:text-sky-300">
             ← Back to home
@@ -285,11 +285,11 @@ export default function EvaluationsPage() {
               Trust Travel Analytics
             </p>
 
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-white md:text-4xl">
+            <h1 className="mt-3 break-words text-2xl font-bold tracking-tight text-white sm:text-3xl md:text-4xl">
               Evaluations & Ratings
             </h1>
 
-            <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">
+            <p className="mt-4 max-w-3xl break-words text-sm leading-6 text-slate-300 md:text-base">
               Search freely first, then refine the analysis by place type.
               This area centralizes structured evaluations across Trust Travel,
               helping users compare countries, cities, hotels, restaurants,

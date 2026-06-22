@@ -121,30 +121,30 @@ export default function PlacePage() {
       ? "Countries"
       : parentLocationLabel || "Places";
 
-  const placeIntroText =
+const placeIntroText =
     place?.place_type === "country"
-      ? `This is the country-level hub for ${place?.name || "this country"}. Use it for general country experiences, country-wide alerts, events and broad travel context.`
+      ? `This is the country-level hub for ${place?.name || "this country"}. Use it for broad country experiences, country-wide travel context, alerts, events and useful information that are not tied to one specific city or place.`
       : place?.place_type === "city"
-      ? `This is the city/region hub for ${place?.name || "this city or region"}. Use it for city-level experiences, local updates and for finding or adding specific places inside it.`
-      : `This is the specific-place hub for ${place?.name || "this place"}. Use it for reviews, ratings, events, alerts and useful information about this exact place.`;
+      ? `This is the city/region hub for ${place?.name || "this city or region"}. Use it for experiences and updates about the city or region as a whole, or to find and add specific places inside it.`
+      : `This is the specific-place hub for ${place?.name || "this place"}. Use it for reviews, ratings, events, alerts and practical information about this exact location, whether it is a restaurant, hotel, attraction, nature spot or local place.`;
 
   const placeHubGuidance =
   place?.place_type === "country"
     ? [
-        "Read or share general experiences about the country.",
-        "Find cities, islands and regions inside this country.",
+        "Share country-level experiences that are not about one exact city or place.",
+        "Move down to cities, islands or regions when the experience is more local.",
         "Post country-wide events, alerts or useful information.",
       ]
     : place?.place_type === "city"
     ? [
-        "Read or share experiences about the city or region.",
-        "Find or add specific places such as restaurants, hotels, attractions or nature spots.",
+        "Share experiences about the city or region as a whole.",
+        "Move down to a restaurant, hotel, attraction, beach or nature spot for exact-place reviews.",
         "Post local events, alerts or useful information.",
       ]
     : [
-        "Read or share reviews about this exact place.",
-        "Check ratings and traveler feedback.",
-        "Post events, alerts or useful information tied to this place.",
+        "Share reviews and ratings about this exact place.",
+        "Use this level for practical feedback about safety, cost, accessibility and convenience.",
+        "Post events, alerts or useful information tied to this exact place.",
       ];
 
   const placeLocation =
@@ -181,10 +181,10 @@ const hierarchyLevelLabel =
 
 const hierarchyLevelDescription =
   place?.place_type === "country"
-    ? "You are viewing the broad country layer. Cities, islands, regions and specific places are organized below this level."
+    ? "You are viewing the broad country layer. Use this level for general country context. Cities, islands, regions and exact places are organized below it."
     : place?.place_type === "city"
-    ? "You are viewing a city or region layer. Restaurants, hotels, attractions, nature spots and other specific places are organized below this level."
-    : "You are viewing a specific place layer. Ratings, experiences, events, alerts and practical information should refer to this exact place.";
+    ? "You are viewing a city or region layer. Use this level for local context. Restaurants, hotels, attractions, nature spots and other exact places are organized below it."
+    : "You are viewing an exact-place layer. Ratings, experiences, events, alerts and practical information should refer to this specific place.";
 
 const placeHierarchyItems =
   place?.place_type === "country"
@@ -991,6 +991,7 @@ const handleToggleEventsInfo = () => {
         <div style={actionHelperBox}>
           <strong>Want to rate or review this place?</strong>{" "}
           Use <strong>Experiences</strong>. Ratings are submitted together with a shared experience.
+          If your review is about an exact restaurant, hotel, attraction or nature spot, move to that specific place first.
           The ratings & insights area only summarizes what travelers have already shared.
         </div>
 
@@ -2097,7 +2098,7 @@ const handleToggleEventsInfo = () => {
                   <div style={insightStatCard}>
                     <div style={overviewStatLabel}>Total reviews</div>
                     <div style={overviewStatValue}>
-                      {experiences.length}
+                      {ratingsSummary?.overall?.total_reviews ?? experiences.length}
                     </div>
                   </div>
 

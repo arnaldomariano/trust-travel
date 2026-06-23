@@ -231,6 +231,24 @@ const placeHierarchyItems =
         ? `Experiences in ${place?.name || "this place"}`
         : `Activity in ${place?.name || "this place"}`;
 
+  const activityFeedTitle =
+  filter === "update"
+    ? `Events & info about ${place?.name || "this place"}`
+    : place?.place_type === "country"
+    ? `Country-level activity in ${place?.name || "this country"}`
+    : place?.place_type === "city"
+    ? `City / region activity in ${place?.name || "this city or region"}`
+    : `Activity about ${place?.name || "this place"}`;
+
+const activityFeedDescription =
+  filter === "update"
+    ? "This list shows only events, alerts and useful information shared about this place."
+    : place?.place_type === "country"
+    ? "This feed shows broad country-level experiences and updates. For local reviews, move down to a city, island, region or exact place."
+    : place?.place_type === "city"
+    ? "This feed shows experiences and updates about this city or region as a whole. For exact-place reviews, move down to a restaurant, hotel, attraction, beach or local place."
+    : "This feed shows experiences, reviews, events, alerts and useful information about this exact place.";
+
   const rating5 = experiences.filter((e) => e.rating === 5).length;
   const rating4 = experiences.filter((e) => e.rating === 4).length;
   const rating3 = experiences.filter((e) => e.rating === 3).length;
@@ -872,7 +890,7 @@ const handleToggleEventsInfo = () => {
             <div
               style={{
                 marginTop: "12px",
-                marginBottom: "6px",
+                marginBottom: "18px",
                 padding: "14px",
                 border: "1px solid #dbeafe",
                 borderRadius: "14px",
@@ -900,19 +918,19 @@ const handleToggleEventsInfo = () => {
               >
                 {hierarchyLevelDescription}
               </p>
-            </div>
 
-          <p
-            style={{
-              marginTop: "14px",
-              marginBottom: "18px",
-              color: "#666",
-              lineHeight: 1.5,
-              maxWidth: "620px",
-            }}
-          >
-            {placeIntroText}
-          </p>
+              <p
+                style={{
+                  marginTop: "8px",
+                  marginBottom: 0,
+                  color: "#1e3a8a",
+                  fontSize: "14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                {placeIntroText}
+              </p>
+            </div>
 
           <div style={hubGuidanceBox}>
               <div style={hubGuidanceTitle}>
@@ -989,10 +1007,14 @@ const handleToggleEventsInfo = () => {
             </div>
 
         <div style={actionHelperBox}>
-          <strong>Want to rate or review this place?</strong>{" "}
+          <strong>Want to rate or review?</strong>{" "}
           Use <strong>Experiences</strong>. Ratings are submitted together with a shared experience.
-          If your review is about an exact restaurant, hotel, attraction or nature spot, move to that specific place first.
-          The ratings & insights area only summarizes what travelers have already shared.
+          {place?.place_type === "country"
+            ? " If your review is about a specific city, island, region, restaurant, hotel, attraction or nature spot, move down the hierarchy first."
+            : place?.place_type === "city"
+            ? " If your review is about an exact restaurant, hotel, attraction, beach or nature spot, move to that specific place first."
+            : " Use this level only when your review is about this exact place."}
+          {" "}The ratings & insights area only summarizes what travelers have already shared.
         </div>
 
         </section>
@@ -2234,6 +2256,37 @@ const handleToggleEventsInfo = () => {
                 </div>
               </section>
             )}
+
+                <section
+          style={{
+            marginBottom: "18px",
+            padding: "18px",
+            border: "1px solid #eee",
+            borderRadius: "14px",
+            backgroundColor: "white",
+          }}
+        >
+          <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+            Activity feed
+          </div>
+
+          <h2 style={{ margin: 0, fontSize: "22px" }}>
+            {activityFeedTitle}
+          </h2>
+
+          <p
+            style={{
+              marginTop: "8px",
+              marginBottom: 0,
+              color: "#666",
+              lineHeight: 1.5,
+              fontSize: "14px",
+              maxWidth: "680px",
+            }}
+          >
+            {activityFeedDescription}
+          </p>
+        </section>
 
         {filteredFeed.length === 0 ? (
           <div

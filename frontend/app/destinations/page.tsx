@@ -41,9 +41,18 @@ export default function DestinationsPage() {
   const [createFlowOpen, setCreateFlowOpen] = useState(false);
   const [createCountrySearch, setCreateCountrySearch] = useState("");
   const [createCitySearch, setCreateCitySearch] = useState("");
+
   const [createSelectedCountry, setCreateSelectedCountry] = useState<any>(null);
+  const [createSelectedCity, setCreateSelectedCity] = useState<any>(null);
+  const [createSpecificPlaceType, setCreateSpecificPlaceType] = useState<
+    "attraction" | "hotel" | "restaurant" | "nature" | "other"
+  >("nature");
+  const [createSpecificPlaceName, setCreateSpecificPlaceName] = useState("");
+
   const [creatingCreateFlowCountry, setCreatingCreateFlowCountry] = useState(false);
   const [creatingCreateFlowCity, setCreatingCreateFlowCity] = useState(false);
+  const [creatingCreateFlowSpecificPlace, setCreatingCreateFlowSpecificPlace] =
+    useState(false);
   const [createFlowError, setCreateFlowError] = useState("");
 
   const [title, setTitle] = useState("");
@@ -743,25 +752,44 @@ if (isUpdateMode) {
   };
 
     const openGuidedCreateFlow = () => {
-  setCreateFlowOpen(true);
-  setCreateFlowError("");
-  setCreateSelectedCountry(null);
-  setCreateCountrySearch("");
-  setCreateCitySearch("");
-  setShowCreatePlaceForm(false);
-  };
+      setCreateFlowOpen(true);
+      setCreateFlowError("");
+      setCreateSelectedCountry(null);
+      setCreateSelectedCity(null);
+      setCreateCountrySearch("");
+      setCreateCitySearch("");
+      setCreateSpecificPlaceType("nature");
+      setCreateSpecificPlaceName("");
+      setShowCreatePlaceForm(false);
+    };
 
     const selectCreateFlowCountry = (countryPlace: any) => {
-  setCreateSelectedCountry(countryPlace);
-  setCreateFlowError("");
-  setCreateCitySearch("");
+      setCreateSelectedCountry(countryPlace);
+      setCreateSelectedCity(null);
+      setCreateFlowError("");
+      setCreateCitySearch("");
+      setCreateSpecificPlaceType("nature");
+      setCreateSpecificPlaceName("");
 
-  setTimeout(() => {
-    document
-      .getElementById("guided-create-city-step")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 0);
-  };
+      setTimeout(() => {
+        document
+          .getElementById("guided-create-city-step")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    };
+
+    const selectCreateFlowCity = (cityPlace: any) => {
+      setCreateSelectedCity(cityPlace);
+      setCreateFlowError("");
+      setCreateSpecificPlaceType("nature");
+      setCreateSpecificPlaceName("");
+
+      setTimeout(() => {
+        document
+          .getElementById("guided-create-specific-step")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    };
 
     const createCountryForFlow = async () => {
       const countryName = formatPlaceNameForCreation(createCountrySearch);
@@ -860,12 +888,81 @@ if (isUpdateMode) {
           return [data, ...prev];
         });
 
-        router.push(`/places/${data.id}`);
+        setCreateSelectedCity(data);
+        setCreateSpecificPlaceType("nature");
+        setCreateSpecificPlaceName("");
+
+        setTimeout(() => {
+          document
+            .getElementById("guided-create-specific-step")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 0);
+
       } catch (error) {
         console.error("Guided city creation failed:", error);
         setCreateFlowError("Something went wrong while creating the city or region.");
       } finally {
         setCreatingCreateFlowCity(false);
+      }
+    };
+
+    const createSpecificPlaceForFlow = async () => {
+      const specificPlaceName = formatPlaceNameForCreation(createSpecificPlaceName);
+
+      if (!createSelectedCountry) {
+        setCreateFlowError("Please choose or create a country first.");
+        return;
+      }
+
+      if (!createSelectedCity) {
+        setCreateFlowError("Please choose or create a city or region first.");
+        return;
+      }
+
+      if (!specificPlaceName) {
+        setCreateFlowError("Please type the specific place name first.");
+        return;
+      }
+
+      setCreatingCreateFlowSpecificPlace(true);
+      setCreateFlowError("");
+
+      try {
+        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: specificPlaceName,
+            place_type: createSpecificPlaceType,
+            city: createSelectedCity.name,
+            country: createSelectedCountry.name,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setCreateFlowError(data.detail || "Could not create this specific place.");
+          return;
+        }
+
+        setPlaces((prev) => {
+          const alreadyExists = prev.some((place) => place.id === data.id);
+
+          if (alreadyExists) return prev;
+
+          return [data, ...prev];
+        });
+
+        router.push(`/places/${data.id}`);
+      } catch (error) {
+        console.error("Guided specific place creation failed:", error);
+        setCreateFlowError("Something went wrong while creating the specific place.");
+      } finally {
+        setCreatingCreateFlowSpecificPlace(false);
       }
     };
 
@@ -1678,7 +1775,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       <button
                         key={cityPlace.id}
                         type="button"
-                        onClick={() => router.push(`/places/${cityPlace.id}`)}
+                        onClick={() => selectCreateFlowCity(cityPlace)}
                         style={guidedCreateResultButton}
                       >
                         <span>
@@ -1689,9 +1786,102 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                           </span>
                         </span>
 
-                        <span>Open →</span>
+                        <span>Choose →</span>
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {createSelectedCountry && createSelectedCity && (
+                  <div id="guided-create-specific-step">
+                    <div style={guidedCreateStepLabel}>Step 3</div>
+
+                    <h3 style={guidedCreateTitle}>
+                      Choose the specific place type
+                    </h3>
+
+                    <p style={guidedCreateText}>
+                      Now choose what kind of specific place you want to add inside{" "}
+                      {createSelectedCity.name}. This keeps restaurants, hotels, attractions and
+                      nature spots separated from city-level experiences.
+                    </p>
+
+                    <select
+                      value={createSpecificPlaceType}
+                      onChange={(event) =>
+                        setCreateSpecificPlaceType(
+                          event.target.value as
+                            | "attraction"
+                            | "hotel"
+                            | "restaurant"
+                            | "nature"
+                            | "other"
+                        )
+                      }
+                      style={input}
+                    >
+                      <option value="nature">Beach / Nature spot</option>
+                      <option value="restaurant">Restaurant / Café</option>
+                      <option value="hotel">Hotel / Stay</option>
+                      <option value="attraction">Tourist attraction</option>
+                      <option value="other">Other specific place</option>
+                    </select>
+
+                    <div
+                      style={{
+                        marginTop: "18px",
+                        padding: "14px",
+                        border: "1px solid #d7f0df",
+                        borderRadius: "14px",
+                        background: "#f2fbf5",
+                      }}
+                    >
+                      <div style={guidedCreateStepLabel}>Step 4 — Final step</div>
+
+                      <h3 style={guidedCreateTitle}>
+                        Create the specific place
+                      </h3>
+
+                      <p style={guidedCreateText}>
+                        This is the final step. The place has not been created yet. Confirm the
+                        exact name below to create it inside {createSelectedCity.name}.
+                      </p>
+
+                      <input
+                        value={createSpecificPlaceName}
+                        onChange={(event) => {
+                          setCreateSpecificPlaceName(event.target.value);
+                          setCreateFlowError("");
+                        }}
+                        placeholder="Specific place name, e.g. restaurant, beach, hotel, museum..."
+                        style={input}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={createSpecificPlaceForFlow}
+                        disabled={
+                          creatingCreateFlowSpecificPlace || !createSpecificPlaceName.trim()
+                        }
+                        style={{
+                          ...primaryButton,
+                          width: "fit-content",
+                          marginTop: "12px",
+                          opacity:
+                            creatingCreateFlowSpecificPlace || !createSpecificPlaceName.trim()
+                              ? 0.5
+                              : 1,
+                          cursor:
+                            creatingCreateFlowSpecificPlace || !createSpecificPlaceName.trim()
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        {creatingCreateFlowSpecificPlace
+                          ? "Creating specific place..."
+                          : `Create this ${getPlaceTypeLabel(createSpecificPlaceType)} inside ${createSelectedCity.name}`}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1724,11 +1914,14 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             <button
               type="button"
               onClick={() => {
-                setCreateFlowOpen(false);
-                setCreateFlowError("");
-                setCreateSelectedCountry(null);
-                setCreateCountrySearch("");
-                setCreateCitySearch("");
+                  setCreateFlowOpen(false);
+                  setCreateFlowError("");
+                  setCreateSelectedCountry(null);
+                  setCreateSelectedCity(null);
+                  setCreateCountrySearch("");
+                  setCreateCitySearch("");
+                  setCreateSpecificPlaceType("nature");
+                  setCreateSpecificPlaceName("");
               }}
               style={secondaryButton}
             >

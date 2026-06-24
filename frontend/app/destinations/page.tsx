@@ -1261,24 +1261,40 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
   setSubmittingExperience(true);
 
   try {
+    const formData = new FormData();
+
+    formData.append("place", String(selectedPlace.id));
+    formData.append("title", title.trim());
+    formData.append("rating", String(rating));
+    formData.append("comment", comment.trim());
+
+    if (safetyRating) {
+      formData.append("safety_rating", String(safetyRating));
+    }
+
+    if (costRating) {
+      formData.append("cost_rating", String(costRating));
+    }
+
+    if (accessibilityRating) {
+      formData.append("accessibility_rating", String(accessibilityRating));
+    }
+
+    if (convenienceRating) {
+      formData.append("convenience_rating", String(convenienceRating));
+    }
+
+    formData.append("trip_context", tripContext);
+    formData.append("trip_style", tripStyle);
+
+    if (imageFile) {
+      formData.append("image", imageFile);
+    }
+
     const res = await fetch(`${API_URL}/api/experiences/${sharedExperience.id}/`, {
       method: "PATCH",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-          title: title.trim(),
-          rating,
-          comment: comment.trim(),
-          place: selectedPlace.id,
-          safety_rating: safetyRating,
-          cost_rating: costRating,
-          accessibility_rating: accessibilityRating,
-          convenience_rating: convenienceRating,
-          trip_context: tripContext,
-          trip_style: tripStyle,
-      }),
+      body: formData,
     });
 
     const data = await res.json();
@@ -1294,6 +1310,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
     setComment("");
     setRating(null);
     resetStructuredRatings();
+    setImageFile(null);
     setEditingExperience(false);
     setExperienceShared(true);
     setTripContext("prefer_not_to_say");
@@ -2572,27 +2589,27 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   They will help future analytics compare recommendations by trip context.
                 </div>
 
-                {!editingExperience && (
-                  <div style={{ display: "grid", gap: "6px" }}>
-                    <label style={{ fontSize: "13px", color: "#666" }}>
-                      Optional image
-                    </label>
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <label style={{ fontSize: "13px", color: "#666" }}>
+                    {editingExperience ? "Replace or add image" : "Optional image"}
+                  </label>
 
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        setImageFile(file);
-                      }}
-                      style={input}
-                    />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setImageFile(file);
+                    }}
+                    style={input}
+                  />
 
-                    <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4 }}>
-                      Avoid sharing real-time or sensitive locations in photos.
-                    </div>
+                  <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4 }}>
+                      {editingExperience
+                        ? "You can replace the main photo here. Later, in My posts, you may add up to 3 additional photos. Avoid sharing sensitive or real-time locations."
+                        : "You can add one main photo here. Later, in My posts, you may add up to 3 additional photos. Avoid sharing sensitive or real-time locations."}
                   </div>
-                )}
+                </div>
 
                 <button
                   type="submit"

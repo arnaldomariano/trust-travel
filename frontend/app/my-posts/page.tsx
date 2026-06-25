@@ -1159,23 +1159,24 @@ const formatTripValue = (value: string) => {
                               />
                             </div>
 
-                            <button
-                              type="button"
-                              style={{
-                                ...secondaryButton,
-                                opacity: uploadingExtraPhoto || !extraPhotoFile ? 0.5 : 1,
-                                cursor:
-                                  uploadingExtraPhoto || !extraPhotoFile ? "not-allowed" : "pointer",
-                              }}
-                              disabled={uploadingExtraPhoto || !extraPhotoFile}
-                              onClick={() => uploadExtraPhoto(experience.id)}
-                            >
-                              {uploadingExtraPhoto
-                                ? "Uploading..."
-                                : !extraPhotoFile
-                                ? "Choose a photo first"
-                                : "Upload gallery photo"}
-                            </button>
+                        {!extraPhotoFile ? (
+                          <div style={helperNote}>
+                            After choosing a photo file, the upload button will appear here.
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            style={{
+                              ...secondaryButton,
+                              opacity: uploadingExtraPhoto ? 0.5 : 1,
+                              cursor: uploadingExtraPhoto ? "not-allowed" : "pointer",
+                            }}
+                            disabled={uploadingExtraPhoto}
+                            onClick={() => uploadExtraPhoto(experience.id)}
+                          >
+                            {uploadingExtraPhoto ? "Uploading..." : "Upload gallery photo"}
+                          </button>
+                        )}
                           </>
                         ) : (
                           <div
@@ -1466,6 +1467,22 @@ const extraGalleryBox = {
   background: "#fafafa",
 };
 
+const extraPhotoUploadBox = {
+  display: "grid",
+  gap: "8px",
+  padding: "12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "white",
+};
+
+const extraPhotoUploadText = {
+  margin: "4px 0 0 0",
+  color: "#666",
+  fontSize: "12px",
+  lineHeight: 1.5,
+};
+
 const extraPhotosGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
@@ -1638,3 +1655,4 @@ const photoSummaryBox = {
   color: "#555",
   fontSize: "13px",
 };
+

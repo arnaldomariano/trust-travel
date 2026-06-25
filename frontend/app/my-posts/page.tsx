@@ -42,6 +42,8 @@ type ExtraPhoto = {
   created_at: string;
 };
 
+const MAX_EXTRA_PHOTOS = 3;
+
 export default function MyPostsPage() {
 const [posts, setPosts] = useState<MyPost[]>([]);
 const [experiences, setExperiences] = useState<MyExperience[]>([]);
@@ -352,6 +354,13 @@ const uploadExtraPhoto = async (experienceId: number) => {
     alert("Please choose an extra photo first.");
     return;
   }
+
+const currentExtraPhotos = extraPhotosByExperience[experienceId] || [];
+
+if (currentExtraPhotos.length >= MAX_EXTRA_PHOTOS) {
+  alert(`You can add up to ${MAX_EXTRA_PHOTOS} extra photos to each experience.`);
+  return;
+}
 
   setUploadingExtraPhoto(true);
 
@@ -821,9 +830,15 @@ const formatTripValue = (value: string) => {
                         </div>
 
                         <div style={imageEditBox}>
+                          <div>
                           <div style={{ fontSize: "13px", color: "#666", fontWeight: 600 }}>
-                            Experience image
+                            Main experience photo
                           </div>
+
+                          <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4, marginTop: "4px" }}>
+                            This is the main photo shown on experience cards. Extra gallery photos are managed separately after saving.
+                          </div>
+                        </div>
 
                           {experience.image_url && imageAction !== "remove" && !editImagePreview && (
                             <div style={{ display: "grid", gap: "8px" }}>
@@ -1032,20 +1047,28 @@ const formatTripValue = (value: string) => {
                       </div>
                     )}
 
+                    <div style={photoSummaryBox}>
+                      <strong>Photos</strong>
+
+                      <span>
+                        Main photo: {experience.image_url ? "added" : "not added yet"} · Extra gallery:{" "}
+                        {(extraPhotosByExperience[experience.id] || []).length} / {MAX_EXTRA_PHOTOS}
+                      </span>
+                    </div>
 
                     <div style={{ marginBottom: "16px" }}>
                       <button
-                        type="button"
-                        style={secondaryButton}
-                        onClick={() => {
-                          setOpenGalleryFor((current) =>
-                            current === experience.id ? null : experience.id
-                          );
-                        }}
-                      >
-                        {openGalleryFor === experience.id
-                          ? "Hide gallery manager"
-                          : `Manage gallery photos (${(extraPhotosByExperience[experience.id] || []).length}/3)`}
+                          type="button"
+                          style={secondaryButton}
+                          onClick={() => {
+                            setOpenGalleryFor((current) =>
+                              current === experience.id ? null : experience.id
+                            );
+                          }}
+                        >
+                          {openGalleryFor === experience.id
+                            ? "Hide gallery manager"
+                            : `Manage gallery photos (${(extraPhotosByExperience[experience.id] || []).length}/${MAX_EXTRA_PHOTOS})`}
                       </button>
                     </div>
 
@@ -1055,7 +1078,7 @@ const formatTripValue = (value: string) => {
                           <strong style={{ fontSize: "14px" }}>Extra gallery photos</strong>
 
                           <span style={{ fontSize: "12px", color: "#777" }}>
-                            {(extraPhotosByExperience[experience.id] || []).length} / 3 photos
+                            {(extraPhotosByExperience[experience.id] || []).length} / {MAX_EXTRA_PHOTOS} photos
                           </span>
                         </div>
 
@@ -1068,8 +1091,8 @@ const formatTripValue = (value: string) => {
                             lineHeight: 1.5,
                           }}
                         >
-                          Add up to 3 extra photos to this experience gallery. Upload one photo at a time.
-                          These photos appear when travelers open the photo gallery on the full experience page.
+                            This area is only for additional gallery photos. The main photo is managed with the Edit button.
+                            You can add up to {MAX_EXTRA_PHOTOS} extra photos, one photo at a time. These photos appear when travelers open the photo gallery on the full experience page.
                         </div>
 
                         {(extraPhotosByExperience[experience.id] || []).length > 0 && (
@@ -1096,25 +1119,45 @@ const formatTripValue = (value: string) => {
                           </div>
                         )}
 
-                        {(extraPhotosByExperience[experience.id] || []).length < 3 ? (
+                        {(extraPhotosByExperience[experience.id] || []).length < MAX_EXTRA_PHOTOS ? (
                           <>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0] || null;
-                                setExtraPhotoFile(file);
-                              }}
-                              style={input}
-                            />
+                            <div style={extraPhotoUploadBox}>
+                              <div>
+                                <strong style={{ fontSize: "13px" }}>Add one extra gallery photo</strong>
 
-                            <input
-                              value={extraPhotoCaption}
-                              onChange={(e) => setExtraPhotoCaption(e.target.value)}
-                              placeholder="Optional caption for this photo"
-                              maxLength={160}
-                              style={input}
-                            />
+                                <p style={extraPhotoUploadText}>
+                                  Choose one photo from your device. It will be uploaded as an additional
+                                  gallery photo for this experience. The main photo is edited separately.
+                                </p>
+                              </div>
+
+                              <label style={smallLabel}>Photo file</label>
+
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  setExtraPhotoFile(file);
+                                }}
+                                style={input}
+                              />
+
+                              <label style={smallLabel}>Caption before upload</label>
+
+                              <p style={extraPhotoUploadText}>
+                                Optional: write a short caption now. This caption will be saved together
+                                with the photo when you click upload.
+                              </p>
+
+                              <input
+                                value={extraPhotoCaption}
+                                onChange={(e) => setExtraPhotoCaption(e.target.value)}
+                                placeholder="Example: View from the trail, hotel entrance, waterfall area..."
+                                maxLength={160}
+                                style={input}
+                              />
+                            </div>
 
                             <button
                               type="button"
@@ -1145,7 +1188,7 @@ const formatTripValue = (value: string) => {
                               fontSize: "13px",
                             }}
                           >
-                            Gallery complete: 3 / 3 photos added.
+                            Gallery complete: {MAX_EXTRA_PHOTOS} / {MAX_EXTRA_PHOTOS} photos added.
                           </div>
                         )}
                       </div>
@@ -1436,10 +1479,11 @@ const extraPhotoItem = {
 
 const extraPhotoThumb = {
   width: "100%",
-  height: "90px",
-  objectFit: "cover" as const,
+  height: "110px",
+  objectFit: "contain" as const,
   borderRadius: "10px",
   border: "1px solid #eee",
+  background: "#f5f5f5",
 };
 
 const imageEditBox = {
@@ -1453,10 +1497,11 @@ const imageEditBox = {
 
 const imagePreview = {
   width: "100%",
-  maxHeight: "220px",
-  objectFit: "cover" as const,
+  maxHeight: "260px",
+  objectFit: "contain" as const,
   borderRadius: "12px",
   border: "1px solid #eee",
+  background: "#f5f5f5",
 };
 
 const removeNotice = {
@@ -1577,4 +1622,19 @@ const structuredRatingsPreviewBadge = {
   border: "1px solid #eee",
   background: "white",
   fontSize: "12px",
+};
+
+const photoSummaryBox = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  alignItems: "center",
+  flexWrap: "wrap" as const,
+  marginBottom: "14px",
+  padding: "10px 12px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
+  background: "#fafafa",
+  color: "#555",
+  fontSize: "13px",
 };

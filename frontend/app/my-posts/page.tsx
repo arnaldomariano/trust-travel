@@ -106,6 +106,7 @@ const [extraPhotoFile, setExtraPhotoFile] = useState<File | null>(null);
 const [extraPhotoCaption, setExtraPhotoCaption] = useState("");
 const [uploadingExtraPhoto, setUploadingExtraPhoto] = useState(false);
 const [openGalleryFor, setOpenGalleryFor] = useState<number | null>(null);
+const [extraPhotoSuccessMessage, setExtraPhotoSuccessMessage] = useState("");
 
 const loadPosts = async () => {
   try {
@@ -213,6 +214,7 @@ const startEditingExperience = (experience: MyExperience) => {
   setExtraPhotoFile(null);
   setExtraPhotoCaption("");
   setUploadingExtraPhoto(false);
+  setExtraPhotoSuccessMessage("");
   setEditImagePreview(null);
   setImageAction("keep");
   setOpenGalleryFor(null);
@@ -233,6 +235,7 @@ const cancelEditingExperience = () => {
   setRemoveImage(false);
   setExtraPhotoFile(null);
   setExtraPhotoCaption("");
+  setExtraPhotoSuccessMessage("");
   setUploadingExtraPhoto(false);
   setEditImagePreview(null);
   setImageAction("keep");
@@ -392,7 +395,7 @@ if (currentExtraPhotos.length >= MAX_EXTRA_PHOTOS) {
 
     await loadExtraPhotosForExperiences(experiences);
 
-    alert("Extra photo added to the experience gallery.");
+    setExtraPhotoSuccessMessage("Gallery photo saved.");
   } catch (error) {
     console.error("Upload extra photo failed:", error);
     alert("Error uploading extra photo.");
@@ -1095,6 +1098,12 @@ const formatTripValue = (value: string) => {
                             You can add up to {MAX_EXTRA_PHOTOS} extra photos, one photo at a time. These photos appear when travelers open the photo gallery on the full experience page.
                         </div>
 
+                        {extraPhotoSuccessMessage && (
+                          <div style={successMessageBox}>
+                            {extraPhotoSuccessMessage}
+                          </div>
+                        )}
+
                         {(extraPhotosByExperience[experience.id] || []).length > 0 && (
                           <div style={extraPhotosGrid}>
                             {(extraPhotosByExperience[experience.id] || []).map((photo, index) => (
@@ -1133,15 +1142,16 @@ const formatTripValue = (value: string) => {
 
                               <label style={smallLabel}>Photo file</label>
 
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0] || null;
-                                  setExtraPhotoFile(file);
-                                }}
-                                style={input}
-                              />
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0] || null;
+                                      setExtraPhotoFile(file);
+                                      setExtraPhotoSuccessMessage("");
+                                    }}
+                                    style={input}
+                                  />
 
                               <label style={smallLabel}>Caption before upload</label>
 
@@ -1656,3 +1666,11 @@ const photoSummaryBox = {
   fontSize: "13px",
 };
 
+const successMessageBox = {
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #c7f0d8",
+  background: "#f2fbf5",
+  color: "#166534",
+  fontSize: "13px",
+};

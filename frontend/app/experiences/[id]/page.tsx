@@ -550,7 +550,7 @@ const authorLabel = authorFlag
       </Link>
 
       <Link
-        href={`/places/${experience.place}/experiences?highlight=${experience.id}`}
+        href={`/places/${experience.place}/experiences`}
         style={secondaryLink}
       >
         Back to experiences

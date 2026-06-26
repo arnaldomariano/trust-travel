@@ -308,23 +308,20 @@ const filteredRelatedPlaces = normalizedRelatedPlaceSearch
   const trustedExperiences = sortedExperiences.filter(
   (e) =>
     e.trust_level === 1 &&
-    e.user !== currentUsername &&
     (!highlightedExperience || e.id !== highlightedExperience.id)
-);
+  );
 
-const networkExperiences = sortedExperiences.filter(
-  (e) =>
-    e.trust_level === 2 &&
-    e.user !== currentUsername &&
-    (!highlightedExperience || e.id !== highlightedExperience.id)
-);
+  const networkExperiences = sortedExperiences.filter(
+      (e) =>
+        e.trust_level === 2 &&
+        (!highlightedExperience || e.id !== highlightedExperience.id)
+  );
 
-const otherExperiences = sortedExperiences.filter(
-  (e) =>
-    e.trust_level === 3 &&
-    e.user !== currentUsername &&
-    (!highlightedExperience || e.id !== highlightedExperience.id)
-);
+  const otherExperiences = sortedExperiences.filter(
+      (e) =>
+        e.trust_level === 3 &&
+        (!highlightedExperience || e.id !== highlightedExperience.id)
+  );
 
   const getTrustedRepliesCount = (experienceId: number) =>
     (repliesByExperience[experienceId] || []).filter(
@@ -2711,7 +2708,7 @@ const renderReportControls = (experience: any) => {
                     fontWeight: "500",
                   }}
                 >
-                  Show other reviews ({otherExperiences.length})
+                  Show all other experiences ({otherExperiences.length})
                 </button>
               </div>
             )}

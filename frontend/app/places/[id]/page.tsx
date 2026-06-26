@@ -2441,8 +2441,8 @@ const handleToggleEventsInfo = () => {
 
 
                     <div style={{ marginTop: "12px" }}>
-                      <Link
-                          href={`/places/${id}/experiences?highlight=${item.id}`}
+                        <Link
+                          href={`/experiences/${item.id}`}
                           style={{
                             display: "inline-block",
                             padding: "8px 12px",

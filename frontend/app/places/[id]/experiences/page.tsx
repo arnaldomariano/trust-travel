@@ -305,6 +305,18 @@ const filteredRelatedPlaces = normalizedRelatedPlaceSearch
     )
   : null;
 
+  const hasHighlightedExperience = !!highlightedExperience;
+
+  const experienceListIntroTitle = hasHighlightedExperience
+      ? "Selected experience"
+      : totalExperiences === 1
+      ? "1 experience shared here"
+      : `${totalExperiences} experiences shared here`;
+
+  const experienceListIntroText = hasHighlightedExperience
+      ? "You are viewing one selected experience. You can open the full experience or return to the complete list."
+      : "Read experiences shared by travelers about this place. Use the full experience page when you want to see photos, gallery details and actions.";
+
   const trustedExperiences = sortedExperiences.filter(
   (e) =>
     e.trust_level === 1 &&
@@ -1586,27 +1598,34 @@ const renderReportControls = (experience: any) => {
           </div>
         </section>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            flexWrap: "wrap",
-            marginTop: "12px",
-            marginBottom: "18px",
-          }}
-        >
+        <div style={experiencePrimaryActions}>
+          <button
+            type="button"
+            onClick={() =>
+              router.push(`/destinations?mode=experience&place=${id}&share=true`)
+            }
+            style={shareExperiencePrimaryButton}
+          >
+            {shareExperienceButtonText}
+          </button>
+
+          {hasHighlightedExperience && (
+            <button
+              type="button"
+              onClick={() => router.push(`/places/${id}/experiences`)}
+              style={viewAllExperiencesButton}
+            >
+              View all experiences here
+            </button>
+          )}
+
           {isCountryPage && (
             <button
               type="button"
               onClick={() => setShowCountryExperiences((current) => !current)}
               style={{
-                padding: "10px 14px",
-                borderRadius: "10px",
-                border: "1px solid #ddd",
+                ...viewAllExperiencesButton,
                 background: showCountryExperiences ? "#f5f5f5" : "white",
-                color: "#111",
-                cursor: "pointer",
-                fontWeight: 700,
               }}
             >
               {showCountryExperiences
@@ -1614,82 +1633,39 @@ const renderReportControls = (experience: any) => {
                 : "View country experiences"}
             </button>
           )}
-
-          {totalExperiences > 0 && (
-            <button
-              type="button"
-              onClick={() =>
-                router.push(`/destinations?mode=experience&place=${id}&share=true`)
-              }
-              style={{
-                padding: "10px 14px",
-                borderRadius: "10px",
-                border: "none",
-                background: "black",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              {shareExperienceButtonText}
-            </button>
-          )}
         </div>
 
     {shouldShowExperienceContent && (
-      <div
-        style={{
-          marginTop: "14px",
-          marginBottom: "24px",
-          padding: "16px",
-          border: "1px solid #eee",
-          borderRadius: "14px",
-          background: "#fafafa",
-          display: "grid",
-          gap: "10px",
-        }}
-      >
-        <div style={{ fontWeight: 600 }}>
-          Overview
+      <section style={evaluationPromptBox}>
+        <div style={evaluationPromptEyebrow}>
+          Ratings & practical insights
         </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: "10px",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: "12px", color: "#777" }}>Experiences</div>
-          <div style={{ fontSize: "18px", fontWeight: 700 }}>
-            {totalExperiences}
-          </div>
-        </div>
+        <h2 style={evaluationPromptTitle}>
+          Want a quick evaluation before reading reviews?
+        </h2>
 
-        <div>
-          <div style={{ fontSize: "12px", color: "#777" }}>Average rating</div>
-          <div style={{ fontSize: "18px", fontWeight: 700 }}>
-            {averageRating ? `${averageRating} ★` : "No ratings yet"}
-          </div>
-        </div>
+        <p style={evaluationPromptText}>
+          Use the evaluations page to check average rating, rating distribution,
+          safety, cost, accessibility and convenience for this place.
+        </p>
 
-        <div>
-          <div style={{ fontSize: "12px", color: "#777" }}>Trusted reviews</div>
-          <div style={{ fontSize: "18px", fontWeight: 700 }}>
-            {trustedReviewsCount}
-          </div>
-        </div>
+        <div style={evaluationPromptActions}>
+          <Link
+            href={`/evaluations?place=${id}`}
+            style={evaluationPromptPrimaryLink}
+          >
+            View evaluations for this place
+          </Link>
 
-                <div>
-                  <div style={{ fontSize: "12px", color: "#777" }}>Recent activity</div>
-                  <div style={{ fontSize: "18px", fontWeight: 700 }}>
-                    {recentExperiencesCount}
-                  </div>
-                </div>
-              </div>
-            </div>
-        )}
+          <span style={evaluationPromptMeta}>
+            {totalExperiences === 1
+              ? "1 experience shared here"
+              : `${totalExperiences} experiences shared here`}
+          </span>
+        </div>
+      </section>
+    )}
 
     {isCountryPage && (
       <section id="related-places-section" style={relatedPlacesBox}>
@@ -1972,6 +1948,22 @@ const renderReportControls = (experience: any) => {
           </button>
         </div>
       </div>
+    )}
+
+    {shouldShowExperienceContent && totalExperiences > 0 && (
+      <section style={experienceListIntroBox}>
+        <div style={experienceListIntroEyebrow}>
+          Experience list
+        </div>
+
+        <h2 style={experienceListIntroHeading}>
+          {experienceListIntroTitle}
+        </h2>
+
+        <p style={experienceListIntroTextStyle}>
+          {experienceListIntroText}
+        </p>
+      </section>
     )}
 
     {shouldShowExperienceContent && highlightedExperience && (
@@ -3391,3 +3383,114 @@ const experienceScopeWarningBox = {
   lineHeight: 1.5,
 };
 
+const experiencePrimaryActions = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+  marginTop: "12px",
+  marginBottom: "18px",
+};
+
+const shareExperiencePrimaryButton = {
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "none",
+  background: "black",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const viewAllExperiencesButton = {
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const experienceListIntroBox = {
+  marginTop: "18px",
+  marginBottom: "20px",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #eee",
+  background: "white",
+  display: "grid",
+  gap: "6px",
+};
+
+const experienceListIntroEyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  fontWeight: 700,
+};
+
+const experienceListIntroHeading = {
+  margin: 0,
+  fontSize: "20px",
+  lineHeight: 1.25,
+};
+
+const experienceListIntroTextStyle = {
+  margin: 0,
+  color: "#555",
+  lineHeight: 1.5,
+  fontSize: "14px",
+};
+
+const evaluationPromptBox = {
+  marginTop: "14px",
+  marginBottom: "24px",
+  padding: "16px",
+  border: "1px solid #e5e7eb",
+  borderRadius: "14px",
+  background: "#fafafa",
+  display: "grid",
+  gap: "8px",
+};
+
+const evaluationPromptEyebrow = {
+  fontSize: "13px",
+  color: "#777",
+  fontWeight: 700,
+};
+
+const evaluationPromptTitle = {
+  margin: 0,
+  fontSize: "18px",
+  lineHeight: 1.3,
+};
+
+const evaluationPromptText = {
+  margin: 0,
+  color: "#555",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
+const evaluationPromptActions = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap" as const,
+  alignItems: "center",
+  marginTop: "6px",
+};
+
+const evaluationPromptPrimaryLink = {
+  display: "inline-block",
+  padding: "9px 12px",
+  borderRadius: "10px",
+  background: "black",
+  color: "white",
+  textDecoration: "none",
+  fontSize: "13px",
+  fontWeight: 700,
+};
+
+const evaluationPromptMeta = {
+  color: "#666",
+  fontSize: "13px",
+};

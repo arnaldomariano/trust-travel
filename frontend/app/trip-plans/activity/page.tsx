@@ -276,8 +276,8 @@ export default function TripPlanActivityPage() {
         </div>
       ) : (
         <section style={activityList}>
-          {filteredItems.map((item) => (
-            <article key={`${item.type}-${item.id}`} style={activityCard}>
+            {filteredItems.map((item, index) => (
+              <article key={`${item.type}-${item.id}-${index}`} style={activityCard}>
               <div style={activityHeader}>
                 <span style={getTypeBadgeStyle(item)}>
                   {getTypeLabel(item)}

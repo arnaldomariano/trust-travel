@@ -992,18 +992,18 @@ const handleToggleEventsInfo = () => {
             </button>
 
             <button
-              onClick={() => setShowRatings(!showRatings)}
+              onClick={() => router.push(`/evaluations?place=${id}`)}
               style={secondaryButton}
             >
-              {showRatings ? "Hide ratings & insights" : "Show ratings & insights"}
+              View evaluations & insights
             </button>
 
-                <button
-                  onClick={handleToggleEventsInfo}
-                  style={secondaryButton}
-                >
-                  {filter === "update" ? "Hide events & info" : "Events & info"}
-                </button>
+            <button
+              onClick={handleToggleEventsInfo}
+              style={secondaryButton}
+            >
+              {filter === "update" ? "Hide events & info" : "Events & info"}
+            </button>
             </div>
 
         <div style={actionHelperBox}>

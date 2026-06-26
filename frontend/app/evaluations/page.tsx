@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { API_URL } from "../lib/api";
 
 type AnalysisType =
@@ -124,6 +125,9 @@ function getPlaceContext(place: Place) {
 }
 
 export default function EvaluationsPage() {
+
+  const searchParams = useSearchParams();
+  const placeIdFromUrl = searchParams.get("place");
   const [selectedType, setSelectedType] = useState<AnalysisType>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [places, setPlaces] = useState<Place[]>([]);
@@ -184,6 +188,33 @@ export default function EvaluationsPage() {
       setLoadingRatingsSummary(false);
     }
   };
+
+    useEffect(() => {
+        if (!placeIdFromUrl || loadingPlaces || places.length === 0) return;
+
+        const foundPlace = places.find(
+          (place) => String(place.id) === String(placeIdFromUrl)
+        );
+
+        if (!foundPlace) return;
+
+        setSelectedPlace(foundPlace);
+        setSearchTerm(foundPlace.name);
+
+        if (
+          foundPlace.place_type === "country" ||
+          foundPlace.place_type === "city" ||
+          foundPlace.place_type === "hotel" ||
+          foundPlace.place_type === "restaurant" ||
+          foundPlace.place_type === "attraction" ||
+          foundPlace.place_type === "nature" ||
+          foundPlace.place_type === "other"
+        ) {
+          setSelectedType(foundPlace.place_type);
+        }
+
+        loadRatingsSummary(foundPlace.id);
+      }, [placeIdFromUrl, loadingPlaces, places]);
 
   const selectedTypeInfo = useMemo(() => {
     return analysisTypes.find((item) => item.value === selectedType);

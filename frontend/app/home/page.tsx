@@ -22,7 +22,6 @@ export default function HomePage() {
 
   useEffect(() => {
     if (lat && lng) {
-      console.log("Center map at:", lat, lng);
     }
   }, [lat, lng]);
 

@@ -298,7 +298,6 @@ export default function TripPlanDetailPage() {
 
       const searchUrl = `${API_URL}/api/places/search/?${params.toString()}`;
 
-      console.log("Radar place search URL:", searchUrl);
 
       const res = await fetch(searchUrl, {
         credentials: "include",
@@ -313,8 +312,6 @@ export default function TripPlanDetailPage() {
       }
 
       const data = await res.json();
-
-      console.log("Radar place search response:", data);
 
       const places: PlaceSearchResult[] = Array.isArray(data.results)
         ? data.results
@@ -1063,7 +1060,7 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
                     </Link>
 
                     <Link
-                      href={`/places/${item.place_id}/experiences?highlight=${item.experience_id}`}
+                      href={`/experiences/${item.experience_id}`}
                       style={secondaryLink}
                     >
                       View in place

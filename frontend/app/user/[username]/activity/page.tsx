@@ -68,7 +68,7 @@ export default function UserActivityPage() {
   const handleOpenUpdate = (item: any) => {
     if (item.type === "experience" && item.experience_id) {
       router.push(
-        `/places/${item.place_id}/experiences?highlight=${item.experience_id}`
+        `/experiences/${item.experience_id}`
       );
       return;
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../../../lib/api";
@@ -23,8 +23,7 @@ export default function ExperiencesPage() {
   const params = useParams();
   const id = params.id;
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const highlightedExperienceId = searchParams.get("highlight");
+
 
   // =====================
   // Core page state
@@ -125,7 +124,7 @@ const pageTitle =
 const isCountryPage = place?.place_type === "country";
 
 const shouldShowExperienceContent =
-  !isCountryPage || showCountryExperiences || !!highlightedExperienceId;
+  !isCountryPage || showCountryExperiences;
 
   const isCityPage = place?.place_type === "city";
 
@@ -299,40 +298,24 @@ const filteredRelatedPlaces = normalizedRelatedPlaceSearch
     );
   });
 
-  const highlightedExperience = highlightedExperienceId
-  ? sortedExperiences.find(
-      (e) => String(e.id) === String(highlightedExperienceId)
-    )
-  : null;
+  const experienceListIntroTitle =
+      totalExperiences === 1
+        ? "1 experience shared here"
+        : `${totalExperiences} experiences shared here`;
 
-  const hasHighlightedExperience = !!highlightedExperience;
-
-  const experienceListIntroTitle = hasHighlightedExperience
-      ? "Selected experience"
-      : totalExperiences === 1
-      ? "1 experience shared here"
-      : `${totalExperiences} experiences shared here`;
-
-  const experienceListIntroText = hasHighlightedExperience
-      ? "You are viewing one selected experience. You can open the full experience or return to the complete list."
-      : "Read experiences shared by travelers about this place. Use the full experience page when you want to see photos, gallery details and actions.";
+  const experienceListIntroText =
+      "Read experiences shared by travelers about this place. Use the full experience page when you want to see photos, gallery details and actions.";
 
   const trustedExperiences = sortedExperiences.filter(
-  (e) =>
-    e.trust_level === 1 &&
-    (!highlightedExperience || e.id !== highlightedExperience.id)
+      (e) => e.trust_level === 1
   );
 
   const networkExperiences = sortedExperiences.filter(
-      (e) =>
-        e.trust_level === 2 &&
-        (!highlightedExperience || e.id !== highlightedExperience.id)
+      (e) => e.trust_level === 2
   );
 
   const otherExperiences = sortedExperiences.filter(
-      (e) =>
-        e.trust_level === 3 &&
-        (!highlightedExperience || e.id !== highlightedExperience.id)
+      (e) => e.trust_level === 3
   );
 
   const getTrustedRepliesCount = (experienceId: number) =>
@@ -858,7 +841,7 @@ const newReply = await response.json();
 
 const getCreateTripPlanUrl = (experienceId: number) => {
   return `/trip-plans?returnTo=${encodeURIComponent(
-    `/places/${id}/experiences?highlight=${experienceId}`
+    `/experiences/${experienceId}`
   )}`;
 };
 
@@ -1609,16 +1592,6 @@ const renderReportControls = (experience: any) => {
             {shareExperienceButtonText}
           </button>
 
-          {hasHighlightedExperience && (
-            <button
-              type="button"
-              onClick={() => router.push(`/places/${id}/experiences`)}
-              style={viewAllExperiencesButton}
-            >
-              View all experiences here
-            </button>
-          )}
-
           {isCountryPage && (
             <button
               type="button"
@@ -1966,93 +1939,7 @@ const renderReportControls = (experience: any) => {
       </section>
     )}
 
-    {shouldShowExperienceContent && highlightedExperience && (
-      <div
-        style={{
-          marginTop: "20px",
-          marginBottom: "30px",
-          padding: "18px",
-          borderRadius: "14px",
-          background: "white",
-          border: "1px solid #e5e5e5",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-        }}
-      >
-        <div style={{ fontSize: "13px", color: "#777", marginBottom: "8px" }}>
-          Selected experience
-        </div>
-
-        {highlightedExperience.rating && (
-          <div style={{ color: "#f5b50a", marginBottom: "8px" }}>
-            {"★".repeat(highlightedExperience.rating)}
-            {"☆".repeat(5 - highlightedExperience.rating)}
-          </div>
-        )}
-
-        {highlightedExperience.title && (
-          <div
-            style={{
-              fontWeight: 700,
-              fontSize: "18px",
-              marginBottom: "8px",
-            }}
-          >
-            {highlightedExperience.title}
-          </div>
-        )}
-
-        {highlightedExperience.image_url && (
-          <img
-            src={highlightedExperience.image_url}
-            alt={highlightedExperience.title || "Shared experience"}
-            style={{
-              width: "140px",
-              height: "90px",
-              objectFit: "cover",
-              borderRadius: "10px",
-              marginBottom: "10px",
-              border: "1px solid #eee",
-              display: "block",
-            }}
-          />
-        )}
-
-        <div style={{ lineHeight: 1.5, marginBottom: "10px" }}>
-          {highlightedExperience.comment}
-        </div>
-
-        {renderTripMeta(highlightedExperience)}
-
-        <div style={{ fontSize: "13px", color: "#777", marginBottom: "12px" }}>
-          — {getAuthorLabel(highlightedExperience)} • {timeAgo(highlightedExperience.created_at)}
-        </div>
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <Link
-            href={`/experiences/${highlightedExperience.id}`}
-            style={{
-              fontSize: "13px",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "1px solid #ddd",
-              background: "#f9f9f9",
-              color: "#111",
-              textDecoration: "none",
-              display: "inline-block",
-            }}
-          >
-            View full experience
-          </Link>
-        </div>
-
-        {renderTripPlanControls(highlightedExperience)}
-
-        {renderReportControls(highlightedExperience)}
-
-      </div>
-    )}
-
-      {shouldShowExperienceContent && !highlightedExperience && trendingExperiences.length > 0 && (
+      {shouldShowExperienceContent && trendingExperiences.length > 0 && (
         <div
           style={{
             marginTop: "20px",
@@ -2114,9 +2001,7 @@ const renderReportControls = (experience: any) => {
           {trendingExperiences.map((e) => (
               <div
                 key={e.id}
-                onClick={() =>
-                  router.push(`/places/${id}/experiences?highlight=${e.id}`)
-                }
+                onClick={() => router.push(`/experiences/${e.id}`)}
                 style={{
                   marginBottom: "10px",
                   cursor: "pointer",
@@ -2182,9 +2067,9 @@ const renderReportControls = (experience: any) => {
               key={`${item.type}-${item.id}`}
               onClick={() =>
                   item.type === "review"
-                    ? router.push(`/places/${id}/experiences?highlight=${item.id}`)
+                    ? router.push(`/experiences/${item.id}`)
                     : router.push(`/places/${id}/experiences`)
-                }
+              }
               style={{ cursor: "pointer" }}
             >
               <strong>{getAuthorLabel(item)}</strong>{" "}
@@ -2334,7 +2219,6 @@ const renderReportControls = (experience: any) => {
                         Reply
                       </button>
 
-                      {/* 🔥 NOVO BOTÃO */}
                       <button
                           type="button"
                           style={{

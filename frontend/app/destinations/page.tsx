@@ -2386,7 +2386,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                     onClick={() =>
                       sharedExperience
                         ? router.push(
-                            `/places/${selectedPlace.id}/experiences?highlight=${sharedExperience.id}`
+                            `/experiences/${sharedExperience.id}`
                           )
                         : router.push(`/places/${selectedPlace.id}/experiences`)
                     }

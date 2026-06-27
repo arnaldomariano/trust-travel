@@ -417,7 +417,7 @@ useEffect(() => {
                     </Link>
 
                     <Link
-                      href={`/places/${item.place_id}/experiences?highlight=${item.experience_id}`}
+                      href={`/experiences/${item.experience_id}`}
                       style={secondaryLink}
                     >
                       View in place

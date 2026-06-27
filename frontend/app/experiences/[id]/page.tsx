@@ -542,31 +542,31 @@ const authorLabel = authorFlag
         </div>
 
         <div style={actions}>
-      <Link
-        href={`/places/${experience.place}/experiences`}
-        style={secondaryLink}
-      >
-        View all experiences
-      </Link>
+          <Link
+            href={`/places/${experience.place}/experiences`}
+            style={secondaryLink}
+          >
+            Back to all experiences
+          </Link>
 
-      <Link
-        href={`/places/${experience.place}/experiences`}
-        style={secondaryLink}
-      >
-        Back to experiences
-      </Link>
+          <Link
+            href={`/evaluations?place=${experience.place}`}
+            style={secondaryLink}
+          >
+            View evaluations
+          </Link>
 
-      <button
-        type="button"
-        style={secondaryButton}
-        onClick={() =>
-          router.push(
-            `/destinations?mode=experience&place=${experience.place}&share=true`
-          )
-        }
-      >
-        Share your experience here
-      </button>
+          <button
+            type="button"
+            style={secondaryButton}
+            onClick={() =>
+              router.push(
+                `/destinations?mode=experience&place=${experience.place}&share=true`
+              )
+            }
+          >
+            Share your experience here
+          </button>
 
         <button
           type="button"
@@ -1045,14 +1045,6 @@ const tripPlanUndoButton = {
   cursor: "pointer",
   padding: 0,
   fontSize: "14px",
-};
-
-const createPlanLink = {
-  color: "#111",
-  fontWeight: 600,
-  fontSize: "13px",
-  textDecoration: "underline",
-  width: "fit-content",
 };
 
 const reportButton = {

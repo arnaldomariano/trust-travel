@@ -753,12 +753,12 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
                 <div key={place.id} style={radarPlaceChip}>
                   <span>{place.name}</span>
 
-                  <Link
-                    href={`/places/${place.id}/experiences`}
-                    style={radarPlaceChipLink}
-                  >
-                    Review
-                  </Link>
+                    <Link
+                      href={`/places/${place.id}`}
+                      style={radarPlaceChipLink}
+                    >
+                      Open
+                    </Link>
 
                     <button
                       type="button"
@@ -864,10 +864,10 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
                     <div style={compactActions}>
                       <Link
-                        href={`/places/${place.id}/experiences`}
-                        style={smallSecondaryLink}
+                          href={`/places/${place.id}`}
+                          style={smallSecondaryLink}
                       >
-                        Open
+                          Open
                       </Link>
 
                       {alreadyWatched ? (
@@ -1057,13 +1057,6 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
                       style={primaryLink}
                     >
                       View experience
-                    </Link>
-
-                    <Link
-                      href={`/experiences/${item.experience_id}`}
-                      style={secondaryLink}
-                    >
-                      View in place
                     </Link>
 
                     <button

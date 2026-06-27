@@ -353,11 +353,12 @@ export default function TripPlanActivityPage() {
                   </Link>
                 ) : item.place_id ? (
                   <Link
-                    href={`/places/${item.place_id}/experiences`}
-                    style={primaryLink}
+                      href={`/places/${item.place_id}`}
+                      style={primaryLink}
                   >
-                    Open place
+                      Open place
                   </Link>
+
                 ) : null}
 
                 {item.trip_plan_id && (

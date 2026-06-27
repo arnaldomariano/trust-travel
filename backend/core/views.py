@@ -718,9 +718,10 @@ class ExperiencePhotoListCreateView(generics.ListCreateAPIView):
 
         serializer.save(experience=experience)
 
-class ExperiencePhotoDestroyView(generics.DestroyAPIView):
+class ExperiencePhotoDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ExperiencePhotoSerializer
     permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "patch", "delete"]
 
     def get_queryset(self):
         return ExperiencePhoto.objects.filter(

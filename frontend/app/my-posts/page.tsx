@@ -109,6 +109,10 @@ const [openGalleryFor, setOpenGalleryFor] = useState<number | null>(null);
 const [extraPhotoSuccessMessage, setExtraPhotoSuccessMessage] = useState("");
 const [removingExtraPhotoId, setRemovingExtraPhotoId] = useState<number | null>(null);
 
+const [editingExtraPhotoId, setEditingExtraPhotoId] = useState<number | null>(null);
+const [editingExtraPhotoCaption, setEditingExtraPhotoCaption] = useState("");
+const [savingExtraPhotoCaption, setSavingExtraPhotoCaption] = useState(false);
+
 const loadPosts = async () => {
   try {
     const [postsRes, experiencesRes] = await Promise.all([
@@ -229,6 +233,52 @@ const deleteExtraPhoto = async (photoId: number, experienceId: number) => {
     alert("Error removing gallery photo.");
   } finally {
     setRemovingExtraPhotoId(null);
+  }
+};
+
+const updateExtraPhotoCaption = async (photoId: number, experienceId: number) => {
+  setSavingExtraPhotoCaption(true);
+  setExtraPhotoSuccessMessage("");
+
+  try {
+    const formData = new FormData();
+    formData.append("caption", editingExtraPhotoCaption.trim());
+
+    const res = await fetch(`${API_URL}/api/experience-photos/${photoId}/`, {
+      method: "PATCH",
+      credentials: "include",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Failed to update extra photo caption:", res.status, text);
+      alert("Error updating photo caption.");
+      return;
+    }
+
+    const updatedPhoto = await res.json();
+
+    setExtraPhotosByExperience((prev) => ({
+      ...prev,
+      [experienceId]: (prev[experienceId] || []).map((photo) =>
+        photo.id === photoId
+          ? {
+              ...photo,
+              caption: updatedPhoto.caption,
+            }
+          : photo
+      ),
+    }));
+
+    setEditingExtraPhotoId(null);
+    setEditingExtraPhotoCaption("");
+    setExtraPhotoSuccessMessage("Photo caption updated.");
+  } catch (error) {
+    console.error("Update extra photo caption failed:", error);
+    alert("Error updating photo caption.");
+  } finally {
+    setSavingExtraPhotoCaption(false);
   }
 };
 
@@ -1133,8 +1183,7 @@ const formatTripValue = (value: string) => {
                             lineHeight: 1.5,
                           }}
                         >
-                            This area is only for additional gallery photos. The main photo is managed with the Edit button.
-                            You can add up to {MAX_EXTRA_PHOTOS} extra photos, one photo at a time. These photos appear when travelers open the photo gallery on the full experience page.
+                            Add extra photos to show more details from this experience. You can add up to {MAX_EXTRA_PHOTOS} photos and edit their captions later.
                         </div>
 
                         {extraPhotoSuccessMessage && (
@@ -1157,10 +1206,71 @@ const formatTripValue = (value: string) => {
                                   Photo {index + 1}
                                 </div>
 
-                                {photo.caption && (
-                                  <div style={{ fontSize: "11px", color: "#777", lineHeight: 1.4 }}>
-                                    {photo.caption}
+                                {editingExtraPhotoId === photo.id ? (
+                                  <div style={{ display: "grid", gap: "6px" }}>
+                                    <input
+                                      value={editingExtraPhotoCaption}
+                                      onChange={(e) => setEditingExtraPhotoCaption(e.target.value)}
+                                      placeholder="Add a short caption..."
+                                      maxLength={160}
+                                      style={input}
+                                    />
+
+                                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateExtraPhotoCaption(photo.id, experience.id)}
+                                        disabled={savingExtraPhotoCaption}
+                                        style={{
+                                          ...secondaryButton,
+                                          padding: "6px 9px",
+                                          fontSize: "12px",
+                                          opacity: savingExtraPhotoCaption ? 0.5 : 1,
+                                          cursor: savingExtraPhotoCaption ? "not-allowed" : "pointer",
+                                        }}
+                                      >
+                                        {savingExtraPhotoCaption ? "Saving..." : "Save caption"}
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingExtraPhotoId(null);
+                                          setEditingExtraPhotoCaption("");
+                                        }}
+                                        disabled={savingExtraPhotoCaption}
+                                        style={{
+                                          ...secondaryButton,
+                                          padding: "6px 9px",
+                                          fontSize: "12px",
+                                        }}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
                                   </div>
+                                ) : (
+                                  <>
+                                    <div style={{ fontSize: "11px", color: "#777", lineHeight: 1.4 }}>
+                                      {photo.caption || "No caption yet."}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingExtraPhotoId(photo.id);
+                                        setEditingExtraPhotoCaption(photo.caption || "");
+                                        setExtraPhotoSuccessMessage("");
+                                      }}
+                                      style={{
+                                        ...secondaryButton,
+                                        padding: "6px 9px",
+                                        fontSize: "12px",
+                                      }}
+                                    >
+                                      {photo.caption ? "Edit caption" : "Add caption"}
+                                    </button>
+                                  </>
                                 )}
 
                             <button

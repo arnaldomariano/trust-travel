@@ -734,21 +734,51 @@ class PlaceExperiencesListView(generics.ListAPIView):
     def get_queryset(self):
         place_id = self.kwargs["place_id"]
 
-        # Important product rule:
-        # A country page shows only general experiences saved directly to that country.
-        # Experiences from cities, regions, hotels, restaurants or attractions inside
-        # the country should be reached through related places, not mixed here.
-        return Experience.objects.filter(
-            place_id=place_id
-        ).select_related(
+        try:
+            place = Place.objects.get(id=place_id)
+        except Place.DoesNotExist:
+            return Experience.objects.none()
+
+        base_queryset = Experience.objects.select_related(
             "user",
             "user__profile",
             "place",
             "place__destination",
-        ).order_by("-created_at")
+        )
+
+        # Important product rule:
+        # A country page shows only general experiences saved directly to that country.
+        # Experiences from cities, regions, hotels, restaurants or attractions inside
+        # the country should be reached through related places, not mixed into the
+        # country-level experience list.
+        if place.place_type == "country":
+            return base_queryset.filter(place_id=place_id).order_by("-created_at")
+
+        # City/region pages should show:
+        # 1. experiences attached directly to the city/region
+        # 2. experiences attached to specific places inside the same city/region
+        #
+        # This is a V1 hierarchy bridge based on destination + city text.
+        # Later, this should be replaced by a real parent_place relationship.
+        if place.place_type == "city":
+            city_name = place.city or place.name
+
+            return base_queryset.filter(
+                Q(place_id=place_id)
+                | Q(
+                    place__destination_id=place.destination_id,
+                    place__city__iexact=city_name,
+                )
+            ).exclude(
+                place__place_type="country"
+            ).order_by("-created_at")
+
+        # Specific-place pages keep showing only experiences for that exact place.
+        return base_queryset.filter(place_id=place_id).order_by("-created_at")
 
     def get_serializer_context(self):
         return {"request": self.request}
+
 
 # ============================================================
 # EXPERIENCE REPLIES

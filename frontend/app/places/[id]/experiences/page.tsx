@@ -2599,7 +2599,11 @@ const renderReportControls = (experience: any) => {
                     marginTop: "30px",
                   }}
                 >
-                  <div style={{ fontWeight: "600" }}>Other reviews</div>
+                  <div style={{ fontWeight: "600" }}>
+                      {isCityPage
+                        ? `Experiences from places in ${place?.name || "this city or region"}`
+                        : "Other experiences"}
+                  </div>
 
                   <button
                     onClick={() => setShowOtherReviews(false)}
@@ -2646,6 +2650,22 @@ const renderReportControls = (experience: any) => {
                             }}
                           >
                             {e.title}
+                          </div>
+                        )}
+
+                        {isCityPage && e.place_name && e.place_name !== place?.name && (
+                          <div
+                            style={{
+                              marginTop: "4px",
+                              fontSize: "13px",
+                              color: "#666",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            About <strong>{e.place_name}</strong>
+                            {e.place_type && e.place_type !== "city" && (
+                              <> · {getPlaceTypeLabel(e.place_type)}</>
+                            )}
                           </div>
                         )}
 

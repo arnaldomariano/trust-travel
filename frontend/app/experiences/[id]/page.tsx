@@ -346,29 +346,29 @@ export default function ExperienceDetailPage() {
     );
   }
 
-    const galleryPhotos =
-      extraPhotos.length > 0
-        ? extraPhotos
-        : experience.image_url
-        ? [
-            {
-              id: "cover",
-              image_url: experience.image_url,
-              caption: experience.title || "Main experience photo",
-            },
-          ]
-        : [];
+const galleryPhotos =
+  extraPhotos.length > 0
+    ? extraPhotos
+    : experience.image_url
+    ? [
+        {
+          id: "cover",
+          image_url: experience.image_url,
+          caption: experience.image_caption || "",
+        },
+      ]
+    : [];
 
-    const mainPhoto =
-      experience.image_url
-        ? {
-            id: "main",
-            image_url: experience.image_url,
-            caption: experience.title || "Main experience photo",
-          }
-        : galleryPhotos.length > 0
-        ? galleryPhotos[0]
-        : null;
+const mainPhoto =
+  experience.image_url
+    ? {
+        id: "main",
+        image_url: experience.image_url,
+        caption: experience.image_caption || "",
+      }
+    : galleryPhotos.length > 0
+    ? galleryPhotos[0]
+    : null;
 
 const authorFlag = countryCodeToFlagEmoji(
   experience.author_nationality_country_code

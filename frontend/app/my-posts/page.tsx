@@ -27,6 +27,7 @@ type MyExperience = {
   trip_style: string;
   image_url?: string | null;
   image_display_mode?: "contain" | "cover";
+  image_caption?: string;
   place: string;
   place_id: number;
   destination: string;
@@ -99,6 +100,7 @@ const handleOptionalRatingChange = (
 const [imageAction, setImageAction] = useState<"keep" | "replace" | "remove">("keep");
 const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 const [editImageDisplayMode, setEditImageDisplayMode] = useState<"contain" | "cover">("cover");
+const [editImageCaption, setEditImageCaption] = useState("");
 
 const [editImageFile, setEditImageFile] = useState<File | null>(null);
 const [removeImage, setRemoveImage] = useState(false);
@@ -308,6 +310,7 @@ const startEditingExperience = (experience: MyExperience) => {
   setExtraPhotoSuccessMessage("");
   setEditImagePreview(null);
   setEditImageDisplayMode(experience.image_display_mode || "cover");
+  setEditImageCaption(experience.image_caption || "");
   setImageAction("keep");
   setOpenGalleryFor(null);
 };
@@ -331,6 +334,7 @@ const cancelEditingExperience = () => {
   setUploadingExtraPhoto(false);
   setEditImagePreview(null);
   setImageAction("keep");
+  setEditImageCaption("");
   setOpenGalleryFor(null);
 };
 
@@ -395,6 +399,8 @@ const saveEditedExperience = async (experienceId: number) => {
 
     formData.append("image_display_mode", editImageDisplayMode);
 
+    formData.append("image_caption", editImageCaption.trim());
+
     if (imageAction === "remove") {
       formData.append("remove_image", "true");
     }
@@ -429,6 +435,7 @@ const saveEditedExperience = async (experienceId: number) => {
             trip_style: data.trip_style,
             image_url: data.image_url,
             image_display_mode: data.image_display_mode || editImageDisplayMode,
+            image_caption: data.image_caption || editImageCaption.trim(),
             updated_at: data.updated_at,
           }
           : experience
@@ -1043,6 +1050,18 @@ const formatTripValue = (value: string) => {
                                   Fill frame
                                 </button>
                               </div>
+                            </div>
+
+                            <div style={{ display: "grid", gap: "8px" }}>
+                              <label style={smallLabel}>Main photo caption</label>
+
+                              <input
+                                value={editImageCaption}
+                                onChange={(e) => setEditImageCaption(e.target.value)}
+                                placeholder="Optional short caption for the main photo..."
+                                maxLength={160}
+                                style={input}
+                              />
                             </div>
 
                           {experience.image_url && (

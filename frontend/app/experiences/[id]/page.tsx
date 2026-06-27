@@ -454,7 +454,10 @@ const authorLabel = authorFlag
             <img
               src={mainPhoto.image_url}
               alt={mainPhoto.caption || experience.title || "Experience photo"}
-              style={mainPhotoImage}
+              style={{
+                ...mainPhotoImage,
+                objectFit: experience.image_display_mode || "cover",
+              }}
             />
 
             {mainPhoto.caption && (

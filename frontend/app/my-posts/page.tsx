@@ -26,6 +26,7 @@ type MyExperience = {
   trip_context: string;
   trip_style: string;
   image_url?: string | null;
+  image_display_mode?: "contain" | "cover";
   place: string;
   place_id: number;
   destination: string;
@@ -97,6 +98,7 @@ const handleOptionalRatingChange = (
 
 const [imageAction, setImageAction] = useState<"keep" | "replace" | "remove">("keep");
 const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+const [editImageDisplayMode, setEditImageDisplayMode] = useState<"contain" | "cover">("cover");
 
 const [editImageFile, setEditImageFile] = useState<File | null>(null);
 const [removeImage, setRemoveImage] = useState(false);
@@ -305,6 +307,7 @@ const startEditingExperience = (experience: MyExperience) => {
   setUploadingExtraPhoto(false);
   setExtraPhotoSuccessMessage("");
   setEditImagePreview(null);
+  setEditImageDisplayMode(experience.image_display_mode || "cover");
   setImageAction("keep");
   setOpenGalleryFor(null);
 };
@@ -390,6 +393,8 @@ const saveEditedExperience = async (experienceId: number) => {
       formData.append("image", editImageFile);
     }
 
+    formData.append("image_display_mode", editImageDisplayMode);
+
     if (imageAction === "remove") {
       formData.append("remove_image", "true");
     }
@@ -423,6 +428,7 @@ const saveEditedExperience = async (experienceId: number) => {
             trip_context: data.trip_context,
             trip_style: data.trip_style,
             image_url: data.image_url,
+            image_display_mode: data.image_display_mode || editImageDisplayMode,
             updated_at: data.updated_at,
           }
           : experience
@@ -941,7 +947,10 @@ const formatTripValue = (value: string) => {
                               <img
                                 src={experience.image_url}
                                 alt={experience.title || "Current experience image"}
-                                style={imagePreview}
+                                style={{
+                                  ...imagePreview,
+                                  objectFit: editImageDisplayMode,
+                                }}
                               />
                             </div>
                           )}
@@ -953,9 +962,12 @@ const formatTripValue = (value: string) => {
                               </div>
 
                               <img
-                                src={editImagePreview}
-                                alt="New selected image preview"
-                                style={imagePreview}
+                                  src={editImagePreview}
+                                  alt="New selected image preview"
+                                  style={{
+                                    ...imagePreview,
+                                    objectFit: editImageDisplayMode,
+                                  }}
                               />
 
                               <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4 }}>
@@ -998,6 +1010,40 @@ const formatTripValue = (value: string) => {
                               style={input}
                             />
                           </div>
+
+                            <div style={imageEditBox}>
+                              <label style={smallLabel}>Photo frame</label>
+
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditImageDisplayMode("contain")}
+                                  style={{
+                                    ...secondaryButton,
+                                    border:
+                                      editImageDisplayMode === "contain"
+                                        ? "1px solid #111"
+                                        : secondaryButton.border,
+                                  }}
+                                >
+                                  Full photo
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setEditImageDisplayMode("cover")}
+                                  style={{
+                                    ...secondaryButton,
+                                    border:
+                                      editImageDisplayMode === "cover"
+                                        ? "1px solid #111"
+                                        : secondaryButton.border,
+                                  }}
+                                >
+                                  Fill frame
+                                </button>
+                              </div>
+                            </div>
 
                           {experience.image_url && (
                             <button
@@ -1077,7 +1123,7 @@ const formatTripValue = (value: string) => {
                         style={{
                           width: "100%",
                           maxHeight: "260px",
-                          objectFit: "cover",
+                          objectFit: experience.image_display_mode || "cover",
                           borderRadius: "12px",
                           marginTop: "10px",
                           marginBottom: "14px",

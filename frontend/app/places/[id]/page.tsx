@@ -43,9 +43,7 @@ export default function PlacePage() {
   const [creatingSpecificPlace, setCreatingSpecificPlace] = useState(false);
   const [createdSpecificPlace, setCreatedSpecificPlace] = useState<any>(null);
 
-  const [showRatings, setShowRatings] = useState(false);
   const [ratingsSummary, setRatingsSummary] = useState<any>(null);
-  const [loadingRatingsSummary, setLoadingRatingsSummary] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const [showUpdateForm, setShowUpdateForm] = useState(false);
@@ -256,7 +254,6 @@ const activityFeedDescription =
   const rating1 = experiences.filter((e) => e.rating === 1).length;
 
   const loadRatingsSummary = async (placeId: string | number) => {
-      setLoadingRatingsSummary(true);
 
       try {
         const res = await fetch(`${API_URL}/api/places/${placeId}/ratings-summary/`);
@@ -273,8 +270,6 @@ const activityFeedDescription =
       } catch (error) {
         console.error("Ratings summary error:", error);
         setRatingsSummary(null);
-      } finally {
-        setLoadingRatingsSummary(false);
       }
   };
 
@@ -2064,200 +2059,7 @@ const handleToggleEventsInfo = () => {
           </section>
         )}
 
-            {showRatings && (
-              <section
-                style={{
-                  marginBottom: "32px",
-                  padding: "22px",
-                  border: "1px solid #eee",
-                  borderRadius: "16px",
-                  backgroundColor: "white",
-                  maxWidth: "760px",
-                }}
-              >
-                <div style={{ marginBottom: "18px" }}>
-                  <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
-                    Place analytics
-                  </div>
-
-                  <h2 style={{ margin: 0, fontSize: "22px" }}>
-                    Ratings & insights
-                  </h2>
-
-                  <p
-                    style={{
-                      marginTop: "8px",
-                      marginBottom: 0,
-                      color: "#666",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    Understand how travelers are evaluating this place based on shared experiences.
-                  </p>
-                </div>
-
-                {loadingRatingsSummary && (
-                  <div style={ratingsLoadingBox}>
-                    Loading ratings summary...
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                    gap: "12px",
-                    marginBottom: "24px",
-                  }}
-                >
-                  <div style={insightStatCard}>
-                    <div style={overviewStatLabel}>Average rating</div>
-                    <div style={overviewStatValue}>
-                      {averageRating ? `${averageRating} ★` : "—"}
-                    </div>
-                  </div>
-
-                  <div style={insightStatCard}>
-                    <div style={overviewStatLabel}>Total reviews</div>
-                    <div style={overviewStatValue}>
-                      {ratingsSummary?.overall?.total_reviews ?? experiences.length}
-                    </div>
-                  </div>
-
-                  <div style={insightStatCard}>
-                    <div style={overviewStatLabel}>Rated experiences</div>
-                    <div style={overviewStatValue}>
-                      {ratingsSummary?.overall?.rated_count ?? ratedExperiences.length}
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "22px",
-                  }}
-                >
-                  <div>
-                    <h3 style={{ marginTop: 0, marginBottom: "14px", fontSize: "17px" }}>
-                      Rating distribution
-                    </h3>
-
-                    {[5, 4, 3, 2, 1].map((stars) => {
-                      const count = ratingCount(stars);
-                      const widthPercent = `${(count / maxCount) * 100}%`;
-
-                      return (
-                        <div
-                          key={stars}
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "42px 1fr 32px",
-                            alignItems: "center",
-                            gap: "12px",
-                            marginBottom: "10px",
-                          }}
-                        >
-                          <div style={{ color: "#555", fontSize: "14px" }}>
-                            {stars}★
-                          </div>
-
-                          <div
-                            style={{
-                              height: "10px",
-                              backgroundColor: "#f1f1f1",
-                              borderRadius: "999px",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: widthPercent,
-                                height: "100%",
-                                backgroundColor: "#111",
-                                borderRadius: "999px",
-                              }}
-                            />
-                          </div>
-
-                          <div style={{ color: "#777", fontSize: "14px" }}>
-                            {count}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {availablePracticalRatingStats.length > 0 && (
-                      <div>
-                        <h3 style={{ marginTop: 0, marginBottom: "14px", fontSize: "17px" }}>
-                          Practical ratings
-                        </h3>
-
-                        <p
-                          style={{
-                            marginTop: 0,
-                            marginBottom: "14px",
-                            color: "#666",
-                            lineHeight: 1.5,
-                            fontSize: "14px",
-                          }}
-                        >
-                          These averages are based only on experiences where travelers filled in each
-                          optional practical rating.
-                        </p>
-
-                        <div style={practicalRatingsInsightGrid}>
-                          {availablePracticalRatingStats.map((stat) => (
-                            <div key={stat.label} style={practicalRatingsInsightCard}>
-                              <div style={overviewStatLabel}>{stat.label}</div>
-
-                              <div style={overviewStatValue}>
-                                {stat.average} ★
-                              </div>
-
-                              <div style={practicalRatingsInsightDescription}>
-                                {stat.description}
-                              </div>
-
-                              <div style={practicalRatingsInsightCount}>
-                                Based on {stat.count} {stat.count === 1 ? "experience" : "experiences"}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                  <div
-                    style={{
-                      padding: "16px",
-                      border: "1px dashed #ddd",
-                      borderRadius: "14px",
-                      backgroundColor: "#fafafa",
-                    }}
-                  >
-                    <h3 style={{ marginTop: 0, marginBottom: "8px", fontSize: "17px" }}>
-                      Traveler insights
-                    </h3>
-
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#666",
-                        lineHeight: 1.5,
-                        fontSize: "14px",
-                      }}
-                    >
-                      Coming soon: breakdown by traveler profile, nationality, age group,
-                      trip type and travel style.
-                    </p>
-                  </div>
-                </div>
-              </section>
-            )}
-
-                <section
+        <section
           style={{
             marginBottom: "18px",
             padding: "18px",
@@ -2681,32 +2483,6 @@ const actionHelperBox = {
   maxWidth: "680px",
 };
 
-const practicalRatingsInsightGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-  gap: "12px",
-};
-
-const practicalRatingsInsightCard = {
-  padding: "16px",
-  border: "1px solid #eee",
-  borderRadius: "14px",
-  backgroundColor: "#fafafa",
-};
-
-const practicalRatingsInsightDescription = {
-  marginTop: "6px",
-  color: "#666",
-  fontSize: "12px",
-  lineHeight: 1.4,
-};
-
-const practicalRatingsInsightCount = {
-  marginTop: "8px",
-  color: "#777",
-  fontSize: "12px",
-};
-
 const practicalRatingsMiniBox = {
   marginTop: "10px",
   padding: "10px 12px",
@@ -2732,14 +2508,4 @@ const practicalRatingsMiniBadge = {
   border: "1px solid #eee",
   backgroundColor: "white",
   fontSize: "12px",
-};
-
-const ratingsLoadingBox = {
-  marginBottom: "16px",
-  padding: "10px 12px",
-  borderRadius: "10px",
-  border: "1px solid #eee",
-  backgroundColor: "#fafafa",
-  color: "#666",
-  fontSize: "13px",
 };

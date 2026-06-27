@@ -366,6 +366,11 @@ class Experience(models.Model):
         default="cover",
     )
 
+    image_caption = models.CharField(
+        max_length=160,
+        blank=True,
+    )
+
     rating = models.IntegerField(null=True, blank=True)
     comment = models.TextField()
 

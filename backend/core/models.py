@@ -357,8 +357,19 @@ class Experience(models.Model):
         null=True,
     )
 
+    image_display_mode = models.CharField(
+        max_length=20,
+        choices=[
+            ("contain", "Full photo"),
+            ("cover", "Fill frame"),
+        ],
+        default="cover",
+    )
+
     rating = models.IntegerField(null=True, blank=True)
     comment = models.TextField()
+
+
 
     # Optional structured practical ratings.
     # These fields are used for future ratings insights, place comparisons,

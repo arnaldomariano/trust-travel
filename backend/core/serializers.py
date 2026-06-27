@@ -186,6 +186,7 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "title",
             "image",
             "image_url",
+            "image_display_mode",
             "rating",
             "comment",
             "safety_rating",

@@ -64,6 +64,12 @@ export default function DestinationsPage() {
   const [accessibilityRating, setAccessibilityRating] = useState<number | null>(null);
   const [convenienceRating, setConvenienceRating] = useState<number | null>(null);
 
+  const hasAnyPracticalRating =
+      Boolean(safetyRating) ||
+      Boolean(costRating) ||
+      Boolean(accessibilityRating) ||
+      Boolean(convenienceRating);
+
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageDisplayMode, setImageDisplayMode] = useState<"contain" | "cover">("cover");
@@ -1192,6 +1198,18 @@ const startEditingExperience = () => {
       return;
     }
 
+    if (!hasAnyPracticalRating) {
+      const shouldContinue = window.confirm(
+        "You have not added practical ratings yet.\n\n" +
+          "They help other travelers understand safety, cost, accessibility and convenience.\n\n" +
+          "Save without practical ratings?"
+      );
+
+      if (!shouldContinue) {
+        return;
+      }
+    }
+
     setSubmittingExperience(true);
 
     try {
@@ -1285,6 +1303,18 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
   if (!comment.trim()) {
     alert("Please write your experience.");
     return;
+  }
+
+  if (!hasAnyPracticalRating) {
+      const shouldContinue = window.confirm(
+        "You have not added practical ratings yet.\n\n" +
+          "They help other travelers understand safety, cost, accessibility and convenience.\n\n" +
+          "Save without practical ratings?"
+      );
+
+    if (!shouldContinue) {
+        return;
+      }
   }
 
   setSubmittingExperience(true);

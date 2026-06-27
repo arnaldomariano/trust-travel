@@ -733,7 +733,7 @@ const formatTripValue = (value: string) => {
                 {editingExperienceId === experience.id ? (
                   <>
                     <div style={metaRow}>
-                      <strong>Edit experience</strong>
+                      <strong>Editing experience</strong>
 
                       <span style={dateText}>
                         {new Date(experience.created_at).toLocaleString()}
@@ -1159,8 +1159,8 @@ const formatTripValue = (value: string) => {
                           }}
                         >
                           {openGalleryFor === experience.id
-                            ? "Hide gallery manager"
-                            : `Manage gallery photos (${(extraPhotosByExperience[experience.id] || []).length}/${MAX_EXTRA_PHOTOS})`}
+                              ? "Hide extra photos"
+                              : `Extra photos & captions (${(extraPhotosByExperience[experience.id] || []).length}/${MAX_EXTRA_PHOTOS})`}
                       </button>
                     </div>
 
@@ -1183,7 +1183,9 @@ const formatTripValue = (value: string) => {
                             lineHeight: 1.5,
                           }}
                         >
-                            Add extra photos to show more details from this experience. You can add up to {MAX_EXTRA_PHOTOS} photos and edit their captions later.
+                            Extra photos appear in the gallery. To change the main photo, use{" "}
+                            <strong>Edit experience</strong>. You can add up to {MAX_EXTRA_PHOTOS} extra photos
+                            and edit their captions here.
                         </div>
 
                         {extraPhotoSuccessMessage && (
@@ -1370,21 +1372,20 @@ const formatTripValue = (value: string) => {
                       </div>
                     )}
                     <div style={actions}>
-                          <Link
-                            href={`/experiences/${experience.id}`}
-                            style={secondaryLink}
-                          >
-                            View experience
-                          </Link>
+                      <Link
+                        href={`/experiences/${experience.id}`}
+                        style={secondaryLink}
+                      >
+                        View experience
+                      </Link>
 
-                          <button
-                            type="button"
-                            style={secondaryButton}
-                            onClick={() => startEditingExperience(experience)}
-                          >
-                            Edit
-                          </button>
-
+                      <button
+                        type="button"
+                        style={secondaryButton}
+                        onClick={() => startEditingExperience(experience)}
+                      >
+                        Edit experience
+                      </button>
                           <button
                             type="button"
                             style={dangerButton}

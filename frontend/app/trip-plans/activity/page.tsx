@@ -96,31 +96,47 @@ export default function TripPlanActivityPage() {
     loadActivity();
   }, []);
 
-  const filteredItems = useMemo(() => {
-    if (filter === "all") return activity.items;
+  const uniqueActivityItems = useMemo(() => {
+      const seen = new Set<string>();
 
-    return activity.items.filter((item) => {
+      return activity.items.filter((item) => {
+        const key = `${item.type}-${item.id}`;
+
+        if (seen.has(key)) {
+          return false;
+        }
+
+        seen.add(key);
+        return true;
+      });
+    }, [activity.items]);
+
+    const filteredItems = useMemo(() => {
+      if (filter === "all") return uniqueActivityItems;
+
+      return uniqueActivityItems.filter((item) => {
+
       if (filter === "experience") {
         return item.type === "experience";
       }
 
       return item.type === filter || item.category === filter;
     });
-  }, [activity.items, filter]);
+  }, [uniqueActivityItems, filter]);
 
-  const experienceCount = activity.items.filter(
+  const experienceCount = uniqueActivityItems.filter(
     (item) => item.type === "experience"
   ).length;
 
-  const alertCount = activity.items.filter(
+  const alertCount = uniqueActivityItems.filter(
     (item) => item.type === "alert" || item.category === "alert"
   ).length;
 
-  const infoCount = activity.items.filter(
+  const infoCount = uniqueActivityItems.filter(
     (item) => item.type === "info" || item.category === "info"
   ).length;
 
-  const eventCount = activity.items.filter(
+  const eventCount = uniqueActivityItems.filter(
     (item) => item.type === "event" || item.category === "event"
   ).length;
 
@@ -205,7 +221,8 @@ export default function TripPlanActivityPage() {
             ...(filter === "all" ? activeFilterButton : {}),
           }}
         >
-          All {activity.count}
+
+        All {uniqueActivityItems.length}
         </button>
 
         <button
@@ -276,8 +293,8 @@ export default function TripPlanActivityPage() {
         </div>
       ) : (
         <section style={activityList}>
-            {filteredItems.map((item, index) => (
-              <article key={`${item.type}-${item.id}-${index}`} style={activityCard}>
+            {filteredItems.map((item) => (
+              <article key={`${item.type}-${item.id}`} style={activityCard}>
               <div style={activityHeader}>
                 <span style={getTypeBadgeStyle(item)}>
                   {getTypeLabel(item)}

@@ -65,6 +65,10 @@ export default function DestinationsPage() {
   const [convenienceRating, setConvenienceRating] = useState<number | null>(null);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageDisplayMode, setImageDisplayMode] = useState<"contain" | "cover">("cover");
+  const [imageCaption, setImageCaption] = useState("");
+
   const [tripContext, setTripContext] = useState("prefer_not_to_say");
   const [tripStyle, setTripStyle] = useState("prefer_not_to_say");
 
@@ -148,6 +152,9 @@ useEffect(() => {
   setRating(null);
   resetStructuredRatings();
   setImageFile(null);
+  setImagePreviewUrl(null);
+  setImageDisplayMode("cover");
+  setImageCaption("");
   setTripContext("prefer_not_to_say");
   setTripStyle("prefer_not_to_say");
 
@@ -994,6 +1001,9 @@ if (isUpdateMode) {
       setRating(null);
       resetStructuredRatings();
       setImageFile(null);
+      setImagePreviewUrl(null);
+      setImageDisplayMode("cover");
+      setImageCaption("");
       setTripContext("prefer_not_to_say");
       setTripStyle("prefer_not_to_say");
 
@@ -1022,6 +1032,9 @@ if (isUpdateMode) {
       setRating(null);
       resetStructuredRatings();
       setImageFile(null);
+      setImagePreviewUrl(null);
+      setImageDisplayMode("cover");
+      setImageCaption("");
       setTripContext("prefer_not_to_say");
       setTripStyle("prefer_not_to_say");
 
@@ -1090,6 +1103,9 @@ if (isUpdateMode) {
     setRating(null);
     resetStructuredRatings();
     setImageFile(null);
+    setImagePreviewUrl(null);
+    setImageDisplayMode("cover");
+    setImageCaption("");
     setExperienceShared(false);
     setSharedExperience(null);
     setEditingExperience(false);
@@ -1115,6 +1131,9 @@ if (isUpdateMode) {
     setRating(null);
     resetStructuredRatings();
     setImageFile(null);
+    setImagePreviewUrl(null);
+    setImageDisplayMode("cover");
+    setImageCaption("");
     setExperienceShared(false);
     setSharedExperience(null);
     setEditingExperience(false);
@@ -1141,6 +1160,9 @@ const startEditingExperience = () => {
   setConvenienceRating(sharedExperience.convenience_rating || null);
 
   setImageFile(null);
+  setImagePreviewUrl(null);
+  setImageDisplayMode(sharedExperience.image_display_mode || "cover");
+  setImageCaption(sharedExperience.image_caption || "");
   setTripContext(sharedExperience.trip_context || "prefer_not_to_say");
   setTripStyle(sharedExperience.trip_style || "prefer_not_to_say");
   setExperienceShared(false);
@@ -1204,7 +1226,11 @@ if (imageFile) {
   formData.append("image", imageFile);
 }
 
+formData.append("image_display_mode", imageDisplayMode);
+formData.append("image_caption", imageCaption.trim());
+
 const res = await fetch(`${API_URL}/api/experiences/`, {
+
   method: "POST",
   credentials: "include",
   body: formData,
@@ -1224,6 +1250,9 @@ const res = await fetch(`${API_URL}/api/experiences/`, {
       setRating(null);
       resetStructuredRatings();
       setImageFile(null);
+      setImagePreviewUrl(null);
+      setImageDisplayMode("cover");
+      setImageCaption("");
       setExperienceShared(true);
       setTripContext("prefer_not_to_say");
       setTripStyle("prefer_not_to_say");
@@ -1291,7 +1320,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       formData.append("image", imageFile);
     }
 
+    formData.append("image_display_mode", imageDisplayMode);
+    formData.append("image_caption", imageCaption.trim());
+
     const res = await fetch(`${API_URL}/api/experiences/${sharedExperience.id}/`, {
+
       method: "PATCH",
       credentials: "include",
       body: formData,
@@ -1311,6 +1344,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
     setRating(null);
     resetStructuredRatings();
     setImageFile(null);
+    setImagePreviewUrl(null);
+    setImageDisplayMode("cover");
+    setImageCaption("");
     setEditingExperience(false);
     setExperienceShared(true);
     setTripContext("prefer_not_to_say");
@@ -2595,19 +2631,91 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   </label>
 
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      setImageFile(file);
-                    }}
-                    style={input}
-                  />
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+
+                        if (imagePreviewUrl) {
+                          URL.revokeObjectURL(imagePreviewUrl);
+                        }
+
+                        setImageFile(file);
+                        setImagePreviewUrl(file ? URL.createObjectURL(file) : null);
+                      }}
+                      style={input}
+                    />
+
+                    {imagePreviewUrl && (
+                      <img
+                        src={imagePreviewUrl}
+                        alt="Selected main photo preview"
+                        style={{
+                          width: "100%",
+                          maxHeight: "260px",
+                          objectFit: imageDisplayMode,
+                          borderRadius: "12px",
+                          border: "1px solid #eee",
+                          background: "#f5f5f5",
+                          marginTop: "8px",
+                        }}
+                      />
+                    )}
+
+                    <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
+                      <label style={{ fontSize: "13px", color: "#666", fontWeight: 600 }}>
+                        Photo frame
+                      </label>
+
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => setImageDisplayMode("contain")}
+                          style={{
+                            ...secondaryButton,
+                            border:
+                              imageDisplayMode === "contain"
+                                ? "1px solid #111"
+                                : secondaryButton.border,
+                          }}
+                        >
+                          Full photo
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setImageDisplayMode("cover")}
+                          style={{
+                            ...secondaryButton,
+                            border:
+                              imageDisplayMode === "cover"
+                                ? "1px solid #111"
+                                : secondaryButton.border,
+                          }}
+                        >
+                          Fill frame
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
+                      <label style={{ fontSize: "13px", color: "#666", fontWeight: 600 }}>
+                        Main photo caption
+                      </label>
+
+                      <input
+                        value={imageCaption}
+                        onChange={(e) => setImageCaption(e.target.value)}
+                        placeholder="Optional short caption for the main photo..."
+                        maxLength={160}
+                        style={input}
+                      />
+                    </div>
 
                   <div style={{ fontSize: "12px", color: "#777", lineHeight: 1.4 }}>
-                      {editingExperience
-                        ? "You can replace the main photo here. Later, in My posts, you may add up to 3 additional photos. Avoid sharing sensitive or real-time locations."
-                        : "You can add one main photo here. Later, in My posts, you may add up to 3 additional photos. Avoid sharing sensitive or real-time locations."}
+                    {editingExperience
+                      ? "You can replace the main photo, adjust its frame and update its caption here."
+                      : "You can add a main photo now. Extra gallery photos can be added later in My posts."}
                   </div>
                 </div>
 

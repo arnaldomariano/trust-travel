@@ -107,6 +107,7 @@ const [extraPhotoCaption, setExtraPhotoCaption] = useState("");
 const [uploadingExtraPhoto, setUploadingExtraPhoto] = useState(false);
 const [openGalleryFor, setOpenGalleryFor] = useState<number | null>(null);
 const [extraPhotoSuccessMessage, setExtraPhotoSuccessMessage] = useState("");
+const [removingExtraPhotoId, setRemovingExtraPhotoId] = useState<number | null>(null);
 
 const loadPosts = async () => {
   try {
@@ -192,6 +193,44 @@ const loadExtraPhotosForExperiences = async (experiencesList: MyExperience[]) =>
   }
 };
 
+const deleteExtraPhoto = async (photoId: number, experienceId: number) => {
+  const confirmed = window.confirm(
+    "Remove this gallery photo? This cannot be undone."
+  );
+
+  if (!confirmed) return;
+
+  setRemovingExtraPhotoId(photoId);
+  setExtraPhotoSuccessMessage("");
+
+  try {
+    const res = await fetch(`${API_URL}/api/experience-photos/${photoId}/`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Failed to delete extra photo:", res.status, text);
+      alert("Error removing gallery photo.");
+      return;
+    }
+
+    setExtraPhotosByExperience((prev) => ({
+      ...prev,
+      [experienceId]: (prev[experienceId] || []).filter(
+        (photo) => photo.id !== photoId
+      ),
+    }));
+
+    setExtraPhotoSuccessMessage("Gallery photo removed.");
+  } catch (error) {
+    console.error("Delete extra photo failed:", error);
+    alert("Error removing gallery photo.");
+  } finally {
+    setRemovingExtraPhotoId(null);
+  }
+};
 
 // =========================
 // Start editing experience
@@ -1123,6 +1162,22 @@ const formatTripValue = (value: string) => {
                                     {photo.caption}
                                   </div>
                                 )}
+
+                            <button
+                              type="button"
+                              onClick={() => deleteExtraPhoto(photo.id, experience.id)}
+                              disabled={removingExtraPhotoId === photo.id}
+                              style={{
+                                ...dangerButton,
+                                padding: "6px 9px",
+                                fontSize: "12px",
+                                opacity: removingExtraPhotoId === photo.id ? 0.5 : 1,
+                                cursor: removingExtraPhotoId === photo.id ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              {removingExtraPhotoId === photo.id ? "Removing..." : "Remove"}
+                            </button>
+
                               </div>
                             ))}
                           </div>

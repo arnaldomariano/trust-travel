@@ -115,6 +115,11 @@ export default function PlacePage() {
         destination?.name ||
         "";
 
+  const parentPlaceLabel =
+    place?.place_type !== "country"
+      ? place?.parent_place_name || ""
+      : "";
+
   const breadcrumbParentLabel =
     place?.place_type === "country"
       ? "Countries"
@@ -125,8 +130,9 @@ const placeIntroText =
       ? `This is the country-level hub for ${place?.name || "this country"}. Use it for broad country experiences, country-wide travel context, alerts, events and useful information that are not tied to one specific city or place.`
       : place?.place_type === "city"
       ? `This is the city/region hub for ${place?.name || "this city or region"}. Use it for experiences and updates about the city or region as a whole, or to find and add specific places inside it.`
+      : parentPlaceLabel
+      ? `This is the specific-place hub for ${place?.name || "this place"}, inside ${parentPlaceLabel}. Use it for reviews, ratings, events, alerts and practical information about this exact location.`
       : `This is the specific-place hub for ${place?.name || "this place"}. Use it for reviews, ratings, events, alerts and practical information about this exact location, whether it is a restaurant, hotel, attraction, nature spot or local place.`;
-
   const placeHubGuidance =
   place?.place_type === "country"
     ? [
@@ -163,13 +169,16 @@ const placeIntroText =
     normalizeText(p.name) === normalizeText(parentLocationLabel)
 );
 
-const cityPlaceForHierarchy = allPlaces.find(
-  (p) =>
-    p.place_type === "city" &&
-    normalizeText(p.name) === normalizeText(place?.city) &&
-    normalizeText(p.destination_country || p.destination_name) ===
-      normalizeText(parentLocationLabel)
-);
+const cityPlaceForHierarchy =
+  place?.parent_place
+    ? allPlaces.find((p) => p.id === place.parent_place)
+    : allPlaces.find(
+        (p) =>
+          p.place_type === "city" &&
+          normalizeText(p.name) === normalizeText(place?.city) &&
+          normalizeText(p.destination_country || p.destination_name) ===
+            normalizeText(parentLocationLabel)
+      );
 
 const hierarchyLevelLabel =
   place?.place_type === "country"
@@ -206,7 +215,7 @@ const placeHierarchyItems =
           href: null,
         },
       ].filter((item) => item.label)
-    : [
+        : [
         {
           label: parentLocationLabel,
           href: countryPlaceForHierarchy
@@ -214,9 +223,11 @@ const placeHierarchyItems =
             : null,
         },
         {
-          label: place?.city,
+          label: parentPlaceLabel || place?.city,
           href: cityPlaceForHierarchy
             ? `/places/${cityPlaceForHierarchy.id}`
+            : place?.parent_place
+            ? `/places/${place.parent_place}`
             : null,
         },
         {

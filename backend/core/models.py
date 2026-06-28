@@ -151,6 +151,19 @@ class Place(models.Model):
     ]
 
     destination = models.ForeignKey(Destination, on_delete=models.CASCADE)
+
+    # Optional parent place used to build a real travel hierarchy.
+    # Examples:
+    # country -> city/region -> specific place
+    # Brazil -> Aparecida do Norte -> Santuário de Nossa Senhora Aparecida
+    parent_place = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="child_places",
+    )
+
     name = models.CharField(max_length=255)
 
     # Type of place used for search, filtering and future travel discovery flows.

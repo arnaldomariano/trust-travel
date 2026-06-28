@@ -71,6 +71,12 @@ class PlaceSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
+    parent_place_name = serializers.CharField(
+        source="parent_place.name",
+        read_only=True,
+        allow_null=True,
+    )
+
     destination_name = serializers.CharField(
         source="destination.name",
         read_only=True
@@ -91,6 +97,8 @@ class PlaceSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "destination",
+            "parent_place",
+            "parent_place_name",
             "destination_name",
             "destination_country",
             "destination_city",
@@ -113,6 +121,7 @@ class PlaceSerializer(serializers.ModelSerializer):
             "created_by",
             "created_at",
             "created_by_username",
+            "parent_place_name",
             "average_rating",
             "reviews_count",
             "destination_name",

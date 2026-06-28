@@ -106,6 +106,10 @@ export default function DestinationsPage() {
   const [sharedExperience, setSharedExperience] = useState<any>(null);
   const [editingExperience, setEditingExperience] = useState(false);
 
+  const [showPracticalRatingsConfirm, setShowPracticalRatingsConfirm] = useState(false);
+  const [pendingExperienceAction, setPendingExperienceAction] = useState<"create" | "update" | null>(null);
+  const [skipPracticalRatingsConfirm, setSkipPracticalRatingsConfirm] = useState(false);
+
   // =========================
   // Load places and destinations
   // =========================
@@ -1175,6 +1179,29 @@ const startEditingExperience = () => {
   setEditingExperience(true);
 };
 
+const requestPracticalRatingsConfirmation = (action: "create" | "update") => {
+  setPendingExperienceAction(action);
+  setShowPracticalRatingsConfirm(true);
+};
+
+const cancelPracticalRatingsConfirmation = () => {
+  setShowPracticalRatingsConfirm(false);
+  setPendingExperienceAction(null);
+  setSkipPracticalRatingsConfirm(false);
+};
+
+const continueWithoutPracticalRatings = () => {
+  setShowPracticalRatingsConfirm(false);
+  setPendingExperienceAction(null);
+  setSkipPracticalRatingsConfirm(true);
+
+  setTimeout(() => {
+    const form = document.getElementById("experience-share-form") as HTMLFormElement | null;
+    form?.requestSubmit();
+  }, 0);
+};
+
+
   // =========================
   // Submit experience
   // =========================
@@ -1198,17 +1225,12 @@ const startEditingExperience = () => {
       return;
     }
 
-    if (!hasAnyPracticalRating) {
-      const shouldContinue = window.confirm(
-        "You have not added practical ratings yet.\n\n" +
-          "They help other travelers understand safety, cost, accessibility and convenience.\n\n" +
-          "Save without practical ratings?"
-      );
-
-      if (!shouldContinue) {
-        return;
-      }
+    if (!hasAnyPracticalRating && !skipPracticalRatingsConfirm) {
+      requestPracticalRatingsConfirmation("create");
+      return;
     }
+
+    setSkipPracticalRatingsConfirm(false);
 
     setSubmittingExperience(true);
 
@@ -1305,17 +1327,12 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
     return;
   }
 
-  if (!hasAnyPracticalRating) {
-      const shouldContinue = window.confirm(
-        "You have not added practical ratings yet.\n\n" +
-          "They help other travelers understand safety, cost, accessibility and convenience.\n\n" +
-          "Save without practical ratings?"
-      );
-
-    if (!shouldContinue) {
-        return;
-      }
+  if (!hasAnyPracticalRating && !skipPracticalRatingsConfirm) {
+      requestPracticalRatingsConfirmation("update");
+      return;
   }
+
+  setSkipPracticalRatingsConfirm(false);
 
   setSubmittingExperience(true);
 
@@ -1391,6 +1408,64 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
   return (
     <main style={{ maxWidth: "800px", margin: "0 auto", padding: "40px" }}>
+
+    {showPracticalRatingsConfirm && (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0, 0, 0, 0.35)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000,
+          padding: "20px",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "460px",
+            background: "white",
+            borderRadius: "18px",
+            padding: "22px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+          }}
+        >
+          <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+            Practical ratings
+          </div>
+
+          <h2 style={{ margin: "0 0 10px 0", fontSize: "22px" }}>
+            You have not added practical ratings yet
+          </h2>
+
+          <p style={{ color: "#555", lineHeight: 1.5, marginBottom: "18px" }}>
+            Safety, cost, accessibility and convenience help other travelers compare
+            experiences. You can still publish now and add them later.
+          </p>
+
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={cancelPracticalRatingsConfirmation}
+              style={secondaryButton}
+            >
+              Go back and add ratings
+            </button>
+
+            <button
+              type="button"
+              onClick={continueWithoutPracticalRatings}
+              style={primaryButton}
+            >
+              {pendingExperienceAction === "update" ? "Save anyway" : "Publish anyway"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
       <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
         <Link href="/" style={{ color: "#666", textDecoration: "none" }}>
           Home
@@ -2476,8 +2551,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               </div>
             ) : (
               <form
-                onSubmit={editingExperience ? handleUpdateExperience : handleSubmitExperience}
-                style={{ display: "grid", gap: "14px" }}
+                  id="experience-share-form"
+                  onSubmit={editingExperience ? handleUpdateExperience : handleSubmitExperience}
+                  style={{ display: "grid", gap: "14px" }}
               >
                 <input
                   value={title}

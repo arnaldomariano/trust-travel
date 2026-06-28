@@ -344,6 +344,34 @@ class CreateBasicPlaceView(APIView):
                 city="",
             )
 
+        parent_place = None
+
+        if place_type in specific_place_types:
+            parent_place = Place.objects.filter(
+                destination=destination,
+                place_type="city",
+                name__iexact=city,
+            ).first()
+
+            if not parent_place:
+                parent_place = Place.objects.filter(
+                    destination=destination,
+                    place_type="city",
+                    city__iexact=city,
+                ).first()
+
+            if not parent_place:
+                return Response(
+                    {
+                        "detail": (
+                            "City or region parent place was not found. "
+                            "Create or select the city/region first, then add "
+                            "the specific place inside it."
+                        )
+                    },
+                    status=400,
+                )
+
         existing_place = Place.objects.filter(
             name__iexact=name,
             destination=destination,
@@ -361,6 +389,7 @@ class CreateBasicPlaceView(APIView):
             name=name,
             place_type=place_type,
             city=city,
+            parent_place=parent_place,
             latitude=latitude or None,
             longitude=longitude or None,
             external_source=external_source,

@@ -34,6 +34,7 @@ export default function PlacePage() {
   const [specificPlaceResults, setSpecificPlaceResults] = useState<any[]>([]);
   const [specificPlaceSearchLoading, setSpecificPlaceSearchLoading] = useState(false);
   const [specificPlaceHasSearched, setSpecificPlaceHasSearched] = useState(false);
+  const [showSpecificPlaceTools, setShowSpecificPlaceTools] = useState(false);
 
   const [showCreateSpecificPlaceForm, setShowCreateSpecificPlaceForm] = useState(false);
   const [newSpecificPlaceName, setNewSpecificPlaceName] = useState("");
@@ -952,9 +953,23 @@ const handleToggleEventsInfo = () => {
           >
             <div style={overviewStatCard}>
               <div style={overviewStatLabel}>Experiences</div>
+
               <div style={overviewStatValue}>
                 {ratingsSummary?.overall?.total_reviews ?? experiences.length}
               </div>
+
+              {place?.place_type === "city" && (
+                <div
+                  style={{
+                    marginTop: "6px",
+                    fontSize: "12px",
+                    color: "#777",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Includes city-level experiences and experiences from specific places inside this city.
+                </div>
+              )}
             </div>
 
             <div style={overviewStatCard}>
@@ -1475,23 +1490,58 @@ const handleToggleEventsInfo = () => {
             </div>
 
             <h2 style={{ marginTop: 0, marginBottom: "8px", fontSize: "22px" }}>
-              Find or add specific places inside {place.name}
+              Specific places inside {place.name}
             </h2>
 
-            <p
-              style={{
-                marginTop: 0,
-                marginBottom: "18px",
-                color: "#666",
-                lineHeight: 1.5,
-                maxWidth: "680px",
-              }}
-            >
-              Use this section to move from the city or region layer into specific places
-              inside {place.name}, such as beaches, hotels, restaurants, attractions or
-              nature spots. Search first before creating a new place, so city-level
-              experiences stay separate from experiences about exact locations.
-            </p>
+            {!showSpecificPlaceTools ? (
+              <>
+                <p
+                  style={{
+                    marginTop: 0,
+                    marginBottom: "16px",
+                    color: "#666",
+                    lineHeight: 1.5,
+                    maxWidth: "680px",
+                  }}
+                >
+                  Restaurants, hotels, attractions, beaches, nature spots and other exact
+                  places can be added under this city or region.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSpecificPlaceTools(true)}
+                  style={secondaryButton}
+                >
+                  Find or add specific places inside {place.name}
+                </button>
+              </>
+            ) : (
+              <>
+                <p
+                  style={{
+                    marginTop: 0,
+                    marginBottom: "18px",
+                    color: "#666",
+                    lineHeight: 1.5,
+                    maxWidth: "680px",
+                  }}
+                >
+                  Use this section to move from the city or region layer into specific places
+                  inside {place.name}, such as beaches, hotels, restaurants, attractions or
+                  nature spots. Search first before creating a new place, so city-level
+                  experiences stay separate from experiences about exact locations.
+                </p>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowSpecificPlaceTools(false)}
+                    style={secondaryButton}
+                  >
+                    Hide specific place tools
+                  </button>
+                </div>
 
             <form
               onSubmit={handleSearchSpecificPlaces}
@@ -1831,6 +1881,8 @@ const handleToggleEventsInfo = () => {
                 </div>
               </div>
             )}
+            </>
+         )}
           </section>
         )}
 

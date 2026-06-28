@@ -13,6 +13,7 @@ export default function NewPlacePage() {
 
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
+  const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -35,10 +36,11 @@ export default function NewPlacePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
+      body: JSON.stringify({
           destination: Number(destinationId),
           name: name.trim(),
           city: city.trim(),
+          description: description.trim(),
           image_url: imageUrl.trim(),
         }),
       });

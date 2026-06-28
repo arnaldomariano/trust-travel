@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { API_URL } from "../lib/api";
 
-export default function DestinationsPage() {
+function DestinationsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const placeFromUrl = searchParams.get("place");
@@ -2853,6 +2853,20 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           </section>
         )}
     </main>
+  );
+}
+
+export default function DestinationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: "800px", margin: "0 auto", padding: "40px" }}>
+          Loading...
+        </main>
+      }
+    >
+      <DestinationsPageContent />
+    </Suspense>
   );
 }
 

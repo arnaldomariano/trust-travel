@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { API_URL } from "../lib/api";
@@ -17,7 +17,7 @@ type TripPlan = {
   updated_at: string;
 };
 
-export default function TripPlansPage() {
+function TripPlansPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
@@ -313,6 +313,14 @@ export default function TripPlansPage() {
   );
 }
 
+export default function TripPlansPage() {
+  return (
+    <Suspense fallback={<main style={page}>Loading trip plans...</main>}>
+      <TripPlansPageContent />
+    </Suspense>
+  );
+}
+
 const page = {
   maxWidth: "820px",
   margin: "0 auto",
@@ -402,6 +410,16 @@ const primaryButton = {
   border: "none",
   background: "black",
   color: "white",
+  width: "fit-content",
+};
+
+const secondaryButton = {
+  display: "inline-block",
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "#111",
   width: "fit-content",
 };
 

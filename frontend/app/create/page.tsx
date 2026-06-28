@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { API_URL } from "../lib/api";
 
@@ -13,7 +13,7 @@ type Place = {
 
 type UpdateType = "alert" | "event" | "info";
 
-export default function CreatePage() {
+function CreatePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialPlaceId = searchParams.get("place");
@@ -227,6 +227,14 @@ export default function CreatePage() {
         </button>
       </section>
     </main>
+  );
+}
+
+export default function CreatePage() {
+  return (
+    <Suspense fallback={<main style={page}>Loading...</main>}>
+      <CreatePageContent />
+    </Suspense>
   );
 }
 

@@ -2,14 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const MapView = dynamic(() => import("../components/MapView"), {
   ssr: false,
 });
 
-export default function HomePage() {
+function HomePageContent() {
 
   // ✅ AGORA CORRETO: dentro do componente
   const searchParams = useSearchParams();
@@ -83,5 +83,13 @@ export default function HomePage() {
           </div>
         </div>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<main style={{ padding: "40px" }}>Loading...</main>}>
+      <HomePageContent />
+    </Suspense>
   );
 }

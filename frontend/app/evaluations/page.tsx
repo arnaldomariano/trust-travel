@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { API_URL } from "../lib/api";
@@ -124,7 +124,7 @@ function getPlaceContext(place: Place) {
   return Array.from(new Set(parts)).join(" · ");
 }
 
-export default function EvaluationsPage() {
+function EvaluationsPageContent() {
 
   const searchParams = useSearchParams();
   const placeIdFromUrl = searchParams.get("place");
@@ -828,5 +828,18 @@ export default function EvaluationsPage() {
         </div>
       </div>
     </main>
+  );
+}
+export default function EvaluationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-950 px-6 py-10 text-slate-100">
+          Loading...
+        </main>
+      }
+    >
+      <EvaluationsPageContent />
+    </Suspense>
   );
 }

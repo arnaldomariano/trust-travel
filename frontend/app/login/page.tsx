@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../providers/AuthProvider";
 import { API_URL } from "../lib/api";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
@@ -147,5 +147,19 @@ export default function LoginPage() {
 
       </form>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ padding: "40px", maxWidth: "400px", margin: "auto" }}>
+          Loading...
+        </main>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
   );
 }

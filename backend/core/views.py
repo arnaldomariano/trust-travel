@@ -389,7 +389,20 @@ class PlaceRatingsSummaryView(APIView):
                 status=404,
             )
 
-        experiences = Experience.objects.filter(place=place)
+        if place.place_type == "city":
+            city_name = place.city or place.name
+
+            experiences = Experience.objects.filter(
+                Q(place=place)
+                | Q(
+                    place__destination_id=place.destination_id,
+                    place__city__iexact=city_name,
+                )
+            ).exclude(
+                place__place_type="country"
+            )
+        else:
+            experiences = Experience.objects.filter(place=place)
 
         rated_experiences = experiences.exclude(rating__isnull=True)
 

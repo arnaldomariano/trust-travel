@@ -423,13 +423,14 @@ class PlaceRatingsSummaryView(APIView):
 
             experiences = Experience.objects.filter(
                 Q(place=place)
+                | Q(place__parent_place_id=place.id)
                 | Q(
                     place__destination_id=place.destination_id,
                     place__city__iexact=city_name,
                 )
             ).exclude(
                 place__place_type="country"
-            )
+            ).distinct()
         else:
             experiences = Experience.objects.filter(place=place)
 
@@ -798,22 +799,22 @@ class PlaceExperiencesListView(generics.ListAPIView):
 
         # City/region pages should show:
         # 1. experiences attached directly to the city/region
-        # 2. experiences attached to specific places inside the same city/region
-        #
-        # This is a V1 hierarchy bridge based on destination + city text.
-        # Later, this should be replaced by a real parent_place relationship.
+        # 2. experiences attached to specific places with this city/region as parent
+        # 3. legacy fallback: experiences attached to places with the same destination
+        #    and city text, for records created before parent_place existed.
         if place.place_type == "city":
             city_name = place.city or place.name
 
             return base_queryset.filter(
                 Q(place_id=place_id)
+                | Q(place__parent_place_id=place.id)
                 | Q(
                     place__destination_id=place.destination_id,
                     place__city__iexact=city_name,
                 )
             ).exclude(
                 place__place_type="country"
-            ).order_by("-created_at")
+            ).distinct().order_by("-created_at")
 
         # Specific-place pages keep showing only experiences for that exact place.
         return base_queryset.filter(place_id=place_id).order_by("-created_at")

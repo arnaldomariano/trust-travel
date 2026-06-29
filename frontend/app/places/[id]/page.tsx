@@ -163,6 +163,29 @@ const placeIntroText =
           .filter(Boolean)
           .join(" · ");
 
+const specificPlaceTypes = ["attraction", "hotel", "restaurant", "nature", "other"];
+
+  const childSpecificPlaces = allPlaces
+    .filter(
+      (p) =>
+        place?.id &&
+        Number(p.parent_place) === Number(place.id) &&
+        specificPlaceTypes.includes(p.place_type)
+    )
+    .sort((a, b) => {
+      const reviewsDiff = Number(b.reviews_count || 0) - Number(a.reviews_count || 0);
+
+      if (reviewsDiff !== 0) return reviewsDiff;
+
+      const ratingDiff = Number(b.average_rating || 0) - Number(a.average_rating || 0);
+
+      if (ratingDiff !== 0) return ratingDiff;
+
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
+  const topChildSpecificPlaces = childSpecificPlaces.slice(0, 5);
+
   const countryPlaceForHierarchy = allPlaces.find(
   (p) =>
     p.place_type === "country" &&
@@ -483,8 +506,13 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     // so we hide automatic experience updates here to avoid duplicate cards.
     const visibleUpdates = updates.filter((u) => u.type !== "experience");
 
+    const visibleExperiences =
+      place?.place_type === "city"
+        ? experiences.filter((e) => Number(e.place) === Number(place.id))
+        : experiences;
+
     const combinedFeed = [
-      ...experiences.map((e) => ({ ...e, content_type: "experience" })),
+      ...visibleExperiences.map((e) => ({ ...e, content_type: "experience" })),
       ...visibleUpdates.map((u) => ({ ...u, content_type: "update" })),
     ].sort(
       (a, b) =>
@@ -1519,6 +1547,75 @@ const handleToggleEventsInfo = () => {
                   places can be added under this city or region.
                 </p>
 
+                                {childSpecificPlaces.length > 0 && (
+                  <div style={{ marginBottom: "18px" }}>
+                    <p
+                      style={{
+                        marginTop: 0,
+                        marginBottom: "10px",
+                        color: "#666",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {childSpecificPlaces.length}{" "}
+                      {childSpecificPlaces.length === 1
+                        ? "specific place added."
+                        : "specific places added."}{" "}
+                      Showing top {topChildSpecificPlaces.length} by traveler activity.
+                    </p>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: "#555",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      Top specific places
+                    </div>
+
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      {topChildSpecificPlaces.map((child) => (
+                        <div
+                          key={child.id}
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #eee",
+                            borderRadius: "12px",
+                            backgroundColor: "#fafafa",
+                          }}
+                        >
+                          <div style={{ fontWeight: 700 }}>{child.name}</div>
+
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              color: "#666",
+                              marginTop: "4px",
+                              marginBottom: "10px",
+                            }}
+                          >
+                            {getPlaceTypeLabel(child.place_type)}
+                          </div>
+
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            <a href={`/places/${child.id}`} style={secondaryButton}>
+                              View place
+                            </a>
+
+                            <a
+                              href={`/destinations?place=${child.id}&share=true`}
+                              style={secondaryButton}
+                            >
+                              Share experience
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowSpecificPlaceTools(true)}

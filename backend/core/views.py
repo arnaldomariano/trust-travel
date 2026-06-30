@@ -555,6 +555,9 @@ class PlaceSearchView(APIView):
         )
 
 class CountryContextView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
     def get(self, request, pk):
         country_place = Place.objects.select_related("destination").filter(
             pk=pk

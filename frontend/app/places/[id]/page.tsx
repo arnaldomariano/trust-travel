@@ -524,26 +524,46 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       return item.content_type === filter;
     });
 
-    const countryChildPlaces = countryContext?.child_places || [];
+        const countryChildPlaces = countryContext?.child_places || [];
 
-    const filteredCountryChildPlaces = countryChildPlaces.filter((childPlace: any) => {
-      const search = searchInsideCountry.trim().toLowerCase();
+        const countryCityRegionPlaces = countryChildPlaces
+          .filter((childPlace: any) => {
+            const type = (childPlace.place_type || "").toLowerCase();
 
-      // Avoid showing a long list while the user is still typing.
-      if (search.length < 4) return false;
+            // On a country hub, only show cities, islands and regions.
+            // Specific places such as restaurants, hotels, attractions and beaches
+            // should be searched from inside the city/region hub.
+            return type === "city";
+          })
+          .sort((a: any, b: any) => {
+            const reviewsDiff =
+              Number(b.reviews_count || 0) - Number(a.reviews_count || 0);
 
-      const type = (childPlace.place_type || "").toLowerCase();
+            if (reviewsDiff !== 0) return reviewsDiff;
 
-      // On a country hub, only show cities, islands and regions.
-      // Specific places such as restaurants, hotels, attractions and beaches
-      // should be searched from inside the city/region hub.
-      if (type !== "city") return false;
+            const ratingDiff =
+              Number(b.average_rating || 0) - Number(a.average_rating || 0);
 
-      const name = (childPlace.name || "").toLowerCase();
-      const city = (childPlace.city || "").toLowerCase();
+            if (ratingDiff !== 0) return ratingDiff;
 
-      return name.includes(search) || city.includes(search);
-    });
+            return String(a.name || "").localeCompare(String(b.name || ""));
+          });
+
+        const topCountryCityRegionPlaces = countryCityRegionPlaces.slice(0, 5);
+
+        const filteredCountryChildPlaces = countryCityRegionPlaces.filter(
+          (childPlace: any) => {
+            const search = searchInsideCountry.trim().toLowerCase();
+
+            // Avoid showing a long list while the user is still typing.
+            if (search.length < 4) return false;
+
+            const name = (childPlace.name || "").toLowerCase();
+            const city = (childPlace.city || "").toLowerCase();
+
+            return name.includes(search) || city.includes(search);
+          }
+        );
 
     const handleCreateChildPlace = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -1179,7 +1199,77 @@ const handleToggleEventsInfo = () => {
               experiences.
             </p>
 
-                        <div
+            {topCountryCityRegionPlaces.length > 0 && (
+              <div style={{ marginBottom: "18px" }}>
+                <p
+                  style={{
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    color: "#666",
+                    fontSize: "14px",
+                  }}
+                >
+                  {countryCityRegionPlaces.length}{" "}
+                  {countryCityRegionPlaces.length === 1
+                    ? "city/region added."
+                    : "cities/regions added."}{" "}
+                  Showing top {topCountryCityRegionPlaces.length} by traveler activity.
+                </p>
+
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "#555",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Top cities and regions
+                </div>
+
+                <div style={{ display: "grid", gap: "10px", maxWidth: "680px" }}>
+                  {topCountryCityRegionPlaces.map((childPlace: any) => (
+                    <div
+                      key={childPlace.id}
+                      style={{
+                        padding: "12px",
+                        border: "1px solid #eee",
+                        borderRadius: "12px",
+                        backgroundColor: "#fafafa",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700 }}>{childPlace.name}</div>
+
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          color: "#666",
+                          marginTop: "4px",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        {getPlaceTypeLabel(childPlace.place_type)}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <Link href={`/places/${childPlace.id}`} style={secondaryButton}>
+                          View page
+                        </Link>
+
+                        <Link
+                          href={`/destinations?place=${childPlace.id}&share=true`}
+                          style={secondaryButton}
+                        >
+                          Share experience
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div
               style={{
                 display: "grid",
                 gap: "8px",

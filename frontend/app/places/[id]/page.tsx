@@ -279,7 +279,7 @@ const activityFeedDescription =
     : place?.place_type === "country"
     ? "This feed shows broad country-level experiences and updates. For local reviews, move down to a city, island, region or exact place."
     : place?.place_type === "city"
-    ? "This feed shows experiences and updates about this city or region as a whole. For exact-place reviews, move down to a restaurant, hotel, attraction, beach or local place."
+    ? "This feed shows only experiences and updates shared directly about this city or region. For exact-place reviews, open one of the specific places above."
     : "This feed shows experiences, reviews, events, alerts and useful information about this exact place.";
 
   const rating5 = experiences.filter((e) => e.rating === 5).length;
@@ -1011,7 +1011,9 @@ const handleToggleEventsInfo = () => {
             }}
           >
             <div style={overviewStatCard}>
-              <div style={overviewStatLabel}>Experiences</div>
+              <div style={overviewStatLabel}>
+                  {place?.place_type === "city" ? "Area experiences" : "Experiences"}
+              </div>
 
               <div style={overviewStatValue}>
                 {ratingsSummary?.overall?.total_reviews ?? experiences.length}
@@ -1026,7 +1028,7 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.4,
                   }}
                 >
-                  Includes city-level experiences and experiences from specific places inside this city.
+                  Includes experiences from this city/region and from specific places inside it.
                 </div>
               )}
             </div>

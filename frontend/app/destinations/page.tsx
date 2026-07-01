@@ -2571,28 +2571,65 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   style={input}
                 />
 
-                <input
-                  type="number"
-                  min="1"
-                  max="5"
-                  value={rating ?? ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-
-                    if (!value) {
-                      setRating(null);
-                      return;
-                    }
-
-                    const numeric = Number(value);
-
-                    if (numeric >= 1 && numeric <= 5) {
-                      setRating(numeric);
-                    }
+                               <section
+                  style={{
+                    padding: "16px",
+                    border: "1px solid #ddd",
+                    borderRadius: "14px",
+                    backgroundColor: "#fafafa",
+                    display: "grid",
+                    gap: "10px",
                   }}
-                  placeholder="Rating from 1 to 5"
-                  style={input}
-                />
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: "#555",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Required rating
+                    </div>
+
+                    <strong style={{ fontSize: "18px" }}>Your overall rating</strong>
+
+                    <p
+                      style={{
+                        margin: "8px 0 0 0",
+                        color: "#666",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Give this exact place an overall rating from 1 to 5. This is the
+                      main rating used in averages, comparisons and Trust Travel insights.
+                    </p>
+                  </div>
+
+                  <input
+                    type="number"
+                    min="1"
+                    max="5"
+                    value={rating ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+
+                      if (!value) {
+                        setRating(null);
+                        return;
+                      }
+
+                      const numeric = Number(value);
+
+                      if (numeric >= 1 && numeric <= 5) {
+                        setRating(numeric);
+                      }
+                    }}
+                    placeholder="Overall rating from 1 to 5"
+                    style={input}
+                  />
+                </section>
 
                 <section style={structuredRatingsBox}>
                   <div>

@@ -1582,15 +1582,26 @@ const renderReportControls = (experience: any) => {
         </section>
 
         <div style={experiencePrimaryActions}>
-          <button
-            type="button"
-            onClick={() =>
-              router.push(`/destinations?mode=experience&place=${id}&share=true`)
-            }
-            style={shareExperiencePrimaryButton}
-          >
-            {shareExperienceButtonText}
-          </button>
+                        {totalExperiences > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(`/destinations?mode=experience&place=${id}&share=true`)
+                }
+                style={{
+                  display: "inline-block",
+                  padding: "12px 16px",
+                  borderRadius: "10px",
+                  border: "none",
+                  backgroundColor: "#111",
+                  color: "white",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {shareExperienceButtonText}
+              </button>
+            )}
 
           {isCountryPage && (
             <button

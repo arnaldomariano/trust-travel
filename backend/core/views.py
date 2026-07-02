@@ -341,6 +341,19 @@ class CreateBasicPlaceView(APIView):
         external_source = (request.data.get("external_source") or "").strip()
         external_id = (request.data.get("external_id") or "").strip()
 
+        canonical_name = (request.data.get("canonical_name") or name).strip()
+        aliases = request.data.get("aliases") or []
+
+        if isinstance(aliases, str):
+            aliases = [
+                alias.strip()
+                for alias in aliases.split(",")
+                if alias.strip()
+            ]
+
+        if not isinstance(aliases, list):
+            aliases = []
+
         destination = Destination.objects.filter(
             name__iexact=destination_name,
             country__iexact=country,
@@ -381,7 +394,17 @@ class CreateBasicPlaceView(APIView):
                     status=400,
                 )
 
-        normalized_requested_name = normalize_place_text(name)
+        normalized_requested_names = {
+            normalize_place_text(name),
+            normalize_place_text(canonical_name),
+            *[
+                normalize_place_text(alias)
+                for alias in aliases
+                if alias
+            ],
+        }
+
+        normalized_requested_names.discard("")
 
         possible_existing_places = Place.objects.filter(
             destination=destination,
@@ -396,7 +419,19 @@ class CreateBasicPlaceView(APIView):
         existing_place = None
 
         for candidate in possible_existing_places:
-            if normalize_place_text(candidate.name) == normalized_requested_name:
+            candidate_names = {
+                normalize_place_text(candidate.name),
+                normalize_place_text(candidate.canonical_name),
+                *[
+                    normalize_place_text(alias)
+                    for alias in (candidate.aliases or [])
+                    if alias
+                ],
+            }
+
+            candidate_names.discard("")
+
+            if normalized_requested_names.intersection(candidate_names):
                 existing_place = candidate
                 break
 
@@ -410,6 +445,8 @@ class CreateBasicPlaceView(APIView):
         place = Place.objects.create(
             destination=destination,
             name=name,
+            canonical_name=canonical_name,
+            aliases=aliases,
             place_type=place_type,
             city=city,
             parent_place=parent_place,

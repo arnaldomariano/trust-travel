@@ -166,6 +166,11 @@ class Place(models.Model):
 
     name = models.CharField(max_length=255)
 
+    # Canonical and alternate names prepare Trust Travel to avoid duplicates
+    # such as Brussels / Bruxelas / Bruxelles / Brussel.
+    canonical_name = models.CharField(max_length=255, blank=True)
+    aliases = models.JSONField(default=list, blank=True)
+
     # Type of place used for search, filtering and future travel discovery flows.
     # Examples:
     # country -> Laos

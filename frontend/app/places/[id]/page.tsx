@@ -614,7 +614,12 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           return;
         }
 
-        setCreatedChildPlace(data);
+        const placeResult = {
+          ...data,
+          already_exists: res.status === 200,
+        };
+
+        setCreatedChildPlace(placeResult);
         setNewChildPlaceName("");
         setNewChildPlaceCity("");
         setShowCreateChildPlaceForm(false);
@@ -754,11 +759,16 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           return;
         }
 
-        setCreatedSpecificPlace(data);
+        const placeResult = {
+          ...data,
+          already_exists: res.status === 200,
+        };
+
+        setCreatedSpecificPlace(placeResult);
         setNewSpecificPlaceName("");
         setNewSpecificPlaceType("nature");
         setShowCreateSpecificPlaceForm(false);
-        setSpecificPlaceResults((prev) => [data, ...prev]);
+        setSpecificPlaceResults((prev) => [placeResult, ...prev]);
       } catch (error) {
         console.error("Create specific place failed:", error);
         alert("Error creating specific place.");
@@ -1412,7 +1422,25 @@ const handleToggleEventsInfo = () => {
                   marginBottom: "18px",
                 }}
               >
-                <strong>{createdChildPlace.name} was created.</strong>
+                <strong>
+                  {createdChildPlace.already_exists
+                    ? "This city, island or region already exists. We found the existing page."
+                    : `${createdChildPlace.name} was created.`}
+                </strong>
+
+                {createdChildPlace.already_exists && (
+                  <p
+                    style={{
+                      margin: "8px 0 0 0",
+                      color: "#666",
+                      fontSize: "14px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    To avoid duplicates, Trust Travel will use the existing page for{" "}
+                    <strong>{createdChildPlace.name}</strong>.
+                  </p>
+                )}
 
                 <div
                   style={{
@@ -1441,7 +1469,9 @@ const handleToggleEventsInfo = () => {
                     }
                     style={secondaryButton}
                   >
-                    Share first experience
+                    {createdChildPlace.already_exists
+                      ? "Share experience"
+                      : "Share first experience"}
                   </button>
 
                   <button
@@ -2039,7 +2069,25 @@ const handleToggleEventsInfo = () => {
                   marginBottom: "18px",
                 }}
               >
-                <strong>{createdSpecificPlace.name} was created.</strong>
+                <strong>
+                  {createdSpecificPlace.already_exists
+                    ? "This place already exists. We found the existing place."
+                    : `${createdSpecificPlace.name} was created.`}
+                </strong>
+
+                {createdSpecificPlace.already_exists && (
+                  <p
+                    style={{
+                      margin: "8px 0 0 0",
+                      color: "#666",
+                      fontSize: "14px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    To avoid duplicates, Trust Travel will use the existing page for{" "}
+                    <strong>{createdSpecificPlace.name}</strong>.
+                  </p>
+                )}
 
                 <div
                   style={{
@@ -2068,7 +2116,9 @@ const handleToggleEventsInfo = () => {
                     }
                     style={secondaryButton}
                   >
-                    Share first experience
+                  {createdSpecificPlace.already_exists
+                      ? "Share experience"
+                      : "Share first experience"}
                   </button>
 
                   <button

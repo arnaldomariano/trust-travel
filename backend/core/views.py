@@ -1,3 +1,5 @@
+import unicodedata
+
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Count, Q
@@ -47,6 +49,13 @@ from .serializers import (
 )
 
 from .authentication import CookieJWTAuthentication
+
+def normalize_place_text(value):
+    value = str(value or "").strip().lower()
+    value = unicodedata.normalize("NFD", value)
+    value = "".join(char for char in value if unicodedata.category(char) != "Mn")
+    value = " ".join(value.split())
+    return value
 
 
 # ============================================================
@@ -372,10 +381,24 @@ class CreateBasicPlaceView(APIView):
                     status=400,
                 )
 
-        existing_place = Place.objects.filter(
-            name__iexact=name,
+        normalized_requested_name = normalize_place_text(name)
+
+        possible_existing_places = Place.objects.filter(
             destination=destination,
-        ).first()
+            place_type=place_type,
+        )
+
+        if parent_place:
+            possible_existing_places = possible_existing_places.filter(
+                parent_place=parent_place
+            )
+
+        existing_place = None
+
+        for candidate in possible_existing_places:
+            if normalize_place_text(candidate.name) == normalized_requested_name:
+                existing_place = candidate
+                break
 
         if existing_place:
             serializer = PlaceSerializer(

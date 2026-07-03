@@ -574,6 +574,8 @@ class PlaceSearchView(APIView):
 
         places = Place.objects.select_related("destination").filter(
             Q(name__icontains=query)
+            | Q(canonical_name__icontains=query)
+            | Q(aliases__icontains=query)
             | Q(city__icontains=query)
             | Q(place_type__icontains=query)
             | Q(destination__name__icontains=query)
@@ -598,6 +600,8 @@ class PlaceSearchView(APIView):
                 {
                     "id": place.id,
                     "name": place.name,
+                    "canonical_name": place.canonical_name,
+                    "aliases": place.aliases,
                     "place_type": place.place_type,
                     "city": place.city,
                     "destination": destination.id if destination else None,

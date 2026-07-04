@@ -188,10 +188,37 @@ useEffect(() => {
 
 const normalizedSearchText = normalizeText(searchTerm);
 
+const getNormalizedPlaceSearchNames = (place: any) => {
+  const values = [
+    place.name,
+    place.canonical_name,
+    place.city,
+    place.destination_name,
+  ];
+
+  if (Array.isArray(place.aliases)) {
+    values.push(...place.aliases);
+  }
+
+  return values
+    .filter(Boolean)
+    .map((value) => normalizeText(String(value)));
+};
+
+const getBestTextMatchScore = (values: string[]) => {
+  if (!normalizedSearchText) return 0;
+
+  if (values.some((value) => value === normalizedSearchText)) return 100;
+  if (values.some((value) => value.startsWith(normalizedSearchText))) return 90;
+  if (values.some((value) => value.includes(normalizedSearchText))) return 80;
+
+  return 0;
+};
+
 const getSimilarityScore = (place: any) => {
   if (!normalizedSearchText) return 0;
 
-  const placeName = normalizeText(place.name);
+  const searchableNames = getNormalizedPlaceSearchNames(place);
   const placeCity = normalizeText(place.city || place.destination_name);
 
   const isCountrySearch = placeType === "country";
@@ -202,11 +229,8 @@ const getSimilarityScore = (place: any) => {
   if (isCountrySearch) {
     if (place.place_type !== "country") return 0;
 
-    if (placeName === normalizedSearchText) return 100;
-    if (placeName.startsWith(normalizedSearchText)) return 90;
-    if (placeName.includes(normalizedSearchText)) return 80;
+  return getBestTextMatchScore(searchableNames);
 
-    return 0;
   }
 
   // City / Region mode must only suggest cities/regions.
@@ -214,13 +238,12 @@ const getSimilarityScore = (place: any) => {
   if (isCitySearch) {
     if (place.place_type !== "city") return 0;
 
-    if (placeName === normalizedSearchText) return 100;
-    if (placeName.startsWith(normalizedSearchText)) return 90;
-    if (placeName.includes(normalizedSearchText)) return 80;
+  const textMatchScore = getBestTextMatchScore(searchableNames);
+  if (textMatchScore > 0) return textMatchScore;
 
-    if (normalizedSearchText.length >= 4 && placeCity.includes(normalizedSearchText)) {
-      return 60;
-    }
+  if (normalizedSearchText.length >= 4 && placeCity.includes(normalizedSearchText)) {
+    return 60;
+  }
 
     return 0;
   }
@@ -238,9 +261,8 @@ const getSimilarityScore = (place: any) => {
       if (placeCountry !== selectedCountryName) return 0;
     }
 
-    if (placeName === normalizedSearchText) return 100;
-    if (placeName.startsWith(normalizedSearchText)) return 90;
-    if (placeName.includes(normalizedSearchText)) return 80;
+    const textMatchScore = getBestTextMatchScore(searchableNames);
+    if (textMatchScore > 0) return textMatchScore;
 
     if (normalizedSearchText.length >= 4 && placeCity.includes(normalizedSearchText)) {
       return 60;
@@ -264,7 +286,7 @@ const similarPlaces = places
 const getSearchMatchScore = (place: any) => {
   if (!normalizedSearchText) return 0;
 
-  const name = normalizeText(place.name);
+  const searchableNames = getNormalizedPlaceSearchNames(place);
   const city = normalizeText(place.city || place.destination_name);
 
   const isCountrySearch = placeType === "country";
@@ -282,11 +304,8 @@ const getSearchMatchScore = (place: any) => {
   if (isCountrySearch) {
     if (!isCountry) return 0;
 
-    if (name === normalizedSearchText) return 100;
-    if (name.startsWith(normalizedSearchText)) return 90;
-    if (name.includes(normalizedSearchText)) return 80;
+  return getBestTextMatchScore(searchableNames);
 
-    return 0;
   }
 
   // =========================
@@ -298,9 +317,8 @@ const getSearchMatchScore = (place: any) => {
   if (isCitySearch) {
     if (!isCity) return 0;
 
-    if (name === normalizedSearchText) return 100;
-    if (name.startsWith(normalizedSearchText)) return 90;
-    if (name.includes(normalizedSearchText)) return 80;
+    const textMatchScore = getBestTextMatchScore(searchableNames);
+    if (textMatchScore > 0) return textMatchScore;
 
     if (normalizedSearchText.length < 4) return 0;
 
@@ -325,9 +343,8 @@ const getSearchMatchScore = (place: any) => {
       if (placeCountry !== selectedCountryName) return 0;
     }
 
-    if (name === normalizedSearchText) return 100;
-    if (name.startsWith(normalizedSearchText)) return 90;
-    if (name.includes(normalizedSearchText)) return 80;
+    const textMatchScore = getBestTextMatchScore(searchableNames);
+    if (textMatchScore > 0) return textMatchScore;
 
     if (normalizedSearchText.length < 4) return 0;
 

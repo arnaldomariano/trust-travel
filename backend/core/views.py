@@ -354,33 +354,85 @@ class CreateBasicPlaceView(APIView):
         if not isinstance(aliases, list):
             aliases = []
 
-        destination = Destination.objects.filter(
-            name__iexact=destination_name,
-            country__iexact=country,
-        ).first()
+        country_place = None
 
-        if not destination:
-            destination = Destination.objects.create(
-                name=destination_name,
-                country=country,
-                city="",
-            )
+        if place_type in ["city", *specific_place_types]:
+            normalized_country = normalize_place_text(country)
+
+            for candidate in Place.objects.filter(place_type="country"):
+                candidate_names = {
+                    normalize_place_text(candidate.name),
+                    normalize_place_text(candidate.canonical_name),
+                    *[
+                        normalize_place_text(alias)
+                        for alias in (candidate.aliases or [])
+                        if alias
+                    ],
+                }
+
+                candidate_names.discard("")
+
+                if normalized_country in candidate_names:
+                    country_place = candidate
+                    break
+
+            if not country_place:
+                return Response(
+                    {
+                        "detail": (
+                            "Country was not found. Please select an existing "
+                            "country before creating a city, region or specific place."
+                        )
+                    },
+                    status=400,
+                )
+
+            destination = country_place.destination
+            country = country_place.destination.country or country_place.name
+
+        else:
+            destination = Destination.objects.filter(
+                name__iexact=destination_name,
+                country__iexact=country,
+            ).first()
+
+            if not destination:
+                destination = Destination.objects.create(
+                    name=destination_name,
+                    country=country,
+                    city="",
+                )
 
         parent_place = None
 
+        if place_type == "city":
+            parent_place = country_place
+
         if place_type in specific_place_types:
-            parent_place = Place.objects.filter(
+            normalized_city = normalize_place_text(city)
+
+            possible_parent_places = Place.objects.filter(
                 destination=destination,
                 place_type="city",
-                name__iexact=city,
-            ).first()
+            )
 
-            if not parent_place:
-                parent_place = Place.objects.filter(
-                    destination=destination,
-                    place_type="city",
-                    city__iexact=city,
-                ).first()
+            for candidate in possible_parent_places:
+                candidate_names = {
+                    normalize_place_text(candidate.name),
+                    normalize_place_text(candidate.city),
+                    normalize_place_text(candidate.canonical_name),
+                    *[
+                        normalize_place_text(alias)
+                        for alias in (candidate.aliases or [])
+                        if alias
+                    ],
+                }
+
+                candidate_names.discard("")
+
+                if normalized_city in candidate_names:
+                    parent_place = candidate
+                    break
 
             if not parent_place:
                 return Response(

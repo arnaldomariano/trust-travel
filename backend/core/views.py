@@ -572,24 +572,75 @@ class PlaceSearchView(APIView):
                 }
             )
 
-        places = Place.objects.select_related("destination").filter(
-            Q(name__icontains=query)
-            | Q(canonical_name__icontains=query)
-            | Q(aliases__icontains=query)
-            | Q(city__icontains=query)
-            | Q(place_type__icontains=query)
-            | Q(destination__name__icontains=query)
-            | Q(destination__country__icontains=query)
-            | Q(destination__city__icontains=query)
-        )
+        normalized_query = normalize_place_text(query)
+        normalized_country = normalize_place_text(country)
 
-        if country:
-            places = places.filter(
-                Q(destination__name__iexact=country)
-                | Q(destination__country__iexact=country)
+        places_queryset = Place.objects.select_related("destination").all()
+
+        def get_place_search_values(place):
+            destination = place.destination
+
+            values = [
+                place.name,
+                place.canonical_name,
+                place.city,
+                place.place_type,
+                destination.name if destination else "",
+                destination.country if destination else "",
+                destination.city if destination else "",
+            ]
+
+            values.extend(place.aliases or [])
+
+            return values
+
+        def matches_search(place):
+            return any(
+                normalized_query in normalize_place_text(value)
+                for value in get_place_search_values(place)
+                if value
             )
 
-        places = places.order_by("place_type", "name")[:20]
+        def matches_country(place):
+            if not normalized_country:
+                return True
+
+            destination = place.destination
+
+            values = [
+                destination.name if destination else "",
+                destination.country if destination else "",
+                destination.city if destination else "",
+            ]
+
+            if place.place_type == "country":
+                values.extend(
+                    [
+                        place.name,
+                        place.canonical_name,
+                        *(place.aliases or []),
+                    ]
+                )
+
+            return any(
+                normalized_country == normalize_place_text(value)
+                for value in values
+                if value
+            )
+
+        places = [
+            place
+            for place in places_queryset
+            if matches_search(place) and matches_country(place)
+        ]
+
+        places = sorted(
+            places,
+            key=lambda place: (
+                place.place_type or "",
+                place.name or "",
+            ),
+        )[:20]
 
         results = []
 

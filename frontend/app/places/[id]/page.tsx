@@ -21,6 +21,12 @@ export default function PlacePage() {
   const [countryContext, setCountryContext] = useState<any>(null);
   const [allPlaces, setAllPlaces] = useState<any[]>([]);
 
+  const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
+  const [suggestedParentPlaceId, setSuggestedParentPlaceId] = useState("");
+  const [locationSuggestionReason, setLocationSuggestionReason] = useState("");
+  const [submittingLocationSuggestion, setSubmittingLocationSuggestion] = useState(false);
+  const [locationSuggestionSubmitted, setLocationSuggestionSubmitted] = useState(false);
+
   const [loadingCountryContext, setLoadingCountryContext] = useState(false);
 
   const [showCreateChildPlaceForm, setShowCreateChildPlaceForm] = useState(false);
@@ -336,6 +342,30 @@ const activityFeedDescription =
     }
   };
 
+  const loadLocationSuggestions = async (placeId: string | number) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/places/${placeId}/location-suggestions/`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to load location suggestions:", res.status, text);
+        setLocationSuggestions([]);
+        return;
+      }
+
+      const data = await res.json();
+      setLocationSuggestions(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Location suggestions error:", error);
+      setLocationSuggestions([]);
+    }
+  };
+
 useEffect(() => {
   const checkLogin = async () => {
     try {
@@ -353,12 +383,13 @@ useEffect(() => {
   checkLogin();
 }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!id) return;
 
-    loadRatingsSummary(id);
+       loadRatingsSummary(id);
+       loadLocationSuggestions(id);
 
-    fetch(`${API_URL}/api/places/${id}/experiences/`)
+       fetch(`${API_URL}/api/places/${id}/experiences/`)
       .then((res) => res.json())
       .then((data) => {
         const sorted = [...data].sort(
@@ -524,6 +555,38 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       return item.content_type === filter;
     });
 
+    const suggestedParentPlaceOptions = allPlaces
+      .filter((candidate) => {
+        if (!place || !candidate) return false;
+
+        if (Number(candidate.id) === Number(place.id)) return false;
+
+        if (!["country", "city"].includes(candidate.place_type)) return false;
+
+        if (
+          place.destination &&
+          candidate.destination &&
+          Number(candidate.destination) !== Number(place.destination)
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        const typeOrder: Record<string, number> = {
+          country: 1,
+          city: 2,
+        };
+
+        const typeDiff =
+          (typeOrder[a.place_type] || 99) - (typeOrder[b.place_type] || 99);
+
+        if (typeDiff !== 0) return typeDiff;
+
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      });
+
         const countryChildPlaces = countryContext?.child_places || [];
 
         const countryCityRegionPlaces = countryChildPlaces
@@ -574,6 +637,59 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       hasSpecificPlaceSearch &&
       !specificPlaceSearchLoading &&
       specificPlaceResults.length === 0;
+
+    const handleSubmitLocationSuggestion = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!place) return;
+
+      if (!isLoggedIn) {
+        router.push(`/login?next=/places/${place.id}`);
+        return;
+      }
+
+      if (!suggestedParentPlaceId) {
+        alert("Please choose the suggested city, region or country.");
+        return;
+      }
+
+      setSubmittingLocationSuggestion(true);
+      setLocationSuggestionSubmitted(false);
+
+      try {
+        const res = await fetch(`${API_URL}/api/place-location-suggestions/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            place: place.id,
+            suggested_parent_place: Number(suggestedParentPlaceId),
+            reason: locationSuggestionReason.trim(),
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Failed to submit location suggestion:", data);
+          alert(data.detail || "Could not submit location suggestion.");
+          return;
+        }
+
+        setSuggestedParentPlaceId("");
+        setLocationSuggestionReason("");
+        setLocationSuggestionSubmitted(true);
+
+        await loadLocationSuggestions(place.id);
+      } catch (error) {
+        console.error("Submit location suggestion failed:", error);
+        alert("Could not submit location suggestion.");
+      } finally {
+        setSubmittingLocationSuggestion(false);
+      }
+    };
 
     const handleCreateChildPlace = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -1021,6 +1137,195 @@ const handleToggleEventsInfo = () => {
                 ))}
               </div>
           </div>
+
+          {place && place.place_type !== "country" && (
+            <div
+              style={{
+                marginTop: "16px",
+                marginBottom: "18px",
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "14px",
+                backgroundColor: "#fafafa",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  color: "#333",
+                  marginBottom: "6px",
+                }}
+              >
+                Help improve this place location
+              </div>
+
+              <p
+                style={{
+                  marginTop: 0,
+                  marginBottom: "12px",
+                  color: "#666",
+                  fontSize: "14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                If this place should be listed under another city, island or region,
+                you can suggest a better location. Suggestions are reviewed before
+                changing the hierarchy.
+              </p>
+
+              {locationSuggestionSubmitted && (
+                <div
+                  style={{
+                    marginBottom: "12px",
+                    padding: "10px",
+                    borderRadius: "10px",
+                    backgroundColor: "#ecfdf5",
+                    color: "#047857",
+                    fontSize: "13px",
+                  }}
+                >
+                  Location suggestion submitted. Thank you for helping improve this place.
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitLocationSuggestion}>
+                <div style={{ marginBottom: "10px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#444",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Suggested parent city, region or country
+                  </label>
+
+                  <select
+                    value={suggestedParentPlaceId}
+                    onChange={(e) => setSuggestedParentPlaceId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #ddd",
+                      borderRadius: "10px",
+                      backgroundColor: "white",
+                    }}
+                  >
+                    <option value="">Choose a suggested location</option>
+
+                    {suggestedParentPlaceOptions.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.name} · {getPlaceTypeLabel(candidate.place_type)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: "10px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#444",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Reason / local context
+                  </label>
+
+                  <textarea
+                    value={locationSuggestionReason}
+                    onChange={(e) => setLocationSuggestionReason(e.target.value)}
+                    placeholder="Example: Eagle Beach is commonly associated with Noord, not only Aruba as a whole."
+                    rows={3}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #ddd",
+                      borderRadius: "10px",
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submittingLocationSuggestion}
+                  style={secondaryButton}
+                >
+                  {submittingLocationSuggestion
+                    ? "Submitting..."
+                    : "Suggest better location"}
+                </button>
+              </form>
+
+              {locationSuggestions.length > 0 && (
+                <div
+                  style={{
+                    marginTop: "14px",
+                    paddingTop: "12px",
+                    borderTop: "1px solid #e5e7eb",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: "#555",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Current location suggestions
+                  </div>
+
+                  {locationSuggestions.map((suggestion) => (
+                    <div
+                      key={suggestion.id}
+                      style={{
+                        padding: "10px",
+                        border: "1px solid #eee",
+                        borderRadius: "10px",
+                        backgroundColor: "white",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <div style={{ fontSize: "14px", color: "#333" }}>
+                        Suggested parent:{" "}
+                        <strong>{suggestion.suggested_parent_place_name}</strong>
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          color: "#777",
+                        }}
+                      >
+                        Status: {suggestion.status}
+                      </div>
+
+                      {suggestion.reason && (
+                        <div
+                          style={{
+                            marginTop: "6px",
+                            fontSize: "13px",
+                            color: "#555",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {suggestion.reason}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div
             style={{

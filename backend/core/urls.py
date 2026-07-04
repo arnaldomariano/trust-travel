@@ -3,6 +3,8 @@ from django.urls import path
 from .views import (
     DestinationListView,
     PlaceListView,
+    PlaceLocationSuggestionCreateView,
+    PlaceLocationSuggestionListView,
     ExperienceListView,
     PlaceRatingsSummaryView,
     ExperiencePhotoListCreateView,
@@ -60,6 +62,15 @@ urlpatterns = [
     path("places/search/", PlaceSearchView.as_view()),
     path("places/create-basic/", CreateBasicPlaceView.as_view()),
     path("places/<int:pk>/country-context/", CountryContextView.as_view()),
+
+    path(
+        "place-location-suggestions/",
+        PlaceLocationSuggestionCreateView.as_view(),
+    ),
+    path(
+        "places/<int:place_id>/location-suggestions/",
+        PlaceLocationSuggestionListView.as_view(),
+    ),
 
     path(
         "places/<int:place_id>/ratings-summary/",

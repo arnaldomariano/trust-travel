@@ -40,6 +40,7 @@ from .models import (
 from .serializers import (
     DestinationSerializer,
     PlaceSerializer,
+    PlaceLocationSuggestionSerializer,
     ExperienceSerializer,
     ExperiencePhotoSerializer,
     UserRegisterSerializer,
@@ -515,6 +516,34 @@ class CreateBasicPlaceView(APIView):
 class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
+
+class PlaceLocationSuggestionCreateView(generics.CreateAPIView):
+    serializer_class = PlaceLocationSuggestionSerializer
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(suggested_by=self.request.user)
+
+
+class PlaceLocationSuggestionListView(generics.ListAPIView):
+    serializer_class = PlaceLocationSuggestionSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        place_id = self.kwargs.get("place_id")
+
+        return (
+            self.serializer_class.Meta.model.objects
+            .select_related(
+                "place",
+                "suggested_parent_place",
+                "suggested_by",
+                "reviewed_by",
+            )
+            .filter(place_id=place_id)
+            .order_by("-created_at")
+        )
 
 class PlaceRatingsSummaryView(APIView):
     permission_classes = [permissions.AllowAny]

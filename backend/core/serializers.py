@@ -4,6 +4,7 @@ from rest_framework import serializers
 from .models import (
     Destination,
     Place,
+    PlaceLocationSuggestion,
     Experience,
     ExperiencePhoto,
     ExperienceReply,
@@ -173,6 +174,81 @@ class PlaceSerializer(serializers.ModelSerializer):
     def get_reviews_count(self, obj):
         return obj.experience_set.count()
 
+class PlaceLocationSuggestionSerializer(serializers.ModelSerializer):
+    place_name = serializers.CharField(
+        source="place.name",
+        read_only=True,
+    )
+
+    suggested_parent_place_name = serializers.CharField(
+        source="suggested_parent_place.name",
+        read_only=True,
+    )
+
+    suggested_by_username = serializers.CharField(
+        source="suggested_by.username",
+        read_only=True,
+    )
+
+    class Meta:
+        model = PlaceLocationSuggestion
+        fields = [
+            "id",
+            "place",
+            "place_name",
+            "suggested_parent_place",
+            "suggested_parent_place_name",
+            "suggested_by",
+            "suggested_by_username",
+            "reason",
+            "status",
+            "created_at",
+            "reviewed_by",
+            "reviewed_at",
+        ]
+
+        read_only_fields = [
+            "suggested_by",
+            "suggested_by_username",
+            "status",
+            "created_at",
+            "reviewed_by",
+            "reviewed_at",
+        ]
+
+    def validate(self, attrs):
+        place = attrs.get("place")
+        suggested_parent_place = attrs.get("suggested_parent_place")
+
+        if place and suggested_parent_place:
+            if place.id == suggested_parent_place.id:
+                raise serializers.ValidationError(
+                    {
+                        "suggested_parent_place": (
+                            "A place cannot be suggested as its own parent."
+                        )
+                    }
+                )
+
+            if suggested_parent_place.place_type not in ["country", "city"]:
+                raise serializers.ValidationError(
+                    {
+                        "suggested_parent_place": (
+                            "Suggested parent must be a country, city or region."
+                        )
+                    }
+                )
+
+            if place.destination_id != suggested_parent_place.destination_id:
+                raise serializers.ValidationError(
+                    {
+                        "suggested_parent_place": (
+                            "Suggested parent must belong to the same country/destination."
+                        )
+                    }
+                )
+
+        return attrs
 
 class ExperienceSerializer(serializers.ModelSerializer):
     user = serializers.CharField(source="user.username", read_only=True)

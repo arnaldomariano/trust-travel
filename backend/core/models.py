@@ -229,11 +229,66 @@ class Place(models.Model):
             )
         ]
 
-    def __str__(self):
-        return self.name
+        def __str__(self):
+            return self.name
 
+    # ===================== Place Location Suggestion =====================
+
+class PlaceLocationSuggestion(models.Model):
+        STATUS_CHOICES = [
+            ("pending", "Pending"),
+            ("approved", "Approved"),
+            ("rejected", "Rejected"),
+        ]
+
+        place = models.ForeignKey(
+            Place,
+            on_delete=models.CASCADE,
+            related_name="location_suggestions",
+        )
+
+        suggested_parent_place = models.ForeignKey(
+            Place,
+            on_delete=models.CASCADE,
+            related_name="suggested_child_locations",
+        )
+
+        suggested_by = models.ForeignKey(
+            User,
+            on_delete=models.SET_NULL,
+            null=True,
+            blank=True,
+            related_name="place_location_suggestions",
+        )
+
+        reason = models.TextField(blank=True)
+
+        status = models.CharField(
+            max_length=20,
+            choices=STATUS_CHOICES,
+            default="pending",
+        )
+
+        reviewed_by = models.ForeignKey(
+            User,
+            on_delete=models.SET_NULL,
+            null=True,
+            blank=True,
+            related_name="reviewed_place_location_suggestions",
+        )
+
+        reviewed_at = models.DateTimeField(null=True, blank=True)
+
+        created_at = models.DateTimeField(auto_now_add=True)
+
+        class Meta:
+            ordering = ["-created_at"]
+
+        def __str__(self):
+            return f"{self.place} → {self.suggested_parent_place} ({self.status})"
 
 # ===================== Update (Feed do app) =====================
+
 class Update(models.Model):
     TYPE_CHOICES = [
         ("event", "Event"),

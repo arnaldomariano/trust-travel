@@ -1221,76 +1221,6 @@ const handleToggleEventsInfo = () => {
               experiences.
             </p>
 
-            {topCountryCityRegionPlaces.length > 0 && (
-              <div style={{ marginBottom: "18px" }}>
-                <p
-                  style={{
-                    marginTop: 0,
-                    marginBottom: "10px",
-                    color: "#666",
-                    fontSize: "14px",
-                  }}
-                >
-                  {countryCityRegionPlaces.length}{" "}
-                  {countryCityRegionPlaces.length === 1
-                    ? "city/region added."
-                    : "cities/regions added."}{" "}
-                  Showing top {topCountryCityRegionPlaces.length} by traveler activity.
-                </p>
-
-                <div
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: "#555",
-                    marginBottom: "8px",
-                  }}
-                >
-                  Top cities and regions
-                </div>
-
-                <div style={{ display: "grid", gap: "10px", maxWidth: "680px" }}>
-                  {topCountryCityRegionPlaces.map((childPlace: any) => (
-                    <div
-                      key={childPlace.id}
-                      style={{
-                        padding: "12px",
-                        border: "1px solid #eee",
-                        borderRadius: "12px",
-                        backgroundColor: "#fafafa",
-                      }}
-                    >
-                      <div style={{ fontWeight: 700 }}>{childPlace.name}</div>
-
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#666",
-                          marginTop: "4px",
-                          marginBottom: "10px",
-                        }}
-                      >
-                        {getPlaceTypeLabel(childPlace.place_type)}
-                      </div>
-
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        <Link href={`/places/${childPlace.id}`} style={secondaryButton}>
-                          View page
-                        </Link>
-
-                        <Link
-                          href={`/destinations?place=${childPlace.id}&share=true`}
-                          style={secondaryButton}
-                        >
-                          Share experience
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div
               style={{
                 display: "grid",
@@ -1670,20 +1600,7 @@ const handleToggleEventsInfo = () => {
               >
                 Keep typing to search inside {place.name}. Use at least 4 characters.
               </div>
-            ) : searchInsideCountry.trim() ? (
-              <div
-                style={{
-                  padding: "14px",
-                  border: "1px solid #eee",
-                  borderRadius: "12px",
-                  color: "#777",
-                  backgroundColor: "#fafafa",
-                  marginBottom: "18px",
-                }}
-              >
-               No city, island or region found for “{searchInsideCountry}”.
-              </div>
-            ) : (
+            ) : searchInsideCountry.trim() ? null : (
               <div
                 style={{
                   padding: "14px",
@@ -1698,8 +1615,78 @@ const handleToggleEventsInfo = () => {
                 {place.name}.
               </div>
             )}
-          </section>
-        )}
+
+            {topCountryCityRegionPlaces.length > 0 && (
+              <div style={{ marginBottom: "18px" }}>
+                <p
+                  style={{
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    color: "#666",
+                    fontSize: "14px",
+                  }}
+                >
+                  {countryCityRegionPlaces.length}{" "}
+                  {countryCityRegionPlaces.length === 1
+                    ? "city/region added."
+                    : "cities/regions added."}{" "}
+                  Showing top {topCountryCityRegionPlaces.length} by traveler activity.
+                </p>
+
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "#555",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Top cities and regions
+                </div>
+
+                <div style={{ display: "grid", gap: "10px", maxWidth: "680px" }}>
+                  {topCountryCityRegionPlaces.map((childPlace: any) => (
+                    <div
+                      key={childPlace.id}
+                      style={{
+                        padding: "12px",
+                        border: "1px solid #eee",
+                        borderRadius: "12px",
+                        backgroundColor: "#fafafa",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700 }}>{childPlace.name}</div>
+
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          color: "#666",
+                          marginTop: "4px",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        {getPlaceTypeLabel(childPlace.place_type)}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <Link href={`/places/${childPlace.id}`} style={secondaryButton}>
+                          View page
+                        </Link>
+
+                        <Link
+                          href={`/destinations?place=${childPlace.id}&share=true`}
+                          style={secondaryButton}
+                        >
+                          Share experience
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              )}
+             </section>
+            )}
 
         {place?.place_type === "city" && (
           <section

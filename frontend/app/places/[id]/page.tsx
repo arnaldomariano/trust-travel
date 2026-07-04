@@ -565,6 +565,16 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           }
         );
 
+    const hasCountrySearch = searchInsideCountry.trim().length >= 4;
+    const canCreateCountryChildPlace =
+      hasCountrySearch && filteredCountryChildPlaces.length === 0;
+
+    const hasSpecificPlaceSearch = specificPlaceHasSearched && searchInsideCity.trim().length >= 2;
+    const canCreateSpecificPlace =
+      hasSpecificPlaceSearch &&
+      !specificPlaceSearchLoading &&
+      specificPlaceResults.length === 0;
+
     const handleCreateChildPlace = async (e: React.FormEvent) => {
       e.preventDefault();
 
@@ -1289,7 +1299,8 @@ const handleToggleEventsInfo = () => {
                 maxWidth: "620px",
               }}
             >
-              <label style={label}>Search inside {place.name}</label>
+
+            <label style={label}>Step 1 — Search first inside {place.name}</label>
 
               <input
                 value={searchInsideCountry}
@@ -1306,7 +1317,8 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.5,
                   }}
                 >
-                  Type at least 4 characters to search for a city, island or region inside this country.
+                  Search first to avoid creating duplicates or alternate spellings of the same place.
+                  For example, a city may already exist under another spelling or alias.
               </p>
             </div>
 
@@ -1391,25 +1403,78 @@ const handleToggleEventsInfo = () => {
                 paddingTop: "16px",
                 marginTop: "6px",
                 marginBottom: "18px",
-                display: "flex",
-                justifyContent: "flex-start",
+                display: "grid",
+                gap: "10px",
+                maxWidth: "620px",
               }}
             >
-              <button
-                type="button"
-                onClick={() =>
-                  setShowCreateChildPlaceForm((prev) => !prev)
-                }
+              <div
                 style={{
-                  ...secondaryButton,
                   fontSize: "13px",
-                  padding: "8px 12px",
+                  fontWeight: 700,
+                  color: "#555",
                 }}
               >
-                {showCreateChildPlaceForm
-                  ? "Cancel"
-                  : `Add city, island or region inside ${place.name}`}
-              </button>
+                Step 2 — Create only if this city, island or region is not listed
+              </div>
+
+              {!hasCountrySearch ? (
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#777",
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Type at least 4 characters above before creating a new city, island
+                  or region.
+                </p>
+              ) : filteredCountryChildPlaces.length > 0 ? (
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#777",
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  We found possible matches. Open an existing page if it is the same
+                  place. Create a new one only if your city, island or region is truly
+                  different.
+                </p>
+              ) : (
+                <>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#777",
+                      fontSize: "14px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    No matching city, island or region was found for “{searchInsideCountry}”.
+                    You can create a new one if this is really a different place.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowCreateChildPlaceForm((prev) => !prev)
+                    }
+                    style={{
+                      ...secondaryButton,
+                      fontSize: "13px",
+                      padding: "8px 12px",
+                      width: "fit-content",
+                    }}
+                  >
+                    {showCreateChildPlaceForm
+                      ? "Cancel"
+                      : `Create city, island or region inside ${place.name}`}
+                  </button>
+                </>
+              )}
             </div>
 
             {createdChildPlace && (
@@ -1782,7 +1847,7 @@ const handleToggleEventsInfo = () => {
                 maxWidth: "620px",
               }}
             >
-              <label style={label}>Search inside {place.name}</label>
+              <label style={label}>Step 1 — Search first inside {place.name}</label>
 
               <div
                 style={{
@@ -1827,8 +1892,8 @@ const handleToggleEventsInfo = () => {
                   lineHeight: 1.5,
                 }}
               >
-                Search first if you already know the specific place. If it does not appear,
-                you can add it below as a specific place inside {place.name}.
+                Search first to avoid creating duplicates or alternate spellings of the same
+                specific place. If it does not appear, you can create it in Step 2.
               </p>
 
             </form>
@@ -1926,22 +1991,95 @@ const handleToggleEventsInfo = () => {
               </div>
             )}
 
-            {specificPlaceHasSearched &&
-              !specificPlaceSearchLoading &&
-              specificPlaceResults.length === 0 && (
-                <div
+            <div
+              style={{
+                borderTop: "1px solid #eee",
+                paddingTop: "16px",
+                marginTop: "6px",
+                marginBottom: "18px",
+                display: "grid",
+                gap: "10px",
+                maxWidth: "620px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  color: "#555",
+                }}
+              >
+                Step 2 — Create only if this specific place is not listed
+              </div>
+
+              {!specificPlaceHasSearched ? (
+                <p
                   style={{
-                    padding: "14px",
-                    border: "1px solid #eee",
-                    borderRadius: "12px",
+                    margin: 0,
                     color: "#777",
-                    backgroundColor: "#fafafa",
-                    marginBottom: "18px",
+                    fontSize: "14px",
+                    lineHeight: 1.5,
                   }}
                 >
-                  No specific place found inside {place.name} for “{searchInsideCity}”.
-                </div>
+                  Search above before creating a new restaurant, hotel, attraction,
+                  beach, nature spot or local place.
+                </p>
+              ) : specificPlaceSearchLoading ? (
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#777",
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Searching for possible matches...
+                </p>
+              ) : specificPlaceResults.length > 0 ? (
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#777",
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  We found possible matches. Open an existing page if it is the same
+                  place. Create a new one only if your specific place is truly different.
+                </p>
+              ) : (
+                <>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#777",
+                      fontSize: "14px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    No matching specific place was found inside {place.name} for “{searchInsideCity}”.
+                    You can create a new one if this is really a different place.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowCreateSpecificPlaceForm((prev) => !prev)
+                    }
+                    style={{
+                      ...secondaryButton,
+                      fontSize: "13px",
+                      padding: "8px 12px",
+                      width: "fit-content",
+                    }}
+                  >
+                    {showCreateSpecificPlaceForm
+                      ? "Cancel"
+                      : `Create specific place inside ${place.name}`}
+                  </button>
+                </>
               )}
+            </div>
 
             {showCreateSpecificPlaceForm && (
               <form
@@ -2042,21 +2180,7 @@ const handleToggleEventsInfo = () => {
                 justifyContent: "flex-start",
               }}
             >
-              <button
-                type="button"
-                onClick={() =>
-                  setShowCreateSpecificPlaceForm((prev) => !prev)
-                }
-                style={{
-                  ...secondaryButton,
-                  fontSize: "13px",
-                  padding: "8px 12px",
-                }}
-              >
-                {showCreateSpecificPlaceForm
-                  ? "Cancel"
-                  : `Add specific place inside ${place.name}`}
-              </button>
+
             </div>
 
             {createdSpecificPlace && (

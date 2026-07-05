@@ -905,16 +905,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         return;
       }
 
-    const placeName = place?.name || "this place";
-
-    const confirmed = window.confirm(
-      `You are about to post this ${updateType} about ${placeName}. Continue?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
       setSubmittingUpdate(true);
 
       try {

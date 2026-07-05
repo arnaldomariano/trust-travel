@@ -26,6 +26,7 @@ export default function PlacePage() {
   const [locationSuggestionReason, setLocationSuggestionReason] = useState("");
   const [submittingLocationSuggestion, setSubmittingLocationSuggestion] = useState(false);
   const [locationSuggestionSubmitted, setLocationSuggestionSubmitted] = useState(false);
+  const [showLocationSuggestionForm, setShowLocationSuggestionForm] = useState(false);
 
   const [loadingCountryContext, setLoadingCountryContext] = useState(false);
 
@@ -683,6 +684,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         setSuggestedParentPlaceId("");
         setLocationSuggestionReason("");
         setLocationSuggestionSubmitted(true);
+        setShowLocationSuggestionForm(false);
 
         await loadLocationSuggestions(place.id);
       } catch (error) {
@@ -709,12 +711,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         alert("Please enter the city, island or region name.");
         return;
       }
-
-      const confirmed = window.confirm(
-          `You are creating a new city, island or region inside ${place.name}: ${name}. Continue?`
-      );
-
-      if (!confirmed) return;
 
       setCreatingChildPlace(true);
       setCreatedChildPlace(null);
@@ -854,12 +850,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         alert("Could not identify the country for this city or region.");
         return;
       }
-
-      const confirmed = window.confirm(
-        `You are creating a new specific place inside ${place.name}: ${name}. Continue?`
-      );
-
-      if (!confirmed) return;
 
       setCreatingSpecificPlace(true);
       setCreatedSpecificPlace(null);
@@ -1191,7 +1181,19 @@ const handleToggleEventsInfo = () => {
                 </div>
               )}
 
-              <form onSubmit={handleSubmitLocationSuggestion}>
+              <button
+                  type="button"
+                  onClick={() => setShowLocationSuggestionForm((prev) => !prev)}
+                  style={secondaryButton}
+              >
+                  {showLocationSuggestionForm
+                    ? "Hide suggestion form"
+                    : "Suggest a better location"}
+              </button>
+
+
+              {showLocationSuggestionForm && (
+                <form onSubmit={handleSubmitLocationSuggestion}>
                 <div style={{ marginBottom: "10px" }}>
                   <label
                     style={{
@@ -1263,7 +1265,8 @@ const handleToggleEventsInfo = () => {
                     ? "Submitting..."
                     : "Suggest better location"}
                 </button>
-              </form>
+               </form>
+              )}
 
               {locationSuggestions.length > 0 && (
                 <div

@@ -35,6 +35,7 @@ export default function PlacePage() {
   const [creatingChildPlace, setCreatingChildPlace] = useState(false);
   const [createdChildPlace, setCreatedChildPlace] = useState<any>(null);
   const [searchInsideCountry, setSearchInsideCountry] = useState("");
+  const [hasSearchedInsideCountry, setHasSearchedInsideCountry] = useState(false);
 
   const [searchInsideCity, setSearchInsideCity] = useState("");
   const [specificPlaceResults, setSpecificPlaceResults] = useState<any[]>([]);
@@ -628,7 +629,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           }
         );
 
-    const hasCountrySearch = searchInsideCountry.trim().length >= 4;
+    const hasCountrySearch =
+     hasSearchedInsideCountry && searchInsideCountry.trim().length >= 4;
     const canCreateCountryChildPlace =
       hasCountrySearch && filteredCountryChildPlaces.length === 0;
 
@@ -1537,12 +1539,47 @@ const handleToggleEventsInfo = () => {
 
             <label style={label}>Step 1 — Search first inside {place.name}</label>
 
-              <input
-                value={searchInsideCountry}
-                onChange={(e) => setSearchInsideCountry(e.target.value)}
-                placeholder={`Search cities, islands or regions inside ${place.name}`}
-                style={input}
-              />
+              <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    alignItems: "stretch",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <input
+                    value={searchInsideCountry}
+                    onChange={(e) => {
+                      setSearchInsideCountry(e.target.value);
+                      setHasSearchedInsideCountry(false);
+                      setShowCreateChildPlaceForm(false);
+                    }}
+                    placeholder={`Search cities, islands or regions inside ${place.name}`}
+                    style={{
+                      ...input,
+                      flex: "1 1 260px",
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (searchInsideCountry.trim().length < 4) {
+                        alert("Type at least 4 characters to search.");
+                        return;
+                      }
+
+                      setHasSearchedInsideCountry(true);
+                      setShowCreateChildPlaceForm(false);
+                    }}
+                    style={{
+                      ...secondaryButton,
+                      flex: "0 0 auto",
+                    }}
+                  >
+                    Search
+                  </button>
+                </div>
 
               <p
                   style={{
@@ -1552,8 +1589,8 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.5,
                   }}
                 >
-                  Search first to avoid creating duplicates or alternate spellings of the same place.
-                  For example, a city may already exist under another spelling or alias.
+                Type the name, then click Search. This helps avoid creating duplicates or
+                alternate spellings of the same place.
               </p>
             </div>
 
@@ -1798,7 +1835,7 @@ const handleToggleEventsInfo = () => {
                 Loading cities, islands and regions...
               </div>
 
-            ) : searchInsideCountry.trim().length >= 4 && filteredCountryChildPlaces.length > 0 ? (
+            ) : hasCountrySearch && filteredCountryChildPlaces.length > 0 ? (
               <div
                 style={{
                   display: "grid",
@@ -1892,7 +1929,7 @@ const handleToggleEventsInfo = () => {
                 ))}
               </div>
 
-            ) : searchInsideCountry.trim() && searchInsideCountry.trim().length < 4 ? (
+            ) : searchInsideCountry.trim() && !hasSearchedInsideCountry ? (
               <div
                 style={{
                   padding: "14px",
@@ -1903,7 +1940,7 @@ const handleToggleEventsInfo = () => {
                   marginBottom: "18px",
                 }}
               >
-                Keep typing to search inside {place.name}. Use at least 4 characters.
+                Type at least 4 characters, then click Search to look for existing cities, islands or regions inside {place.name}.
               </div>
             ) : searchInsideCountry.trim() ? null : (
               <div

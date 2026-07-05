@@ -2638,14 +2638,24 @@ const handleToggleEventsInfo = () => {
                   onChange={(e) => setUpdateTitle(e.target.value)}
                   placeholder={
                     updateType === "event"
-                      ? "Event title, e.g. Free concert tonight"
+                      ? "Example: Carnival week in Brazil"
                       : updateType === "alert"
-                      ? "Alert title, e.g. Museum closed this Sunday"
-                      : "Useful info title, e.g. Best entrance is on the north side"
+                      ? "Example: Beach access closed today"
+                      : "Example: Parking near Palm Beach"
                   }
-                  maxLength={160}
                   style={input}
                 />
+
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#777",
+                    fontSize: "13px",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Keep the title short and specific. Use the details field for the full explanation.
+                </p>
               </div>
 
               <div style={{ display: "grid", gap: "6px" }}>
@@ -2654,10 +2664,21 @@ const handleToggleEventsInfo = () => {
                 <textarea
                   value={updateText}
                   onChange={(e) => setUpdateText(e.target.value)}
-                  placeholder="Write the event, alert or useful information..."
+                  placeholder="Add the full context, practical advice, source summary or explanation here."
                   rows={4}
                   style={input}
                 />
+
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#777",
+                    fontSize: "13px",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  This is where longer information belongs. The title should work as a quick summary.
+                </p>
               </div>
 
               <div

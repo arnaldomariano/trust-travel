@@ -364,16 +364,17 @@ const getUnifiedSearchScore = (place: any) => {
   // Avoid showing a long list while the user is still typing.
   if (search.length < 4) return 0;
 
-  const name = normalizeText(place.name || "");
+  const searchableNames = getNormalizedPlaceSearchNames(place);
   const city = normalizeText(place.city || "");
   const type = normalizeText(place.place_type || "");
 
-  if (name === search) return 100;
-  if (name.startsWith(search)) return 90;
-  if (name.includes(search)) return 80;
+  if (searchableNames.some((value) => value === search)) return 100;
+  if (searchableNames.some((value) => value.startsWith(search))) return 90;
+  if (searchableNames.some((value) => value.includes(search))) return 80;
 
   // Only city/region records should match by city name.
-  // Specific places should appear only when the user searches their own name.
+  // Specific places should appear only when the user searches their own name,
+  // alias or canonical name.
   if (place.place_type === "city" && city.includes(search)) {
     return 65;
   }

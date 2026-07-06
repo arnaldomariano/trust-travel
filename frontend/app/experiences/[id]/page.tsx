@@ -41,6 +41,7 @@ export default function ExperienceDetailPage() {
   const [newTripPlanDestination, setNewTripPlanDestination] = useState("");
   const [creatingTripPlan, setCreatingTripPlan] = useState(false);
   const [tripPlanError, setTripPlanError] = useState("");
+  const [addToPlanError, setAddToPlanError] = useState("");
 
   const [tripPlanMessage, setTripPlanMessage] = useState<{
   text: string;
@@ -117,10 +118,11 @@ export default function ExperienceDetailPage() {
       }
 
       if (!selectedTripPlanId) {
-        alert("Please choose a trip plan first.");
-        return;
+          setAddToPlanError("Choose one of your trip plans before adding this experience.");
+          return;
       }
 
+      setAddToPlanError("");
       setAddingToPlan(true);
 
       try {
@@ -683,7 +685,10 @@ const authorLabel = authorFlag
                       <div style={existingPlanBox}>
                         <select
                           value={selectedTripPlanId}
-                          onChange={(event) => setSelectedTripPlanId(event.target.value)}
+                          onChange={(event) => {
+                              setSelectedTripPlanId(event.target.value);
+                              setAddToPlanError("");
+                          }}
                           style={selectInput}
                         >
                           <option value="">Choose an existing trip plan</option>
@@ -695,6 +700,22 @@ const authorLabel = authorFlag
                             </option>
                           ))}
                         </select>
+
+                        {addToPlanError && (
+                          <div
+                            style={{
+                              padding: "10px",
+                              border: "1px solid #fecaca",
+                              borderRadius: "10px",
+                              backgroundColor: "#fef2f2",
+                              color: "#b91c1c",
+                              fontSize: "13px",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {addToPlanError}
+                          </div>
+                        )}
 
                         <button
                           type="button"

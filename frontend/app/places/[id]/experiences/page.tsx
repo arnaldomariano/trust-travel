@@ -849,9 +849,17 @@ const addExperienceToTripPlan = async (experienceId: number) => {
   const selectedPlanId = selectedPlanByExperience[experienceId];
 
   if (!selectedPlanId) {
-    alert("Please choose a trip plan first.");
-    return;
-  }
+  setTripPlanErrorByExperience((prev) => ({
+    ...prev,
+    [experienceId]: "Choose one of your trip plans before adding this experience.",
+  }));
+  return;
+}
+
+  setTripPlanErrorByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "",
+  }));
 
   setAddingToPlan((prev) => ({
     ...prev,
@@ -1140,24 +1148,45 @@ const renderTripPlanControls = (experience: any) => {
           {tripPlans.length > 0 && (
             <div style={inlineExistingPlanBox}>
               <select
-                value={selectedPlanId}
-                onChange={(event) =>
-                  setSelectedPlanByExperience((prev) => ({
-                    ...prev,
-                    [experienceId]: event.target.value,
-                  }))
-                }
-                style={inlineSelectInput}
-              >
-                <option value="">Choose an existing trip plan</option>
+                  value={selectedPlanId}
+                  onChange={(event) => {
+                    setSelectedPlanByExperience((prev) => ({
+                      ...prev,
+                      [experienceId]: event.target.value,
+                    }));
 
-                {tripPlans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.title}
-                    {plan.destination_text ? ` — ${plan.destination_text}` : ""}
-                  </option>
-                ))}
-              </select>
+                    setTripPlanErrorByExperience((prev) => ({
+                      ...prev,
+                      [experienceId]: "",
+                    }));
+                  }}
+                  style={inlineSelectInput}
+                >
+                  <option value="">Choose an existing trip plan</option>
+
+                  {tripPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.title}
+                      {plan.destination_text ? ` — ${plan.destination_text}` : ""}
+                    </option>
+                  ))}
+                </select>
+
+              {tripPlanError && (
+                  <div
+                    style={{
+                      padding: "10px",
+                      border: "1px solid #fecaca",
+                      borderRadius: "10px",
+                      backgroundColor: "#fef2f2",
+                      color: "#b91c1c",
+                      fontSize: "13px",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {tripPlanError}
+                  </div>
+              )}
 
               <button
                 type="button"
@@ -2278,12 +2307,18 @@ const renderReportControls = (experience: any) => {
                               <>
                                 <select
                                   value={selectedPlanByExperience[e.id] || ""}
-                                  onChange={(event) =>
-                                    setSelectedPlanByExperience((prev) => ({
-                                      ...prev,
-                                      [e.id]: event.target.value,
-                                    }))
-                                  }
+                                  onChange={(event) => {
+                                      setSelectedPlanByExperience((prev) => ({
+                                        ...prev,
+                                        [e.id]: event.target.value,
+                                      }));
+
+                                      setTripPlanErrorByExperience((prev) => ({
+                                        ...prev,
+                                        [e.id]: "",
+                                      }));
+                                  }}
+
                                   style={{
                                     padding: "8px",
                                     borderRadius: "8px",
@@ -2300,6 +2335,22 @@ const renderReportControls = (experience: any) => {
                                     </option>
                                   ))}
                                 </select>
+
+                                {tripPlanErrorByExperience[e.id] && (
+                                  <div
+                                    style={{
+                                      padding: "10px",
+                                      border: "1px solid #fecaca",
+                                      borderRadius: "10px",
+                                      backgroundColor: "#fef2f2",
+                                      color: "#b91c1c",
+                                      fontSize: "12px",
+                                      lineHeight: 1.4,
+                                    }}
+                                  >
+                                    {tripPlanErrorByExperience[e.id]}
+                                  </div>
+                                )}
 
                                 <button
                                   type="button"

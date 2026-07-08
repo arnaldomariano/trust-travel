@@ -818,9 +818,14 @@ useEffect(() => {
       if (!response.ok) {
           const text = await response.text();
           console.error("Backend error:", text);
-          alert("Error sending reply");
+
+          setReplyErrorByExperience((prev) => ({
+            ...prev,
+            [experienceId]: "Could not send this reply. Please try again.",
+          }));
+
           return;
-        }
+      }
 
 const newReply = await response.json();
 
@@ -990,7 +995,12 @@ const addExperienceToTripPlan = async (experienceId: number) => {
 
     if (!res.ok) {
       console.error("Add to trip plan error:", data);
-      alert(data.detail || "Error adding experience to trip plan.");
+
+      setTripPlanErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]: data.detail || "Could not add this experience to your trip plan.",
+      }));
+
       return;
     }
 
@@ -1014,10 +1024,15 @@ const addExperienceToTripPlan = async (experienceId: number) => {
     }));
 
 
-  } catch (error) {
-    console.error("Failed to add experience to trip plan:", error);
-    alert("Error adding experience to trip plan.");
-  } finally {
+    } catch (error) {
+      console.error("Failed to add experience to trip plan:", error);
+
+      setTripPlanErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]: "Could not add this experience to your trip plan.",
+      }));
+    } finally {
+
     setAddingToPlan((prev) => ({
       ...prev,
       [experienceId]: false,

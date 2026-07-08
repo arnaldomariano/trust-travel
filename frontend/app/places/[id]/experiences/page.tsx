@@ -36,6 +36,8 @@ export default function ExperiencesPage() {
   const [replyTextByExperience, setReplyTextByExperience] = useState<Record<number, string>>({});
   const [showReplyForm, setShowReplyForm] = useState<Record<number, boolean>>({});
   const [submittingReply, setSubmittingReply] = useState<Record<number, boolean>>({});
+  const [replyErrorByExperience, setReplyErrorByExperience] = useState<Record<number, string>>({});
+
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [lastVisit, setLastVisit] = useState<number>(0);
   const [showOtherReviews, setShowOtherReviews] = useState(false);
@@ -776,14 +778,25 @@ useEffect(() => {
     const replyText = replyTextByExperience[experienceId]?.trim();
 
     if (!token) {
-      alert("You need to be logged in to reply.");
+      setReplyErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]: "You need to be logged in to reply.",
+      }));
       return;
     }
 
     if (!replyText) {
-      alert("Please write a reply before sending.");
+      setReplyErrorByExperience((prev) => ({
+        ...prev,
+        [experienceId]: "Write a reply before sending.",
+      }));
       return;
     }
+
+    setReplyErrorByExperience((prev) => ({
+      ...prev,
+      [experienceId]: "",
+   }));
 
     setSubmittingReply((prev) => ({ ...prev, [experienceId]: true }));
 
@@ -821,6 +834,11 @@ const newReply = await response.json();
         [experienceId]: "",
       }));
 
+      setReplyErrorByExperience((prev) => ({
+          ...prev,
+          [experienceId]: "",
+      }));
+
       setShowReplyForm((prev) => ({
         ...prev,
         [experienceId]: false,
@@ -833,6 +851,99 @@ const newReply = await response.json();
         [experienceId]: false,
       }));
     }
+  };
+
+  // =====================
+  // Reusable reply UI
+  // =====================
+
+  const renderReplyControls = (experience: any) => {
+    if (!experience?.id) return null;
+
+    const experienceId = experience.id;
+
+    return (
+      <div style={{ marginTop: "10px" }}>
+        <button
+          type="button"
+          style={{
+            fontSize: "12px",
+            padding: "4px 10px",
+            borderRadius: "6px",
+            border: "1px solid #ddd",
+            background: "#f9f9f9",
+            cursor: "pointer",
+          }}
+          onClick={() =>
+            setShowReplyForm((prev) => ({
+              ...prev,
+              [experienceId]: !prev[experienceId],
+            }))
+          }
+        >
+          {showReplyForm[experienceId] ? "Cancel reply" : "Reply"}
+        </button>
+
+        {showReplyForm[experienceId] && (
+          <div style={{ marginTop: "10px" }}>
+            <textarea
+              value={replyTextByExperience[experienceId] || ""}
+              onChange={(ev) => {
+                setReplyTextByExperience((prev) => ({
+                  ...prev,
+                  [experienceId]: ev.target.value,
+                }));
+
+                setReplyErrorByExperience((prev) => ({
+                  ...prev,
+                  [experienceId]: "",
+                }));
+              }}
+              placeholder="Write a reply..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "6px",
+                border: "1px solid #ddd",
+              }}
+            />
+
+            {replyErrorByExperience[experienceId] && (
+              <div
+                style={{
+                  marginTop: "6px",
+                  padding: "8px",
+                  border: "1px solid #fecaca",
+                  borderRadius: "8px",
+                  backgroundColor: "#fef2f2",
+                  color: "#b91c1c",
+                  fontSize: "12px",
+                  lineHeight: 1.4,
+                }}
+              >
+                {replyErrorByExperience[experienceId]}
+              </div>
+            )}
+
+            <button
+              type="button"
+              style={{
+                marginTop: "6px",
+                padding: "4px 10px",
+                borderRadius: "6px",
+                background: "#0070f3",
+                color: "white",
+                border: "none",
+                cursor: "pointer",
+              }}
+              onClick={() => handleReplySubmit(experienceId)}
+            >
+              {submittingReply[experienceId] ? "Sending..." : "Send"}
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // =====================
@@ -2399,7 +2510,9 @@ const renderReportControls = (experience: any) => {
                               View full experience
                             </Link>
 
-                         {renderReportControls(e)}
+                            {renderReportControls(e)}
+                            {renderReplyControls(e)}
+                            {renderTripPlanControls(e)}
 
 
 
@@ -2424,12 +2537,17 @@ const renderReportControls = (experience: any) => {
                         <div style={{ marginTop: "10px" }}>
                           <textarea
                             value={replyTextByExperience[e.id] || ""}
-                            onChange={(ev) =>
+                            onChange={(ev) => {
                               setReplyTextByExperience((prev) => ({
                                 ...prev,
                                 [e.id]: ev.target.value,
-                              }))
-                            }
+                              }));
+
+                              setReplyErrorByExperience((prev) => ({
+                                ...prev,
+                                [e.id]: "",
+                              }));
+                            }}
                             placeholder="Write a reply..."
                             style={{
                               width: "100%",
@@ -2438,6 +2556,23 @@ const renderReportControls = (experience: any) => {
                               border: "1px solid #ddd",
                             }}
                           />
+
+                            {replyErrorByExperience[e.id] && (
+                              <div
+                                style={{
+                                  marginTop: "6px",
+                                  padding: "8px",
+                                  border: "1px solid #fecaca",
+                                  borderRadius: "8px",
+                                  backgroundColor: "#fef2f2",
+                                  color: "#b91c1c",
+                                  fontSize: "12px",
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                {replyErrorByExperience[e.id]}
+                              </div>
+                            )}
 
                           <button
                             style={{
@@ -2621,6 +2756,8 @@ const renderReportControls = (experience: any) => {
                       </Link>
 
                       {renderReportControls(e)}
+                      {renderReplyControls(e)}
+                      {renderTripPlanControls(e)}
 
                     </div>
 
@@ -2781,6 +2918,9 @@ const renderReportControls = (experience: any) => {
                           </Link>
 
                           {renderReportControls(e)}
+                          {renderReplyControls(e)}
+                          {renderTripPlanControls(e)}
+
 
                         </div>
 

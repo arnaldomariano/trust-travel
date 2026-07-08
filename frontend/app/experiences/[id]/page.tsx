@@ -31,6 +31,12 @@ export default function ExperienceDetailPage() {
   const [reportMessage, setReportMessage] = useState("");
   const [reportError, setReportError] = useState("");
 
+  const [replies, setReplies] = useState<any[]>([]);
+  const [showReplyForm, setShowReplyForm] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [replyError, setReplyError] = useState("");
+  const [submittingReply, setSubmittingReply] = useState(false);
+
   const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
   const [selectedTripPlanId, setSelectedTripPlanId] = useState("");
   const [showTripPlanPicker, setShowTripPlanPicker] = useState(false);
@@ -98,6 +104,19 @@ export default function ExperienceDetailPage() {
           const text = await photosRes.text();
           console.error("Failed to load experience photos:", photosRes.status, text);
           setExtraPhotos([]);
+        }
+
+        const repliesRes = await fetch(`${API_URL}/api/experiences/${id}/replies/`, {
+          credentials: "include",
+        });
+
+        if (repliesRes.ok) {
+          const repliesData = await repliesRes.json();
+          setReplies(Array.isArray(repliesData) ? repliesData : []);
+        } else {
+          const text = await repliesRes.text();
+          console.error("Failed to load replies:", repliesRes.status, text);
+          setReplies([]);
         }
 
       } catch (error) {
@@ -326,6 +345,57 @@ export default function ExperienceDetailPage() {
         setReportError("Something went wrong while submitting the report.");
       } finally {
         setSubmittingReport(false);
+      }
+    };
+
+    const handleSubmitReply = async (event: React.FormEvent) => {
+      event.preventDefault();
+
+      if (!experience?.id) {
+        setReplyError("Experience not loaded yet.");
+        return;
+      }
+
+      const text = replyText.trim();
+
+      if (!text) {
+        setReplyError("Write a reply before sending.");
+        return;
+      }
+
+      setSubmittingReply(true);
+      setReplyError("");
+
+      try {
+        const res = await fetch(`${API_URL}/api/experiences/${experience.id}/replies/`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            comment: text,
+          }),
+        });
+
+        if (!res.ok) {
+          const backendText = await res.text();
+          console.error("Reply submit error:", backendText);
+          setReplyError("Could not send this reply. Please try again.");
+          return;
+        }
+
+        const newReply = await res.json();
+
+        setReplies((prev) => [...prev, newReply]);
+        setReplyText("");
+        setReplyError("");
+        setShowReplyForm(false);
+      } catch (error) {
+        console.error("Reply submit error:", error);
+        setReplyError("Something went wrong while sending your reply.");
+      } finally {
+        setSubmittingReply(false);
       }
     };
 
@@ -584,6 +654,17 @@ const authorLabel = authorFlag
           Add to trip plan
         </button>
 
+        <button
+          type="button"
+          style={secondaryButton}
+          onClick={() => {
+            setShowReplyForm((prev) => !prev);
+            setReplyError("");
+          }}
+        >
+          {showReplyForm ? "Cancel reply" : "Reply"}
+        </button>
+
               <button
                 type="button"
                 style={reportButton}
@@ -596,6 +677,80 @@ const authorLabel = authorFlag
                 Report
               </button>
             </div>
+
+            {showReplyForm && (
+              <form onSubmit={handleSubmitReply} style={replyBox}>
+                <div style={replyTitle}>Reply to this experience</div>
+
+                <textarea
+                  value={replyText}
+                  onChange={(event) => {
+                    setReplyText(event.target.value);
+                    setReplyError("");
+                  }}
+                  placeholder="Write a helpful reply or add context..."
+                  rows={4}
+                  style={replyTextarea}
+                />
+
+                {replyError && (
+                  <div style={replyErrorBox}>
+                    {replyError}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button
+                    type="submit"
+                    disabled={submittingReply}
+                    style={{
+                      ...primaryButton,
+                      opacity: submittingReply ? 0.5 : 1,
+                      cursor: submittingReply ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {submittingReply ? "Sending..." : "Send reply"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={secondaryButton}
+                    onClick={() => {
+                      setShowReplyForm(false);
+                      setReplyText("");
+                      setReplyError("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {replies.length > 0 && (
+              <section style={repliesBox}>
+                <div style={repliesTitle}>
+                  Replies
+                </div>
+
+                <div style={repliesList}>
+                  {replies.map((reply: any) => (
+                    <div key={reply.id} style={replyCard}>
+                      <div style={replyMeta}>
+                        — {reply.user || reply.username || "Traveler"}
+                        {reply.created_at && (
+                          <> · {new Date(reply.created_at).toLocaleString()}</>
+                        )}
+                      </div>
+
+                      <div style={replyComment}>
+                        {reply.comment}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {showReportForm && (
               <form onSubmit={handleSubmitReport} style={reportBox}>
@@ -1080,6 +1235,79 @@ const reportButton = {
   background: "#fff5f5",
   cursor: "pointer",
   fontSize: "14px",
+};
+
+const repliesBox = {
+  marginTop: "16px",
+  padding: "16px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  background: "#fff",
+  display: "grid",
+  gap: "12px",
+};
+
+const repliesTitle = {
+  fontWeight: 700,
+  fontSize: "15px",
+};
+
+const repliesList = {
+  display: "grid",
+  gap: "10px",
+};
+
+const replyCard = {
+  padding: "12px",
+  borderRadius: "10px",
+  border: "1px solid #eee",
+  background: "#f9fafb",
+};
+
+const replyMeta = {
+  fontSize: "12px",
+  color: "#777",
+  marginBottom: "6px",
+};
+
+const replyComment = {
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
+const replyBox = {
+  marginTop: "16px",
+  padding: "16px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  display: "grid",
+  gap: "12px",
+};
+
+const replyTitle = {
+  fontWeight: 700,
+  fontSize: "15px",
+};
+
+const replyTextarea = {
+  width: "100%",
+  minHeight: "100px",
+  padding: "10px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+  resize: "vertical" as const,
+};
+
+const replyErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };
 
 const reportBox = {

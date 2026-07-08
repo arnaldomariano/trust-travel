@@ -132,13 +132,13 @@ export default function ExperienceDetailPage() {
 
     const addExperienceToTripPlan = async () => {
       if (!experience?.id) {
-        alert("Experience not loaded yet.");
+        setAddToPlanError("Experience not loaded yet.");
         return;
       }
 
       if (!selectedTripPlanId) {
-          setAddToPlanError("Choose one of your trip plans before adding this experience.");
-          return;
+        setAddToPlanError("Choose one of your trip plans before adding this experience.");
+        return;
       }
 
       setAddToPlanError("");
@@ -157,7 +157,7 @@ export default function ExperienceDetailPage() {
 
         if (!res.ok) {
           console.error("Add to trip plan error:", data);
-          alert(data.detail || "Error adding experience to trip plan.");
+          setAddToPlanError(data.detail || "Could not add this experience to your trip plan.");
           return;
         }
 
@@ -175,8 +175,8 @@ export default function ExperienceDetailPage() {
         setShowTripPlanPicker(false);
 
       } catch (error) {
-        console.error("Failed to add experience to trip plan:", error);
-        alert("Error adding experience to trip plan.");
+          console.error("Failed to add experience to trip plan:", error);
+          setAddToPlanError("Could not add this experience to your trip plan.");
       } finally {
         setAddingToPlan(false);
       }
@@ -280,7 +280,7 @@ export default function ExperienceDetailPage() {
 
         if (!res.ok) {
           console.error("Remove from trip plan error:", data);
-          alert(data.detail || "Could not remove experience from this trip plan.");
+          setTripPlanError(data.detail || "Could not remove experience from this trip plan.");
           return;
         }
 
@@ -291,8 +291,8 @@ export default function ExperienceDetailPage() {
 
         setSelectedTripPlanId("");
       } catch (error) {
-        console.error("Remove from trip plan error:", error);
-        alert("Something went wrong while removing this experience.");
+          console.error("Remove from trip plan error:", error);
+          setTripPlanError("Something went wrong while removing this experience.");
       }
     };
 
@@ -986,6 +986,13 @@ const authorLabel = authorFlag
             )}
           </div>
         )}
+
+        {tripPlanError && !showTripPlanPicker && (
+          <div style={tripPlanErrorBox}>
+            {tripPlanError}
+          </div>
+        )}
+
       </article>
 
 

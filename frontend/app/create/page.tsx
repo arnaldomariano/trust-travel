@@ -26,6 +26,7 @@ function CreatePageContent() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [loadingPlaces, setLoadingPlaces] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
 
   // =========================
   // Check authentication
@@ -101,15 +102,16 @@ function CreatePageContent() {
   // =========================
   const handleCreate = async () => {
     if (!selectedPlaceId) {
-      alert("Please select a place.");
+      setFormError("Please select a place.");
       return;
     }
 
     if (!text.trim()) {
-      alert("Please write something.");
+      setFormError("Please write something.");
       return;
     }
 
+    setFormError("");
     setSubmitting(true);
 
     try {
@@ -130,14 +132,14 @@ function CreatePageContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.detail || "Error creating post");
-        return;
+          setFormError(data.detail || "Could not create this post.");
+          return;
       }
 
       router.push("/");
     } catch (error) {
       console.error("Create post failed:", error);
-      alert("Error creating post");
+      setFormError("Could not create this post.");
     } finally {
       setSubmitting(false);
     }
@@ -171,7 +173,10 @@ function CreatePageContent() {
           ) : (
             <select
               value={selectedPlaceId}
-              onChange={(e) => setSelectedPlaceId(e.target.value)}
+              onChange={(e) => {
+                  setSelectedPlaceId(e.target.value);
+                  setFormError("");
+              }}
               style={input}
             >
               <option value="">Select a place</option>
@@ -209,7 +214,10 @@ function CreatePageContent() {
           <textarea
             placeholder="Write something..."
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              setFormError("");
+            }}
             style={{
               ...input,
               minHeight: "120px",
@@ -217,6 +225,12 @@ function CreatePageContent() {
             }}
           />
         </div>
+
+        {formError && (
+          <div style={formErrorBox}>
+            {formError}
+          </div>
+        )}
 
         <button
           onClick={handleCreate}
@@ -292,4 +306,14 @@ const button = {
   color: "white",
   cursor: "pointer",
   alignSelf: "flex-start",
+};
+
+const formErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };

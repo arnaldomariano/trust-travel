@@ -58,6 +58,8 @@ export default function ProfilePage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
+  const [profileError, setProfileError] = useState("");
 
   // =========================
   // Load current profile
@@ -176,6 +178,9 @@ export default function ProfilePage() {
   const saveProfile = async () => {
     setSaving(true);
 
+    setProfileMessage("");
+    setProfileError("");
+
     try {
       const formData = new FormData();
 
@@ -213,9 +218,9 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert("Error saving profile");
-        console.error(data);
-        return;
+          console.error(data);
+          setProfileError(data.detail || "Could not save your profile.");
+          return;
       }
 
       setDisplayName(data.display_name || "");
@@ -243,10 +248,10 @@ export default function ProfilePage() {
       setAgeRange(data.age_range || "prefer_not_to_say");
 
 
-      alert("Profile saved");
+      setProfileMessage("Profile saved.");
     } catch (error) {
       console.error("Profile save error:", error);
-      alert("Error saving profile");
+      setProfileError("Could not save your profile.");
     } finally {
       setSaving(false);
     }
@@ -538,6 +543,18 @@ export default function ProfilePage() {
         </div>
       </section>
 
+      {profileError && (
+          <div style={profileErrorBox}>
+            {profileError}
+          </div>
+      )}
+
+      {profileMessage && (
+          <div style={profileSuccessBox}>
+            {profileMessage}
+          </div>
+      )}
+
       <button onClick={saveProfile} disabled={saving} style={button}>
         {saving ? "Saving..." : "Save profile"}
       </button>
@@ -758,4 +775,26 @@ const profileWarning = {
   background: "#fffbeb",
   color: "#7a4b00",
   marginBottom: "18px",
+};
+
+const profileErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginTop: "16px",
+};
+
+const profileSuccessBox = {
+  padding: "10px",
+  border: "1px solid #bbf7d0",
+  borderRadius: "10px",
+  backgroundColor: "#f0fdf4",
+  color: "#166534",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginTop: "16px",
 };

@@ -292,10 +292,6 @@ export default function TripPlanDetailPage() {
         q: query,
       });
 
-      if (plan?.destination_text) {
-        params.set("country", plan.destination_text);
-      }
-
       const searchUrl = `${API_URL}/api/places/search/?${params.toString()}`;
 
 

@@ -38,9 +38,7 @@ export default function CreateEventPage() {
         return;
       }
 
-      alert("Evento criado!");
-
-      router.push("/"); // volta pro feed
+    router.push("/"); // volta pro feed
 
     } catch (err) {
       console.error("Erro:", err);

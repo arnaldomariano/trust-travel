@@ -10,6 +10,14 @@ export default function ConnectionsPage() {
   const [sent, setSent] = useState<any[]>([]);
   const [searchCode, setSearchCode] = useState("");
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [pendingRemoveFriend, setPendingRemoveFriend] = useState<any | null>(null);
+
+  const clearFeedback = () => {
+    setActionMessage("");
+    setActionError("");
+  };
 
   // =========================
   // Load connections
@@ -45,9 +53,12 @@ export default function ConnectionsPage() {
   // =========================
   const sendFriendRequest = async (code: string) => {
     if (!code.trim()) {
-      alert("Please enter a user code.");
+      setActionError("Please enter a user code.");
+      setActionMessage("");
       return;
     }
+
+    clearFeedback();
 
     const res = await fetch(`${API_URL}/api/friends/send/`, {
       method: "POST",
@@ -61,20 +72,23 @@ export default function ConnectionsPage() {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.detail || "Error sending request");
+      setActionError(data.detail || "Could not send this request.");
       return;
     }
 
     setSearchCode("");
     await loadConnections();
     window.dispatchEvent(new Event("connectionsUpdated"));
+    setActionMessage("Connection request sent.");
   };
+
 
   // =========================
   // Accept request
   // =========================
 const acceptRequest = async (id: number) => {
   setActionLoading(id);
+  clearFeedback();
 
   try {
     const res = await fetch(`${API_URL}/api/friends/accept/`, {
@@ -89,13 +103,14 @@ const acceptRequest = async (id: number) => {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.detail || "Error accepting request");
+      setActionError(data.detail || "Could not accept this request.");
       return;
     }
 
     setReceived((prev) => prev.filter((r) => r.request_id !== id));
     await loadConnections();
     window.dispatchEvent(new Event("connectionsUpdated"));
+    setActionMessage("Connection request accepted.");
   } finally {
     setActionLoading(null);
   }
@@ -105,6 +120,7 @@ const acceptRequest = async (id: number) => {
   // =========================
 const rejectRequest = async (id: number) => {
   setActionLoading(id);
+  clearFeedback();
 
   try {
     const res = await fetch(`${API_URL}/api/friends/reject/`, {
@@ -119,13 +135,14 @@ const rejectRequest = async (id: number) => {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.detail || "Error rejecting request");
+      setActionError(data.detail || "Could not reject this request.");
       return;
     }
 
     setReceived((prev) => prev.filter((r) => r.request_id !== id));
     await loadConnections();
     window.dispatchEvent(new Event("connectionsUpdated"));
+    setActionMessage("Connection request rejected.");
   } finally {
     setActionLoading(null);
   }
@@ -135,6 +152,7 @@ const rejectRequest = async (id: number) => {
   // =========================
 const cancelRequest = async (id: number) => {
   setActionLoading(id);
+  clearFeedback();
 
   try {
     const res = await fetch(`${API_URL}/api/friends/cancel/`, {
@@ -149,13 +167,14 @@ const cancelRequest = async (id: number) => {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.detail || "Error canceling request");
+      setActionError(data.detail || "Could not cancel this request.");
       return;
     }
 
     setSent((prev) => prev.filter((s) => s.request_id !== id));
     await loadConnections();
     window.dispatchEvent(new Event("connectionsUpdated"));
+    setActionMessage("Connection request canceled.");
   } finally {
     setActionLoading(null);
   }
@@ -165,13 +184,8 @@ const cancelRequest = async (id: number) => {
   // Remove friend
   // =========================
     const removeFriend = async (userId: number) => {
-      const confirmed = window.confirm(
-        "Remove this person from your trusted network?"
-      );
-
-      if (!confirmed) return;
-
       setActionLoading(userId);
+      clearFeedback();
 
       try {
         const res = await fetch(`${API_URL}/api/friends/remove/`, {
@@ -186,13 +200,15 @@ const cancelRequest = async (id: number) => {
         const data = await res.json();
 
         if (!res.ok) {
-          alert(data.detail || "Error removing friend");
+          setActionError(data.detail || "Could not remove this connection.");
           return;
         }
 
         setFriends((prev) => prev.filter((f) => f.id !== userId));
+        setPendingRemoveFriend(null);
         await loadConnections();
         window.dispatchEvent(new Event("connectionsUpdated"));
+        setActionMessage("Connection removed.");
       } finally {
         setActionLoading(null);
       }
@@ -260,6 +276,55 @@ const cancelRequest = async (id: number) => {
             </button>
           </div>
         </section>
+
+        {actionError && (
+          <div style={actionErrorBox}>
+            {actionError}
+          </div>
+        )}
+
+        {actionMessage && (
+          <div style={actionSuccessBox}>
+            {actionMessage}
+          </div>
+        )}
+
+        {pendingRemoveFriend && (
+          <div style={confirmBox}>
+            <div>
+              <strong>Remove this connection?</strong>
+              <p style={confirmText}>
+                Remove{" "}
+                <strong>
+                  {pendingRemoveFriend.display_name || pendingRemoveFriend.username}
+                </strong>{" "}
+                from your trusted network?
+              </p>
+            </div>
+
+            <div style={actionGroup}>
+              <button
+                type="button"
+                style={secondaryButton}
+                onClick={() => setPendingRemoveFriend(null)}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                style={dangerButton}
+                disabled={actionLoading === pendingRemoveFriend.id}
+                onClick={() => removeFriend(pendingRemoveFriend.id)}
+              >
+                {actionLoading === pendingRemoveFriend.id
+                  ? "Removing..."
+                  : "Remove connection"}
+              </button>
+            </div>
+          </div>
+        )}
+
       {/* Trusted friends */}
       <ConnectionSection title="Trusted Network">
         {friends.length === 0 ? (
@@ -279,7 +344,10 @@ const cancelRequest = async (id: number) => {
                 <button
                   style={secondaryButton}
                   disabled={actionLoading === friend.id}
-                  onClick={() => removeFriend(friend.id)}
+                  onClick={() => {
+                      clearFeedback();
+                      setPendingRemoveFriend(friend);
+                  }}
                 >
                   {actionLoading === friend.id ? "Removing..." : "Remove"}
                 </button>
@@ -614,4 +682,53 @@ const helperText = {
   lineHeight: 1.5,
   marginTop: "-8px",
   marginBottom: "16px",
+};
+
+const confirmBox = {
+  padding: "14px",
+  border: "1px solid #fecaca",
+  borderRadius: "12px",
+  backgroundColor: "#fff7f7",
+  color: "#7f1d1d",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginBottom: "24px",
+  display: "grid",
+  gap: "12px",
+};
+
+const confirmText = {
+  margin: "6px 0 0 0",
+  color: "#7f1d1d",
+};
+
+const dangerButton = {
+  padding: "9px 14px",
+  borderRadius: "10px",
+  border: "1px solid #fecaca",
+  background: "#fff",
+  color: "#b91c1c",
+  cursor: "pointer",
+};
+
+const actionErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginBottom: "24px",
+};
+
+const actionSuccessBox = {
+  padding: "10px",
+  border: "1px solid #bbf7d0",
+  borderRadius: "10px",
+  backgroundColor: "#f0fdf4",
+  color: "#166534",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginBottom: "24px",
 };

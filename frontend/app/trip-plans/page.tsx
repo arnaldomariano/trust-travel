@@ -32,6 +32,7 @@ function TripPlansPageContent() {
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [formError, setFormError] = useState("");
 
   const loadPlans = async () => {
     try {
@@ -60,6 +61,7 @@ function TripPlansPageContent() {
 
    const handleStartDateChange = (value: string) => {
       setStartDate(value);
+      setFormError("");
 
       if (!value) {
         return;
@@ -72,15 +74,16 @@ function TripPlansPageContent() {
 
   const createPlan = async () => {
     if (!title.trim()) {
-      alert("Please add a title for your trip plan.");
+      setFormError("Please add a title for your trip plan.");
       return;
     }
 
     if (startDate && endDate && endDate < startDate) {
-      alert("End date cannot be earlier than start date.");
+      setFormError("End date cannot be earlier than start date.");
       return;
     }
 
+    setFormError("");
     setCreating(true);
 
     try {
@@ -102,9 +105,9 @@ function TripPlansPageContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        console.error("Create trip plan error:", data);
-        alert(data.detail || "Error creating trip plan.");
-        return;
+          console.error("Create trip plan error:", data);
+          setFormError(data.detail || "Could not create this trip plan.");
+          return;
       }
 
       setPlans((prev) => [data, ...prev]);
@@ -123,7 +126,7 @@ function TripPlansPageContent() {
 
     } catch (error) {
       console.error("Failed to create trip plan:", error);
-      alert("Error creating trip plan.");
+      setFormError("Could not create this trip plan.");
     } finally {
       setCreating(false);
     }
@@ -184,6 +187,13 @@ function TripPlansPageContent() {
                 After creating this plan, you will return to the page where you started.
               </p>
             )}
+
+            {formError && (
+              <div style={formErrorBox}>
+                {formError}
+              </div>
+            )}
+
           </div>
 
         <div style={field}>
@@ -193,7 +203,10 @@ function TripPlansPageContent() {
 
           <input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setFormError("");
+            }}
             placeholder="e.g. Thailand 2027, Weekend in Amsterdam..."
             style={input}
           />
@@ -232,7 +245,10 @@ function TripPlansPageContent() {
               type="date"
               value={endDate}
               min={startDate || undefined}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setFormError("");
+              }}
               style={input}
             />
           </div>
@@ -249,13 +265,31 @@ function TripPlansPageContent() {
           />
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowCreateForm(false)}
-          style={secondaryButton}
-        >
-          Cancel
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={createPlan}
+            disabled={creating}
+            style={{
+              ...primaryButton,
+              opacity: creating ? 0.5 : 1,
+              cursor: creating ? "not-allowed" : "pointer",
+            }}
+          >
+            {creating ? "Creating..." : "Create trip plan"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowCreateForm(false);
+              setFormError("");
+            }}
+            style={secondaryButton}
+          >
+            Cancel
+          </button>
+        </div>
       </section>
     )}
 
@@ -531,4 +565,14 @@ const topActions = {
   gap: "10px",
   flexWrap: "wrap" as const,
   marginBottom: "22px",
+};
+
+const formErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };

@@ -16,6 +16,7 @@ export default function NewPlacePage() {
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,10 +24,16 @@ export default function NewPlacePage() {
     if (!destinationId) return;
 
     if (!name.trim()) {
-      alert("Please enter a place name.");
+      setFormError("Please enter a place name.");
       return;
     }
 
+    if (!city.trim()) {
+      setFormError("Please enter the city or region for this place.");
+      return;
+    }
+
+    setFormError("");
     setSubmitting(true);
 
     try {
@@ -49,14 +56,14 @@ export default function NewPlacePage() {
 
       if (!res.ok) {
         console.error("Create place error:", data);
-        alert(data.detail || "Error creating place.");
+        setFormError(data.detail || "Could not create this place.");
         return;
       }
 
       router.push(`/places/${data.id}`);
     } catch (error) {
       console.error("Create place failed:", error);
-      alert("Error creating place.");
+      setFormError("Could not create this place.");
     } finally {
       setSubmitting(false);
     }
@@ -99,11 +106,33 @@ export default function NewPlacePage() {
       >
 
         <label style={field}>
-          <span style={label}>City</span>
+          <span style={label}>Place name</span>
+          <input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setFormError("");
+            }}
+            placeholder="Example: Colosseum, Vatican Museum, Central Station..."
+            style={input}
+          />
+        </label>
+
+         {formError && (
+            <div style={formErrorBox}>
+              {formError}
+            </div>
+         )}
+
+        <label style={field}>
+          <span style={label}>City or region</span>
           <input
             value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="Example: Rome"
+            onChange={(e) => {
+              setCity(e.target.value);
+              setFormError("");
+            }}
+            placeholder="Example: Rome, São Luiz do Paraitinga, Amsterdam..."
             style={input}
           />
         </label>
@@ -166,4 +195,14 @@ const input = {
   borderRadius: "10px",
   border: "1px solid #ddd",
   fontSize: "14px",
+};
+
+const formErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };

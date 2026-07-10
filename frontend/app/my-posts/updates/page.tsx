@@ -32,6 +32,14 @@ export default function MyUpdatesPage() {
   const [editingUpdateType, setEditingUpdateType] =
     useState<"event" | "alert" | "info">("info");
   const [savingUpdate, setSavingUpdate] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState("");
+  const [updateError, setUpdateError] = useState("");
+  const [pendingDeleteUpdate, setPendingDeleteUpdate] = useState<MyPost | null>(null);
+
+  const clearUpdateFeedback = () => {
+      setUpdateMessage("");
+      setUpdateError("");
+  };
 
   const [editingUpdateTitle, setEditingUpdateTitle] = useState("");
   const [editingUpdateCategory, setEditingUpdateCategory] = useState("general");
@@ -101,14 +109,16 @@ const formatDateTime = (value?: string | null) => {
   });
 
   const startEditingUpdate = (post: MyPost) => {
-  setEditingUpdateId(post.id);
-  setEditingUpdateTitle(post.title || "");
-  setEditingUpdateText(post.text || "");
-  setEditingUpdateCategory(post.category || "general");
-  setEditingUpdateEventDate(toDateTimeLocalValue(post.event_date));
-  setEditingUpdateExternalLink(post.external_link || "");
-  setEditingUpdateSourceName(post.source_name || "");
-  setEditingUpdateSourceUrl(post.source_url || "");
+      clearUpdateFeedback();
+      setPendingDeleteUpdate(null);
+      setEditingUpdateId(post.id);
+      setEditingUpdateTitle(post.title || "");
+      setEditingUpdateText(post.text || "");
+      setEditingUpdateCategory(post.category || "general");
+      setEditingUpdateEventDate(toDateTimeLocalValue(post.event_date));
+      setEditingUpdateExternalLink(post.external_link || "");
+      setEditingUpdateSourceName(post.source_name || "");
+      setEditingUpdateSourceUrl(post.source_url || "");
 
   if (post.type === "event" || post.type === "alert" || post.type === "info") {
     setEditingUpdateType(post.type);
@@ -129,24 +139,27 @@ const formatDateTime = (value?: string | null) => {
 };
 
   const cancelEditingUpdate = () => {
-  setEditingUpdateId(null);
-  setEditingUpdateTitle("");
-  setEditingUpdateText("");
-  setEditingUpdateType("info");
-  setEditingUpdateCategory("general");
-  setEditingUpdateEventDate("");
-  setEditingUpdateExternalLink("");
-  setEditingUpdateSourceName("");
-  setEditingUpdateSourceUrl("");
-  setEditingUpdatePriority("normal");
-};
+      clearUpdateFeedback();
+      setEditingUpdateId(null);
+      setEditingUpdateTitle("");
+      setEditingUpdateText("");
+      setEditingUpdateType("info");
+      setEditingUpdateCategory("general");
+      setEditingUpdateEventDate("");
+      setEditingUpdateExternalLink("");
+      setEditingUpdateSourceName("");
+      setEditingUpdateSourceUrl("");
+      setEditingUpdatePriority("normal");
+  };
 
   const saveUpdateChanges = async (postId: number) => {
     if (!editingUpdateText.trim()) {
-      alert("Please write the event or information.");
+      setUpdateError("Please write the event or information.");
+      setUpdateMessage("");
       return;
     }
 
+    clearUpdateFeedback();
     setSavingUpdate(true);
 
     try {
@@ -172,9 +185,9 @@ const formatDateTime = (value?: string | null) => {
       const data = await res.json();
 
       if (!res.ok) {
-        console.error("Update edit error:", data);
-        alert(data.detail || "Error updating post.");
-        return;
+          console.error("Update edit error:", data);
+          setUpdateError(data.detail || "Could not update this post.");
+          return;
       }
 
       setPosts((prev) =>
@@ -201,38 +214,37 @@ const formatDateTime = (value?: string | null) => {
       );
 
       cancelEditingUpdate();
-    } catch (error) {
-      console.error("Failed to update post:", error);
-      alert("Error updating post.");
-    } finally {
-      setSavingUpdate(false);
-    }
-  };
+      setUpdateMessage("Post updated.");
+      } catch (error) {
+          console.error("Failed to update post:", error);
+          setUpdateError("Could not update this post.");
+        } finally {
+          setSavingUpdate(false);
+        }
+      };
 
   const deleteUpdate = async (postId: number) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this event, alert or info post?"
-    );
+      clearUpdateFeedback();
 
-    if (!confirmed) return;
+      try {
+        const res = await fetch(`${API_URL}/api/updates/${postId}/`, {
+          method: "DELETE",
+          credentials: "include",
+        });
 
-    try {
-      const res = await fetch(`${API_URL}/api/updates/${postId}/`, {
-        method: "DELETE",
-        credentials: "include",
-      });
+        if (!res.ok) {
+          const data = await res.json();
+          setUpdateError(data.detail || "Could not delete this post.");
+          return;
+        }
 
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.detail || "Error deleting post.");
-        return;
+        setPosts((prev) => prev.filter((post) => post.id !== postId));
+        setPendingDeleteUpdate(null);
+        setUpdateMessage("Post deleted.");
+      } catch (error) {
+        console.error("Failed to delete post:", error);
+        setUpdateError("Could not delete this post.");
       }
-
-      setPosts((prev) => prev.filter((post) => post.id !== postId));
-    } catch (error) {
-      console.error("Failed to delete post:", error);
-      alert("Error deleting post.");
-    }
   };
 
   const getPostLabel = (type: string) => {
@@ -343,6 +355,48 @@ const formatDateTime = (value?: string | null) => {
           </button>
         ))}
       </div>
+
+      {updateError && (
+          <div style={updateErrorBox}>
+            {updateError}
+          </div>
+        )}
+
+        {updateMessage && (
+          <div style={updateSuccessBox}>
+            {updateMessage}
+          </div>
+        )}
+
+        {pendingDeleteUpdate && (
+          <div style={deleteConfirmBox}>
+            <div>
+              <strong>Delete this post?</strong>
+              <p style={deleteConfirmText}>
+                This will permanently delete{" "}
+                <strong>{pendingDeleteUpdate.title || pendingDeleteUpdate.text}</strong>.
+              </p>
+            </div>
+
+            <div style={actions}>
+              <button
+                type="button"
+                style={secondaryButton}
+                onClick={() => setPendingDeleteUpdate(null)}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                style={dangerButton}
+                onClick={() => deleteUpdate(pendingDeleteUpdate.id)}
+              >
+                Delete post
+              </button>
+            </div>
+          </div>
+        )}
 
       {filteredPosts.length === 0 ? (
         <section style={emptyBox}>
@@ -512,15 +566,11 @@ const formatDateTime = (value?: string | null) => {
                         <button
                           type="button"
                           onClick={() => saveUpdateChanges(post.id)}
-                          disabled={savingUpdate || !editingUpdateText.trim()}
+                          disabled={savingUpdate}
                           style={{
-                            ...primaryButton,
-                            opacity:
-                              savingUpdate || !editingUpdateText.trim() ? 0.5 : 1,
-                            cursor:
-                              savingUpdate || !editingUpdateText.trim()
-                                ? "not-allowed"
-                                : "pointer",
+                              ...primaryButton,
+                              opacity: savingUpdate ? 0.5 : 1,
+                              cursor: savingUpdate ? "not-allowed" : "pointer",
                           }}
                         >
                           {savingUpdate ? "Saving..." : "Save changes"}
@@ -607,11 +657,14 @@ const formatDateTime = (value?: string | null) => {
                       </button>
 
                       <button
-                        type="button"
-                        onClick={() => deleteUpdate(post.id)}
-                        style={dangerButton}
-                      >
-                        Delete
+                          type="button"
+                          onClick={() => {
+                            clearUpdateFeedback();
+                            setPendingDeleteUpdate(post);
+                          }}
+                          style={dangerButton}
+                        >
+                          Delete
                       </button>
                     </div>
                   </>
@@ -869,4 +922,44 @@ const smallLink = {
   color: "#111",
   fontSize: "13px",
   fontWeight: 600,
+};
+
+const updateErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginBottom: "16px",
+};
+
+const updateSuccessBox = {
+  padding: "10px",
+  border: "1px solid #bbf7d0",
+  borderRadius: "10px",
+  backgroundColor: "#f0fdf4",
+  color: "#166534",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginBottom: "16px",
+};
+
+const deleteConfirmBox = {
+  padding: "14px",
+  border: "1px solid #fecaca",
+  borderRadius: "12px",
+  backgroundColor: "#fff7f7",
+  color: "#7f1d1d",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginBottom: "18px",
+  display: "grid",
+  gap: "12px",
+};
+
+const deleteConfirmText = {
+  margin: "6px 0 0 0",
+  color: "#7f1d1d",
 };

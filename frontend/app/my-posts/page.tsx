@@ -59,6 +59,11 @@ const [editingUpdateId, setEditingUpdateId] = useState<number | null>(null);
 const [editingUpdateText, setEditingUpdateText] = useState("");
 const [editingUpdateType, setEditingUpdateType] = useState<"event" | "alert" | "info">("info");
 const [savingUpdate, setSavingUpdate] = useState(false);
+const [updateMessage, setUpdateMessage] = useState("");
+const [updateError, setUpdateError] = useState("");
+
+const [pendingUpdateDelete, setPendingUpdateDelete] =
+  useState<MyPost | null>(null);
 
 const [editingExperienceId, setEditingExperienceId] = useState<number | null>(null);
 
@@ -105,6 +110,11 @@ const [editImageCaption, setEditImageCaption] = useState("");
 const [editImageFile, setEditImageFile] = useState<File | null>(null);
 const [removeImage, setRemoveImage] = useState(false);
 const [savingExperience, setSavingExperience] = useState(false);
+const [experienceMessage, setExperienceMessage] = useState("");
+const [experienceError, setExperienceError] = useState("");
+
+const [pendingExperienceDelete, setPendingExperienceDelete] =
+  useState<MyExperience | null>(null);
 
 const [extraPhotoFile, setExtraPhotoFile] = useState<File | null>(null);
 const [extraPhotoCaption, setExtraPhotoCaption] = useState("");
@@ -113,9 +123,30 @@ const [openGalleryFor, setOpenGalleryFor] = useState<number | null>(null);
 const [extraPhotoSuccessMessage, setExtraPhotoSuccessMessage] = useState("");
 const [removingExtraPhotoId, setRemovingExtraPhotoId] = useState<number | null>(null);
 
+const [extraPhotoError, setExtraPhotoError] = useState("");
+const [pendingExtraPhotoDelete, setPendingExtraPhotoDelete] = useState<{
+  photoId: number;
+  experienceId: number;
+} | null>(null);
+
 const [editingExtraPhotoId, setEditingExtraPhotoId] = useState<number | null>(null);
 const [editingExtraPhotoCaption, setEditingExtraPhotoCaption] = useState("");
 const [savingExtraPhotoCaption, setSavingExtraPhotoCaption] = useState(false);
+
+const clearExtraPhotoFeedback = () => {
+  setExtraPhotoSuccessMessage("");
+  setExtraPhotoError("");
+};
+
+const clearExperienceFeedback = () => {
+  setExperienceMessage("");
+  setExperienceError("");
+};
+
+const clearUpdateFeedback = () => {
+  setUpdateMessage("");
+  setUpdateError("");
+};
 
 const loadPosts = async () => {
   try {
@@ -202,14 +233,8 @@ const loadExtraPhotosForExperiences = async (experiencesList: MyExperience[]) =>
 };
 
 const deleteExtraPhoto = async (photoId: number, experienceId: number) => {
-  const confirmed = window.confirm(
-    "Remove this gallery photo? This cannot be undone."
-  );
-
-  if (!confirmed) return;
-
   setRemovingExtraPhotoId(photoId);
-  setExtraPhotoSuccessMessage("");
+  clearExtraPhotoFeedback();
 
   try {
     const res = await fetch(`${API_URL}/api/experience-photos/${photoId}/`, {
@@ -220,7 +245,7 @@ const deleteExtraPhoto = async (photoId: number, experienceId: number) => {
     if (!res.ok) {
       const text = await res.text();
       console.error("Failed to delete extra photo:", res.status, text);
-      alert("Error removing gallery photo.");
+      setExtraPhotoError("Could not remove this gallery photo.");
       return;
     }
 
@@ -231,10 +256,11 @@ const deleteExtraPhoto = async (photoId: number, experienceId: number) => {
       ),
     }));
 
+    setPendingExtraPhotoDelete(null);
     setExtraPhotoSuccessMessage("Gallery photo removed.");
   } catch (error) {
     console.error("Delete extra photo failed:", error);
-    alert("Error removing gallery photo.");
+    setExtraPhotoError("Could not remove this gallery photo.");
   } finally {
     setRemovingExtraPhotoId(null);
   }
@@ -242,7 +268,7 @@ const deleteExtraPhoto = async (photoId: number, experienceId: number) => {
 
 const updateExtraPhotoCaption = async (photoId: number, experienceId: number) => {
   setSavingExtraPhotoCaption(true);
-  setExtraPhotoSuccessMessage("");
+  clearExtraPhotoFeedback();
 
   try {
     const formData = new FormData();
@@ -257,7 +283,7 @@ const updateExtraPhotoCaption = async (photoId: number, experienceId: number) =>
     if (!res.ok) {
       const text = await res.text();
       console.error("Failed to update extra photo caption:", res.status, text);
-      alert("Error updating photo caption.");
+      setExtraPhotoError("Could not update this photo caption.");
       return;
     }
 
@@ -279,8 +305,8 @@ const updateExtraPhotoCaption = async (photoId: number, experienceId: number) =>
     setEditingExtraPhotoCaption("");
     setExtraPhotoSuccessMessage("Photo caption updated.");
   } catch (error) {
-    console.error("Update extra photo caption failed:", error);
-    alert("Error updating photo caption.");
+      console.error("Update extra photo caption failed:", error);
+      setExtraPhotoError("Could not update this photo caption.");
   } finally {
     setSavingExtraPhotoCaption(false);
   }
@@ -290,6 +316,7 @@ const updateExtraPhotoCaption = async (photoId: number, experienceId: number) =>
 // Start editing experience
 // =========================
 const startEditingExperience = (experience: MyExperience) => {
+  clearExperienceFeedback();
   setEditingExperienceId(experience.id);
   setEditTitle(experience.title || "");
   setEditComment(experience.comment || "");
@@ -307,7 +334,8 @@ const startEditingExperience = (experience: MyExperience) => {
   setExtraPhotoFile(null);
   setExtraPhotoCaption("");
   setUploadingExtraPhoto(false);
-  setExtraPhotoSuccessMessage("");
+  clearExtraPhotoFeedback();
+  setPendingExtraPhotoDelete(null);
   setEditImagePreview(null);
   setEditImageDisplayMode(experience.image_display_mode || "cover");
   setEditImageCaption(experience.image_caption || "");
@@ -319,6 +347,7 @@ const startEditingExperience = (experience: MyExperience) => {
 // Cancel editing experience
 // =========================
 const cancelEditingExperience = () => {
+  clearExperienceFeedback();
   setEditingExperienceId(null);
   setEditTitle("");
   setEditComment("");
@@ -343,21 +372,25 @@ const cancelEditingExperience = () => {
 // =========================
 const saveEditedExperience = async (experienceId: number) => {
   if (!editTitle.trim()) {
-    alert("Please add a short title.");
-    return;
+      setExperienceError("Please add a short title.");
+      setExperienceMessage("");
+      return;
   }
 
   if (!editComment.trim()) {
-    alert("Please write your experience.");
-    return;
+      setExperienceError("Please write your experience.");
+      setExperienceMessage("");
+      return;
   }
 
   if (!editRating) {
-    alert("Please select a rating.");
-    return;
+      setExperienceError("Please select a rating.");
+      setExperienceMessage("");
+      return;
   }
 
-  setSavingExperience(true);
+    clearExperienceFeedback();
+    setSavingExperience(true);
 
   try {
     const formData = new FormData();
@@ -415,7 +448,7 @@ const saveEditedExperience = async (experienceId: number) => {
 
     if (!res.ok) {
       console.error("Failed to update experience:", data);
-      alert(data.detail || "Error updating experience.");
+      setExperienceError(data.detail || "Could not update this experience.");
       return;
     }
 
@@ -443,9 +476,10 @@ const saveEditedExperience = async (experienceId: number) => {
     );
 
     cancelEditingExperience();
+    setExperienceMessage("Experience updated.");
   } catch (error) {
-    console.error("Update experience failed:", error);
-    alert("Error updating experience.");
+      console.error("Update experience failed:", error);
+      setExperienceError("Could not update this experience.");
   } finally {
     setSavingExperience(false);
   }
@@ -456,17 +490,22 @@ const saveEditedExperience = async (experienceId: number) => {
 // =========================
 const uploadExtraPhoto = async (experienceId: number) => {
   if (!extraPhotoFile) {
-    alert("Please choose an extra photo first.");
-    return;
+      setExtraPhotoError("Please choose an extra photo first.");
+      setExtraPhotoSuccessMessage("");
+      return;
   }
 
 const currentExtraPhotos = extraPhotosByExperience[experienceId] || [];
 
 if (currentExtraPhotos.length >= MAX_EXTRA_PHOTOS) {
-  alert(`You can add up to ${MAX_EXTRA_PHOTOS} extra photos to each experience.`);
+  setExtraPhotoError(
+    `You can add up to ${MAX_EXTRA_PHOTOS} extra photos to each experience.`
+  );
+  setExtraPhotoSuccessMessage("");
   return;
 }
 
+  clearExtraPhotoFeedback();
   setUploadingExtraPhoto(true);
 
   try {
@@ -488,7 +527,7 @@ if (currentExtraPhotos.length >= MAX_EXTRA_PHOTOS) {
 
     if (!res.ok) {
       console.error("Failed to upload extra photo:", data);
-      alert(data.detail || "Error uploading extra photo.");
+      setExtraPhotoError(data.detail || "Could not upload this extra photo.");
       return;
     }
 
@@ -498,10 +537,10 @@ if (currentExtraPhotos.length >= MAX_EXTRA_PHOTOS) {
     await loadExtraPhotosForExperiences(experiences);
 
     setExtraPhotoSuccessMessage("Gallery photo saved.");
-  } catch (error) {
-    console.error("Upload extra photo failed:", error);
-    alert("Error uploading extra photo.");
-  } finally {
+    } catch (error) {
+      console.error("Upload extra photo failed:", error);
+      setExtraPhotoError("Could not upload this extra photo.");
+    } finally {
     setUploadingExtraPhoto(false);
   }
 };
@@ -510,6 +549,7 @@ if (currentExtraPhotos.length >= MAX_EXTRA_PHOTOS) {
 // Start editing event/info/alert
 // =========================
 const startEditingUpdate = (post: MyPost) => {
+  clearUpdateFeedback();
   setEditingUpdateId(post.id);
   setEditingUpdateText(post.text || "");
 
@@ -524,6 +564,7 @@ const startEditingUpdate = (post: MyPost) => {
 // Cancel editing event/info/alert
 // =========================
 const cancelEditingUpdate = () => {
+  clearUpdateFeedback();
   setEditingUpdateId(null);
   setEditingUpdateText("");
   setEditingUpdateType("info");
@@ -534,10 +575,12 @@ const cancelEditingUpdate = () => {
 // =========================
 const saveUpdateChanges = async (postId: number) => {
   if (!editingUpdateText.trim()) {
-    alert("Please write the event or information.");
-    return;
+      setUpdateError("Please write the event or information.");
+      setUpdateMessage("");
+      return;
   }
 
+  clearUpdateFeedback();
   setSavingUpdate(true);
 
   try {
@@ -558,7 +601,7 @@ const saveUpdateChanges = async (postId: number) => {
 
     if (!res.ok) {
       console.error("Update edit error:", data);
-      alert(data.detail || "Error updating post.");
+      setUpdateError(data.detail || "Could not update this post.");
       return;
     }
 
@@ -579,10 +622,11 @@ const saveUpdateChanges = async (postId: number) => {
     );
 
     cancelEditingUpdate();
-  } catch (error) {
-    console.error("Failed to update post:", error);
-    alert("Error updating post.");
-  } finally {
+    setUpdateMessage("Post updated.");
+    } catch (error) {
+      console.error("Failed to update post:", error);
+      setUpdateError("Could not update this post.");
+    } finally {
     setSavingUpdate(false);
   }
 };
@@ -591,11 +635,7 @@ const saveUpdateChanges = async (postId: number) => {
 // Delete experience
 // =========================
 const deleteExperience = async (experienceId: number) => {
-  const confirmed = window.confirm(
-    "Are you sure you want to delete this experience? This action cannot be undone."
-  );
-
-  if (!confirmed) return;
+  clearExperienceFeedback();
 
   try {
     const res = await fetch(`${API_URL}/api/experiences/${experienceId}/`, {
@@ -604,7 +644,7 @@ const deleteExperience = async (experienceId: number) => {
     });
 
     if (!res.ok) {
-      let message = "Error deleting experience.";
+      let message = "Could not delete this experience.";
 
       try {
         const data = await res.json();
@@ -613,7 +653,8 @@ const deleteExperience = async (experienceId: number) => {
         // Keep default message if response has no JSON body.
       }
 
-      alert(message);
+      setExperienceError(message);
+      setPendingExperienceDelete(null);
       return;
     }
 
@@ -634,22 +675,21 @@ const deleteExperience = async (experienceId: number) => {
     if (openGalleryFor === experienceId) {
       setOpenGalleryFor(null);
     }
+
+    setPendingExperienceDelete(null);
+    setExperienceMessage("Experience deleted.");
   } catch (error) {
     console.error("Failed to delete experience:", error);
-    alert("Error deleting experience.");
+    setExperienceError("Could not delete this experience.");
+    setPendingExperienceDelete(null);
   }
 };
-
 
 // =========================
 // Delete event/info/alert
 // =========================
 const deleteUpdate = async (postId: number) => {
-  const confirmed = window.confirm(
-    "Are you sure you want to delete this event, alert or info post?"
-  );
-
-  if (!confirmed) return;
+  clearUpdateFeedback();
 
   try {
     const res = await fetch(`${API_URL}/api/updates/${postId}/`, {
@@ -659,14 +699,18 @@ const deleteUpdate = async (postId: number) => {
 
     if (!res.ok) {
       const data = await res.json();
-      alert(data.detail || "Error deleting post.");
+      setUpdateError(data.detail || "Could not delete this post.");
+      setPendingUpdateDelete(null);
       return;
     }
 
     setPosts((prev) => prev.filter((post) => post.id !== postId));
+    setPendingUpdateDelete(null);
+    setUpdateMessage("Post deleted.");
   } catch (error) {
     console.error("Failed to delete post:", error);
-    alert("Error deleting post.");
+    setUpdateError("Could not delete this post.");
+    setPendingUpdateDelete(null);
   }
 };
 
@@ -1259,6 +1303,66 @@ const formatTripValue = (value: string) => {
                           </div>
                         )}
 
+                        {extraPhotoError && (
+                          <div style={errorMessageBox}>
+                            {extraPhotoError}
+                          </div>
+                        )}
+
+                        {pendingExtraPhotoDelete &&
+                          pendingExtraPhotoDelete.experienceId === experience.id && (
+                            <div style={deleteConfirmBox}>
+                              <div>
+                                <strong>Remove this gallery photo?</strong>
+
+                                <p style={deleteConfirmText}>
+                                  This cannot be undone.
+                                </p>
+                              </div>
+
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingExtraPhotoDelete(null)}
+                                  disabled={removingExtraPhotoId === pendingExtraPhotoDelete.photoId}
+                                  style={{
+                                    ...secondaryButton,
+                                    padding: "6px 9px",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    deleteExtraPhoto(
+                                      pendingExtraPhotoDelete.photoId,
+                                      pendingExtraPhotoDelete.experienceId
+                                    )
+                                  }
+                                  disabled={removingExtraPhotoId === pendingExtraPhotoDelete.photoId}
+                                  style={{
+                                    ...dangerButton,
+                                    padding: "6px 9px",
+                                    fontSize: "12px",
+                                    opacity:
+                                      removingExtraPhotoId === pendingExtraPhotoDelete.photoId ? 0.5 : 1,
+                                    cursor:
+                                      removingExtraPhotoId === pendingExtraPhotoDelete.photoId
+                                        ? "not-allowed"
+                                        : "pointer",
+                                  }}
+                                >
+                                  {removingExtraPhotoId === pendingExtraPhotoDelete.photoId
+                                    ? "Removing..."
+                                    : "Remove photo"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
                         {(extraPhotosByExperience[experience.id] || []).length > 0 && (
                           <div style={extraPhotosGrid}>
                             {(extraPhotosByExperience[experience.id] || []).map((photo, index) => (
@@ -1325,9 +1429,10 @@ const formatTripValue = (value: string) => {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setEditingExtraPhotoId(photo.id);
-                                        setEditingExtraPhotoCaption(photo.caption || "");
-                                        setExtraPhotoSuccessMessage("");
+                                          setEditingExtraPhotoId(photo.id);
+                                          setEditingExtraPhotoCaption(photo.caption || "");
+                                          clearExtraPhotoFeedback();
+                                          setPendingExtraPhotoDelete(null);
                                       }}
                                       style={{
                                         ...secondaryButton,
@@ -1340,20 +1445,26 @@ const formatTripValue = (value: string) => {
                                   </>
                                 )}
 
-                            <button
-                              type="button"
-                              onClick={() => deleteExtraPhoto(photo.id, experience.id)}
-                              disabled={removingExtraPhotoId === photo.id}
-                              style={{
-                                ...dangerButton,
-                                padding: "6px 9px",
-                                fontSize: "12px",
-                                opacity: removingExtraPhotoId === photo.id ? 0.5 : 1,
-                                cursor: removingExtraPhotoId === photo.id ? "not-allowed" : "pointer",
-                              }}
-                            >
-                              {removingExtraPhotoId === photo.id ? "Removing..." : "Remove"}
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    clearExtraPhotoFeedback();
+                                    setPendingExtraPhotoDelete({
+                                      photoId: photo.id,
+                                      experienceId: experience.id,
+                                    });
+                                  }}
+                                  disabled={removingExtraPhotoId === photo.id}
+                                  style={{
+                                    ...dangerButton,
+                                    padding: "6px 9px",
+                                    fontSize: "12px",
+                                    opacity: removingExtraPhotoId === photo.id ? 0.5 : 1,
+                                    cursor: removingExtraPhotoId === photo.id ? "not-allowed" : "pointer",
+                                  }}
+                                >
+                                  Remove
+                                </button>
 
                               </div>
                             ))}
@@ -1452,13 +1563,47 @@ const formatTripValue = (value: string) => {
                         Edit experience
                       </button>
                           <button
-                            type="button"
-                            style={dangerButton}
-                            onClick={() => deleteExperience(experience.id)}
+                              type="button"
+                              style={dangerButton}
+                              onClick={() => {
+                                clearExperienceFeedback();
+                                setPendingExperienceDelete(experience);
+                              }}
                           >
                             Delete
                           </button>
                         </div>
+
+                        {pendingExperienceDelete?.id === experience.id && (
+                          <div style={deleteConfirmBox}>
+                            <div>
+                              <strong>Delete this experience?</strong>
+
+                              <p style={deleteConfirmText}>
+                                This will permanently delete{" "}
+                                <strong>{experience.title || "this experience"}</strong>.
+                              </p>
+                            </div>
+
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                style={secondaryButton}
+                                onClick={() => setPendingExperienceDelete(null)}
+                              >
+                                Cancel
+                              </button>
+
+                              <button
+                                type="button"
+                                style={dangerButton}
+                                onClick={() => deleteExperience(experience.id)}
+                              >
+                                Delete experience
+                              </button>
+                            </div>
+                          </div>
+                        )}
                   </>
                 )}
               </article>
@@ -1563,12 +1708,45 @@ const formatTripValue = (value: string) => {
 
                         <button
                           type="button"
-                          onClick={() => deleteUpdate(post.id)}
+                          onClick={() => {
+                            clearUpdateFeedback();
+                            setPendingUpdateDelete(post);
+                          }}
                           style={dangerButton}
                         >
                           Delete
                         </button>
                       </div>
+
+                      {pendingUpdateDelete?.id === post.id && (
+                          <div style={deleteConfirmBox}>
+                            <div>
+                              <strong>Delete this post?</strong>
+
+                              <p style={deleteConfirmText}>
+                                This will permanently delete this event, alert or info post.
+                              </p>
+                            </div>
+
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                style={secondaryButton}
+                                onClick={() => setPendingUpdateDelete(null)}
+                              >
+                                Cancel
+                              </button>
+
+                              <button
+                                type="button"
+                                style={dangerButton}
+                                onClick={() => deleteUpdate(post.id)}
+                              >
+                                Delete post
+                              </button>
+                            </div>
+                          </div>
+                        )}
                     </>
                   )}
                 </article>
@@ -1904,4 +2082,31 @@ const successMessageBox = {
   background: "#f2fbf5",
   color: "#166534",
   fontSize: "13px",
+};
+
+const errorMessageBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const deleteConfirmBox = {
+  padding: "12px",
+  border: "1px solid #fecaca",
+  borderRadius: "12px",
+  backgroundColor: "#fff7f7",
+  color: "#7f1d1d",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  display: "grid",
+  gap: "10px",
+};
+
+const deleteConfirmText = {
+  margin: "6px 0 0 0",
+  color: "#7f1d1d",
 };

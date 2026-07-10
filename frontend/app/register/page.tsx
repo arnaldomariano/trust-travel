@@ -33,6 +33,7 @@ const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [countryCode, setCountryCode] = useState("");
 const [loading, setLoading] = useState(false);
+const [formError, setFormError] = useState("");
 
 const [registrationResult, setRegistrationResult] = useState<{
   username: string;
@@ -46,29 +47,30 @@ const [registrationResult, setRegistrationResult] = useState<{
     e.preventDefault();
 
     if (!username.trim()) {
-      alert("Please choose a username.");
+      setFormError("Please choose a username.");
       return;
     }
 
     const usernamePattern = /^[A-Za-z0-9@.+\-_]+$/;
 
     if (!usernamePattern.test(username.trim())) {
-      alert(
+      setFormError(
         "Username can only contain letters, numbers, and these symbols: @ . + - _"
       );
       return;
     }
 
     if (!countryCode) {
-      alert("Please choose your country / nationality.");
+      setFormError("Please choose your country / nationality.");
       return;
     }
 
-    if (!password) {
-      alert("Please choose a password.");
+   if (!password) {
+      setFormError("Please choose a password.");
       return;
     }
 
+    setFormError("");
     setLoading(true);
 
     try {
@@ -86,11 +88,11 @@ const [registrationResult, setRegistrationResult] = useState<{
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(errorText);
-        alert("Registration failed");
-        setLoading(false);
-        return;
+          const errorText = await response.text();
+          console.error(errorText);
+          setFormError("Registration failed. Please check your details and try again.");
+          setLoading(false);
+          return;
       }
 
       const data = await response.json();
@@ -101,7 +103,7 @@ const [registrationResult, setRegistrationResult] = useState<{
     });
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setFormError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -169,12 +171,14 @@ const [registrationResult, setRegistrationResult] = useState<{
           <label style={label}>Username</label>
 
           <input
-            type="text"
-            placeholder="Username, e.g. maria_silva"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            style={input}
+              type="text"
+              placeholder="Username, e.g. maria_silva"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setFormError("");
+              }}
+              style={input}
           />
 
           <small style={hint}>
@@ -186,10 +190,12 @@ const [registrationResult, setRegistrationResult] = useState<{
           <label style={label}>Country of birth / Nationality</label>
 
           <select
-            value={countryCode}
-            onChange={(e) => setCountryCode(e.target.value)}
-            required
-            style={input}
+              value={countryCode}
+              onChange={(e) => {
+                setCountryCode(e.target.value);
+                setFormError("");
+              }}
+              style={input}
           >
             {COUNTRY_OPTIONS.map((country) => (
               <option key={country.code || "empty"} value={country.code}>
@@ -216,7 +222,10 @@ const [registrationResult, setRegistrationResult] = useState<{
             type="email"
             placeholder="Optional"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setFormError("");
+            }}
             style={input}
           />
           <small style={hint}>
@@ -227,14 +236,22 @@ const [registrationResult, setRegistrationResult] = useState<{
         <div style={field}>
           <label style={label}>Password</label>
           <input
-            type="password"
-            placeholder="Choose a password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={input}
+              type="password"
+              placeholder="Choose a password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setFormError("");
+              }}
+              style={input}
           />
         </div>
+
+        {formError && (
+          <div style={formErrorBox}>
+            {formError}
+          </div>
+        )}
 
         <button type="submit" disabled={loading} style={button}>
           {loading ? "Creating..." : "Create account"}
@@ -365,4 +382,14 @@ const recoveryCodeText = {
   color: "#555",
   fontSize: "13px",
   lineHeight: 1.5,
+};
+
+const formErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };

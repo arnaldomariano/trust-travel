@@ -154,6 +154,7 @@ export default function TripPlanDetailPage() {
 
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const [showDeletePlanConfirm, setShowDeletePlanConfirm] = useState(false);
 
   const [editingPlan, setEditingPlan] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
@@ -580,12 +581,6 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
   const deleteTripPlan = async () => {
     if (!plan) return;
 
-    const confirmed = window.confirm(
-      "Delete this trip plan? This will remove the plan and all saved items inside it."
-    );
-
-    if (!confirmed) return;
-
     clearActionFeedback();
     setDeletingPlan(true);
 
@@ -606,6 +601,7 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
         console.error("Delete trip plan error:", data);
         setActionError(data.detail || "Could not delete this trip plan.");
+        setShowDeletePlanConfirm(false);
         return;
       }
 
@@ -613,6 +609,7 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
     } catch (error) {
       console.error("Failed to delete trip plan:", error);
       setActionError("Something went wrong while deleting this trip plan.");
+      setShowDeletePlanConfirm(false);
     } finally {
       setDeletingPlan(false);
     }
@@ -693,20 +690,59 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
             Edit trip plan
           </button>
 
-          <button
-            type="button"
-            onClick={deleteTripPlan}
-            disabled={deletingPlan}
-            style={{
-              ...dangerButton,
-              opacity: deletingPlan ? 0.5 : 1,
-              cursor: deletingPlan ? "not-allowed" : "pointer",
-            }}
-          >
-            {deletingPlan ? "Deleting..." : "Delete trip plan"}
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearActionFeedback();
+                setShowDeletePlanConfirm(true);
+              }}
+              disabled={deletingPlan}
+              style={{
+                ...dangerButton,
+                opacity: deletingPlan ? 0.5 : 1,
+                cursor: deletingPlan ? "not-allowed" : "pointer",
+              }}
+            >
+              Delete trip plan
+            </button>
         </div>
       </section>
+
+      {showDeletePlanConfirm && (
+          <section style={deleteConfirmBox}>
+            <div>
+              <strong>Delete this trip plan?</strong>
+
+              <p style={deleteConfirmText}>
+                This will remove <strong>{plan.title}</strong> and all saved items inside it.
+              </p>
+            </div>
+
+            <div style={actions}>
+              <button
+                type="button"
+                onClick={() => setShowDeletePlanConfirm(false)}
+                disabled={deletingPlan}
+                style={secondaryButton}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={deleteTripPlan}
+                disabled={deletingPlan}
+                style={{
+                  ...dangerButton,
+                  opacity: deletingPlan ? 0.5 : 1,
+                  cursor: deletingPlan ? "not-allowed" : "pointer",
+                }}
+              >
+                {deletingPlan ? "Deleting..." : "Delete plan"}
+              </button>
+            </div>
+          </section>
+        )}
 
       <section style={radarBox}>
         <div style={radarHeaderRow}>
@@ -1634,4 +1670,22 @@ const removeConfirmOverlay = {
   justifyContent: "center",
   padding: "20px",
   zIndex: 1000,
+};
+
+const deleteConfirmBox = {
+  padding: "14px",
+  border: "1px solid #fecaca",
+  borderRadius: "12px",
+  backgroundColor: "#fff7f7",
+  color: "#7f1d1d",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginBottom: "18px",
+  display: "grid",
+  gap: "12px",
+};
+
+const deleteConfirmText = {
+  margin: "6px 0 0 0",
+  color: "#7f1d1d",
 };

@@ -26,6 +26,7 @@ export default function PlacePage() {
   const [locationSuggestionReason, setLocationSuggestionReason] = useState("");
   const [submittingLocationSuggestion, setSubmittingLocationSuggestion] = useState(false);
   const [locationSuggestionSubmitted, setLocationSuggestionSubmitted] = useState(false);
+  const [locationSuggestionError, setLocationSuggestionError] = useState("");
   const [showLocationSuggestionForm, setShowLocationSuggestionForm] = useState(false);
 
   const [loadingCountryContext, setLoadingCountryContext] = useState(false);
@@ -35,13 +36,17 @@ export default function PlacePage() {
   const [newChildPlaceCity, setNewChildPlaceCity] = useState("");
   const [creatingChildPlace, setCreatingChildPlace] = useState(false);
   const [createdChildPlace, setCreatedChildPlace] = useState<any>(null);
+  const [createChildPlaceError, setCreateChildPlaceError] = useState("");
   const [searchInsideCountry, setSearchInsideCountry] = useState("");
   const [hasSearchedInsideCountry, setHasSearchedInsideCountry] = useState(false);
+  const [countryChildSearchError, setCountryChildSearchError] = useState("");
+
 
   const [searchInsideCity, setSearchInsideCity] = useState("");
   const [specificPlaceResults, setSpecificPlaceResults] = useState<any[]>([]);
-  const [specificPlaceSearchLoading, setSpecificPlaceSearchLoading] = useState(false);
   const [specificPlaceHasSearched, setSpecificPlaceHasSearched] = useState(false);
+  const [specificPlaceSearchLoading, setSpecificPlaceSearchLoading] = useState(false);
+  const [specificPlaceSearchError, setSpecificPlaceSearchError] = useState("");
   const [showSpecificPlaceTools, setShowSpecificPlaceTools] = useState(false);
 
   const [showCreateSpecificPlaceForm, setShowCreateSpecificPlaceForm] = useState(false);
@@ -51,16 +56,19 @@ export default function PlacePage() {
   >("nature");
   const [creatingSpecificPlace, setCreatingSpecificPlace] = useState(false);
   const [createdSpecificPlace, setCreatedSpecificPlace] = useState<any>(null);
+  const [createSpecificPlaceError, setCreateSpecificPlaceError] = useState("");
 
   const [ratingsSummary, setRatingsSummary] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const [showUpdateForm, setShowUpdateForm] = useState(false);
+  const [updateFormError, setUpdateFormError] = useState("");
   const [updateType, setUpdateType] = useState<"event" | "alert" | "info">("info");
+  const [updateTitle, setUpdateTitle] = useState("");
   const [updateText, setUpdateText] = useState("");
   const [submittingUpdate, setSubmittingUpdate] = useState(false);
 
-  const [updateTitle, setUpdateTitle] = useState("");
+
   const [updateCategory, setUpdateCategory] = useState("general");
   const [updateEventDate, setUpdateEventDate] = useState("");
   const [updateExternalLink, setUpdateExternalLink] = useState("");
@@ -652,12 +660,14 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       }
 
       if (!suggestedParentPlaceId) {
-        alert("Please choose the suggested city, region or country.");
-        return;
+          setLocationSuggestionError("Please choose the suggested city, region or country.");
+          setLocationSuggestionSubmitted(false);
+          return;
       }
 
       setSubmittingLocationSuggestion(true);
       setLocationSuggestionSubmitted(false);
+      setLocationSuggestionError("");
 
       try {
         const res = await fetch(`${API_URL}/api/place-location-suggestions/`, {
@@ -677,7 +687,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         if (!res.ok) {
           console.error("Failed to submit location suggestion:", data);
-          alert(data.detail || "Could not submit location suggestion.");
+          setLocationSuggestionError(data.detail || "Could not submit location suggestion.");
           return;
         }
 
@@ -689,7 +699,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         await loadLocationSuggestions(place.id);
       } catch (error) {
         console.error("Submit location suggestion failed:", error);
-        alert("Could not submit location suggestion.");
+        setLocationSuggestionError("Could not submit location suggestion.");
       } finally {
         setSubmittingLocationSuggestion(false);
       }
@@ -708,12 +718,14 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         place.name;
 
       if (!name) {
-        alert("Please enter the city, island or region name.");
-        return;
+          setCreateChildPlaceError("Please enter the city, island or region name.");
+          setCreatedChildPlace(null);
+          return;
       }
 
-      setCreatingChildPlace(true);
-      setCreatedChildPlace(null);
+        setCreatingChildPlace(true);
+        setCreatedChildPlace(null);
+        setCreateChildPlaceError("");
 
       try {
         const res = await fetch(`${API_URL}/api/places/create-basic/`, {
@@ -734,7 +746,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         if (!res.ok) {
           console.error("Failed to create city/region:", data);
-          alert(data.detail || "Error creating city or region.");
+          setCreateChildPlaceError(data.detail || "Could not create this city or region.");
           return;
         }
 
@@ -750,8 +762,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         await loadCountryContext(place.id);
       } catch (error) {
-        console.error("Create child place failed:", error);
-        alert("Error creating city or region.");
+          console.error("Create child place failed:", error);
+          setCreateChildPlaceError("Could not create this city or region.");
       } finally {
         setCreatingChildPlace(false);
       }
@@ -766,10 +778,13 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
       setSpecificPlaceHasSearched(true);
       setSpecificPlaceResults([]);
+      setSpecificPlaceSearchError("");
 
       if (query.length < 2) {
-        alert("Type at least 2 characters to search inside this city or region.");
-        return;
+          setSpecificPlaceSearchError(
+            "Type at least 2 characters to search inside this city or region."
+          );
+          return;
       }
 
       const countryName =
@@ -799,7 +814,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         if (!res.ok) {
           const text = await res.text();
           console.error("Specific place search failed:", res.status, text);
-          alert("Could not search specific places right now.");
+          setSpecificPlaceSearchError("Could not search specific places right now.");
           return;
         }
 
@@ -822,7 +837,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         setSpecificPlaceResults(filtered);
       } catch (error) {
         console.error("Specific place search error:", error);
-        alert("Could not search specific places right now.");
+        setSpecificPlaceSearchError("Could not search specific places right now.");
       } finally {
         setSpecificPlaceSearchLoading(false);
       }
@@ -836,8 +851,9 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       const name = newSpecificPlaceName.trim();
 
       if (!name) {
-        alert("Please enter the specific place name.");
-        return;
+          setCreateSpecificPlaceError("Please enter the specific place name.");
+          setCreatedSpecificPlace(null);
+          return;
       }
 
       const countryName =
@@ -847,12 +863,14 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         "";
 
       if (!countryName) {
-        alert("Could not identify the country for this city or region.");
-        return;
+          setCreateSpecificPlaceError("Could not identify the country for this city or region.");
+          setCreatedSpecificPlace(null);
+          return;
       }
 
-      setCreatingSpecificPlace(true);
-      setCreatedSpecificPlace(null);
+        setCreatingSpecificPlace(true);
+        setCreatedSpecificPlace(null);
+        setCreateSpecificPlaceError("");
 
       try {
         const res = await fetch(`${API_URL}/api/places/create-basic/`, {
@@ -873,7 +891,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         if (!res.ok) {
           console.error("Failed to create specific place:", data);
-          alert(data.detail || "Error creating specific place.");
+          setCreateSpecificPlaceError(data.detail || "Could not create this specific place.");
           return;
         }
 
@@ -888,8 +906,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         setShowCreateSpecificPlaceForm(false);
         setSpecificPlaceResults((prev) => [placeResult, ...prev]);
       } catch (error) {
-        console.error("Create specific place failed:", error);
-        alert("Error creating specific place.");
+          console.error("Create specific place failed:", error);
+          setCreateSpecificPlaceError("Could not create this specific place.");
       } finally {
         setCreatingSpecificPlace(false);
       }
@@ -901,10 +919,11 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       if (!id) return;
 
       if (!updateText.trim()) {
-        alert("Please write the event or information.");
-        return;
+          setUpdateFormError("Please write the event or information.");
+          return;
       }
 
+      setUpdateFormError("");
       setSubmittingUpdate(true);
 
       try {
@@ -932,7 +951,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         if (!res.ok) {
           console.error("Failed to create update:", data);
-          alert(data.detail || "Error sharing event or info.");
+          setUpdateFormError(data.detail || "Could not share this event or info.");
           return;
         }
 
@@ -949,8 +968,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         setShowUpdateForm(false);
         setFilter("update");
       } catch (error) {
-        console.error("Create update failed:", error);
-        alert("Error sharing event or info.");
+          console.error("Create update failed:", error);
+          setUpdateFormError("Could not share this event or info.");
       } finally {
         setSubmittingUpdate(false);
       }
@@ -1080,6 +1099,8 @@ const handleToggleEventsInfo = () => {
               >
                 {hierarchyLevelLabel}
               </div>
+
+
 
               <p
                 style={{
@@ -1245,6 +1266,12 @@ const handleToggleEventsInfo = () => {
                     }}
                   />
                 </div>
+
+                {locationSuggestionError && (
+                  <div style={locationSuggestionErrorBox}>
+                    {locationSuggestionError}
+                  </div>
+                )}
 
                 <button
                   type="submit"
@@ -1546,6 +1573,7 @@ const handleToggleEventsInfo = () => {
                       setSearchInsideCountry(e.target.value);
                       setHasSearchedInsideCountry(false);
                       setShowCreateChildPlaceForm(false);
+                      setCountryChildSearchError("");
                     }}
                     placeholder={`Search cities, islands or regions inside ${place.name}`}
                     style={{
@@ -1555,24 +1583,31 @@ const handleToggleEventsInfo = () => {
                   />
 
                   <button
-                    type="button"
-                    onClick={() => {
-                      if (searchInsideCountry.trim().length < 4) {
-                        alert("Type at least 4 characters to search.");
-                        return;
-                      }
+                      type="button"
+                      onClick={() => {
+                        if (searchInsideCountry.trim().length < 4) {
+                          setCountryChildSearchError("Type at least 4 characters to search.");
+                          return;
+                        }
 
-                      setHasSearchedInsideCountry(true);
-                      setShowCreateChildPlaceForm(false);
-                    }}
-                    style={{
-                      ...secondaryButton,
-                      flex: "0 0 auto",
-                    }}
+                        setCountryChildSearchError("");
+                        setHasSearchedInsideCountry(true);
+                        setShowCreateChildPlaceForm(false);
+                      }}
+                      style={{
+                        ...secondaryButton,
+                        flex: "0 0 auto",
+                      }}
                   >
                     Search
                   </button>
                 </div>
+
+               {countryChildSearchError && (
+                  <div style={countryChildSearchErrorBox}>
+                    {countryChildSearchError}
+                  </div>
+               )}
 
               <p
                   style={{
@@ -1640,24 +1675,24 @@ const handleToggleEventsInfo = () => {
                   />
                 </div>
 
+                {createChildPlaceError && (
+                  <div style={createChildPlaceErrorBox}>
+                    {createChildPlaceError}
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  disabled={creatingChildPlace || !newChildPlaceName.trim()}
+                  disabled={creatingChildPlace}
                   style={{
                     ...primaryButton,
-                    opacity:
-                      creatingChildPlace || !newChildPlaceName.trim()
-                        ? 0.5
-                        : 1,
-                    cursor:
-                      creatingChildPlace || !newChildPlaceName.trim()
-                        ? "not-allowed"
-                        : "pointer",
+                    opacity: creatingChildPlace ? 0.5 : 1,
+                    cursor: creatingChildPlace ? "not-allowed" : "pointer",
                   }}
                 >
-                {creatingChildPlace
-                  ? "Creating..."
-                  : `Create city/island/region inside ${place.name}`}
+                  {creatingChildPlace
+                    ? "Creating..."
+                    : `Create city/island/region inside ${place.name}`}
                 </button>
               </form>
             )}
@@ -2181,9 +2216,10 @@ const handleToggleEventsInfo = () => {
                 <input
                   value={searchInsideCity}
                   onChange={(e) => {
-                    setSearchInsideCity(e.target.value);
-                    setSpecificPlaceResults([]);
-                    setSpecificPlaceHasSearched(false);
+                      setSearchInsideCity(e.target.value);
+                      setSpecificPlaceResults([]);
+                      setSpecificPlaceHasSearched(false);
+                      setSpecificPlaceSearchError("");
                   }}
                   placeholder={`Example: beach, hotel, restaurant, viewpoint or attraction inside ${place.name}`}
                   style={{
@@ -2470,19 +2506,19 @@ const handleToggleEventsInfo = () => {
                   </select>
                 </div>
 
+                {createSpecificPlaceError && (
+                  <div style={createSpecificPlaceErrorBox}>
+                    {createSpecificPlaceError}
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  disabled={creatingSpecificPlace || !newSpecificPlaceName.trim()}
+                  disabled={creatingSpecificPlace}
                   style={{
                     ...primaryButton,
-                    opacity:
-                      creatingSpecificPlace || !newSpecificPlaceName.trim()
-                        ? 0.5
-                        : 1,
-                    cursor:
-                      creatingSpecificPlace || !newSpecificPlaceName.trim()
-                        ? "not-allowed"
-                        : "pointer",
+                    opacity: creatingSpecificPlace ? 0.5 : 1,
+                    cursor: creatingSpecificPlace ? "not-allowed" : "pointer",
                   }}
                 >
                   {creatingSpecificPlace
@@ -2810,20 +2846,25 @@ const handleToggleEventsInfo = () => {
                 />
               </div>
 
+              {updateFormError && (
+                <div style={updateFormErrorBox}>
+                  {updateFormError}
+                </div>
+              )}
+
               <button
-                type="submit"
-                disabled={submittingUpdate || !updateText.trim()}
-                style={{
-                  ...primaryButton,
-                  opacity: submittingUpdate || !updateText.trim() ? 0.5 : 1,
-                  cursor:
-                    submittingUpdate || !updateText.trim() ? "not-allowed" : "pointer",
-                }}
-              >
-                {submittingUpdate
-                  ? "Sharing..."
-                  : `Share about ${place?.name || "this place"}`}
-              </button>
+                  type="submit"
+                  disabled={submittingUpdate}
+                  style={{
+                    ...primaryButton,
+                    opacity: submittingUpdate ? 0.5 : 1,
+                    cursor: submittingUpdate ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {submittingUpdate
+                    ? "Sharing..."
+                    : `Share about ${place?.name || "this place"}`}
+                </button>
             </form>
           </section>
         )}
@@ -3277,4 +3318,65 @@ const practicalRatingsMiniBadge = {
   border: "1px solid #eee",
   backgroundColor: "white",
   fontSize: "12px",
+};
+
+const locationSuggestionErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  marginBottom: "10px",
+};
+
+const createChildPlaceErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const specificPlaceSearchErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const createSpecificPlaceErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const updateFormErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const countryChildSearchErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };

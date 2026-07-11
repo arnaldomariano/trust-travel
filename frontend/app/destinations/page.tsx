@@ -19,6 +19,7 @@ function DestinationsPageContent() {
   const [places, setPlaces] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [creatingPlace, setCreatingPlace] = useState(false);
+  const [createPlaceError, setCreatePlaceError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -102,6 +103,7 @@ function DestinationsPageContent() {
   };
 
   const [submittingExperience, setSubmittingExperience] = useState(false);
+  const [experienceFormError, setExperienceFormError] = useState("");
   const [experienceShared, setExperienceShared] = useState(false);
   const [sharedExperience, setSharedExperience] = useState<any>(null);
   const [editingExperience, setEditingExperience] = useState(false);
@@ -709,10 +711,11 @@ const placeTypeOptionsToShow = [
   // =========================
   // Create a basic place
   // =========================
-  const handleCreatePlace = async () => {
-    if (!canCreatePlace) return;
+const handleCreatePlace = async () => {
+  if (!canCreatePlace) return;
 
-    setCreatingPlace(true);
+  setCreatePlaceError("");
+  setCreatingPlace(true);
 
     try {
       const res = await fetch(`${API_URL}/api/places/create-basic/`, {
@@ -742,8 +745,8 @@ const placeTypeOptionsToShow = [
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.detail || "Error creating place.");
-        return;
+          setCreatePlaceError(data.detail || "Could not create this place.");
+          return;
       }
 
         setPlaces((prev) => {
@@ -780,7 +783,7 @@ if (isUpdateMode) {
 
     } catch (error) {
       console.error("Create basic place failed:", error);
-      alert("Error creating place.");
+      setCreatePlaceError("Could not create this place.");
     } finally {
       setCreatingPlace(false);
     }
@@ -1208,6 +1211,10 @@ const cancelPracticalRatingsConfirmation = () => {
   setSkipPracticalRatingsConfirm(false);
 };
 
+const clearExperienceFormError = () => {
+  setExperienceFormError("");
+};
+
 const continueWithoutPracticalRatings = () => {
   setShowPracticalRatingsConfirm(false);
   setPendingExperienceAction(null);
@@ -1229,17 +1236,17 @@ const continueWithoutPracticalRatings = () => {
     if (!selectedPlace) return;
 
     if (!title.trim()) {
-      alert("Please add a short title.");
+      setExperienceFormError("Please add a short title.");
       return;
     }
 
     if (!rating) {
-      alert("Please select a rating.");
+      setExperienceFormError("Please select a rating.");
       return;
     }
 
     if (!comment.trim()) {
-      alert("Please write your experience.");
+      setExperienceFormError("Please write your experience.");
       return;
     }
 
@@ -1248,6 +1255,7 @@ const continueWithoutPracticalRatings = () => {
       return;
     }
 
+    clearExperienceFormError();
     setSkipPracticalRatingsConfirm(false);
 
     setSubmittingExperience(true);
@@ -1297,9 +1305,9 @@ const res = await fetch(`${API_URL}/api/experiences/`, {
       const data = await res.json();
 
       if (!res.ok) {
-        console.error("Experience error:", data);
-        alert(data.detail || "Error sharing experience.");
-        return;
+          console.error("Experience error:", data);
+          setExperienceFormError(data.detail || "Could not share this experience.");
+          return;
       }
 
       setSharedExperience(data);
@@ -1316,7 +1324,7 @@ const res = await fetch(`${API_URL}/api/experiences/`, {
       setTripStyle("prefer_not_to_say");
     } catch (error) {
       console.error("Share experience failed:", error);
-      alert("Error sharing experience.");
+      setExperienceFormError("Could not share this experience.");
     } finally {
       setSubmittingExperience(false);
     }
@@ -1331,18 +1339,18 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
   if (!sharedExperience) return;
 
   if (!title.trim()) {
-    alert("Please add a short title.");
-    return;
+      setExperienceFormError("Please add a short title.");
+      return;
   }
 
   if (!rating) {
-    alert("Please select a rating.");
-    return;
+      setExperienceFormError("Please select a rating.");
+      return;
   }
 
   if (!comment.trim()) {
-    alert("Please write your experience.");
-    return;
+      setExperienceFormError("Please write your experience.");
+      return;
   }
 
   if (!hasAnyPracticalRating && !skipPracticalRatingsConfirm) {
@@ -1350,6 +1358,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       return;
   }
 
+  clearExperienceFormError();
   setSkipPracticalRatingsConfirm(false);
 
   setSubmittingExperience(true);
@@ -1399,7 +1408,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
     if (!res.ok) {
       console.error("Update experience error:", data);
-      alert(data.detail || "Error updating experience.");
+      setExperienceFormError(data.detail || "Could not update this experience.");
       return;
     }
 
@@ -1417,8 +1426,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
     setTripContext("prefer_not_to_say");
     setTripStyle("prefer_not_to_say");
   } catch (error) {
-    console.error("Update experience failed:", error);
-    alert("Error updating experience.");
+      console.error("Update experience failed:", error);
+      setExperienceFormError("Could not update this experience.");
   } finally {
     setSubmittingExperience(false);
   }
@@ -2289,24 +2298,30 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 style={input}
               />
 
-              <input
-                value={newPlaceCountry}
-                onChange={(e) => setNewPlaceCountry(e.target.value)}
-                placeholder="Country"
-                style={input}
-              />
+                <input
+                  value={newPlaceCountry}
+                  onChange={(e) => setNewPlaceCountry(e.target.value)}
+                  placeholder="Country"
+                  style={input}
+                />
 
-              <button
-                onClick={handleCreatePlace}
-                disabled={!canCreatePlace || creatingPlace}
-                style={{
-                  ...primaryButton,
-                  opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
-                  cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
-                }}
-              >
-                {creatingPlace ? "Creating..." : "Create city/region"}
-              </button>
+                {createPlaceError && (
+                  <div style={createPlaceErrorBox}>
+                    {createPlaceError}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleCreatePlace}
+                  disabled={!canCreatePlace || creatingPlace}
+                  style={{
+                    ...primaryButton,
+                    opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
+                    cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {creatingPlace ? "Creating..." : "Create city/region"}
+                </button>
 
               <button
                 type="button"
@@ -2880,19 +2895,19 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   </div>
                 </div>
 
+                {experienceFormError && (
+                  <div style={experienceFormErrorBox}>
+                    {experienceFormError}
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  disabled={submittingExperience || !title.trim() || !rating || !comment.trim()}
+                  disabled={submittingExperience}
                   style={{
                     ...primaryButton,
-                    opacity:
-                      submittingExperience || !title.trim() || !rating || !comment.trim()
-                        ? 0.5
-                        : 1,
-                    cursor:
-                      submittingExperience || !title.trim() || !rating || !comment.trim()
-                        ? "not-allowed"
-                        : "pointer",
+                    opacity: submittingExperience ? 0.5 : 1,
+                    cursor: submittingExperience ? "not-allowed" : "pointer",
                   }}
                 >
                   {submittingExperience
@@ -3153,4 +3168,24 @@ const structuredRatingsPreviewBadge = {
   border: "1px solid #eee",
   background: "#fafafa",
   fontSize: "12px",
+};
+
+const createPlaceErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const experienceFormErrorBox = {
+  padding: "10px",
+  border: "1px solid #fecaca",
+  borderRadius: "10px",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };

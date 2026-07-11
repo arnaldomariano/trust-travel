@@ -1637,7 +1637,7 @@ const handleToggleEventsInfo = () => {
                 }}
               >
                 <div>
-                  <strong>Create city, island or region inside {place.name}</strong>
+                  <strong>Create a city, island or region inside {place.name}</strong>
 
                   <p
                     style={{
@@ -1647,10 +1647,27 @@ const handleToggleEventsInfo = () => {
                       lineHeight: 1.5,
                     }}
                   >
-                    Use this for broad travel areas inside this country, such as cities,
-                    islands, provinces or regions. Specific beaches, restaurants, hotels
-                    and attractions should be added later inside a city or region.
+                    You are inside the country hub for {place.name}. Add a broad travel area
+                    first, such as a city, island, province or region. Specific places like
+                    beaches, restaurants, hotels and attractions should be created later inside
+                    that city or region.
                   </p>
+                </div>
+
+                <div style={childPlaceCreateGuideBox}>
+                  <div>
+                    <strong>Current country:</strong> {place.name}
+                  </div>
+
+                  <div>
+                    <strong>New city/region:</strong>{" "}
+                    {newChildPlaceName.trim() || "Type the city, island or region name below"}
+                  </div>
+
+                  <div>
+                    <strong>Examples:</strong> city, island, province, region, national park area
+                    or broad destination area.
+                  </div>
                 </div>
 
                 <div style={{ display: "grid", gap: "6px" }}>
@@ -1665,12 +1682,12 @@ const handleToggleEventsInfo = () => {
                 </div>
 
                 <div style={{ display: "grid", gap: "6px" }}>
-                  <label style={label}>Optional display label</label>
+                  <label style={label}>Optional display label or local area name</label>
 
                   <input
                     value={newChildPlaceCity}
                     onChange={(e) => setNewChildPlaceCity(e.target.value)}
-                    placeholder="Optional. Leave blank to use the same name."
+                    placeholder="Optional. Leave blank to use the city/region name."
                     style={input}
                   />
                 </div>
@@ -1691,8 +1708,8 @@ const handleToggleEventsInfo = () => {
                   }}
                 >
                   {creatingChildPlace
-                    ? "Creating..."
-                    : `Create city/island/region inside ${place.name}`}
+                      ? "Creating..."
+                      : "Create this city/region"}
                 </button>
               </form>
             )}
@@ -2454,7 +2471,7 @@ const handleToggleEventsInfo = () => {
                 }}
               >
                 <div>
-                  <strong>Create specific place inside {place.name}</strong>
+                  <strong>Create a specific place inside {place.name}</strong>
 
                   <p
                     style={{
@@ -2464,19 +2481,34 @@ const handleToggleEventsInfo = () => {
                       lineHeight: 1.5,
                     }}
                   >
-                    Use this for beaches, restaurants, hotels, tourist
-                    attractions, nature spots or other specific places inside
-                    this city, island or region.
+                    You are already inside the city, island or region hub for {place.name}.
+                    Now add the exact place people would visit, review or save to a trip plan.
                   </p>
                 </div>
 
+                <div style={specificPlaceCreateGuideBox}>
+                  <div>
+                    <strong>Current city/region:</strong> {place.name}
+                  </div>
+
+                  <div>
+                    <strong>New specific place:</strong>{" "}
+                    {newSpecificPlaceName.trim() || "Type the exact place name below"}
+                  </div>
+
+                  <div>
+                    <strong>Examples:</strong> beach, restaurant, hotel, museum, market,
+                    waterfall, viewpoint or trail.
+                  </div>
+                </div>
+
                 <div style={{ display: "grid", gap: "6px" }}>
-                  <label style={label}>Specific place name</label>
+                  <label style={label}>Exact place name</label>
 
                   <input
                     value={newSpecificPlaceName}
                     onChange={(e) => setNewSpecificPlaceName(e.target.value)}
-                    placeholder="Example: Kuta Beach, Colosseum, Central Market"
+                    placeholder={`Example: beach, restaurant, hotel or attraction inside ${place.name}`}
                     style={input}
                   />
                 </div>
@@ -2522,8 +2554,8 @@ const handleToggleEventsInfo = () => {
                   }}
                 >
                   {creatingSpecificPlace
-                    ? "Creating..."
-                    : `Create specific place inside ${place.name}`}
+                      ? "Creating..."
+                      : "Create this specific place"}
                 </button>
               </form>
             )}
@@ -3379,4 +3411,28 @@ const countryChildSearchErrorBox = {
   color: "#b91c1c",
   fontSize: "13px",
   lineHeight: 1.4,
+};
+
+const specificPlaceCreateGuideBox = {
+  display: "grid",
+  gap: "6px",
+  padding: "12px",
+  border: "1px solid #dbeafe",
+  borderRadius: "12px",
+  backgroundColor: "#eff6ff",
+  color: "#1e3a8a",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+
+const childPlaceCreateGuideBox = {
+  display: "grid",
+  gap: "6px",
+  padding: "12px",
+  border: "1px solid #dbeafe",
+  borderRadius: "12px",
+  backgroundColor: "#eff6ff",
+  color: "#1e3a8a",
+  fontSize: "13px",
+  lineHeight: 1.5,
 };

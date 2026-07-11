@@ -23,11 +23,6 @@ function DestinationsPageContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const [newPlaceName, setNewPlaceName] = useState("");
-  const [newPlaceCity, setNewPlaceCity] = useState("");
-  const [newPlaceCountry, setNewPlaceCountry] = useState("");
-  const [showCreatePlaceForm, setShowCreatePlaceForm] = useState(false);
-
   const [placeType, setPlaceType] = useState<
   "country" | "city" | "attraction" | "hotel" | "restaurant" | "nature" | "other"
   >("country");
@@ -550,14 +545,6 @@ const filteredPlacesInsideSelectedCountry = normalizedRelatedPlaceSearch
     })
   : [];
 
-  const canCreatePlace =
-    !!newPlaceName.trim() &&
-    (
-      placeType === "country" ||
-      placeType === "city" ||
-      !!selectedCountryPlace
-    );
-
 const searchPlaceholderByType: Record<typeof placeType, string> = {
   country: "Search a country, e.g. Laos, Brazil, Italy",
   city: "Search a city or region, e.g. Recife, Tuscany, Itatiaia",
@@ -797,301 +784,220 @@ const placeTypeOptionsToShow = [
   ...specificPlaceTypeOptions,
 ];
 
-  // =========================
-  // Create a basic place
-  // =========================
-const handleCreatePlace = async () => {
-  if (!canCreatePlace) return;
 
-  setCreatePlaceError("");
-  setCreatingPlace(true);
+const openGuidedCreateFlow = () => {
+  setCreateFlowOpen(true);
+  setCreateFlowError("");
+  setCreateSelectedCountry(null);
+  setCreateSelectedCity(null);
+  setCreateCountrySearch("");
+  setCreateCitySearch("");
+  setCreateSpecificPlaceType("nature");
+  setCreateSpecificPlaceName("");
+};
 
-    try {
-      const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: newPlaceName.trim(),
-          place_type: placeType,
-          city:
-            placeType === "country"
-              ? ""
-              : placeType === "city"
-              ? newPlaceCity.trim() || newPlaceName.trim()
-              : newPlaceCity.trim(),
-          country:
-              placeType === "country"
-                ? newPlaceName.trim()
-                : selectedCountryPlace
-                ? selectedCountryPlace.name
-                : newPlaceCountry.trim(),
-        }),
-      });
+const selectCreateFlowCountry = (countryPlace: any) => {
+  setCreateSelectedCountry(countryPlace);
+  setCreateSelectedCity(null);
+  setCreateFlowError("");
+  setCreateCitySearch("");
+  setCreateSpecificPlaceType("nature");
+  setCreateSpecificPlaceName("");
 
-      const data = await res.json();
+  setTimeout(() => {
+    document
+      .getElementById("guided-create-city-step")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+};
 
-      if (!res.ok) {
-          setCreatePlaceError(data.detail || "Could not create this place.");
-          return;
-      }
+const selectCreateFlowCity = (cityPlace: any) => {
+  setCreateSelectedCity(cityPlace);
+  setCreateFlowError("");
+  setCreateSpecificPlaceType("nature");
+  setCreateSpecificPlaceName("");
 
-        setPlaces((prev) => {
-          const alreadyExists = prev.some((place) => place.id === data.id);
+  setTimeout(() => {
+    document
+      .getElementById("guided-create-specific-step")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+};
 
-          if (alreadyExists) {
-            return prev;
-          }
+const createCountryForFlow = async () => {
+  const countryName = formatPlaceNameForCreation(createCountrySearch);
 
-          return [data, ...prev];
-        });
+  if (!countryName) {
+    setCreateFlowError("Please type a country name first.");
+    return;
+  }
 
-if (isUpdateMode) {
-  router.push(`/create?place=${data.id}`);
-  return;
-}
+  setCreatingCreateFlowCountry(true);
+  setCreateFlowError("");
 
-    setSelectedPlace(data);
-    setCreatedPlaceId(data.id);
+  try {
+    const res = await fetch(`${API_URL}/api/places/create-basic/`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: countryName,
+        place_type: "country",
+        city: "",
+        country: countryName,
+      }),
+    });
 
-    // Do not open the experience form automatically after creating a place.
-    // The user can click the selected place card to open the form.
-    setShowShareForm(false);
-    setShowCreatePlaceForm(false);
+    const data = await res.json();
 
-    setExperienceShared(false);
-    setSharedExperience(null);
-    setEditingExperience(false);
-    setSearchTerm(data.name || newPlaceName.trim());
-
-    setNewPlaceName("");
-    setNewPlaceCity("");
-    setNewPlaceCountry("");
-
-    } catch (error) {
-      console.error("Create basic place failed:", error);
-      setCreatePlaceError("Could not create this place.");
-    } finally {
-      setCreatingPlace(false);
+    if (!res.ok) {
+      setCreateFlowError(data.detail || "Could not create this country.");
+      return;
     }
-  };
 
-    const openGuidedCreateFlow = () => {
-      setCreateFlowOpen(true);
-      setCreateFlowError("");
-      setCreateSelectedCountry(null);
-      setCreateSelectedCity(null);
-      setCreateCountrySearch("");
-      setCreateCitySearch("");
-      setCreateSpecificPlaceType("nature");
-      setCreateSpecificPlaceName("");
-      setShowCreatePlaceForm(false);
-    };
+    setPlaces((prev) => {
+      const alreadyExists = prev.some((place) => place.id === data.id);
 
-    const selectCreateFlowCountry = (countryPlace: any) => {
-      setCreateSelectedCountry(countryPlace);
-      setCreateSelectedCity(null);
-      setCreateFlowError("");
-      setCreateCitySearch("");
-      setCreateSpecificPlaceType("nature");
-      setCreateSpecificPlaceName("");
+      if (alreadyExists) return prev;
 
-      setTimeout(() => {
-        document
-          .getElementById("guided-create-city-step")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
-    };
+      return [data, ...prev];
+    });
 
-    const selectCreateFlowCity = (cityPlace: any) => {
-      setCreateSelectedCity(cityPlace);
-      setCreateFlowError("");
-      setCreateSpecificPlaceType("nature");
-      setCreateSpecificPlaceName("");
+    setCreateSelectedCountry(data);
+    setCreateCitySearch("");
+  } catch (error) {
+    console.error("Guided country creation failed:", error);
+    setCreateFlowError("Something went wrong while creating the country.");
+  } finally {
+    setCreatingCreateFlowCountry(false);
+  }
+};
 
-      setTimeout(() => {
-        document
-          .getElementById("guided-create-specific-step")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
-    };
+const createCityForFlow = async () => {
+  const cityName = formatPlaceNameForCreation(createCitySearch);
 
-    const createCountryForFlow = async () => {
-      const countryName = formatPlaceNameForCreation(createCountrySearch);
+  if (!createSelectedCountry) {
+    setCreateFlowError("Please choose or create a country first.");
+    return;
+  }
 
-      if (!countryName) {
-        setCreateFlowError("Please type a country name first.");
-        return;
-      }
+  if (!cityName) {
+    setCreateFlowError("Please type a city or region name first.");
+    return;
+  }
 
-      setCreatingCreateFlowCountry(true);
-      setCreateFlowError("");
+  setCreatingCreateFlowCity(true);
+  setCreateFlowError("");
 
-      try {
-        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: countryName,
-            place_type: "country",
-            city: "",
-            country: countryName,
-          }),
-        });
+  try {
+    const res = await fetch(`${API_URL}/api/places/create-basic/`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: cityName,
+        place_type: "city",
+        city: cityName,
+        country: createSelectedCountry.name,
+      }),
+    });
 
-        const data = await res.json();
+    const data = await res.json();
 
-        if (!res.ok) {
-          setCreateFlowError(data.detail || "Could not create this country.");
-          return;
-        }
+    if (!res.ok) {
+      setCreateFlowError(data.detail || "Could not create this city or region.");
+      return;
+    }
 
-        setPlaces((prev) => {
-          const alreadyExists = prev.some((place) => place.id === data.id);
+    setPlaces((prev) => {
+      const alreadyExists = prev.some((place) => place.id === data.id);
 
-          if (alreadyExists) return prev;
+      if (alreadyExists) return prev;
 
-          return [data, ...prev];
-        });
+      return [data, ...prev];
+    });
 
-        setCreateSelectedCountry(data);
-        setCreateCitySearch("");
-      } catch (error) {
-        console.error("Guided country creation failed:", error);
-        setCreateFlowError("Something went wrong while creating the country.");
-      } finally {
-        setCreatingCreateFlowCountry(false);
-      }
-    };
+    setCreateSelectedCity(data);
+    setCreateSpecificPlaceType("nature");
+    setCreateSpecificPlaceName("");
 
-    const createCityForFlow = async () => {
-      const cityName = formatPlaceNameForCreation(createCitySearch);
+    setTimeout(() => {
+      document
+        .getElementById("guided-create-specific-step")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
 
-      if (!createSelectedCountry) {
-        setCreateFlowError("Please choose or create a country first.");
-        return;
-      }
+  } catch (error) {
+    console.error("Guided city creation failed:", error);
+    setCreateFlowError("Something went wrong while creating the city or region.");
+  } finally {
+    setCreatingCreateFlowCity(false);
+  }
+};
 
-      if (!cityName) {
-        setCreateFlowError("Please type a city or region name first.");
-        return;
-      }
+const createSpecificPlaceForFlow = async () => {
+  const specificPlaceName = formatPlaceNameForCreation(createSpecificPlaceName);
 
-      setCreatingCreateFlowCity(true);
-      setCreateFlowError("");
+  if (!createSelectedCountry) {
+    setCreateFlowError("Please choose or create a country first.");
+    return;
+  }
 
-      try {
-        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: cityName,
-            place_type: "city",
-            city: cityName,
-            country: createSelectedCountry.name,
-          }),
-        });
+  if (!createSelectedCity) {
+    setCreateFlowError("Please choose or create a city or region first.");
+    return;
+  }
 
-        const data = await res.json();
+  if (!specificPlaceName) {
+    setCreateFlowError("Please type the specific place name first.");
+    return;
+  }
 
-        if (!res.ok) {
-          setCreateFlowError(data.detail || "Could not create this city or region.");
-          return;
-        }
+  setCreatingCreateFlowSpecificPlace(true);
+  setCreateFlowError("");
 
-        setPlaces((prev) => {
-          const alreadyExists = prev.some((place) => place.id === data.id);
+  try {
+    const res = await fetch(`${API_URL}/api/places/create-basic/`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: specificPlaceName,
+        place_type: createSpecificPlaceType,
+        city: createSelectedCity.name,
+        country: createSelectedCountry.name,
+      }),
+    });
 
-          if (alreadyExists) return prev;
+    const data = await res.json();
 
-          return [data, ...prev];
-        });
+    if (!res.ok) {
+      setCreateFlowError(data.detail || "Could not create this specific place.");
+      return;
+    }
 
-        setCreateSelectedCity(data);
-        setCreateSpecificPlaceType("nature");
-        setCreateSpecificPlaceName("");
+    setPlaces((prev) => {
+      const alreadyExists = prev.some((place) => place.id === data.id);
 
-        setTimeout(() => {
-          document
-            .getElementById("guided-create-specific-step")
-            ?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 0);
+      if (alreadyExists) return prev;
 
-      } catch (error) {
-        console.error("Guided city creation failed:", error);
-        setCreateFlowError("Something went wrong while creating the city or region.");
-      } finally {
-        setCreatingCreateFlowCity(false);
-      }
-    };
+      return [data, ...prev];
+    });
 
-    const createSpecificPlaceForFlow = async () => {
-      const specificPlaceName = formatPlaceNameForCreation(createSpecificPlaceName);
-
-      if (!createSelectedCountry) {
-        setCreateFlowError("Please choose or create a country first.");
-        return;
-      }
-
-      if (!createSelectedCity) {
-        setCreateFlowError("Please choose or create a city or region first.");
-        return;
-      }
-
-      if (!specificPlaceName) {
-        setCreateFlowError("Please type the specific place name first.");
-        return;
-      }
-
-      setCreatingCreateFlowSpecificPlace(true);
-      setCreateFlowError("");
-
-      try {
-        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: specificPlaceName,
-            place_type: createSpecificPlaceType,
-            city: createSelectedCity.name,
-            country: createSelectedCountry.name,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setCreateFlowError(data.detail || "Could not create this specific place.");
-          return;
-        }
-
-        setPlaces((prev) => {
-          const alreadyExists = prev.some((place) => place.id === data.id);
-
-          if (alreadyExists) return prev;
-
-          return [data, ...prev];
-        });
-
-        router.push(`/places/${data.id}`);
-      } catch (error) {
-        console.error("Guided specific place creation failed:", error);
-        setCreateFlowError("Something went wrong while creating the specific place.");
-      } finally {
-        setCreatingCreateFlowSpecificPlace(false);
-      }
-    };
+    router.push(`/places/${data.id}`);
+  } catch (error) {
+    console.error("Guided specific place creation failed:", error);
+    setCreateFlowError("Something went wrong while creating the specific place.");
+  } finally {
+    setCreatingCreateFlowSpecificPlace(false);
+  }
+};
 
     // =========================
     // Select country as search context
@@ -1110,7 +1016,6 @@ if (isUpdateMode) {
       setSelectedPlace(null);
       setCreatedPlaceId(null);
       setShowShareForm(false);
-      setShowCreatePlaceForm(false);
       setShowRelatedPlaces(false);
       setRelatedPlaceSearch("");
       setExperienceShared(false);
@@ -1143,7 +1048,6 @@ if (isUpdateMode) {
       setSelectedPlace(selectedCountryPlace);
       setCreatedPlaceId(null);
       setShowShareForm(true);
-      setShowCreatePlaceForm(false);
       setExperienceShared(false);
       setSharedExperience(null);
       setEditingExperience(false);
@@ -1171,7 +1075,15 @@ if (isUpdateMode) {
     const openCreateCityInSelectedCountry = () => {
       if (!selectedCountryPlace) return;
 
-      setPlaceType("city");
+      setCreateFlowOpen(true);
+      setCreateFlowError("");
+      setCreateSelectedCountry(selectedCountryPlace);
+      setCreateSelectedCity(null);
+      setCreateCountrySearch(selectedCountryPlace.name || "");
+      setCreateCitySearch("");
+      setCreateSpecificPlaceType("nature");
+      setCreateSpecificPlaceName("");
+
       setSelectedPlace(null);
       setCreatedPlaceId(null);
       setShowShareForm(false);
@@ -1179,15 +1091,9 @@ if (isUpdateMode) {
       setSharedExperience(null);
       setEditingExperience(false);
 
-      setNewPlaceName("");
-      setNewPlaceCity("");
-      setNewPlaceCountry(selectedCountryPlace.name || "");
-
-      setShowCreatePlaceForm(true);
-
       setTimeout(() => {
         document
-          .getElementById("create-place-form")
+          .getElementById("guided-create-city-step")
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 0);
     };
@@ -1230,7 +1136,6 @@ if (isUpdateMode) {
     setSharedExperience(null);
     setEditingExperience(false);
     setShowShareForm(false);
-    setShowCreatePlaceForm(false);
     setTripContext("prefer_not_to_say");
     setTripStyle("prefer_not_to_say");
   };
@@ -1243,9 +1148,6 @@ if (isUpdateMode) {
     setSelectedPlace(null);
     setCreatedPlaceId(null);
     setSearchTerm("");
-    setNewPlaceName("");
-    setNewPlaceCity("");
-    setNewPlaceCountry("");
     setTitle("");
     setComment("");
     setRating(null);
@@ -1258,7 +1160,6 @@ if (isUpdateMode) {
     setSharedExperience(null);
     setEditingExperience(false);
     setShowShareForm(false);
-    setShowCreatePlaceForm(false);
     setRelatedPlaceSearch("");
     setTripContext("prefer_not_to_say");
     setTripStyle("prefer_not_to_say");
@@ -1619,9 +1520,6 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               setCreateSelectedCountry(null);
 
               if (placeType === "country") {
-                setNewPlaceName(value);
-                setNewPlaceCountry(value);
-                setNewPlaceCity("");
               }
 
               if (selectedCountryPlace) {
@@ -1630,7 +1528,6 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
               if (selectedPlace) {
                 setSelectedPlace(null);
-                setShowCreatePlaceForm(false);
                 setTitle("");
                 setComment("");
                 setRating(null);
@@ -2363,65 +2260,6 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             )}
           </div>
         )}
-
-        {showCreatePlaceForm && (
-          <section id="create-place-form" style={{ marginTop: "20px" }}>
-            <strong>Create a city or region in {selectedCountryPlace.name}</strong>
-
-            <p
-              style={{
-                margin: "10px 0 16px 0",
-                color: "#555",
-                lineHeight: 1.5,
-              }}
-            >
-              Add the city or region first. Hotels, restaurants, attractions and
-              nature spots can be added later inside that city or region.
-            </p>
-
-            <div style={createPlaceForm}>
-              <input
-                value={newPlaceName}
-                onChange={(e) => setNewPlaceName(e.target.value)}
-                placeholder="City or region name, e.g. Bali, Jakarta, Lombok"
-                style={input}
-              />
-
-                <input
-                  value={newPlaceCountry}
-                  onChange={(e) => setNewPlaceCountry(e.target.value)}
-                  placeholder="Country"
-                  style={input}
-                />
-
-                {createPlaceError && (
-                  <div style={createPlaceErrorBox}>
-                    {createPlaceError}
-                  </div>
-                )}
-
-                <button
-                  onClick={handleCreatePlace}
-                  disabled={!canCreatePlace || creatingPlace}
-                  style={{
-                    ...primaryButton,
-                    opacity: canCreatePlace && !creatingPlace ? 1 : 0.5,
-                    cursor: canCreatePlace && !creatingPlace ? "pointer" : "not-allowed",
-                  }}
-                >
-                  {creatingPlace ? "Creating..." : "Create city/region"}
-                </button>
-
-              <button
-                type="button"
-                onClick={() => setShowCreatePlaceForm(false)}
-                style={secondaryButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </section>
-        )}
       </section>
     )}
 
@@ -2522,7 +2360,6 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   setSelectedPlace(null);
                   setSelectedCountryPlace(null);
                   setShowShareForm(false);
-                  setShowCreatePlaceForm(false);
                   setRelatedPlaceSearch("");
                 }}
                 style={secondaryButton}

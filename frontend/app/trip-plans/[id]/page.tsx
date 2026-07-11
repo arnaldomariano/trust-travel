@@ -147,7 +147,6 @@ export default function TripPlanDetailPage() {
   const [watchingPlaceId, setWatchingPlaceId] = useState<number | null>(null);
   const [unwatchingPlaceId, setUnwatchingPlaceId] = useState<number | null>(null);
   const [pendingRadarRemove, setPendingRadarRemove] = useState<RadarPlace | null>(null);
-  const [creatingRadarPlace, setCreatingRadarPlace] = useState(false);
 
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
   const [pendingRemove, setPendingRemove] = useState<SavedItem | null>(null);
@@ -363,64 +362,6 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
       setWatchingPlaceId(null);
     }
   };
-
-    const createAndWatchRadarPlace = async () => {
-      if (!plan) return;
-
-      const name = radarPlaceSearch.trim();
-
-      if (name.length < 2) {
-        setActionError("Type at least 2 characters to create a place.");
-        return;
-      }
-
-      clearActionFeedback();
-      setCreatingRadarPlace(true);
-
-      try {
-        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name,
-            city: name,
-            country: plan.destination_text || "",
-            place_type: "city",
-          }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          console.error("Create radar place error:", data);
-          setActionError(data.detail || "Error creating place.");
-          return;
-        }
-
-        const createdPlaceId = data.id || data.place_id;
-
-        if (!createdPlaceId) {
-          console.error("Create radar place response without place id:", data);
-          setActionError("Place was created, but its id was not returned.");
-          return;
-        }
-
-        await watchRadarPlace({
-          id: createdPlaceId,
-          name: data.name || name,
-        });
-
-        setActionMessage(`${data.name || name} created and added to your Radar watchlist.`);
-      } catch (error) {
-        console.error("Failed to create radar place:", error);
-        setActionError("Error creating place.");
-      } finally {
-        setCreatingRadarPlace(false);
-      }
-    };
 
   const removeRadarWatchedPlace = async (place: { id: number; name: string }) => {
     if (!plan) return;
@@ -857,23 +798,20 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
                 <div style={radarCreateBox}>
                   <span>
-                    No place found for “{radarPlaceSearch.trim()}”.
+                    No existing place found for “{radarPlaceSearch.trim()}”.
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={createAndWatchRadarPlace}
-                    disabled={creatingRadarPlace}
-                    style={{
-                      ...smallPrimaryButton,
-                      opacity: creatingRadarPlace ? 0.5 : 1,
-                      cursor: creatingRadarPlace ? "not-allowed" : "pointer",
-                    }}
+                  <p style={{ margin: 0, color: "#666", fontSize: "13px", lineHeight: 1.5 }}>
+                    To avoid duplicate or wrongly structured places, create the place first using
+                    the guided place creation flow. After that, return here and add it to Radar.
+                  </p>
+
+                  <Link
+                    href="/destinations"
+                    style={smallPrimaryButton}
                   >
-                    {creatingRadarPlace
-                      ? "Creating..."
-                      : "Create and monitor"}
-                  </button>
+                    Create place with guided flow
+                  </Link>
                 </div>
               )}
 

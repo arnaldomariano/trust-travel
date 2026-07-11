@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -106,6 +106,7 @@ function DestinationsPageContent() {
   const [showPracticalRatingsConfirm, setShowPracticalRatingsConfirm] = useState(false);
   const [pendingExperienceAction, setPendingExperienceAction] = useState<"create" | "update" | null>(null);
   const [skipPracticalRatingsConfirm, setSkipPracticalRatingsConfirm] = useState(false);
+  const skipPracticalRatingsConfirmRef = useRef(false);
 
   // =========================
   // Load places and destinations
@@ -1199,6 +1200,7 @@ const cancelPracticalRatingsConfirmation = () => {
   setShowPracticalRatingsConfirm(false);
   setPendingExperienceAction(null);
   setSkipPracticalRatingsConfirm(false);
+  skipPracticalRatingsConfirmRef.current = false;
 };
 
 const clearExperienceFormError = () => {
@@ -1209,6 +1211,7 @@ const continueWithoutPracticalRatings = () => {
   setShowPracticalRatingsConfirm(false);
   setPendingExperienceAction(null);
   setSkipPracticalRatingsConfirm(true);
+  skipPracticalRatingsConfirmRef.current = true;
 
   setTimeout(() => {
     const form = document.getElementById("experience-share-form") as HTMLFormElement | null;
@@ -1240,13 +1243,18 @@ const continueWithoutPracticalRatings = () => {
       return;
     }
 
-    if (!hasAnyPracticalRating && !skipPracticalRatingsConfirm) {
+    const shouldSkipPracticalRatingsConfirm =
+      skipPracticalRatingsConfirm || skipPracticalRatingsConfirmRef.current;
+
+    clearExperienceFormError();
+
+    if (!hasAnyPracticalRating && !shouldSkipPracticalRatingsConfirm) {
       requestPracticalRatingsConfirmation("create");
       return;
     }
 
-    clearExperienceFormError();
     setSkipPracticalRatingsConfirm(false);
+    skipPracticalRatingsConfirmRef.current = false;
 
     setSubmittingExperience(true);
 
@@ -1343,13 +1351,18 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       return;
   }
 
-  if (!hasAnyPracticalRating && !skipPracticalRatingsConfirm) {
+    const shouldSkipPracticalRatingsConfirm =
+      skipPracticalRatingsConfirm || skipPracticalRatingsConfirmRef.current;
+
+    clearExperienceFormError();
+
+    if (!hasAnyPracticalRating && !shouldSkipPracticalRatingsConfirm) {
       requestPracticalRatingsConfirmation("update");
       return;
-  }
+    }
 
-  clearExperienceFormError();
-  setSkipPracticalRatingsConfirm(false);
+    setSkipPracticalRatingsConfirm(false);
+    skipPracticalRatingsConfirmRef.current = false;
 
   setSubmittingExperience(true);
 

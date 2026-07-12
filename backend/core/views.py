@@ -1,4 +1,3 @@
-import unicodedata
 
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -50,14 +49,7 @@ from .serializers import (
 )
 
 from .authentication import CookieJWTAuthentication
-
-def normalize_place_text(value):
-    value = str(value or "").strip().lower()
-    value = unicodedata.normalize("NFD", value)
-    value = "".join(char for char in value if unicodedata.category(char) != "Mn")
-    value = " ".join(value.split())
-    return value
-
+from .place_utils import normalize_place_text, get_country_alias_values
 
 # ============================================================
 # AUTH / USER
@@ -355,10 +347,12 @@ class CreateBasicPlaceView(APIView):
         if not isinstance(aliases, list):
             aliases = []
 
-        country_place = None
+        if place_type == "country":
+            normalized_country_values = get_country_alias_values(name)
+            normalized_country_values.update(get_country_alias_values(canonical_name))
 
-        if place_type in ["city", *specific_place_types]:
-            normalized_country = normalize_place_text(country)
+            for alias in aliases:
+                normalized_country_values.update(get_country_alias_values(alias))
 
             for candidate in Place.objects.filter(place_type="country"):
                 candidate_names = {
@@ -373,7 +367,32 @@ class CreateBasicPlaceView(APIView):
 
                 candidate_names.discard("")
 
-                if normalized_country in candidate_names:
+                if normalized_country_values.intersection(candidate_names):
+                    serializer = PlaceSerializer(
+                        candidate,
+                        context={"request": request},
+                    )
+                    return Response(serializer.data, status=200)
+
+        country_place = None
+
+        if place_type in ["city", *specific_place_types]:
+            normalized_country_values = get_country_alias_values(country)
+
+            for candidate in Place.objects.filter(place_type="country"):
+                candidate_names = {
+                    normalize_place_text(candidate.name),
+                    normalize_place_text(candidate.canonical_name),
+                    *[
+                        normalize_place_text(alias)
+                        for alias in (candidate.aliases or [])
+                        if alias
+                    ],
+                }
+
+                candidate_names.discard("")
+
+                if normalized_country_values.intersection(candidate_names):
                     country_place = candidate
                     break
 
@@ -654,7 +673,9 @@ class PlaceSearchView(APIView):
             )
 
         normalized_query = normalize_place_text(query)
-        normalized_country = normalize_place_text(country)
+        query_values = get_country_alias_values(query)
+        country_values = get_country_alias_values(country)
+        is_country_alias_query = query_values != {normalized_query}
 
         places_queryset = Place.objects.select_related("destination").all()
 
@@ -676,14 +697,27 @@ class PlaceSearchView(APIView):
             return values
 
         def matches_search(place):
-            return any(
-                normalized_query in normalize_place_text(value)
+            normalized_values = {
+                normalize_place_text(value)
                 for value in get_place_search_values(place)
                 if value
-            )
+            }
+
+            normalized_values.discard("")
+
+            if is_country_alias_query:
+                return bool(query_values.intersection(normalized_values))
+
+            if any(
+                normalized_query in normalized_value
+                for normalized_value in normalized_values
+            ):
+                return True
+
+            return bool(query_values.intersection(normalized_values))
 
         def matches_country(place):
-            if not normalized_country:
+            if not country_values:
                 return True
 
             destination = place.destination
@@ -703,11 +737,15 @@ class PlaceSearchView(APIView):
                     ]
                 )
 
-            return any(
-                normalized_country == normalize_place_text(value)
+            normalized_values = {
+                normalize_place_text(value)
                 for value in values
                 if value
-            )
+            }
+
+            normalized_values.discard("")
+
+            return bool(country_values.intersection(normalized_values))
 
         places = [
             place
@@ -715,9 +753,44 @@ class PlaceSearchView(APIView):
             if matches_search(place) and matches_country(place)
         ]
 
+        def get_search_rank(place):
+            destination = place.destination
+
+            place_values = {
+                normalize_place_text(place.name),
+                normalize_place_text(place.canonical_name),
+                *[
+                    normalize_place_text(alias)
+                    for alias in (place.aliases or [])
+                    if alias
+                ],
+            }
+
+            place_values.discard("")
+
+            destination_values = {
+                normalize_place_text(destination.name if destination else ""),
+                normalize_place_text(destination.country if destination else ""),
+                normalize_place_text(destination.city if destination else ""),
+            }
+
+            destination_values.discard("")
+
+            if (
+                place.place_type == "country"
+                and query_values.intersection(place_values)
+            ):
+                return 0
+
+            if query_values.intersection(destination_values):
+                return 1
+
+            return 2
+
         places = sorted(
             places,
             key=lambda place: (
+                get_search_rank(place),
                 place.place_type or "",
                 place.name or "",
             ),

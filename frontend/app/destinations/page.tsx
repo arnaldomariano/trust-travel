@@ -184,56 +184,7 @@ const normalizeText = (value?: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-const COUNTRY_SEARCH_ALIASES: Record<string, string[]> = {
-  brasil: ["brazil"],
-  italia: ["italy"],
-  alemanha: ["germany"],
-  espanha: ["spain"],
-  franca: ["france"],
-  holanda: ["netherlands"],
-  "paises baixos": ["netherlands"],
-  eua: ["united states"],
-  "estados unidos": ["united states"],
-  inglaterra: ["united kingdom"],
-  "reino unido": ["united kingdom"],
-  grecia: ["greece"],
-  laos: ["laos"],
-};
-
-const getSearchVariants = (value?: string) => {
-  const normalized = normalizeText(value);
-
-  if (!normalized) return [];
-
-  const variants = new Set<string>([normalized]);
-
-  Object.entries(COUNTRY_SEARCH_ALIASES).forEach(([alias, targets]) => {
-    const normalizedTargets = targets.map((target) => normalizeText(target));
-
-    const aliasMatches =
-      normalized.length >= 3 &&
-      (alias.startsWith(normalized) || normalized.startsWith(alias));
-
-    const targetMatches = normalizedTargets.some(
-      (target) =>
-        normalized.length >= 3 &&
-        (target.startsWith(normalized) || normalized.startsWith(target))
-    );
-
-    if (aliasMatches || targetMatches) {
-      variants.add(alias);
-
-      normalizedTargets.forEach((target) => {
-        variants.add(target);
-      });
-    }
-  });
-
-  return Array.from(variants);
-};
-
 const normalizedSearchText = normalizeText(searchTerm);
-const normalizedSearchTextVariants = getSearchVariants(searchTerm);
 
 const getNormalizedPlaceSearchNames = (place: any) => {
   const values = [
@@ -247,6 +198,10 @@ const getNormalizedPlaceSearchNames = (place: any) => {
     values.push(...place.aliases);
   }
 
+  if (Array.isArray(place.search_aliases)) {
+    values.push(...place.search_aliases);
+  }
+
   return values
     .filter(Boolean)
     .map((value) => normalizeText(String(value)));
@@ -255,27 +210,15 @@ const getNormalizedPlaceSearchNames = (place: any) => {
 const getBestTextMatchScore = (values: string[]) => {
   if (!normalizedSearchText) return 0;
 
-  if (
-    values.some((value) =>
-      normalizedSearchTextVariants.some((search) => value === search)
-    )
-  ) {
+  if (values.some((value) => value === normalizedSearchText)) {
     return 100;
   }
 
-  if (
-    values.some((value) =>
-      normalizedSearchTextVariants.some((search) => value.startsWith(search))
-    )
-  ) {
+  if (values.some((value) => value.startsWith(normalizedSearchText))) {
     return 90;
   }
 
-  if (
-    values.some((value) =>
-      normalizedSearchTextVariants.some((search) => value.includes(search))
-    )
-  ) {
+  if (values.some((value) => value.includes(normalizedSearchText))) {
     return 80;
   }
 
@@ -425,7 +368,6 @@ const getSearchMatchScore = (place: any) => {
 
 const getUnifiedSearchScore = (place: any) => {
   const search = normalizeText(searchTerm);
-  const searchVariants = getSearchVariants(searchTerm);
 
   if (!search) return 0;
 
@@ -436,29 +378,17 @@ const getUnifiedSearchScore = (place: any) => {
   const city = normalizeText(place.city || "");
   const type = normalizeText(place.place_type || "");
 
-if (
-  searchableNames.some((value) =>
-    searchVariants.some((variant) => value === variant)
-  )
-) {
-  return 100;
-}
+  if (searchableNames.some((value) => value === search)) {
+    return 100;
+  }
 
-if (
-  searchableNames.some((value) =>
-    searchVariants.some((variant) => value.startsWith(variant))
-  )
-) {
-  return 90;
-}
+  if (searchableNames.some((value) => value.startsWith(search))) {
+    return 90;
+  }
 
-if (
-  searchableNames.some((value) =>
-    searchVariants.some((variant) => value.includes(variant))
-  )
-) {
-  return 80;
-}
+  if (searchableNames.some((value) => value.includes(search))) {
+    return 80;
+  }
 
   // Only city/region records should match by city name.
   // Specific places should appear only when the user searches their own name,
@@ -713,10 +643,10 @@ const createCountryCandidates = createCountrySearch.trim()
   ? places
       .filter((place) => place.place_type === "country")
       .filter((place) => {
-        const name = normalizeText(place.name);
-        const searchVariants = getSearchVariants(createCountrySearch);
+        const search = normalizeText(createCountrySearch);
+        const searchableNames = getNormalizedPlaceSearchNames(place);
 
-        return searchVariants.some((search) => name.includes(search));
+        return searchableNames.some((value) => value.includes(search));
       })
       .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
       .slice(0, 6)

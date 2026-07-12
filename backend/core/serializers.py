@@ -18,6 +18,8 @@ from .models import (
     generate_recovery_code,
 )
 
+from .place_utils import get_country_alias_values
+
 class UpdateSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.username", read_only=True)
     place_name = serializers.CharField(source="place.name", read_only=True)
@@ -66,6 +68,7 @@ class DestinationSerializer(serializers.ModelSerializer):
 class PlaceSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
     reviews_count = serializers.SerializerMethodField()
+    search_aliases = serializers.SerializerMethodField()
 
     created_by_username = serializers.CharField(
         source="created_by.username",
@@ -106,6 +109,7 @@ class PlaceSerializer(serializers.ModelSerializer):
             "name",
             "canonical_name",
             "aliases",
+            "search_aliases",
             "place_type",
             "city",
             "description",
@@ -130,7 +134,29 @@ class PlaceSerializer(serializers.ModelSerializer):
             "destination_name",
             "destination_country",
             "destination_city",
+            "search_aliases",
         ]
+
+    def get_search_aliases(self, obj):
+        if obj.place_type == "country":
+            values = set()
+
+            for value in [
+                obj.name,
+                obj.canonical_name,
+                *(obj.aliases or []),
+            ]:
+                values.update(get_country_alias_values(value))
+
+            return sorted(values)
+
+        return sorted(
+            {
+                str(alias).strip()
+                for alias in (obj.aliases or [])
+                if str(alias).strip()
+            }
+        )
 
     def validate(self, attrs):
         name = attrs.get("name")

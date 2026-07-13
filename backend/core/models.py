@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password, check_password
 from django.db.models.signals import post_save
@@ -585,6 +586,56 @@ class TripPlan(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.title}"
+
+
+# ===================== Trip Plan Destination =====================
+class TripPlanDestination(models.Model):
+    ROLE_CHOICES = [
+        ("primary", "Primary destination"),
+        ("secondary", "Secondary destination"),
+    ]
+
+    trip_plan = models.ForeignKey(
+        TripPlan,
+        on_delete=models.CASCADE,
+        related_name="destinations",
+    )
+
+    place = models.ForeignKey(
+        Place,
+        on_delete=models.CASCADE,
+        related_name="trip_plan_destinations",
+    )
+
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default="secondary",
+    )
+
+    position = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trip_plan", "place"],
+                name="unique_destination_place_per_trip_plan",
+            ),
+            models.UniqueConstraint(
+                fields=["trip_plan"],
+                condition=Q(role="primary"),
+                name="unique_primary_destination_per_trip_plan",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.place.name} in {self.trip_plan.title} "
+            f"({self.role})"
+        )
 
 
 # ===================== Saved Place =====================

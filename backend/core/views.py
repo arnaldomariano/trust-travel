@@ -2,6 +2,7 @@
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Count, Q
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 
 
@@ -29,6 +30,7 @@ from .models import (
     TripPlanWatchedPlace,
     TripPlanActivitySeen,
     TripPlan,
+    TripPlanDestination,
     Update,
     Profile,
     FeedState,
@@ -46,6 +48,7 @@ from .serializers import (
     ExperienceReplySerializer,
     ProfileSerializer,
     ContentReportSerializer,
+    TripPlanDestinationSerializer,
 )
 
 from .authentication import CookieJWTAuthentication
@@ -1142,14 +1145,224 @@ class ExperienceReplyListCreateView(generics.ListCreateAPIView):
 # TRIP PLANS / SAVED ITEMS
 # ============================================================
 
+def validate_trip_plan_destinations_payload(destinations_payload):
+    if destinations_payload is None:
+        return None
+
+    if not isinstance(destinations_payload, list):
+        raise serializers.ValidationError(
+            {
+                "destinations": (
+                    "Destinations must be provided as a list."
+                )
+            }
+        )
+
+    if not destinations_payload:
+        return []
+
+    normalized_destinations = []
+    place_ids = []
+    positions = []
+    primary_count = 0
+
+    for index, item in enumerate(destinations_payload):
+        if not isinstance(item, dict):
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        f"Destination at position {index} must be an object."
+                    )
+                }
+            )
+
+        if "place_id" not in item:
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        f"Destination at position {index} requires place_id."
+                    )
+                }
+            )
+
+        if "role" not in item:
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        f"Destination at position {index} requires role."
+                    )
+                }
+            )
+
+        if "position" not in item:
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        f"Destination at position {index} requires position."
+                    )
+                }
+            )
+
+        place_id = item.get("place_id")
+        role = item.get("role")
+        position = item.get("position")
+
+        if isinstance(place_id, bool) or not isinstance(place_id, int):
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        f"place_id at position {index} must be an integer."
+                    )
+                }
+            )
+
+        if role not in {"primary", "secondary"}:
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        f"role at position {index} must be "
+                        "'primary' or 'secondary'."
+                    )
+                }
+            )
+
+        if isinstance(position, bool) or not isinstance(position, int):
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        f"position at index {index} must be an integer."
+                    )
+                }
+            )
+
+        if position < 0:
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        f"position at index {index} cannot be negative."
+                    )
+                }
+            )
+
+        if place_id in place_ids:
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        "The same place cannot be added more than once "
+                        "to a trip plan."
+                    )
+                }
+            )
+
+        if position in positions:
+            raise serializers.ValidationError(
+                {
+                    "destinations": (
+                        "Each destination must have a unique position."
+                    )
+                }
+            )
+
+        if role == "primary":
+            primary_count += 1
+
+        place_ids.append(place_id)
+        positions.append(position)
+
+        normalized_destinations.append(
+            {
+                "place_id": place_id,
+                "role": role,
+                "position": position,
+            }
+        )
+
+    if primary_count != 1:
+        raise serializers.ValidationError(
+            {
+                "destinations": (
+                    "A trip plan with destinations must have exactly "
+                    "one primary destination."
+                )
+            }
+        )
+
+    places_by_id = Place.objects.in_bulk(place_ids)
+    missing_place_ids = [
+        place_id
+        for place_id in place_ids
+        if place_id not in places_by_id
+    ]
+
+    if missing_place_ids:
+        raise serializers.ValidationError(
+            {
+                "destinations": (
+                    "The following places were not found: "
+                    + ", ".join(str(place_id) for place_id in missing_place_ids)
+                    + "."
+                )
+            }
+        )
+
+    for destination in normalized_destinations:
+        destination["place"] = places_by_id[destination["place_id"]]
+
+    return sorted(
+        normalized_destinations,
+        key=lambda destination: destination["position"],
+    )
+
+def replace_trip_plan_destinations(plan, normalized_destinations):
+    if normalized_destinations is None:
+        return
+
+    plan.destinations.all().delete()
+
+    TripPlanDestination.objects.bulk_create(
+        [
+            TripPlanDestination(
+                trip_plan=plan,
+                place=destination["place"],
+                role=destination["role"],
+                position=destination["position"],
+            )
+            for destination in normalized_destinations
+        ]
+    )
+
 def serialize_trip_plan(plan):
     saved_items_count = plan.saved_items.count()
     saved_places_count = plan.saved_places.count()
+
+    destinations = plan.destinations.select_related(
+        "place",
+        "place__destination",
+    ).order_by(
+        "position",
+        "created_at",
+    )
+
+    serialized_destinations = TripPlanDestinationSerializer(
+        destinations,
+        many=True,
+    ).data
+
+    primary_destination = next(
+        (
+            destination
+            for destination in serialized_destinations
+            if destination["role"] == "primary"
+        ),
+        None,
+    )
 
     return {
         "id": plan.id,
         "title": plan.title,
         "destination_text": plan.destination_text,
+        "destinations": serialized_destinations,
+        "primary_destination": primary_destination,
         "description": plan.description,
         "start_date": plan.start_date,
         "end_date": plan.end_date,
@@ -1248,18 +1461,32 @@ class TripPlanListCreateView(APIView):
         description = (request.data.get("description") or "").strip()
         start_date = request.data.get("start_date") or None
         end_date = request.data.get("end_date") or None
+        destinations_payload = request.data.get("destinations")
 
         if not title:
             return Response({"detail": "Title is required."}, status=400)
 
-        plan = TripPlan.objects.create(
-            user=request.user,
-            title=title,
-            destination_text=destination_text,
-            description=description,
-            start_date=start_date,
-            end_date=end_date,
-        )
+        try:
+            normalized_destinations = validate_trip_plan_destinations_payload(
+                destinations_payload
+            )
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=400)
+
+        with transaction.atomic():
+            plan = TripPlan.objects.create(
+                user=request.user,
+                title=title,
+                destination_text=destination_text,
+                description=description,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+            replace_trip_plan_destinations(
+                plan,
+                normalized_destinations,
+            )
 
         return Response(serialize_trip_plan(plan), status=201)
 
@@ -1318,20 +1545,37 @@ class TripPlanDetailView(APIView):
             return Response({"detail": "Trip plan not found."}, status=404)
 
         title = request.data.get("title", plan.title)
-        destination_text = request.data.get("destination_text", plan.destination_text)
+        destination_text = request.data.get(
+            "destination_text",
+            plan.destination_text,
+        )
         description = request.data.get("description", plan.description)
         start_date = request.data.get("start_date", plan.start_date)
         end_date = request.data.get("end_date", plan.end_date)
+        destinations_payload = request.data.get("destinations")
 
         if not str(title).strip():
             return Response({"detail": "Title is required."}, status=400)
 
-        plan.title = str(title).strip()
-        plan.destination_text = str(destination_text or "").strip()
-        plan.description = str(description or "").strip()
-        plan.start_date = start_date or None
-        plan.end_date = end_date or None
-        plan.save()
+        try:
+            normalized_destinations = validate_trip_plan_destinations_payload(
+                destinations_payload
+            )
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=400)
+
+        with transaction.atomic():
+            plan.title = str(title).strip()
+            plan.destination_text = str(destination_text or "").strip()
+            plan.description = str(description or "").strip()
+            plan.start_date = start_date or None
+            plan.end_date = end_date or None
+            plan.save()
+
+            replace_trip_plan_destinations(
+                plan,
+                normalized_destinations,
+            )
 
         return Response(serialize_trip_plan(plan))
 
@@ -1344,7 +1588,6 @@ class TripPlanDetailView(APIView):
         plan.delete()
 
         return Response({"detail": "Trip plan deleted."})
-
 
 class TripPlanExperienceView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -2651,6 +2894,7 @@ class UpdateListView(APIView):
         )
 
         return Response(serialize_update(update, request), status=201)
+
 class UpdateDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]

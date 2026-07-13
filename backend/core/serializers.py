@@ -13,6 +13,7 @@ from .models import (
     Update,
     ContentReport,
     TripPlan,
+    TripPlanDestination,
     SavedItem,
     SavedPlace,
     generate_recovery_code,
@@ -788,6 +789,56 @@ class ContentReportSerializer(serializers.ModelSerializer):
                 )
 
         return attrs
+
+class TripPlanDestinationSerializer(serializers.ModelSerializer):
+    place_name = serializers.CharField(
+        source="place.name",
+        read_only=True,
+    )
+
+    place_type = serializers.CharField(
+        source="place.place_type",
+        read_only=True,
+    )
+
+    place_city = serializers.CharField(
+        source="place.city",
+        read_only=True,
+    )
+
+    destination_name = serializers.CharField(
+        source="place.destination.name",
+        read_only=True,
+    )
+
+    destination_country = serializers.CharField(
+        source="place.destination.country",
+        read_only=True,
+    )
+
+    class Meta:
+        model = TripPlanDestination
+        fields = [
+            "id",
+            "place",
+            "place_name",
+            "place_type",
+            "place_city",
+            "destination_name",
+            "destination_country",
+            "role",
+            "position",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "place_name",
+            "place_type",
+            "place_city",
+            "destination_name",
+            "destination_country",
+            "created_at",
+        ]
 
 class TripPlanSerializer(serializers.ModelSerializer):
     saved_count = serializers.SerializerMethodField()

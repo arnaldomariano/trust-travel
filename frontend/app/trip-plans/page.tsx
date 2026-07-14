@@ -17,6 +17,18 @@ type TripPlan = {
   updated_at: string;
 };
 
+type PlaceSearchResult = {
+  id: number;
+  name: string;
+  canonical_name?: string;
+  aliases?: string[];
+  place_type: string;
+  city?: string;
+  destination_name?: string;
+  destination_country?: string;
+  destination_city?: string;
+};
+
 function TripPlansPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,7 +40,11 @@ function TripPlansPageContent() {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const [title, setTitle] = useState("");
-  const [destinationText, setDestinationText] = useState("");
+  const [destinationSearch, setDestinationSearch] = useState("");
+  const [destinationResults, setDestinationResults] = useState<PlaceSearchResult[]>([]);
+  const [selectedDestination, setSelectedDestination] =
+    useState<PlaceSearchResult | null>(null);
+  const [searchingDestinations, setSearchingDestinations] = useState(false);
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -59,6 +75,47 @@ function TripPlansPageContent() {
     loadPlans();
   }, []);
 
+  useEffect(() => {
+      const query = destinationSearch.trim();
+
+      if (selectedDestination || query.length < 2) {
+        setDestinationResults([]);
+        setSearchingDestinations(false);
+        return;
+      }
+
+      const timeoutId = window.setTimeout(async () => {
+        setSearchingDestinations(true);
+
+        try {
+          const res = await fetch(
+            `${API_URL}/api/places/search/?q=${encodeURIComponent(query)}`,
+            {
+              credentials: "include",
+            }
+          );
+
+          if (!res.ok) {
+            setDestinationResults([]);
+            return;
+          }
+
+          const data = await res.json();
+
+          setDestinationResults(
+            Array.isArray(data?.results) ? data.results : []
+          );
+        } catch (error) {
+          console.error("Destination search error:", error);
+          setDestinationResults([]);
+        } finally {
+          setSearchingDestinations(false);
+        }
+      }, 300);
+
+      return () => window.clearTimeout(timeoutId);
+    }, [destinationSearch, selectedDestination]);
+
    const handleStartDateChange = (value: string) => {
       setStartDate(value);
       setFormError("");
@@ -75,6 +132,11 @@ function TripPlansPageContent() {
   const createPlan = async () => {
     if (!title.trim()) {
       setFormError("Please add a title for your trip plan.");
+      return;
+    }
+
+    if (!selectedDestination) {
+      setFormError("Please select a destination for this trip plan.");
       return;
     }
 
@@ -95,10 +157,16 @@ function TripPlansPageContent() {
         },
         body: JSON.stringify({
           title: title.trim(),
-          destination_text: destinationText.trim(),
           description: description.trim(),
           start_date: startDate || null,
           end_date: endDate || null,
+          destinations: [
+            {
+              place_id: selectedDestination.id,
+              role: "primary",
+              position: 0,
+            },
+          ],
         }),
       });
 
@@ -113,7 +181,9 @@ function TripPlansPageContent() {
       setPlans((prev) => [data, ...prev]);
 
       setTitle("");
-      setDestinationText("");
+      setDestinationSearch("");
+      setDestinationResults([]);
+      setSelectedDestination(null);
       setDescription("");
       setStartDate("");
       setEndDate("");
@@ -219,13 +289,109 @@ function TripPlansPageContent() {
         </div>
 
         <div style={field}>
-          <label style={fieldLabel}>Destination or theme</label>
+          <label style={fieldLabel}>
+            Primary destination <span style={requiredMark}>*</span>
+          </label>
+
           <input
-            value={destinationText}
-            onChange={(e) => setDestinationText(e.target.value)}
-            placeholder="e.g. Thailand, Rome, beaches, restaurants..."
+            value={destinationSearch}
+            onChange={(e) => {
+              setDestinationSearch(e.target.value);
+              setSelectedDestination(null);
+              setFormError("");
+            }}
+            placeholder="Search a country, city or specific place..."
             style={input}
           />
+
+          {searchingDestinations && (
+              <div style={requiredHint}>Searching destinations...</div>
+            )}
+
+            {!searchingDestinations &&
+              !selectedDestination &&
+              destinationSearch.trim().length >= 2 &&
+              destinationResults.length > 0 && (
+                <div style={destinationResultsList}>
+                  {destinationResults.map((place) => {
+                    const context = [
+                      place.place_type,
+                      place.city,
+                      place.destination_country || place.destination_name,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
+
+                    return (
+                      <button
+                        key={place.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDestination(place);
+                          setDestinationSearch(place.name);
+                          setDestinationResults([]);
+                          setFormError("");
+                        }}
+                        style={destinationResultButton}
+                      >
+                        <strong>{place.name}</strong>
+
+                        {context && (
+                          <span style={destinationResultContext}>
+                            {context}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+            {!searchingDestinations &&
+              !selectedDestination &&
+              destinationSearch.trim().length >= 2 &&
+              destinationResults.length === 0 && (
+                <div style={requiredHint}>
+                  No matching destination found.
+                </div>
+              )}
+
+            {selectedDestination && (
+              <div style={selectedDestinationBox}>
+                <div>
+                  <strong>{selectedDestination.name}</strong>
+
+                  <div style={destinationResultContext}>
+                    {[
+                      selectedDestination.place_type,
+                      selectedDestination.city,
+                      selectedDestination.destination_country ||
+                        selectedDestination.destination_name,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDestination(null);
+                    setDestinationSearch("");
+                    setDestinationResults([]);
+                  }}
+                  style={smallSecondaryButton}
+                >
+                  Change
+                </button>
+              </div>
+            )}
+
+          {!selectedDestination && (
+            <div style={requiredHint}>
+              Select a real place from the search results.
+            </div>
+          )}
         </div>
 
         <div style={twoColumns}>
@@ -575,4 +741,47 @@ const formErrorBox = {
   color: "#b91c1c",
   fontSize: "13px",
   lineHeight: 1.4,
+};
+
+const destinationResultsList = {
+  display: "grid",
+  gap: "8px",
+  marginTop: "8px",
+};
+
+const destinationResultButton = {
+  width: "100%",
+  padding: "10px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: "10px",
+  background: "#ffffff",
+  textAlign: "left" as const,
+  cursor: "pointer",
+  display: "grid",
+  gap: "4px",
+};
+
+const destinationResultContext = {
+  fontSize: "0.85rem",
+  color: "#6b7280",
+};
+
+const selectedDestinationBox = {
+  marginTop: "10px",
+  padding: "12px",
+  border: "1px solid #bfdbfe",
+  borderRadius: "10px",
+  background: "#eff6ff",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const smallSecondaryButton = {
+  padding: "6px 10px",
+  borderRadius: "8px",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  cursor: "pointer",
 };

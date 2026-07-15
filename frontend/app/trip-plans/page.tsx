@@ -5,10 +5,25 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { API_URL } from "../lib/api";
 
+type TripPlanDestination = {
+  id: number;
+  place: number;
+  place_name: string;
+  place_type: string;
+  place_city?: string;
+  destination_name?: string;
+  destination_country?: string;
+  role: "primary" | "secondary";
+  position: number;
+  created_at: string;
+};
+
 type TripPlan = {
   id: number;
   title: string;
   destination_text: string;
+  destinations: TripPlanDestination[];
+  primary_destination: TripPlanDestination | null;
   description: string;
   start_date: string | null;
   end_date: string | null;
@@ -478,8 +493,21 @@ function TripPlansPageContent() {
 
                   <h3 style={planTitle}>{plan.title}</h3>
 
-                  {plan.destination_text && (
-                    <p style={destinationTextStyle}>{plan.destination_text}</p>
+                  {plan.primary_destination ? (
+                    <p style={destinationTextStyle}>
+                      {[
+                        plan.primary_destination.place_name,
+                        plan.primary_destination.place_city,
+                        plan.primary_destination.destination_country ||
+                          plan.primary_destination.destination_name,
+                      ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                  ) : (
+                    plan.destination_text && (
+                      <p style={destinationTextStyle}>{plan.destination_text}</p>
+                    )
                   )}
 
                   {plan.description && (

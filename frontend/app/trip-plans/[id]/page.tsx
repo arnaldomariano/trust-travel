@@ -39,11 +39,26 @@ type SavedPlace = {
   has_related_content: boolean;
 };
 
+type TripPlanDestination = {
+  id: number;
+  place: number;
+  place_name: string;
+  place_type: string;
+  place_city?: string;
+  destination_name?: string;
+  destination_country?: string;
+  role: "primary" | "secondary";
+  position: number;
+  created_at: string;
+};
+
 type TripPlanDetail = {
   id: number;
   title: string;
   destination_text: string;
   description: string;
+  destinations: TripPlanDestination[];
+  primary_destination: TripPlanDestination | null;
   start_date: string | null;
   end_date: string | null;
   saved_count: number;
@@ -593,8 +608,21 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
         <h1 style={titleStyle}>{plan.title}</h1>
 
-        {plan.destination_text && (
-          <p style={destinationText}>{plan.destination_text}</p>
+        {plan.primary_destination ? (
+          <p style={destinationText}>
+            {[
+              plan.primary_destination.place_name,
+              plan.primary_destination.place_city,
+              plan.primary_destination.destination_country ||
+                plan.primary_destination.destination_name,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        ) : (
+          plan.destination_text && (
+            <p style={destinationText}>{plan.destination_text}</p>
+          )
         )}
 
         {plan.description && <p style={descriptionText}>{plan.description}</p>}

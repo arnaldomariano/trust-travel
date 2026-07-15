@@ -175,7 +175,13 @@ export default function TripPlanDetailPage() {
   const [deletingPlan, setDeletingPlan] = useState(false);
 
   const [editTitle, setEditTitle] = useState("");
-  const [editDestinationText, setEditDestinationText] = useState("");
+  const [editDestinationSearch, setEditDestinationSearch] = useState("");
+  const [editDestinationResults, setEditDestinationResults] =
+    useState<PlaceSearchResult[]>([]);
+  const [editSelectedDestination, setEditSelectedDestination] =
+    useState<PlaceSearchResult | null>(null);
+  const [searchingEditDestinations, setSearchingEditDestinations] =
+  useState(false);
   const [editDescription, setEditDescription] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
@@ -196,6 +202,27 @@ export default function TripPlanDetailPage() {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
+
+  const getPlaceContextLabel = (
+      placeName?: string,
+      placeCity?: string,
+      destinationCountry?: string,
+      destinationName?: string
+  ) => {
+      const normalizedPlaceName = normalizeText(placeName);
+      const normalizedPlaceCity = normalizeText(placeCity);
+
+      const values = [
+        placeName,
+        normalizedPlaceCity &&
+        normalizedPlaceCity !== normalizedPlaceName
+          ? placeCity
+          : "",
+        destinationCountry || destinationName,
+      ];
+
+      return values.filter(Boolean).join(" · ");
+  };
 
   const getPlaceDestinationLabel = (place: PlaceSearchResult | RadarPlace) => {
     const destinationName =
@@ -274,7 +301,24 @@ export default function TripPlanDetailPage() {
     clearActionFeedback();
 
     setEditTitle(plan.title || "");
-    setEditDestinationText(plan.destination_text || "");
+
+    if (plan.primary_destination) {
+      setEditSelectedDestination({
+        id: plan.primary_destination.place,
+        name: plan.primary_destination.place_name,
+        place_type: plan.primary_destination.place_type,
+        city: plan.primary_destination.place_city,
+        destination_name: plan.primary_destination.destination_name,
+        destination_country: plan.primary_destination.destination_country,
+      });
+
+      setEditDestinationSearch(plan.primary_destination.place_name);
+    } else {
+      setEditSelectedDestination(null);
+      setEditDestinationSearch("");
+    }
+
+    setEditDestinationResults([]);
     setEditDescription(plan.description || "");
     setEditStartDate(plan.start_date || "");
     setEditEndDate(plan.end_date || "");
@@ -286,6 +330,58 @@ export default function TripPlanDetailPage() {
     setEditingPlan(false);
     clearActionFeedback();
   };
+
+  const searchPlacesForEditDestination = async () => {
+      clearActionFeedback();
+
+      const query = editDestinationSearch.trim();
+
+      if (query.length < 2) {
+        setEditDestinationResults([]);
+        setActionError("Type at least 2 characters to search for a destination.");
+        return;
+      }
+
+      setSearchingEditDestinations(true);
+
+      try {
+        const params = new URLSearchParams({
+          q: query,
+        });
+
+        const searchUrl = `${API_URL}/api/places/search/?${params.toString()}`;
+
+        const res = await fetch(searchUrl, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error(
+            "Failed to search edit destinations:",
+            res.status,
+            text
+          );
+          setActionError("Could not search destinations right now.");
+          setEditDestinationResults([]);
+          return;
+        }
+
+        const data = await res.json();
+
+        const places: PlaceSearchResult[] = Array.isArray(data.results)
+          ? data.results
+          : [];
+
+        setEditDestinationResults(places);
+      } catch (error) {
+        console.error("Edit destination search error:", error);
+        setActionError("Could not search destinations right now.");
+        setEditDestinationResults([]);
+      } finally {
+        setSearchingEditDestinations(false);
+      }
+    };
 
   const searchPlacesForRadar = async () => {
     clearActionFeedback();
@@ -484,6 +580,11 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
       return;
     }
 
+    if (!editSelectedDestination) {
+      setActionError("Please select a primary destination.");
+      return;
+    }
+
     setSavingPlan(true);
 
     try {
@@ -495,13 +596,18 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
         },
         body: JSON.stringify({
           title,
-          destination_text: editDestinationText.trim(),
           description: editDescription.trim(),
           start_date: editStartDate || null,
           end_date: editEndDate || null,
-        }),
-      });
-
+          destinations: [
+            {
+              place_id: editSelectedDestination.id,
+              role: "primary",
+              position: 0,
+            },
+          ],
+         }),
+       });
       const data = await res.json();
 
       if (!res.ok) {
@@ -517,6 +623,8 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           ...prev,
           title: data.title,
           destination_text: data.destination_text,
+          destinations: data.destinations,
+          primary_destination: data.primary_destination,
           description: data.description,
           start_date: data.start_date,
           end_date: data.end_date,
@@ -610,14 +718,12 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
         {plan.primary_destination ? (
           <p style={destinationText}>
-            {[
+            {getPlaceContextLabel(
               plan.primary_destination.place_name,
               plan.primary_destination.place_city,
-              plan.primary_destination.destination_country ||
-                plan.primary_destination.destination_name,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+              plan.primary_destination.destination_country,
+              plan.primary_destination.destination_name
+            )}
           </p>
         ) : (
           plan.destination_text && (
@@ -906,26 +1012,127 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           </div>
 
           <label style={formLabel}>
-            Title
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(event) => setEditTitle(event.target.value)}
-              placeholder="Trip plan title"
-              style={textInput}
-            />
-          </label>
+              Title
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(event) => {
+                  setEditTitle(event.target.value);
+                  setActionError("");
+                }}
+                placeholder="Trip plan title"
+                style={textInput}
+              />
+            </label>
 
-          <label style={formLabel}>
-            Destination
-            <input
-              type="text"
-              value={editDestinationText}
-              onChange={(event) => setEditDestinationText(event.target.value)}
-              placeholder="Destination, city or country"
-              style={textInput}
-            />
-          </label>
+            <label style={formLabel}>
+              Primary destination
+              <input
+                type="text"
+                value={editDestinationSearch}
+                onChange={(event) => {
+                  setEditDestinationSearch(event.target.value);
+                  setEditSelectedDestination(null);
+                  setActionError("");
+                }}
+                placeholder="Search a country, city or specific place"
+                style={textInput}
+              />
+            </label>
+
+            <div style={compactActions}>
+              <button
+                type="button"
+                onClick={searchPlacesForEditDestination}
+                disabled={searchingEditDestinations}
+                style={{
+                  ...smallPrimaryButton,
+                  opacity: searchingEditDestinations ? 0.5 : 1,
+                  cursor: searchingEditDestinations ? "not-allowed" : "pointer",
+                }}
+              >
+                {searchingEditDestinations
+                  ? "Searching..."
+                  : "Search destination"}
+              </button>
+            </div>
+
+            {editDestinationResults.length > 0 && (
+              <div style={{ display: "grid", gap: "8px" }}>
+                {editDestinationResults.map((place) => {
+                  const contextLabel = getPlaceContextLabel(
+                    undefined,
+                    place.city,
+                    place.destination_country,
+                    place.destination_name
+                  );
+
+                  return (
+                    <div key={place.id} style={radarSearchResultRow}>
+                      <div>
+                        <strong>{place.name}</strong>
+
+                        <div style={mutedSmall}>
+                          {place.place_type}
+                          {contextLabel ? ` · ${contextLabel}` : ""}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditSelectedDestination(place);
+                          setEditDestinationSearch(place.name);
+                          setEditDestinationResults([]);
+                          setActionError("");
+                        }}
+                        style={smallPrimaryButton}
+                      >
+                        Select
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {editSelectedDestination && (
+              <div style={radarSearchResultRow}>
+                <div>
+                  <strong>{editSelectedDestination.name}</strong>
+
+                  <div style={mutedSmall}>
+                    {editSelectedDestination.place_type}
+
+                    {getPlaceContextLabel(
+                      undefined,
+                      editSelectedDestination.city,
+                      editSelectedDestination.destination_country,
+                      editSelectedDestination.destination_name
+                    )
+                      ? ` · ${getPlaceContextLabel(
+                          undefined,
+                          editSelectedDestination.city,
+                          editSelectedDestination.destination_country,
+                          editSelectedDestination.destination_name
+                        )}`
+                      : ""}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditSelectedDestination(null);
+                    setEditDestinationSearch("");
+                    setEditDestinationResults([]);
+                  }}
+                  style={secondaryButton}
+                >
+                  Change
+                </button>
+              </div>
+            )}
 
           <label style={formLabel}>
             Description

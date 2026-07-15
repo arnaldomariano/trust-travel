@@ -44,6 +44,34 @@ type PlaceSearchResult = {
   destination_city?: string;
 };
 
+const normalizePlaceLabel = (value?: string) =>
+  (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const getPlaceContextLabel = (
+  placeName?: string,
+  placeCity?: string,
+  destinationCountry?: string,
+  destinationName?: string
+) => {
+  const normalizedPlaceName = normalizePlaceLabel(placeName);
+  const normalizedPlaceCity = normalizePlaceLabel(placeCity);
+
+  return [
+    placeName,
+    normalizedPlaceCity &&
+    normalizedPlaceCity !== normalizedPlaceName
+      ? placeCity
+      : "",
+    destinationCountry || destinationName,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+};
+
 function TripPlansPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -494,20 +522,18 @@ function TripPlansPageContent() {
                   <h3 style={planTitle}>{plan.title}</h3>
 
                   {plan.primary_destination ? (
-                    <p style={destinationTextStyle}>
-                      {[
-                        plan.primary_destination.place_name,
-                        plan.primary_destination.place_city,
-                        plan.primary_destination.destination_country ||
-                          plan.primary_destination.destination_name,
-                      ]
-                          .filter(Boolean)
-                          .join(" · ")}
+                      <p style={destinationTextStyle}>
+                        {getPlaceContextLabel(
+                          plan.primary_destination.place_name,
+                          plan.primary_destination.place_city,
+                          plan.primary_destination.destination_country,
+                          plan.primary_destination.destination_name
+                        )}
                       </p>
                   ) : (
-                    plan.destination_text && (
-                      <p style={destinationTextStyle}>{plan.destination_text}</p>
-                    )
+                      plan.destination_text && (
+                        <p style={destinationTextStyle}>{plan.destination_text}</p>
+                      )
                   )}
 
                   {plan.description && (

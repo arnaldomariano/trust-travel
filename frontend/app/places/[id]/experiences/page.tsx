@@ -7,11 +7,46 @@ import Link from "next/link";
 import { API_URL } from "../../../lib/api";
 import { countryCodeToFlagEmoji } from "../../../lib/flags";
 
+type TripPlanDestination = {
+  place_name: string;
+  place_city?: string;
+  destination_name?: string;
+  destination_country?: string;
+};
+
 type TripPlan = {
   id: number;
   title: string;
   destination_text: string;
   saved_count: number;
+  primary_destination: TripPlanDestination | null;
+};
+
+const getTripPlanDestinationLabel = (plan: TripPlan) => {
+  if (plan.primary_destination) {
+    const {
+      place_name,
+      place_city,
+      destination_country,
+      destination_name,
+    } = plan.primary_destination;
+
+    const normalizedPlaceName = (place_name || "").trim().toLowerCase();
+    const normalizedPlaceCity = (place_city || "").trim().toLowerCase();
+
+    return [
+      place_name,
+      normalizedPlaceCity &&
+      normalizedPlaceCity !== normalizedPlaceName
+        ? place_city
+        : "",
+      destination_country || destination_name,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return plan.destination_text || "";
 };
 
 export default function ExperiencesPage() {
@@ -21,9 +56,9 @@ export default function ExperiencesPage() {
   // =====================
 
   const params = useParams();
-  const id = params.id;
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const placeId = Number(id);
   const router = useRouter();
-
 
   // =====================
   // Core page state
@@ -54,7 +89,6 @@ export default function ExperiencesPage() {
 
   const [showCreatePlanByExperience, setShowCreatePlanByExperience] = useState<Record<number, boolean>>({});
   const [newPlanTitleByExperience, setNewPlanTitleByExperience] = useState<Record<number, string>>({});
-  const [newPlanDestinationByExperience, setNewPlanDestinationByExperience] = useState<Record<number, string>>({});
   const [creatingPlanByExperience, setCreatingPlanByExperience] = useState<Record<number, boolean>>({});
   const [tripPlanErrorByExperience, setTripPlanErrorByExperience] = useState<Record<number, string>>({});
 
@@ -794,13 +828,6 @@ const createTripPlanAndAddExperience = async (experience: any) => {
 
   const title = (newPlanTitleByExperience[experienceId] || "").trim();
 
-  const destinationText =
-    (newPlanDestinationByExperience[experienceId] || "").trim() ||
-    experience.destination_name ||
-    experience.place_name ||
-    place?.name ||
-    "";
-
   if (!title) {
     setTripPlanErrorByExperience((prev) => ({
       ...prev,
@@ -828,7 +855,13 @@ const createTripPlanAndAddExperience = async (experience: any) => {
       },
       body: JSON.stringify({
         title,
-        destination_text: destinationText,
+        destinations: [
+          {
+            place_id: placeId,
+            role: "primary",
+            position: 0,
+          },
+        ],
       }),
     });
 
@@ -884,11 +917,6 @@ const createTripPlanAndAddExperience = async (experience: any) => {
     }));
 
     setNewPlanTitleByExperience((prev) => ({
-      ...prev,
-      [experienceId]: "",
-    }));
-
-    setNewPlanDestinationByExperience((prev) => ({
       ...prev,
       [experienceId]: "",
     }));
@@ -1031,12 +1059,16 @@ const renderTripPlanControls = (experience: any) => {
                 >
                   <option value="">Choose an existing trip plan</option>
 
-                  {tripPlans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.title}
-                      {plan.destination_text ? ` — ${plan.destination_text}` : ""}
-                    </option>
-                  ))}
+                  {tripPlans.map((plan) => {
+                    const destinationLabel = getTripPlanDestinationLabel(plan);
+
+                    return (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.title}
+                        {destinationLabel ? ` — ${destinationLabel}` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
 
               {tripPlanError && (
@@ -1090,17 +1122,6 @@ const renderTripPlanControls = (experience: any) => {
                   ...prev,
                   [experienceId]: "",
                 }));
-
-                if (!newPlanDestinationByExperience[experienceId]) {
-                  setNewPlanDestinationByExperience((prev) => ({
-                    ...prev,
-                    [experienceId]:
-                      experience.destination_name ||
-                      experience.place_name ||
-                      place?.name ||
-                      "",
-                  }));
-                }
               }}
             >
               Create new trip plan here
@@ -1117,19 +1138,6 @@ const renderTripPlanControls = (experience: any) => {
                   }))
                 }
                 placeholder="Trip plan title, e.g. Italy 2026"
-                style={inlineTextInput}
-              />
-
-              <input
-                type="text"
-                value={newPlanDestinationByExperience[experienceId] || ""}
-                onChange={(event) =>
-                  setNewPlanDestinationByExperience((prev) => ({
-                    ...prev,
-                    [experienceId]: event.target.value,
-                  }))
-                }
-                placeholder="Destination, e.g. Rome, Thailand, São Roque"
                 style={inlineTextInput}
               />
 
@@ -2065,12 +2073,16 @@ const renderReportControls = (experience: any) => {
                                 >
                                   <option value="">Choose a trip plan</option>
 
-                                  {tripPlans.map((plan) => (
-                                    <option key={plan.id} value={plan.id}>
-                                      {plan.title}
-                                      {plan.destination_text ? ` — ${plan.destination_text}` : ""}
-                                    </option>
-                                  ))}
+                                  {tripPlans.map((plan) => {
+                                    const destinationLabel = getTripPlanDestinationLabel(plan);
+
+                                    return (
+                                      <option key={plan.id} value={plan.id}>
+                                        {plan.title}
+                                        {destinationLabel ? ` — ${destinationLabel}` : ""}
+                                      </option>
+                                    );
+                                  })}
                                 </select>
 
                                 {tripPlanErrorByExperience[e.id] && (

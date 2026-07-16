@@ -7,11 +7,46 @@ import Link from "next/link";
 import { API_URL } from "../../lib/api";
 import { countryCodeToFlagEmoji } from "../../lib/flags";
 
+type TripPlanDestination = {
+  place_name: string;
+  place_city?: string;
+  destination_name?: string;
+  destination_country?: string;
+};
+
 type TripPlan = {
   id: number;
   title: string;
   destination_text: string;
   saved_count: number;
+  primary_destination: TripPlanDestination | null;
+};
+
+const getTripPlanDestinationLabel = (plan: TripPlan) => {
+  if (plan.primary_destination) {
+    const {
+      place_name,
+      place_city,
+      destination_country,
+      destination_name,
+    } = plan.primary_destination;
+
+    const normalizedPlaceName = (place_name || "").trim().toLowerCase();
+    const normalizedPlaceCity = (place_city || "").trim().toLowerCase();
+
+    return [
+      place_name,
+      normalizedPlaceCity &&
+      normalizedPlaceCity !== normalizedPlaceName
+        ? place_city
+        : "",
+      destination_country || destination_name,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return plan.destination_text || "";
 };
 
 export default function ExperienceDetailPage() {
@@ -44,7 +79,6 @@ export default function ExperienceDetailPage() {
 
   const [showCreateTripPlanForm, setShowCreateTripPlanForm] = useState(false);
   const [newTripPlanTitle, setNewTripPlanTitle] = useState("");
-  const [newTripPlanDestination, setNewTripPlanDestination] = useState("");
   const [creatingTripPlan, setCreatingTripPlan] = useState(false);
   const [tripPlanError, setTripPlanError] = useState("");
   const [addToPlanError, setAddToPlanError] = useState("");
@@ -189,11 +223,6 @@ export default function ExperienceDetailPage() {
       }
 
       const title = newTripPlanTitle.trim();
-      const destinationText =
-        newTripPlanDestination.trim() ||
-        experience.destination_name ||
-        experience.place_name ||
-        "";
 
       if (!title) {
         setTripPlanError("Please give your trip plan a title.");
@@ -212,7 +241,13 @@ export default function ExperienceDetailPage() {
           },
           body: JSON.stringify({
             title,
-            destination_text: destinationText,
+            destinations: [
+              {
+                place_id: experience.place,
+                role: "primary",
+                position: 0,
+              },
+            ],
           }),
         });
 
@@ -251,7 +286,6 @@ export default function ExperienceDetailPage() {
         });
 
         setNewTripPlanTitle("");
-        setNewTripPlanDestination("");
         setShowCreateTripPlanForm(false);
         setShowTripPlanPicker(false);
       } catch (error) {
@@ -848,12 +882,16 @@ const authorLabel = authorFlag
                         >
                           <option value="">Choose an existing trip plan</option>
 
-                          {tripPlans.map((plan) => (
-                            <option key={plan.id} value={plan.id}>
-                              {plan.title}
-                              {plan.destination_text ? ` — ${plan.destination_text}` : ""}
-                            </option>
-                          ))}
+                          {tripPlans.map((plan) => {
+                            const destinationLabel = getTripPlanDestinationLabel(plan);
+
+                            return (
+                              <option key={plan.id} value={plan.id}>
+                                {plan.title}
+                                {destinationLabel ? ` — ${destinationLabel}` : ""}
+                              </option>
+                            );
+                          })}
                         </select>
 
                         {addToPlanError && (
@@ -898,12 +936,6 @@ const authorLabel = authorFlag
                         onClick={() => {
                           setShowCreateTripPlanForm(true);
                           setTripPlanError("");
-
-                          if (!newTripPlanDestination) {
-                            setNewTripPlanDestination(
-                              experience.destination_name || experience.place_name || ""
-                            );
-                          }
                         }}
                       >
                         Create new trip plan here
@@ -917,15 +949,6 @@ const authorLabel = authorFlag
                           placeholder="Trip plan title, e.g. Italy 2026"
                           style={textInput}
                         />
-
-                        <input
-                          type="text"
-                          value={newTripPlanDestination}
-                          onChange={(event) => setNewTripPlanDestination(event.target.value)}
-                          placeholder="Destination, e.g. Rome, Thailand, São Roque"
-                          style={textInput}
-                        />
-
                         <div style={quickCreateActions}>
                           <button
                             type="button"

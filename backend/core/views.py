@@ -1331,6 +1331,142 @@ def replace_trip_plan_destinations(plan, normalized_destinations):
         ]
     )
 
+def resolve_trip_plan_scope(plan):
+    structured_destinations = list(
+        plan.destinations.select_related(
+            "place",
+            "place__destination",
+        ).order_by(
+            "position",
+            "created_at",
+        )
+    )
+
+    if structured_destinations:
+        root_places = [
+            destination.place
+            for destination in structured_destinations
+        ]
+
+        matched_place_ids = {
+            place.id
+            for place in root_places
+        }
+
+        frontier_place_ids = set(matched_place_ids)
+
+        # Expand the structured hierarchy recursively.
+        while frontier_place_ids:
+            child_place_ids = set(
+                Place.objects.filter(
+                    parent_place_id__in=frontier_place_ids
+                ).values_list(
+                    "id",
+                    flat=True,
+                )
+            )
+
+            child_place_ids.difference_update(matched_place_ids)
+
+            if not child_place_ids:
+                break
+
+            matched_place_ids.update(child_place_ids)
+            frontier_place_ids = child_place_ids
+
+        # Compatibility for records created before parent_place existed.
+        for place in root_places:
+            if not place.destination_id:
+                continue
+
+            if place.place_type == "country":
+                legacy_place_ids = Place.objects.filter(
+                    destination_id=place.destination_id
+                ).values_list(
+                    "id",
+                    flat=True,
+                )
+
+                matched_place_ids.update(legacy_place_ids)
+
+            elif place.place_type == "city":
+                city_name = (place.city or place.name or "").strip()
+
+                if not city_name:
+                    continue
+
+                legacy_place_ids = Place.objects.filter(
+                    destination_id=place.destination_id,
+                    city__iexact=city_name,
+                ).exclude(
+                    place_type="country"
+                ).values_list(
+                    "id",
+                    flat=True,
+                )
+
+                matched_place_ids.update(legacy_place_ids)
+
+        ordered_matched_place_ids = sorted(matched_place_ids)
+
+        matched_places = Place.objects.filter(
+            id__in=ordered_matched_place_ids
+        ).select_related(
+            "destination"
+        ).distinct().order_by(
+            "place_type",
+            "name",
+        )
+
+        return {
+            "source": "structured_destinations",
+            "query": " · ".join(place.name for place in root_places),
+            "root_places": root_places,
+            "matched_places": matched_places,
+            "matched_place_ids": ordered_matched_place_ids,
+            "is_legacy": False,
+        }
+
+    destination_text = (plan.destination_text or "").strip()
+
+    if destination_text:
+        matched_places = Place.objects.filter(
+            Q(name__icontains=destination_text)
+            | Q(city__icontains=destination_text)
+            | Q(destination__name__icontains=destination_text)
+            | Q(destination__country__icontains=destination_text)
+        ).select_related(
+            "destination"
+        ).distinct().order_by(
+            "place_type",
+            "name",
+        )
+
+        matched_place_ids = list(
+            matched_places.values_list(
+                "id",
+                flat=True,
+            )
+        )
+
+        return {
+            "source": "legacy_destination_text",
+            "query": destination_text,
+            "root_places": [],
+            "matched_places": matched_places,
+            "matched_place_ids": matched_place_ids,
+            "is_legacy": True,
+        }
+
+    return {
+        "source": "empty",
+        "query": "",
+        "root_places": [],
+        "matched_places": Place.objects.none(),
+        "matched_place_ids": [],
+        "is_legacy": False,
+    }
+
 def serialize_trip_plan(plan):
     saved_items_count = plan.saved_items.count()
     saved_places_count = plan.saved_places.count()
@@ -1742,6 +1878,19 @@ class TripPlanWatchedPlaceView(APIView):
             pk=place_id,
         )
 
+        resolved_scope = resolve_trip_plan_scope(trip_plan)
+
+        if place.id not in resolved_scope["matched_place_ids"]:
+            return Response(
+                {
+                    "detail": (
+                        "This place is outside the destinations "
+                        "defined for this trip plan."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         watched_place, created = TripPlanWatchedPlace.objects.get_or_create(
             user=request.user,
             trip_plan=trip_plan,
@@ -1834,6 +1983,8 @@ class TripPlanRadarView(APIView):
             saved_places.values_list("place_id", flat=True)
         )
 
+        resolved_scope = None
+
         # ------------------------------------------------------------
         # 1. Preferred mode: explicit Radar watchlist
         # ------------------------------------------------------------
@@ -1857,13 +2008,16 @@ class TripPlanRadarView(APIView):
             ).select_related("destination").order_by("place_type", "name")
 
         # ------------------------------------------------------------
-        # 3. Final fallback: broad destination search
+        # 3. Trip Plan destination scope
         # ------------------------------------------------------------
         else:
-            watch_mode = "destination_text"
-            query = destination_text
+            resolved_scope = resolve_trip_plan_scope(plan)
 
-            if not destination_text:
+            watch_mode = resolved_scope["source"]
+            query = resolved_scope["query"]
+            matched_places = resolved_scope["matched_places"]
+
+            if watch_mode == "empty":
                 return Response(
                     {
                         "trip_plan": serialize_trip_plan(plan),
@@ -1885,19 +2039,16 @@ class TripPlanRadarView(APIView):
                     }
                 )
 
-            matched_places = Place.objects.filter(
-                Q(name__icontains=destination_text)
-                | Q(city__icontains=destination_text)
-                | Q(destination__name__icontains=destination_text)
-                | Q(destination__country__icontains=destination_text)
-            ).select_related(
-                "destination"
-            ).distinct().order_by(
-                "place_type",
-                "name",
+        matched_place_ids = (
+            resolved_scope["matched_place_ids"]
+            if resolved_scope is not None
+            else list(
+                matched_places.values_list(
+                    "id",
+                    flat=True,
+                )
             )
-
-        matched_place_ids = list(matched_places.values_list("id", flat=True))
+        )
 
         recommended_experiences = Experience.objects.filter(
             place_id__in=matched_place_ids
@@ -1949,7 +2100,8 @@ class TripPlanRadarView(APIView):
                         else "",
                         "is_saved": place.id in saved_place_ids,
                     }
-                    for place in related_places
+                    for watched_place in watched_places
+                    for place in [watched_place.place]
                 ],
                 "related_experiences_count": recommended_experiences.count()
                 if hasattr(recommended_experiences, "count")
@@ -2742,7 +2894,7 @@ class TripPlanSuggestionsView(APIView):
 
         return Response({
             "experiences": experience_results,
-            "places": place_results,
+            "matched_places": place_results,
         })
 
 # ============================================================

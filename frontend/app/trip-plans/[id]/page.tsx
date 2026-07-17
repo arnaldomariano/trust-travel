@@ -455,8 +455,7 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
       const data = await res.json();
 
-      if (!res.ok) {
-        console.error("Watch radar place error:", data);
+            if (!res.ok) {
         setActionError(data.detail || "Error adding place to Radar watchlist.");
         return;
       }

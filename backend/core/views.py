@@ -2133,81 +2133,56 @@ class TripPlanRadarView(APIView):
             watched_places.values_list("place_id", flat=True)
         )
 
-        saved_places = SavedPlace.objects.filter(
-            user=request.user,
-            trip_plan=plan,
-        ).select_related("place", "place__destination")
+        resolved_scope = resolve_trip_plan_scope(plan)
 
-        saved_place_watch_ids = list(
-            saved_places.values_list("place_id", flat=True)
-        )
+        watch_mode = resolved_scope["source"]
+        query = resolved_scope["query"]
+        matched_places = resolved_scope["matched_places"]
+        matched_place_ids = resolved_scope["matched_place_ids"]
 
-        resolved_scope = None
-
-        # ------------------------------------------------------------
-        # 1. Preferred mode: explicit Radar watchlist
-        # ------------------------------------------------------------
-        if watched_place_ids:
-            watch_mode = "radar_watchlist"
-            query = "Radar watchlist"
-
-            matched_places = Place.objects.filter(
-                id__in=watched_place_ids
-            ).select_related("destination").order_by("place_type", "name")
-
-        # ------------------------------------------------------------
-        # 2. Secondary mode: saved places as automatic watchlist
-        # ------------------------------------------------------------
-        elif saved_place_watch_ids:
-            watch_mode = "saved_places"
-            query = "Saved places"
-
-            matched_places = Place.objects.filter(
-                id__in=saved_place_watch_ids
-            ).select_related("destination").order_by("place_type", "name")
-
-        # ------------------------------------------------------------
-        # 3. Trip Plan destination scope
-        # ------------------------------------------------------------
-        else:
-            resolved_scope = resolve_trip_plan_scope(plan)
-
-            watch_mode = resolved_scope["source"]
-            query = resolved_scope["query"]
-            matched_places = resolved_scope["matched_places"]
-
-            if watch_mode == "empty":
-                return Response(
-                    {
-                        "trip_plan": serialize_trip_plan(plan),
-                        "query": "",
-                        "destination_text": "",
-                        "watch_mode": watch_mode,
-                        "watched_places_count": 0,
-                        "watched_places": [],
-                        "related_experiences_count": 0,
-                        "related_places_count": 0,
-                        "related_updates_count": 0,
-                        "has_related_content": False,
-                        "related_places": [],
-                        "recommended_experiences": [],
-                        "related_updates": [],
-                        "saved_experience_ids": saved_experience_ids,
-                        "saved_place_ids": saved_place_ids,
-                        "detail": "This trip plan does not have a destination or watched places yet.",
-                    }
-                )
-
-        matched_place_ids = (
-            resolved_scope["matched_place_ids"]
-            if resolved_scope is not None
-            else list(
-                matched_places.values_list(
-                    "id",
-                    flat=True,
-                )
+        if watch_mode == "empty":
+            return Response(
+                {
+                    "trip_plan": serialize_trip_plan(plan),
+                    "query": "",
+                    "destination_text": "",
+                    "watch_mode": watch_mode,
+                    "watched_places_count": len(watched_place_ids),
+                    "explicit_watched_places_count": len(watched_place_ids),
+                    "saved_places_count": len(saved_place_ids),
+                    "watched_places": [
+                        {
+                            "id": watched_place.place.id,
+                            "name": watched_place.place.name,
+                            "place_type": watched_place.place.place_type,
+                            "city": watched_place.place.city,
+                            "destination_id": watched_place.place.destination_id,
+                            "destination_name": (
+                                watched_place.place.destination.name
+                                if watched_place.place.destination
+                                else ""
+                            ),
+                            "destination_country": (
+                                watched_place.place.destination.country
+                                if watched_place.place.destination
+                                else ""
+                            ),
+                            "is_saved": watched_place.place.id in saved_place_ids,
+                        }
+                        for watched_place in watched_places
+                    ],
+                    "related_experiences_count": 0,
+                    "related_places_count": 0,
+                    "related_updates_count": 0,
+                    "has_related_content": False,
+                    "related_places": [],
+                    "recommended_experiences": [],
+                    "related_updates": [],
+                    "saved_experience_ids": saved_experience_ids,
+                    "saved_place_ids": saved_place_ids,
+                    "detail": "This trip plan does not have a destination yet.",
+                }
             )
-        )
 
         recommended_experiences = Experience.objects.filter(
             place_id__in=matched_place_ids
@@ -2239,9 +2214,7 @@ class TripPlanRadarView(APIView):
                 "query": query,
                 "destination_text": destination_text,
                 "watch_mode": watch_mode,
-                "watched_places_count": len(watched_place_ids)
-                if watched_place_ids
-                else len(saved_place_watch_ids),
+                "watched_places_count": len(watched_place_ids),
                 "explicit_watched_places_count": len(watched_place_ids),
                 "saved_places_count": len(saved_place_ids),
                 "watched_places": [
@@ -2270,8 +2243,7 @@ class TripPlanRadarView(APIView):
                 if hasattr(updates, "count")
                 else len(updates),
                 "has_related_content": (
-                    len(related_places) > 0
-                    or len(recommended_experiences) > 0
+                    len(recommended_experiences) > 0
                     or len(updates) > 0
                 ),
                 "related_places": [

@@ -117,7 +117,10 @@ type RadarUpdate = {
 type TripRadar = {
   query: string;
   destination_text?: string;
-  watch_mode?: "radar_watchlist" | "saved_places" | "destination_text";
+  watch_mode?:
+  | "structured_destinations"
+  | "legacy_destination_text"
+  | "empty";
   watched_places_count?: number;
   explicit_watched_places_count?: number;
   saved_places_count?: number;

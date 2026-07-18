@@ -159,6 +159,7 @@ export default function TripPlanDetailPage() {
   const [radarPlaceResults, setRadarPlaceResults] = useState<PlaceSearchResult[]>([]);
   const [radarPlaceSearchLoading, setRadarPlaceSearchLoading] = useState(false);
   const [radarPlaceHasSearched, setRadarPlaceHasSearched] = useState(false);
+  const [radarPlaceHasOutOfScopeMatches, setRadarPlaceHasOutOfScopeMatches] = useState(false);
   const [watchingPlaceId, setWatchingPlaceId] = useState<number | null>(null);
   const [unwatchingPlaceId, setUnwatchingPlaceId] = useState<number | null>(null);
   const [pendingRadarRemove, setPendingRadarRemove] = useState<RadarPlace | null>(null);
@@ -338,6 +339,7 @@ export default function TripPlanDetailPage() {
 
       if (query.length < 2) {
         setEditDestinationResults([]);
+        setRadarPlaceHasOutOfScopeMatches(false);
         setActionError("Type at least 2 characters to search for a destination.");
         return;
       }
@@ -384,6 +386,8 @@ export default function TripPlanDetailPage() {
     };
 
   const searchPlacesForRadar = async () => {
+      if (!plan) return;
+
     clearActionFeedback();
 
     const query = radarPlaceSearch.trim();
@@ -392,6 +396,7 @@ export default function TripPlanDetailPage() {
 
     if (query.length < 2) {
       setRadarPlaceResults([]);
+      setRadarPlaceHasOutOfScopeMatches(false);
       setActionError("Type at least 2 characters to search for a place.");
       return;
     }
@@ -403,7 +408,8 @@ export default function TripPlanDetailPage() {
         q: query,
       });
 
-      const searchUrl = `${API_URL}/api/places/search/?${params.toString()}`;
+      const searchUrl =
+        `${API_URL}/api/trip-plans/${plan.id}/radar-place-search/?${params.toString()}`;
 
 
       const res = await fetch(searchUrl, {
@@ -419,6 +425,10 @@ export default function TripPlanDetailPage() {
       }
 
       const data = await res.json();
+
+      setRadarPlaceHasOutOfScopeMatches(
+        Boolean(data.has_out_of_scope_matches)
+      );
 
       const places: PlaceSearchResult[] = Array.isArray(data.results)
         ? data.results
@@ -904,6 +914,7 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
                 setRadarPlaceSearch(event.target.value);
                 setRadarPlaceResults([]);
                 setRadarPlaceHasSearched(false);
+                setRadarPlaceHasOutOfScopeMatches(false);
                 setActionMessage("");
                 setActionError("");
               }}
@@ -928,25 +939,38 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
               radarPlaceSearch.trim().length >= 2 &&
               !radarPlaceSearchLoading &&
               radarPlaceResults.length === 0 && (
-
                 <div style={radarCreateBox}>
-                  <span>
-                    No existing place found for “{radarPlaceSearch.trim()}”.
-                  </span>
+                  {radarPlaceHasOutOfScopeMatches ? (
+                    <>
+                      <span>
+                        This place exists, but it is outside the destinations defined for this trip plan.
+                      </span>
 
-                  <p style={{ margin: 0, color: "#666", fontSize: "13px", lineHeight: 1.5 }}>
-                    To avoid duplicate or wrongly structured places, create the place first using
-                    the guided place creation flow. After that, return here and add it to Radar.
-                  </p>
+                      <p style={{ margin: 0, color: "#666", fontSize: "13px", lineHeight: 1.5 }}>
+                        Radar can only monitor places that belong to the current trip plan scope.
+                      </p>
+                    </>
+                 ) : (
+                   <>
+                     <span>
+                        No existing place found for “{radarPlaceSearch.trim()}”.
+                     </span>
 
-                  <Link
-                    href="/destinations"
-                    style={smallPrimaryButton}
-                  >
-                    Create place with guided flow
-                  </Link>
-                </div>
-              )}
+                     <p style={{ margin: 0, color: "#666", fontSize: "13px", lineHeight: 1.5 }}>
+                        To avoid duplicate or wrongly structured places, create the place first using
+                        the guided place creation flow. After that, return here and add it to Radar.
+                     </p>
+
+                     <Link
+                       href="/destinations"
+                       style={smallPrimaryButton}
+                     >
+                       Create place with guided flow
+                     </Link>
+                   </>
+                 )}
+              </div>
+            )}
 
           {radarPlaceResults.length > 0 && (
             <div style={radarSearchResultsBox}>

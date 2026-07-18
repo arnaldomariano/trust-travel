@@ -1939,6 +1939,165 @@ class TripPlanWatchedPlaceView(APIView):
             status=status.HTTP_200_OK,
         )
 
+class TripPlanRadarPlaceSearchView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        trip_plan = get_object_or_404(
+            TripPlan,
+            pk=pk,
+            user=request.user,
+        )
+
+        query = (request.query_params.get("q") or "").strip()
+
+        if len(query) < 2:
+            return Response(
+                {
+                    "count": 0,
+                    "results": [],
+                    "detail": "Type at least 2 characters to search.",
+                }
+            )
+
+        resolved_scope = resolve_trip_plan_scope(trip_plan)
+
+        normalized_query = normalize_place_text(query)
+        query_values = get_country_alias_values(query)
+        is_country_alias_query = query_values != {normalized_query}
+
+        places_queryset = Place.objects.filter(
+            id__in=resolved_scope["matched_place_ids"]
+        ).select_related("destination")
+
+        def get_place_search_values(place):
+            destination = place.destination
+
+            values = [
+                place.name,
+                place.canonical_name,
+                place.city,
+                place.place_type,
+                destination.name if destination else "",
+                destination.country if destination else "",
+                destination.city if destination else "",
+            ]
+
+            values.extend(place.aliases or [])
+
+            return values
+
+        def matches_search(place):
+            normalized_values = {
+                normalize_place_text(value)
+                for value in get_place_search_values(place)
+                if value
+            }
+
+            normalized_values.discard("")
+
+            if is_country_alias_query:
+                return bool(query_values.intersection(normalized_values))
+
+            if any(
+                normalized_query in normalized_value
+                for normalized_value in normalized_values
+            ):
+                return True
+
+            return bool(query_values.intersection(normalized_values))
+
+        places = [
+            place
+            for place in places_queryset
+            if matches_search(place)
+        ]
+
+        has_out_of_scope_matches = False
+
+        if not places:
+            scope_place_ids = set(resolved_scope["matched_place_ids"])
+
+            has_out_of_scope_matches = any(
+                matches_search(place)
+                for place in Place.objects.select_related("destination").exclude(
+                    id__in=scope_place_ids
+                )
+            )
+
+        def get_search_rank(place):
+            destination = place.destination
+
+            place_values = {
+                normalize_place_text(place.name),
+                normalize_place_text(place.canonical_name),
+                *[
+                    normalize_place_text(alias)
+                    for alias in (place.aliases or [])
+                    if alias
+                ],
+            }
+
+            place_values.discard("")
+
+            destination_values = {
+                normalize_place_text(destination.name if destination else ""),
+                normalize_place_text(destination.country if destination else ""),
+                normalize_place_text(destination.city if destination else ""),
+            }
+
+            destination_values.discard("")
+
+            if (
+                place.place_type == "country"
+                and query_values.intersection(place_values)
+            ):
+                return 0
+
+            if query_values.intersection(destination_values):
+                return 1
+
+            return 2
+
+        places = sorted(
+            places,
+            key=lambda place: (
+                get_search_rank(place),
+                place.place_type or "",
+                place.name or "",
+            ),
+        )[:20]
+
+        results = []
+
+        for place in places:
+            destination = place.destination
+
+            results.append(
+                {
+                    "id": place.id,
+                    "name": place.name,
+                    "canonical_name": place.canonical_name,
+                    "aliases": place.aliases,
+                    "place_type": place.place_type,
+                    "city": place.city,
+                    "destination": destination.id if destination else None,
+                    "destination_name": destination.name if destination else "",
+                    "destination_country": destination.country if destination else "",
+                    "destination_city": destination.city if destination else "",
+                }
+            )
+
+        return Response(
+            {
+                "count": len(results),
+                "results": results,
+                "scope_source": resolved_scope["source"],
+                "has_out_of_scope_matches": has_out_of_scope_matches,
+            }
+        )
+
 class TripPlanRadarView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]

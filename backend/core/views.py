@@ -52,7 +52,12 @@ from .serializers import (
 )
 
 from .authentication import CookieJWTAuthentication
-from .place_utils import normalize_place_text, get_country_alias_values
+from .place_utils import (
+    normalize_place_text,
+    get_country_alias_values,
+    resolve_country,
+    get_or_create_country,
+)
 
 # ============================================================
 # AUTH / USER
@@ -347,10 +352,16 @@ class CreateBasicPlaceView(APIView):
             aliases = []
 
         if place_type == "country":
-            if country_code:
+            resolved_country = get_or_create_country(
+                value=canonical_name or name,
+                code=country_code,
+                aliases=aliases,
+            )
+
+            if resolved_country:
                 existing_country = Place.objects.filter(
                     place_type="country",
-                    country_code__iexact=country_code,
+                    country_ref=resolved_country,
                 ).first()
 
                 if existing_country:
@@ -389,10 +400,15 @@ class CreateBasicPlaceView(APIView):
         country_place = None
 
         if place_type in ["city", *specific_place_types]:
-            if country_code:
+            resolved_country = resolve_country(
+                value=country,
+                code=country_code,
+            )
+
+            if resolved_country:
                 country_place = Place.objects.filter(
                     place_type="country",
-                    country_code__iexact=country_code,
+                    country_ref=resolved_country,
                 ).first()
 
             if not country_place:
@@ -533,8 +549,19 @@ class CreateBasicPlaceView(APIView):
             )
             return Response(serializer.data, status=200)
 
+        place_country_ref = None
+
+        if place_type == "country":
+            place_country_ref = resolve_country(
+                value=canonical_name or name,
+                code=country_code,
+            )
+        elif country_place:
+            place_country_ref = country_place.country_ref
+
         place = Place.objects.create(
             destination=destination,
+            country_ref=place_country_ref,
             name=name,
             canonical_name=canonical_name,
             aliases=aliases,

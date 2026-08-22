@@ -1,5 +1,8 @@
 import unicodedata
+import json
+from pathlib import Path
 
+COUNTRIES_DATA_PATH = Path(__file__).resolve().parent / "data" / "countries.json"
 
 COUNTRY_ALIAS_GROUPS = [
     {
@@ -64,6 +67,19 @@ COUNTRY_ALIAS_GROUPS = [
     },
 ]
 
+def load_country_catalog():
+    with COUNTRIES_DATA_PATH.open(encoding="utf-8") as file:
+        countries = json.load(file)
+
+    return countries
+
+
+def get_country_catalog_by_code():
+    return {
+        country["code"].strip().upper(): country
+        for country in load_country_catalog()
+        if country.get("code")
+    }
 
 def normalize_place_text(value):
     value = str(value or "").strip().lower()

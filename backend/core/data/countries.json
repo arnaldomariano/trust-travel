@@ -1,0 +1,39 @@
+[
+  {
+    "code": "BR",
+    "canonical_name": "Brazil",
+    "aliases": [
+      "Brasil"
+    ]
+  },
+  {
+    "code": "BE",
+    "canonical_name": "Belgium",
+    "aliases": [
+      "Belgica",
+      "Bélgica",
+      "Belgique",
+      "België"
+    ]
+  },
+  {
+    "code": "NL",
+    "canonical_name": "Netherlands",
+    "aliases": [
+      "Holland",
+      "Holanda",
+      "Países Baixos",
+      "Paises Baixos",
+      "The Netherlands"
+    ]
+  },
+  {
+    "code": "ES",
+    "canonical_name": "Spain",
+    "aliases": [
+      "Espanha",
+      "España",
+      "Espana"
+    ]
+  }
+]

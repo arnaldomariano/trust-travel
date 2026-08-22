@@ -2034,12 +2034,22 @@ class TripPlanRadarPlaceSearchView(APIView):
         resolved_scope = resolve_trip_plan_scope(trip_plan)
 
         normalized_query = normalize_place_text(query)
+
+        resolved_query_country = resolve_country(value=query)
+
         query_values = get_country_alias_values(query)
-        is_country_alias_query = query_values != {normalized_query}
+
+        is_country_alias_query = (
+                resolved_query_country is not None
+                or query_values != {normalized_query}
+        )
 
         places_queryset = Place.objects.filter(
             id__in=resolved_scope["matched_place_ids"]
-        ).select_related("destination")
+        ).select_related(
+            "destination",
+            "country_ref",
+        )
 
         def get_place_search_values(place):
             destination = place.destination
@@ -2059,6 +2069,8 @@ class TripPlanRadarPlaceSearchView(APIView):
             return values
 
         def matches_search(place):
+            if resolved_query_country:
+                return place.country_ref_id == resolved_query_country.id
             normalized_values = {
                 normalize_place_text(value)
                 for value in get_place_search_values(place)
@@ -2091,7 +2103,10 @@ class TripPlanRadarPlaceSearchView(APIView):
 
             has_out_of_scope_matches = any(
                 matches_search(place)
-                for place in Place.objects.select_related("destination").exclude(
+                for place in Place.objects.select_related(
+                    "destination",
+                    "country_ref",
+                ).exclude(
                     id__in=scope_place_ids
                 )
             )
@@ -2119,9 +2134,19 @@ class TripPlanRadarPlaceSearchView(APIView):
 
             destination_values.discard("")
 
+            if resolved_query_country:
+                if (
+                        place.place_type == "country"
+                        and place.country_ref_id == resolved_query_country.id
+                ):
+                    return 0
+
+                if place.country_ref_id == resolved_query_country.id:
+                    return 1
+
             if (
-                place.place_type == "country"
-                and query_values.intersection(place_values)
+                    place.place_type == "country"
+                    and query_values.intersection(place_values)
             ):
                 return 0
 

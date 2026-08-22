@@ -19,7 +19,10 @@ from .models import (
     generate_recovery_code,
 )
 
-from .place_utils import get_country_alias_values
+from .place_utils import (
+    get_country_alias_values,
+    get_country_identity_values,
+)
 
 class UpdateSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.username", read_only=True)
@@ -140,6 +143,11 @@ class PlaceSerializer(serializers.ModelSerializer):
         ]
 
     def get_search_aliases(self, obj):
+        if obj.place_type == "country" and obj.country_ref:
+            return sorted(
+                get_country_identity_values(obj.country_ref)
+            )
+
         if obj.place_type == "country":
             values = set()
 

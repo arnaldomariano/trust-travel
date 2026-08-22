@@ -332,6 +332,8 @@ class CreateBasicPlaceView(APIView):
         external_source = (request.data.get("external_source") or "").strip()
         external_id = (request.data.get("external_id") or "").strip()
 
+        country_code = (request.data.get("country_code") or "").strip().upper()[:2]
+
         canonical_name = (request.data.get("canonical_name") or name).strip()
         aliases = request.data.get("aliases") or []
 
@@ -517,6 +519,7 @@ class CreateBasicPlaceView(APIView):
             name=name,
             canonical_name=canonical_name,
             aliases=aliases,
+            country_code=country_code,
             place_type=place_type,
             city=city,
             parent_place=parent_place,

@@ -172,6 +172,11 @@ class Place(models.Model):
     canonical_name = models.CharField(max_length=255, blank=True)
     aliases = models.JSONField(default=list, blank=True)
 
+    # Optional ISO 3166-1 alpha-2 country code.
+    # For country Places, this provides a stable geographic identity
+    # independent of language, spelling, or aliases.
+    country_code = models.CharField(max_length=2, blank=True)
+
     # Type of place used for search, filtering and future travel discovery flows.
     # Examples:
     # country -> Laos

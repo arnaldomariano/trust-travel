@@ -110,6 +110,7 @@ class PlaceSerializer(serializers.ModelSerializer):
             "name",
             "canonical_name",
             "aliases",
+            "country_code",
             "search_aliases",
             "place_type",
             "city",

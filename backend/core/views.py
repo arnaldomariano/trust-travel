@@ -216,6 +216,7 @@ class CreateBasicPlaceView(APIView):
         name = (request.data.get("name") or "").strip()
         city = (request.data.get("city") or "").strip()
         country = (request.data.get("country") or "").strip()
+        country_code = (request.data.get("country_code") or "").strip().upper()[:2]
         place_type = (request.data.get("place_type") or "city").strip()
 
         valid_place_types = [
@@ -332,8 +333,6 @@ class CreateBasicPlaceView(APIView):
         external_source = (request.data.get("external_source") or "").strip()
         external_id = (request.data.get("external_id") or "").strip()
 
-        country_code = (request.data.get("country_code") or "").strip().upper()[:2]
-
         canonical_name = (request.data.get("canonical_name") or name).strip()
         aliases = request.data.get("aliases") or []
 
@@ -348,6 +347,19 @@ class CreateBasicPlaceView(APIView):
             aliases = []
 
         if place_type == "country":
+            if country_code:
+                existing_country = Place.objects.filter(
+                    place_type="country",
+                    country_code__iexact=country_code,
+                ).first()
+
+                if existing_country:
+                    serializer = PlaceSerializer(
+                        existing_country,
+                        context={"request": request},
+                    )
+                    return Response(serializer.data, status=200)
+
             normalized_country_values = get_country_alias_values(name)
             normalized_country_values.update(get_country_alias_values(canonical_name))
 
@@ -377,24 +389,31 @@ class CreateBasicPlaceView(APIView):
         country_place = None
 
         if place_type in ["city", *specific_place_types]:
-            normalized_country_values = get_country_alias_values(country)
+            if country_code:
+                country_place = Place.objects.filter(
+                    place_type="country",
+                    country_code__iexact=country_code,
+                ).first()
 
-            for candidate in Place.objects.filter(place_type="country"):
-                candidate_names = {
-                    normalize_place_text(candidate.name),
-                    normalize_place_text(candidate.canonical_name),
-                    *[
-                        normalize_place_text(alias)
-                        for alias in (candidate.aliases or [])
-                        if alias
-                    ],
-                }
+            if not country_place:
+                normalized_country_values = get_country_alias_values(country)
 
-                candidate_names.discard("")
+                for candidate in Place.objects.filter(place_type="country"):
+                    candidate_names = {
+                        normalize_place_text(candidate.name),
+                        normalize_place_text(candidate.canonical_name),
+                        *[
+                            normalize_place_text(alias)
+                            for alias in (candidate.aliases or [])
+                            if alias
+                        ],
+                    }
 
-                if normalized_country_values.intersection(candidate_names):
-                    country_place = candidate
-                    break
+                    candidate_names.discard("")
+
+                    if normalized_country_values.intersection(candidate_names):
+                        country_place = candidate
+                        break
 
             if not country_place:
                 return Response(

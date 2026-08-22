@@ -138,6 +138,18 @@ class Destination(models.Model):
         return f"{self.name} ({self.country})" if self.country else self.name
 
 
+class Country(models.Model):
+    code = models.CharField(max_length=2, unique=True)
+    canonical_name = models.CharField(max_length=150, unique=True)
+    aliases = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ["canonical_name"]
+
+    def __str__(self):
+        return f"{self.canonical_name} ({self.code})"
+
+
 # ===================== Place =====================
 
 class Place(models.Model):
@@ -152,6 +164,14 @@ class Place(models.Model):
     ]
 
     destination = models.ForeignKey(Destination, on_delete=models.CASCADE)
+
+    country_ref = models.ForeignKey(
+        Country,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="places",
+    )
 
     # Optional parent place used to build a real travel hierarchy.
     # Examples:

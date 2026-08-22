@@ -201,17 +201,12 @@ class DestinationListView(generics.ListAPIView):
     serializer_class = DestinationSerializer
 
 
-class PlaceListView(generics.ListCreateAPIView):
+class PlaceListView(generics.ListAPIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
 
-    def perform_create(self, serializer):
-        if self.request.user.is_authenticated:
-            serializer.save(created_by=self.request.user)
-        else:
-            serializer.save()
 
 class CreateBasicPlaceView(APIView):
     authentication_classes = [CookieJWTAuthentication]

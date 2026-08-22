@@ -121,7 +121,7 @@ def resolve_country(value="", code=""):
         if normalized_value in get_country_identity_values(candidate):
             return candidate
 
-        return None
+    return None
 
 def get_or_create_country(value="", code="", aliases=None):
 

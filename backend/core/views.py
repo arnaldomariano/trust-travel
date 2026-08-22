@@ -720,11 +720,22 @@ class PlaceSearchView(APIView):
             )
 
         normalized_query = normalize_place_text(query)
+
+        resolved_query_country = resolve_country(value=query)
+        resolved_filter_country = resolve_country(value=country)
+
         query_values = get_country_alias_values(query)
         country_values = get_country_alias_values(country)
-        is_country_alias_query = query_values != {normalized_query}
 
-        places_queryset = Place.objects.select_related("destination").all()
+        is_country_alias_query = (
+                resolved_query_country is not None
+                or query_values != {normalized_query}
+        )
+
+        places_queryset = Place.objects.select_related(
+            "destination",
+            "country_ref",
+        ).all()
 
         def get_place_search_values(place):
             destination = place.destination
@@ -744,6 +755,8 @@ class PlaceSearchView(APIView):
             return values
 
         def matches_search(place):
+            if resolved_query_country:
+                return place.country_ref_id == resolved_query_country.id
             normalized_values = {
                 normalize_place_text(value)
                 for value in get_place_search_values(place)
@@ -764,6 +777,9 @@ class PlaceSearchView(APIView):
             return bool(query_values.intersection(normalized_values))
 
         def matches_country(place):
+            if resolved_filter_country:
+                return place.country_ref_id == resolved_filter_country.id
+
             if not country_values:
                 return True
 
@@ -823,9 +839,19 @@ class PlaceSearchView(APIView):
 
             destination_values.discard("")
 
+            if resolved_query_country:
+                if (
+                        place.place_type == "country"
+                        and place.country_ref_id == resolved_query_country.id
+                ):
+                    return 0
+
+                if place.country_ref_id == resolved_query_country.id:
+                    return 1
+
             if (
-                place.place_type == "country"
-                and query_values.intersection(place_values)
+                    place.place_type == "country"
+                    and query_values.intersection(place_values)
             ):
                 return 0
 

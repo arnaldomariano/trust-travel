@@ -61,6 +61,12 @@ from .place_utils import (
     resolve_country_catalog_entry,
 )
 
+from .geography.providers.geonames import (
+    GeoNamesConfigurationError,
+    GeoNamesRequestError,
+    search_cities,
+)
+
 # ============================================================
 # AUTH / USER
 # ============================================================
@@ -225,6 +231,153 @@ class CountryCatalogView(APIView):
                 key=lambda item: item["canonical_name"].casefold(),
             )
         ]
+
+        return Response(
+            {
+                "count": len(results),
+                "results": results,
+            }
+        )
+
+class GeographyCitySearchView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        query = (request.query_params.get("q") or "").strip()
+        country_code = (
+            request.query_params.get("country_code") or ""
+        ).strip().upper()
+
+        if len(query) < 2:
+            return Response(
+                {
+                    "detail": (
+                        "Search query must contain at least 2 characters."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        country = resolve_country_catalog_entry(code=country_code)
+
+        if not country:
+            return Response(
+                {
+                    "detail": (
+                        "A valid two-letter country code is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            results = search_cities(
+                query=query,
+                country_code=country["code"],
+            )
+
+        except GeoNamesConfigurationError:
+            return Response(
+                {
+                    "detail": (
+                        "Geographic search is not configured."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        except GeoNamesRequestError:
+            return Response(
+                {
+                    "detail": (
+                        "Geographic search is temporarily unavailable."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        external_ids = [
+            result["external_id"]
+            for result in results
+            if result.get("external_id")
+        ]
+
+        existing_places_by_external_id = {
+            place.external_id: place.id
+            for place in Place.objects.filter(
+                external_source="geonames",
+                external_id__in=external_ids,
+            )
+        }
+
+        country_places = list(
+            Place.objects.filter(
+                place_type="city",
+            )
+            .filter(
+                Q(country_ref__code=country["code"])
+                | Q(country_code=country["code"])
+            )
+            .distinct()
+        )
+
+        places_by_identity_value = {}
+
+        for place in country_places:
+            place_values = {
+                normalize_place_text(value)
+                for value in [
+                    place.name,
+                    place.canonical_name,
+                    *(place.aliases or []),
+                ]
+                if str(value or "").strip()
+            }
+
+            for value in place_values:
+                places_by_identity_value.setdefault(
+                    value,
+                    set(),
+                ).add(place.id)
+
+        for result in results:
+            external_match_id = (
+                existing_places_by_external_id.get(
+                    result.get("external_id")
+                )
+            )
+
+            if external_match_id is not None:
+                result["existing_place_id"] = external_match_id
+                continue
+
+            result_values = {
+                normalize_place_text(value)
+                for value in [
+                    result.get("name"),
+                    result.get("canonical_name"),
+                    *(result.get("aliases") or []),
+                ]
+                if str(value or "").strip()
+            }
+
+            candidate_place_ids = set()
+
+            for value in result_values:
+                candidate_place_ids.update(
+                    places_by_identity_value.get(
+                        value,
+                        set(),
+                    )
+                )
+
+            if len(candidate_place_ids) == 1:
+                result["existing_place_id"] = next(
+                    iter(candidate_place_ids)
+                )
+            else:
+                result["existing_place_id"] = None
 
         return Response(
             {

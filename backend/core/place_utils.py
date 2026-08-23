@@ -89,6 +89,45 @@ def normalize_place_text(value):
     return value
 
 
+def get_country_catalog_identity_values(country):
+    if not country:
+        return set()
+
+    values = {
+        normalize_place_text(country.get("code")),
+        normalize_place_text(country.get("canonical_name")),
+        *[
+            normalize_place_text(alias)
+            for alias in (country.get("aliases") or [])
+            if alias
+        ],
+    }
+
+    values.discard("")
+
+    return values
+
+
+def resolve_country_catalog_entry(value="", code=""):
+    normalized_code = str(code or "").strip().upper()[:2]
+
+    if normalized_code:
+        country = get_country_catalog_by_code().get(normalized_code)
+
+        if country:
+            return country
+
+    normalized_value = normalize_place_text(value)
+
+    if not normalized_value:
+        return None
+
+    for country in load_country_catalog():
+        if normalized_value in get_country_catalog_identity_values(country):
+            return country
+
+    return None
+
 def get_country_identity_values(country):
     if not country:
         return set()
@@ -137,7 +176,21 @@ def resolve_country(value="", code=""):
         if normalized_value in get_country_identity_values(candidate):
             return candidate
 
+    catalog_country = resolve_country_catalog_entry(
+        value=value,
+        code=code,
+    )
+
+    if catalog_country:
+        country = Country.objects.filter(
+            code__iexact=catalog_country["code"],
+        ).first()
+
+        if country:
+            return country
+
     return None
+
 
 def get_or_create_country(value="", code="", aliases=None):
 
@@ -148,17 +201,33 @@ def get_or_create_country(value="", code="", aliases=None):
     if country:
         return country
 
-    normalized_code = str(code or "").strip().upper()[:2]
-    canonical_name = str(value or "").strip()
+    catalog_country = resolve_country_catalog_entry(
+        value=value,
+        code=code,
+    )
+
+    if catalog_country:
+        normalized_code = catalog_country["code"].strip().upper()
+        canonical_name = catalog_country["canonical_name"].strip()
+        catalog_aliases = catalog_country.get("aliases") or []
+    else:
+        normalized_code = str(code or "").strip().upper()[:2]
+        canonical_name = str(value or "").strip()
+        catalog_aliases = []
 
     if len(normalized_code) != 2 or not canonical_name:
         return None
 
-    clean_aliases = [
+    clean_aliases = {
         str(alias).strip()
-        for alias in (aliases or [])
+        for alias in [
+            *catalog_aliases,
+            *(aliases or []),
+        ]
         if str(alias).strip()
-    ]
+    }
+
+    clean_aliases = sorted(clean_aliases)
 
     country, _ = Country.objects.get_or_create(
         code=normalized_code,

@@ -22,6 +22,7 @@ from .models import (
 from .place_utils import (
     get_country_alias_values,
     get_country_identity_values,
+    resolve_country_catalog_entry,
 )
 
 class UpdateSerializer(serializers.ModelSerializer):
@@ -460,25 +461,6 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=False, allow_blank=True)
     recovery_code = serializers.CharField(read_only=True)
 
-    COUNTRY_LABELS = {
-        "BR": "Brazil",
-        "PT": "Portugal",
-        "NL": "Netherlands",
-        "IT": "Italy",
-        "US": "United States",
-        "GB": "United Kingdom",
-        "ES": "Spain",
-        "FR": "France",
-        "DE": "Germany",
-        "MX": "Mexico",
-        "CL": "Chile",
-        "AR": "Argentina",
-        "GR": "Greece",
-        "TH": "Thailand",
-        "LA": "Laos",
-        "BO": "Bolivia",
-    }
-
     class Meta:
         model = User
         fields = [
@@ -490,10 +472,27 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             "recovery_code",
         ]
 
+    def validate_country_code(self, value):
+        country = resolve_country_catalog_entry(code=value)
+
+        if not country:
+            raise serializers.ValidationError(
+                "Please choose a valid country."
+            )
+
+        return country["code"]
+
     def create(self, validated_data):
-        country_code = validated_data.pop("country_code", "XX")
-        country_code = (country_code or "XX").upper()[:2]
-        country_label = self.COUNTRY_LABELS.get(country_code, "")
+        country_code = validated_data.pop("country_code")
+        country = resolve_country_catalog_entry(code=country_code)
+
+        if not country:
+            raise serializers.ValidationError(
+                {"country_code": "Please choose a valid country."}
+            )
+
+        country_code = country["code"]
+        country_label = country["canonical_name"]
 
         user = User.objects.create_user(
             username=validated_data["username"],

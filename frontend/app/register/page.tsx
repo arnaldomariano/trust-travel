@@ -1,29 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { API_URL } from "../lib/api";
 
-const COUNTRY_OPTIONS = [
-  { code: "", label: "Select your country / nationality", flag: "" },
-  { code: "BR", label: "Brazil", flag: "🇧🇷" },
-  { code: "PT", label: "Portugal", flag: "🇵🇹" },
-  { code: "NL", label: "Netherlands", flag: "🇳🇱" },
-  { code: "IT", label: "Italy", flag: "🇮🇹" },
-  { code: "US", label: "United States", flag: "🇺🇸" },
-  { code: "GB", label: "United Kingdom", flag: "🇬🇧" },
-  { code: "ES", label: "Spain", flag: "🇪🇸" },
-  { code: "FR", label: "France", flag: "🇫🇷" },
-  { code: "DE", label: "Germany", flag: "🇩🇪" },
-  { code: "MX", label: "Mexico", flag: "🇲🇽" },
-  { code: "CL", label: "Chile", flag: "🇨🇱" },
-  { code: "AR", label: "Argentina", flag: "🇦🇷" },
-  { code: "GR", label: "Greece", flag: "🇬🇷" },
-  { code: "TH", label: "Thailand", flag: "🇹🇭" },
-  { code: "LA", label: "Laos", flag: "🇱🇦" },
-  { code: "BO", label: "Bolivia", flag: "🇧🇴" },
-];
+type CountryCatalogItem = {
+  code: string;
+  canonical_name: string;
+  aliases: string[];
+};
+
+const countryCodeToFlag = (code: string) => {
+  if (code.length !== 2) return "";
+
+  return String.fromCodePoint(
+    ...code
+      .toUpperCase()
+      .split("")
+      .map((character) => 127397 + character.charCodeAt(0))
+  );
+};
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,6 +29,8 @@ const [username, setUsername] = useState("");
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [countryCode, setCountryCode] = useState("");
+const [countryCatalog, setCountryCatalog] = useState<CountryCatalogItem[]>([]);
+const [countryCatalogLoading, setCountryCatalogLoading] = useState(true);
 const [loading, setLoading] = useState(false);
 const [formError, setFormError] = useState("");
 
@@ -39,9 +38,31 @@ const [registrationResult, setRegistrationResult] = useState<{
   username: string;
   recovery_code?: string;
 } | null>(null);
-  const selectedCountry = COUNTRY_OPTIONS.find(
+const selectedCountry = countryCatalog.find(
     (country) => country.code === countryCode
   );
+
+  useEffect(() => {
+    const loadCountries = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/countries/`);
+
+        if (!response.ok) {
+          console.error("Failed to load country catalog");
+          return;
+        }
+
+        const data = await response.json();
+        setCountryCatalog(data.results || []);
+      } catch (error) {
+        console.error("Country catalog load error:", error);
+      } finally {
+        setCountryCatalogLoading(false);
+      }
+    };
+
+    loadCountries();
+  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,23 +212,31 @@ const [registrationResult, setRegistrationResult] = useState<{
 
           <select
               value={countryCode}
+              disabled={countryCatalogLoading}
               onChange={(e) => {
                 setCountryCode(e.target.value);
                 setFormError("");
               }}
               style={input}
           >
-            {COUNTRY_OPTIONS.map((country) => (
-              <option key={country.code || "empty"} value={country.code}>
-                {country.flag ? `${country.flag} ${country.label}` : country.label}
+            <option value="">
+              {countryCatalogLoading
+                ? "Loading countries..."
+                : "Select your country / nationality"}
+            </option>
+
+            {countryCatalog.map((country) => (
+              <option key={country.code} value={country.code}>
+                {countryCodeToFlag(country.code)} {country.canonical_name}
               </option>
             ))}
           </select>
 
-          {selectedCountry && selectedCountry.code ? (
+          {selectedCountry ? (
             <small style={countryPreview}>
-              {selectedCountry.flag} {selectedCountry.label} will be used to
-              create your public code, for example {selectedCountry.code}7x2a.
+              {countryCodeToFlag(selectedCountry.code)}{" "}
+              {selectedCountry.canonical_name} will be used to create your
+              public code, for example {selectedCountry.code}7x2a.
             </small>
           ) : (
             <small style={hint}>

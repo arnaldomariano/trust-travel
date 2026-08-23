@@ -6,6 +6,12 @@ import Link from "next/link";
 
 import { API_URL } from "../lib/api";
 
+type CountryCatalogItem = {
+  code: string;
+  canonical_name: string;
+  aliases: string[];
+};
+
 function DestinationsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,6 +24,7 @@ function DestinationsPageContent() {
 
   const [places, setPlaces] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
+  const [countryCatalog, setCountryCatalog] = useState<CountryCatalogItem[]>([]);
   const [creatingPlace, setCreatingPlace] = useState(false);
   const [createPlaceError, setCreatePlaceError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -114,9 +121,10 @@ function DestinationsPageContent() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [placesRes, destinationsRes] = await Promise.all([
+        const [placesRes, destinationsRes, countriesRes] = await Promise.all([
           fetch(`${API_URL}/api/places/`),
           fetch(`${API_URL}/api/destinations/`),
+          fetch(`${API_URL}/api/countries/`),
         ]);
 
         if (!placesRes.ok || !destinationsRes.ok) {
@@ -129,6 +137,13 @@ function DestinationsPageContent() {
 
         setPlaces(placesData || []);
         setDestinations(destinationsData || []);
+
+        if (countriesRes.ok) {
+          const countriesData = await countriesRes.json();
+          setCountryCatalog(countriesData.results || []);
+        } else {
+          console.error("Failed to load country catalog");
+        }
       } catch (error) {
         console.error("Search page load error:", error);
       } finally {
@@ -640,15 +655,21 @@ const formatPlaceNameForCreation = (value: string) => {
 };
 
 const createCountryCandidates = createCountrySearch.trim()
-  ? places
-      .filter((place) => place.place_type === "country")
-      .filter((place) => {
+  ? countryCatalog
+      .filter((country) => {
         const search = normalizeText(createCountrySearch);
-        const searchableNames = getNormalizedPlaceSearchNames(place);
+
+        const searchableNames = [
+          country.code,
+          country.canonical_name,
+          ...(country.aliases || []),
+        ].map((value) => normalizeText(value));
 
         return searchableNames.some((value) => value.includes(search));
       })
-      .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+      .sort((a, b) =>
+        a.canonical_name.localeCompare(b.canonical_name)
+      )
       .slice(0, 6)
   : [];
 
@@ -659,15 +680,23 @@ const createCityCandidates =
           if (!isCityOrRegionPlace(place)) return false;
 
           const selectedCountryName = normalizeText(createSelectedCountry.name);
+          const selectedCountryCode = (
+            createSelectedCountry.country_code || ""
+          ).toUpperCase();
+
           const placeCountry = normalizeText(place.destination_country);
           const placeDestination = normalizeText(place.destination_name);
+          const placeCountryCode = (place.country_code || "").toUpperCase();
+
           const search = normalizeText(createCitySearch);
           const name = normalizeText(place.name);
           const city = normalizeText(place.city);
 
           const belongsToSelectedCountry =
-            placeCountry === selectedCountryName ||
-            placeDestination === selectedCountryName;
+            selectedCountryCode && placeCountryCode
+              ? placeCountryCode === selectedCountryCode
+              : placeCountry === selectedCountryName ||
+                placeDestination === selectedCountryName;
 
           if (!belongsToSelectedCountry) return false;
 
@@ -755,18 +784,40 @@ const selectCreateFlowCity = (cityPlace: any) => {
   }, 0);
 };
 
-const createCountryForFlow = async () => {
-  const countryName = formatPlaceNameForCreation(createCountrySearch);
-
-  if (!countryName) {
-    setCreateFlowError("Please type a country name first.");
-    return;
-  }
-
+const selectCreateFlowCountryFromCatalog = async (
+  country: CountryCatalogItem
+) => {
   setCreatingCreateFlowCountry(true);
   setCreateFlowError("");
 
   try {
+    const normalizedCatalogNames = [
+      country.canonical_name,
+      ...(country.aliases || []),
+    ].map((value) => normalizeText(value));
+
+    const existingCountryPlace = places.find((place) => {
+      if (place.place_type !== "country") return false;
+
+      const placeCountryCode = (place.country_code || "").toUpperCase();
+
+      if (placeCountryCode) {
+        return placeCountryCode === country.code.toUpperCase();
+      }
+
+      const placeNames = getNormalizedPlaceSearchNames(place);
+
+      return placeNames.some((value) =>
+        normalizedCatalogNames.includes(value)
+      );
+    });
+
+    if (existingCountryPlace) {
+      setCreateCountrySearch(country.canonical_name);
+      selectCreateFlowCountry(existingCountryPlace);
+      return;
+    }
+
     const res = await fetch(`${API_URL}/api/places/create-basic/`, {
       method: "POST",
       credentials: "include",
@@ -774,17 +825,21 @@ const createCountryForFlow = async () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        name: countryName,
+        name: country.canonical_name,
+        canonical_name: country.canonical_name,
         place_type: "country",
         city: "",
-        country: countryName,
+        country: country.canonical_name,
+        country_code: country.code,
       }),
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      setCreateFlowError(data.detail || "Could not create this country.");
+      setCreateFlowError(
+        data.detail || "Could not prepare this country."
+      );
       return;
     }
 
@@ -796,11 +851,13 @@ const createCountryForFlow = async () => {
       return [data, ...prev];
     });
 
-    setCreateSelectedCountry(data);
-    setCreateCitySearch("");
+    setCreateCountrySearch(country.canonical_name);
+    selectCreateFlowCountry(data);
   } catch (error) {
-    console.error("Guided country creation failed:", error);
-    setCreateFlowError("Something went wrong while creating the country.");
+    console.error("Guided country selection failed:", error);
+    setCreateFlowError(
+      "Something went wrong while preparing the country."
+    );
   } finally {
     setCreatingCreateFlowCountry(false);
   }
@@ -834,6 +891,7 @@ const createCityForFlow = async () => {
         place_type: "city",
         city: cityName,
         country: createSelectedCountry.name,
+        country_code: createSelectedCountry.country_code || "",
       }),
     });
 
@@ -903,9 +961,9 @@ const createSpecificPlaceForFlow = async () => {
         place_type: createSpecificPlaceType,
         city: createSelectedCity.name,
         country: createSelectedCountry.name,
+        country_code: createSelectedCountry.country_code || "",
       }),
     });
-
     const data = await res.json();
 
     if (!res.ok) {
@@ -1800,11 +1858,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             <div>
               <div style={guidedCreateStepLabel}>Step 1</div>
 
-              <h3 style={guidedCreateTitle}>Choose or create the country</h3>
+              <h3 style={guidedCreateTitle}>Choose the country</h3>
 
               <p style={guidedCreateText}>
-                Start with the country where this place belongs. This helps avoid
-                duplicate or confusing places with the same name.
+                Start with the country where this place belongs. Search by country
+                name, common alternative name, or country code.
               </p>
 
               <input
@@ -1818,45 +1876,42 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               />
 
               {createCountryCandidates.length > 0 && (
-                <div style={guidedCreateResults}>
-                  {createCountryCandidates.map((countryPlace) => (
-                    <button
-                      key={countryPlace.id}
-                      type="button"
-                      onClick={() => selectCreateFlowCountry(countryPlace)}
-                      style={guidedCreateResultButton}
-                    >
-                      <span>
-                        <strong>{countryPlace.name}</strong>
-                        <br />
-                        <span style={{ color: "#666", fontSize: "13px" }}>
-                          Country
+                  <div style={guidedCreateResults}>
+                    {createCountryCandidates.map((country) => (
+                      <button
+                        key={country.code}
+                        type="button"
+                        onClick={() => selectCreateFlowCountryFromCatalog(country)}
+                        disabled={creatingCreateFlowCountry}
+                        style={{
+                          ...guidedCreateResultButton,
+                          opacity: creatingCreateFlowCountry ? 0.5 : 1,
+                          cursor: creatingCreateFlowCountry
+                            ? "not-allowed"
+                            : "pointer",
+                        }}
+                      >
+                        <span>
+                          <strong>{country.canonical_name}</strong>
+                          <br />
+                          <span style={{ color: "#666", fontSize: "13px" }}>
+                            Country · {country.code}
+                          </span>
                         </span>
-                      </span>
 
-                      <span>Choose →</span>
-                    </button>
-                  ))}
-                </div>
+                        <span>Choose →</span>
+                      </button>
+                    ))}
+                  </div>
               )}
 
-              {createCountrySearch.trim() && createCountryCandidates.length === 0 && (
-                <button
-                  type="button"
-                  onClick={createCountryForFlow}
-                  disabled={creatingCreateFlowCountry}
-                  style={{
-                    ...secondaryButton,
-                    width: "fit-content",
-                    opacity: creatingCreateFlowCountry ? 0.5 : 1,
-                    cursor: creatingCreateFlowCountry ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {creatingCreateFlowCountry
-                    ? "Creating country..."
-                    : `Create country “${formatPlaceNameForCreation(createCountrySearch)}”`}
-                </button>
-              )}
+              {createCountrySearch.trim() &&
+                  createCountryCandidates.length === 0 && (
+                    <p style={{ ...guidedCreateText, marginBottom: 0 }}>
+                      No country found in the country catalog. Try another name or
+                      country code.
+                    </p>
+                  )}
             </div>
 
             {createSelectedCountry && (

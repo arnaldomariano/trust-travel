@@ -4,69 +4,6 @@ from pathlib import Path
 
 COUNTRIES_DATA_PATH = Path(__file__).resolve().parent / "data" / "countries.json"
 
-COUNTRY_ALIAS_GROUPS = [
-    {
-        "brazil",
-        "brasil",
-        "br",
-    },
-    {
-        "netherlands",
-        "the netherlands",
-        "holland",
-        "holanda",
-        "paises baixos",
-        "países baixos",
-        "nl",
-    },
-    {
-        "united states",
-        "united states of america",
-        "usa",
-        "us",
-        "eua",
-        "estados unidos",
-    },
-    {
-        "united kingdom",
-        "uk",
-        "great britain",
-        "reino unido",
-        "gb",
-    },
-    {
-        "germany",
-        "deutschland",
-        "alemanha",
-        "de",
-    },
-    {
-        "italy",
-        "italia",
-        "itália",
-        "it",
-    },
-    {
-        "spain",
-        "espanha",
-        "espana",
-        "españa",
-        "es",
-    },
-    {
-        "france",
-        "franca",
-        "frança",
-        "fr",
-    },
-    {
-        "greece",
-        "grecia",
-        "grécia",
-        "gr",
-    },
-]
-
 def load_country_catalog():
     with COUNTRIES_DATA_PATH.open(encoding="utf-8") as file:
         countries = json.load(file)
@@ -141,6 +78,38 @@ def get_country_identity_values(country):
             if alias
         ],
     }
+
+    values.discard("")
+
+    return values
+
+def get_country_search_values(value="", code=""):
+    normalized_value = normalize_place_text(value)
+
+    values = set()
+
+    catalog_country = resolve_country_catalog_entry(
+        value=value,
+        code=code,
+    )
+
+    if catalog_country:
+        values.update(
+            get_country_catalog_identity_values(catalog_country)
+        )
+
+    country = resolve_country(
+        value=value,
+        code=code,
+    )
+
+    if country:
+        values.update(
+            get_country_identity_values(country)
+        )
+
+    if normalized_value:
+        values.add(normalized_value)
 
     values.discard("")
 
@@ -238,26 +207,3 @@ def get_or_create_country(value="", code="", aliases=None):
     )
 
     return country
-
-
-def get_country_alias_values(value):
-    normalized_value = normalize_place_text(value)
-
-    if not normalized_value:
-        return set()
-
-    values = {normalized_value}
-
-    for alias_group in COUNTRY_ALIAS_GROUPS:
-        normalized_group = {
-            normalize_place_text(alias)
-            for alias in alias_group
-            if alias
-        }
-
-        if normalized_value in normalized_group:
-            values.update(normalized_group)
-
-    values.discard("")
-
-    return values

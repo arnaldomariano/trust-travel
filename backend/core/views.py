@@ -54,7 +54,7 @@ from .serializers import (
 from .authentication import CookieJWTAuthentication
 from .place_utils import (
     normalize_place_text,
-    get_country_alias_values,
+    get_country_search_values,
     resolve_country,
     get_or_create_country,
     load_country_catalog,
@@ -398,11 +398,18 @@ class CreateBasicPlaceView(APIView):
                     )
                     return Response(serializer.data, status=200)
 
-            normalized_country_values = get_country_alias_values(name)
-            normalized_country_values.update(get_country_alias_values(canonical_name))
+            normalized_country_values = get_country_search_values(
+                name,
+                code=country_code,
+            )
+            normalized_country_values.update(
+                get_country_search_values(canonical_name)
+            )
 
             for alias in aliases:
-                normalized_country_values.update(get_country_alias_values(alias))
+                normalized_country_values.update(
+                    get_country_search_values(alias)
+                )
 
             for candidate in Place.objects.filter(place_type="country"):
                 candidate_names = {
@@ -439,7 +446,10 @@ class CreateBasicPlaceView(APIView):
                 ).first()
 
             if not country_place:
-                normalized_country_values = get_country_alias_values(country)
+                normalized_country_values = get_country_search_values(
+                    country,
+                    code=country_code,
+                )
 
                 for candidate in Place.objects.filter(place_type="country"):
                     candidate_names = {
@@ -751,8 +761,8 @@ class PlaceSearchView(APIView):
         resolved_query_country = resolve_country(value=query)
         resolved_filter_country = resolve_country(value=country)
 
-        query_values = get_country_alias_values(query)
-        country_values = get_country_alias_values(country)
+        query_values = get_country_search_values(query)
+        country_values = get_country_search_values(country)
 
         is_country_alias_query = (
                 resolved_query_country is not None
@@ -2064,7 +2074,7 @@ class TripPlanRadarPlaceSearchView(APIView):
 
         resolved_query_country = resolve_country(value=query)
 
-        query_values = get_country_alias_values(query)
+        query_values = get_country_search_values(query)
 
         is_country_alias_query = (
                 resolved_query_country is not None

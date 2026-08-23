@@ -20,8 +20,8 @@ from .models import (
 )
 
 from .place_utils import (
-    get_country_alias_values,
     get_country_identity_values,
+    get_country_search_values,
     resolve_country_catalog_entry,
 )
 
@@ -157,7 +157,7 @@ class PlaceSerializer(serializers.ModelSerializer):
                 obj.canonical_name,
                 *(obj.aliases or []),
             ]:
-                values.update(get_country_alias_values(value))
+                values.update(get_country_search_values(value))
 
             return sorted(values)
 

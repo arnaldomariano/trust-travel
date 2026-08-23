@@ -4,38 +4,28 @@ import { useEffect, useState } from "react";
 import { API_URL } from "../lib/api";
 import { getInitials, getColorFromName } from "../lib/avatar";
 
-const COUNTRY_OPTIONS = [
-  { code: "", label: "Select a country", flag: "" },
-  { code: "BR", label: "Brazil", flag: "🇧🇷" },
-  { code: "PT", label: "Portugal", flag: "🇵🇹" },
-  { code: "NL", label: "Netherlands", flag: "🇳🇱" },
-  { code: "IT", label: "Italy", flag: "🇮🇹" },
-  { code: "US", label: "United States", flag: "🇺🇸" },
-  { code: "GB", label: "United Kingdom", flag: "🇬🇧" },
-  { code: "ES", label: "Spain", flag: "🇪🇸" },
-  { code: "FR", label: "France", flag: "🇫🇷" },
-  { code: "DE", label: "Germany", flag: "🇩🇪" },
-  { code: "MX", label: "Mexico", flag: "🇲🇽" },
-  { code: "CL", label: "Chile", flag: "🇨🇱" },
-  { code: "AR", label: "Argentina", flag: "🇦🇷" },
-  { code: "GR", label: "Greece", flag: "🇬🇷" },
-  { code: "TH", label: "Thailand", flag: "🇹🇭" },
-  { code: "LA", label: "Laos", flag: "🇱🇦" },
-  { code: "BO", label: "Bolivia", flag: "🇧🇴" },
-];
-
-const getCountryOption = (code: string) => {
-  return COUNTRY_OPTIONS.find((country) => country.code === code) || null;
+type CountryCatalogItem = {
+  code: string;
+  canonical_name: string;
+  aliases: string[];
 };
 
-const getCountryByLabel = (label: string) => {
-  return COUNTRY_OPTIONS.find((country) => country.label === label) || null;
+const countryCodeToFlag = (code: string) => {
+  if (code.length !== 2) return "";
+
+  return String.fromCodePoint(
+    ...code
+      .toUpperCase()
+      .split("")
+      .map((character) => 127397 + character.charCodeAt(0))
+  );
 };
 
 export default function ProfilePage() {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [countryCode, setCountryCode] = useState("");
+  const [countryCatalog, setCountryCatalog] = useState<CountryCatalogItem[]>([]);
   const [publicCode, setPublicCode] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -61,9 +51,32 @@ export default function ProfilePage() {
   const [profileMessage, setProfileMessage] = useState("");
   const [profileError, setProfileError] = useState("");
 
+  const getCountryOption = (code: string) => {
+    return (
+      countryCatalog.find((country) => country.code === code) || null
+    );
+  };
+
   // =========================
   // Load current profile
   // =========================
+
+  const loadCountryCatalog = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/countries/`);
+
+      if (!res.ok) {
+        console.error("Failed to load country catalog");
+        return;
+      }
+
+      const data = await res.json();
+      setCountryCatalog(data.results || []);
+    } catch (error) {
+      console.error("Country catalog load error:", error);
+    }
+  };
+
   const loadProfile = async () => {
     try {
       const res = await fetch(`${API_URL}/api/profile/`, {
@@ -111,13 +124,22 @@ export default function ProfilePage() {
 
     } catch (error) {
       console.error("Profile fetch error:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadProfile();
+    const loadPageData = async () => {
+      setLoading(true);
+
+      await Promise.all([
+        loadCountryCatalog(),
+        loadProfile(),
+      ]);
+
+      setLoading(false);
+    };
+
+    loadPageData();
   }, []);
 
   // =========================
@@ -135,40 +157,26 @@ export default function ProfilePage() {
     setAvatarPreview(previewUrl);
   };
 
-    const handleCountryChange = (value: string) => {
-      setCountryCode(value);
-
-      const selectedCountry = getCountryOption(value);
-
-      if (selectedCountry && selectedCountry.code) {
-        setCountryOfBirth(selectedCountry.label);
-
-        if (!nationalityCountryCode || nationalityCountryCode === "XX") {
-          setNationalityCountryCode(selectedCountry.code);
-        }
-
-        if (!nationality) {
-          setNationality(selectedCountry.label);
-        }
-      }
-    };
-
     const handleNationalityChange = (value: string) => {
       setCountryCode(value);
       setNationalityCountryCode(value);
 
       const selectedCountry = getCountryOption(value);
 
-      if (selectedCountry && selectedCountry.code) {
-        setNationality(selectedCountry.label);
-        setCountryOfBirth(selectedCountry.label);
+      if (selectedCountry) {
+        setNationality(selectedCountry.canonical_name);
+        setCountryOfBirth(selectedCountry.canonical_name);
 
         if (residenceMode === "same") {
-          setCountryOfResidence(selectedCountry.label);
+          setCountryOfResidence(selectedCountry.canonical_name);
         }
       } else {
         setNationality("");
         setCountryOfBirth("");
+
+        if (residenceMode === "same") {
+          setCountryOfResidence("");
+        }
       }
     };
 
@@ -185,7 +193,8 @@ export default function ProfilePage() {
       const formData = new FormData();
 
       const selectedNationalityCountry = getCountryOption(countryCode);
-      const nationalityLabel = selectedNationalityCountry?.label || "";
+      const nationalityLabel =
+        selectedNationalityCountry?.canonical_name || "";
       const residenceCountry =
         residenceMode === "same" ? nationalityLabel : countryOfResidence;
 
@@ -358,17 +367,20 @@ export default function ProfilePage() {
             onChange={(e) => handleNationalityChange(e.target.value)}
             style={input}
           >
-            {COUNTRY_OPTIONS.map((country) => (
-              <option key={country.code || "empty"} value={country.code}>
-                {country.flag ? `${country.flag} ${country.label}` : country.label}
+            <option value="">Select a country</option>
+
+            {countryCatalog.map((country) => (
+              <option key={country.code} value={country.code}>
+                {countryCodeToFlag(country.code)} {country.canonical_name}
               </option>
             ))}
           </select>
 
-          {selectedNationalityCountry && selectedNationalityCountry.code ? (
+          {selectedNationalityCountry ? (
             <small style={countryPreview}>
-              {selectedNationalityCountry.flag} {selectedNationalityCountry.label} will
-              be used in aggregated planner analytics.
+              {countryCodeToFlag(selectedNationalityCountry.code)}{" "}
+              {selectedNationalityCountry.canonical_name} will be used in
+              aggregated planner analytics.
             </small>
           ) : (
             <small style={hint}>
@@ -431,7 +443,7 @@ export default function ProfilePage() {
                   setResidenceMode("same");
 
                   const selectedCountry = getCountryOption(countryCode);
-                  setCountryOfResidence(selectedCountry?.label || "");
+                  setCountryOfResidence(selectedCountry?.canonical_name || "");
                 }}
               />
               Same as nationality
@@ -455,9 +467,13 @@ export default function ProfilePage() {
             >
               <option value="">Select country of residence</option>
 
-              {COUNTRY_OPTIONS.filter((country) => country.code).map((country) => (
-                <option key={country.code} value={country.label}>
-                  {country.flag} {country.label}
+              {countryCatalog.map((country) => (
+                <option
+                  key={country.code}
+                  value={country.canonical_name}
+                >
+                  {countryCodeToFlag(country.code)}{" "}
+                  {country.canonical_name}
                 </option>
               ))}
             </select>

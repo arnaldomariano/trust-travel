@@ -599,6 +599,96 @@ class ProfileSerializer(serializers.ModelSerializer):
             "avatar_url",
         ]
 
+    def validate(self, attrs):
+        country_code = (attrs.get("country_code") or "").strip().upper()
+        nationality_country_code = (
+            attrs.get("nationality_country_code") or ""
+        ).strip().upper()
+
+        resolved_country = None
+
+        if country_code and country_code != "XX":
+            resolved_country = resolve_country_catalog_entry(
+                code=country_code
+            )
+
+            if not resolved_country:
+                raise serializers.ValidationError(
+                    {
+                        "country_code": (
+                            "Please choose a valid country."
+                        )
+                    }
+                )
+
+        if nationality_country_code and nationality_country_code != "XX":
+            resolved_nationality = resolve_country_catalog_entry(
+                code=nationality_country_code
+            )
+
+            if not resolved_nationality:
+                raise serializers.ValidationError(
+                    {
+                        "nationality_country_code": (
+                            "Please choose a valid country."
+                        )
+                    }
+                )
+
+            if (
+                resolved_country
+                and resolved_nationality["code"]
+                != resolved_country["code"]
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "nationality_country_code": (
+                            "Nationality country code must match "
+                            "the selected country."
+                        )
+                    }
+                )
+
+            if not resolved_country:
+                resolved_country = resolved_nationality
+
+        if resolved_country:
+            canonical_name = resolved_country["canonical_name"]
+            canonical_code = resolved_country["code"]
+
+            attrs["country_code"] = canonical_code
+            attrs["nationality_country_code"] = canonical_code
+            attrs["nationality"] = canonical_name
+            attrs["country_of_birth"] = canonical_name
+
+        if "country_of_residence" in attrs:
+            residence_value = (
+                attrs.get("country_of_residence") or ""
+            ).strip()
+
+            if residence_value:
+                resolved_residence = resolve_country_catalog_entry(
+                    value=residence_value
+                )
+
+                if not resolved_residence:
+                    raise serializers.ValidationError(
+                        {
+                            "country_of_residence": (
+                                "Please choose a valid country "
+                                "of residence."
+                            )
+                        }
+                    )
+
+                attrs["country_of_residence"] = (
+                    resolved_residence["canonical_name"]
+                )
+            else:
+                attrs["country_of_residence"] = ""
+
+        return attrs
+
     def get_avatar_url(self, obj):
         request = self.context.get("request")
 

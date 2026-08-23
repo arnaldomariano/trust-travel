@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     DestinationListView,
+    CountryCatalogView,
     PlaceListView,
     PlaceLocationSuggestionCreateView,
     PlaceLocationSuggestionListView,
@@ -59,6 +60,7 @@ from .views import (
 
 urlpatterns = [
     path("destinations/", DestinationListView.as_view()),
+    path("countries/", CountryCatalogView.as_view()),
     path("places/", PlaceListView.as_view()),
     path("places/search/", PlaceSearchView.as_view()),
     path("places/create-basic/", CreateBasicPlaceView.as_view()),

@@ -57,6 +57,7 @@ from .place_utils import (
     get_country_alias_values,
     resolve_country,
     get_or_create_country,
+    load_country_catalog,
 )
 
 # ============================================================
@@ -205,6 +206,31 @@ class DestinationListView(generics.ListAPIView):
     queryset = Destination.objects.all()
     serializer_class = DestinationSerializer
 
+class CountryCatalogView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        countries = load_country_catalog()
+
+        results = [
+            {
+                "code": country["code"],
+                "canonical_name": country["canonical_name"],
+                "aliases": country.get("aliases") or [],
+            }
+            for country in sorted(
+                countries,
+                key=lambda item: item["canonical_name"].casefold(),
+            )
+        ]
+
+        return Response(
+            {
+                "count": len(results),
+                "results": results,
+            }
+        )
 
 class PlaceListView(generics.ListAPIView):
     authentication_classes = [CookieJWTAuthentication]

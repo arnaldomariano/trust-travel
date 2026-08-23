@@ -74,6 +74,56 @@ def normalize_city_result(item):
         "external_id": str(item.get("geonameId") or "").strip(),
     }
 
+def get_city(external_id):
+    external_id = str(external_id or "").strip()
+
+    if not external_id:
+        raise ValueError(
+            "GeoNames external ID is required."
+        )
+
+    username = get_geonames_username()
+
+    params = {
+        "geonameId": external_id,
+        "style": "FULL",
+        "username": username,
+    }
+
+    url = (
+        "https://secure.geonames.org/getJSON?"
+        + urlencode(params)
+    )
+
+    try:
+        with urlopen(url, timeout=5) as response:
+            payload = json.load(response)
+    except (HTTPError, URLError, TimeoutError) as error:
+        raise GeoNamesRequestError(
+            "GeoNames city lookup failed."
+        ) from error
+
+    status = payload.get("status")
+
+    if status:
+        raise GeoNamesRequestError(
+            status.get("message")
+            or "GeoNames returned an error."
+        )
+
+    normalized = normalize_city_result(payload)
+
+    if (
+        not normalized["external_id"]
+        or not normalized["name"]
+        or payload.get("fcl") != "P"
+    ):
+        raise GeoNamesRequestError(
+            "GeoNames result is not a valid city or populated place."
+        )
+
+    return normalized
+
 def search_cities(query, country_code, max_rows=8):
     query = str(query or "").strip()
     country_code = str(country_code or "").strip().upper()

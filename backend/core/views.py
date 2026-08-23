@@ -64,6 +64,7 @@ from .place_utils import (
 from .geography.providers.geonames import (
     GeoNamesConfigurationError,
     GeoNamesRequestError,
+    get_city,
     search_cities,
 )
 
@@ -384,6 +385,252 @@ class GeographyCitySearchView(APIView):
                 "count": len(results),
                 "results": results,
             }
+        )
+
+class GeographyCityMaterializeView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        external_id = (
+                request.data.get("external_id") or ""
+        ).strip()
+
+        country_code = (
+                request.data.get("country_code") or ""
+        ).strip().upper()
+
+        if not external_id:
+            return Response(
+                {
+                    "detail": (
+                        "GeoNames external ID is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        country = resolve_country_catalog_entry(
+            code=country_code,
+        )
+
+        if not country:
+            return Response(
+                {
+                    "detail": (
+                        "A valid two-letter country code is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            city_result = get_city(external_id)
+        except GeoNamesConfigurationError:
+            return Response(
+                {
+                    "detail": (
+                        "Geographic search is not configured."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except GeoNamesRequestError:
+            return Response(
+                {
+                    "detail": (
+                        "Geographic place lookup is temporarily unavailable."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except ValueError as error:
+            return Response(
+                {"detail": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if city_result["country_code"] != country["code"]:
+            return Response(
+                {
+                    "detail": (
+                        "The selected geographic place does not belong "
+                        "to the requested country."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        resolved_country = get_or_create_country(
+            value=country["canonical_name"],
+            code=country["code"],
+            aliases=country.get("aliases") or [],
+        )
+
+        country_place = Place.objects.filter(
+            place_type="country",
+            country_ref=resolved_country,
+        ).first()
+
+        if not country_place:
+            return Response(
+                {
+                    "detail": (
+                        "Country place was not found. Please select "
+                        "the country before selecting a city or region."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing_place = Place.objects.filter(
+            place_type="city",
+            external_source="geonames",
+            external_id=city_result["external_id"],
+        ).first()
+
+        if not existing_place:
+            result_values = {
+                normalize_place_text(value)
+                for value in [
+                    city_result.get("name"),
+                    city_result.get("canonical_name"),
+                    *(city_result.get("aliases") or []),
+                ]
+                if str(value or "").strip()
+            }
+
+            matching_places = []
+
+            possible_places = (
+                Place.objects.filter(
+                    place_type="city",
+                )
+                .filter(
+                    Q(country_ref=resolved_country)
+                    | Q(country_code=country["code"])
+                )
+                .distinct()
+            )
+
+            for candidate in possible_places:
+                candidate_values = {
+                    normalize_place_text(value)
+                    for value in [
+                        candidate.name,
+                        candidate.canonical_name,
+                        *(candidate.aliases or []),
+                    ]
+                    if str(value or "").strip()
+                }
+
+                if result_values.intersection(
+                        candidate_values
+                ):
+                    matching_places.append(candidate)
+
+            if len(matching_places) == 1:
+                existing_place = matching_places[0]
+
+        if existing_place:
+            merged_aliases = []
+
+            seen_aliases = {
+                normalize_place_text(
+                    city_result["canonical_name"]
+                )
+            }
+
+            for alias in [
+                *(existing_place.aliases or []),
+                *(city_result.get("aliases") or []),
+            ]:
+                alias = str(alias or "").strip()
+
+                if not alias:
+                    continue
+
+                normalized_alias = normalize_place_text(alias)
+
+                if normalized_alias in seen_aliases:
+                    continue
+
+                seen_aliases.add(normalized_alias)
+                merged_aliases.append(alias)
+
+            existing_place.country_ref = resolved_country
+            existing_place.country_code = country["code"]
+            existing_place.parent_place = country_place
+            existing_place.canonical_name = (
+                city_result["canonical_name"]
+            )
+            existing_place.aliases = merged_aliases
+            existing_place.latitude = (
+                    city_result.get("latitude") or None
+            )
+            existing_place.longitude = (
+                    city_result.get("longitude") or None
+            )
+            existing_place.external_source = "geonames"
+            existing_place.external_id = (
+                city_result["external_id"]
+            )
+
+            if not existing_place.city:
+                existing_place.city = existing_place.name
+
+            existing_place.save(
+                update_fields=[
+                    "country_ref",
+                    "country_code",
+                    "parent_place",
+                    "canonical_name",
+                    "aliases",
+                    "latitude",
+                    "longitude",
+                    "external_source",
+                    "external_id",
+                    "city",
+                ]
+            )
+
+            serializer = PlaceSerializer(
+                existing_place,
+                context={"request": request},
+            )
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK,
+            )
+
+        destination = country_place.destination
+
+        place = Place.objects.create(
+            destination=destination,
+            country_ref=resolved_country,
+            parent_place=country_place,
+            name=city_result["canonical_name"],
+            canonical_name=city_result["canonical_name"],
+            aliases=city_result.get("aliases") or [],
+            country_code=country["code"],
+            place_type="city",
+            city=city_result["canonical_name"],
+            latitude=city_result.get("latitude") or None,
+            longitude=city_result.get("longitude") or None,
+            external_source="geonames",
+            external_id=city_result["external_id"],
+            created_by=request.user,
+        )
+
+        serializer = PlaceSerializer(
+            place,
+            context={"request": request},
+        )
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED,
         )
 
 class PlaceListView(generics.ListAPIView):

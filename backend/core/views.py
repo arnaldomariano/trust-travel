@@ -58,6 +58,7 @@ from .place_utils import (
     resolve_country,
     get_or_create_country,
     load_country_catalog,
+    resolve_country_catalog_entry,
 )
 
 # ============================================================
@@ -3943,26 +3944,22 @@ class PlannerCountriesAnalyticsView(APIView):
             .order_by("user__profile__country_code")
         )
 
-        country_labels = {
-            "BR": "Brazil",
-            "IT": "Italy",
-            "NL": "Netherlands",
-            "US": "United States",
-            "PT": "Portugal",
-            "FR": "France",
-            "DE": "Germany",
-            "ES": "Spain",
-            "GB": "United Kingdom",
-        }
-
         result = []
 
         for item in country_stats:
             country_code = item["user__profile__country_code"]
 
+            country = resolve_country_catalog_entry(
+                code=country_code
+            )
+
             result.append({
                 "country_code": country_code,
-                "label": country_labels.get(country_code, country_code),
+                "label": (
+                    country["canonical_name"]
+                    if country
+                    else country_code
+                ),
                 "saved_count": item["saved_count"],
             })
 

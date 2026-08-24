@@ -252,7 +252,15 @@ class Place(models.Model):
             models.UniqueConstraint(
                 fields=["destination", "name"],
                 name="unique_place_name_per_destination",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["external_source", "external_id"],
+                condition=(
+                        ~models.Q(external_source="")
+                        & ~models.Q(external_id="")
+                ),
+                name="unique_place_external_identity",
+            ),
         ]
 
         def __str__(self):

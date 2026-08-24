@@ -12,6 +12,22 @@ type CountryCatalogItem = {
   aliases: string[];
 };
 
+type GeographyCityResult = {
+  name: string;
+  canonical_name: string;
+  aliases: string[];
+  country_code: string;
+  place_type: "city";
+  latitude: string | null;
+  longitude: string | null;
+  feature_code: string;
+  population: number;
+  admin_name: string;
+  external_source: string;
+  external_id: string;
+  existing_place_id: number | null;
+};
+
 function DestinationsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -44,6 +60,13 @@ function DestinationsPageContent() {
   const [createFlowOpen, setCreateFlowOpen] = useState(false);
   const [createCountrySearch, setCreateCountrySearch] = useState("");
   const [createCitySearch, setCreateCitySearch] = useState("");
+
+  const [geographyCityResults, setGeographyCityResults] = useState<
+    GeographyCityResult[]
+  >([]);
+  const [geographyCitySearchLoading, setGeographyCitySearchLoading] =
+    useState(false);
+  const [geographyCitySearchError, setGeographyCitySearchError] = useState("");
 
   const [createSelectedCountry, setCreateSelectedCountry] = useState<any>(null);
   const [createSelectedCity, setCreateSelectedCity] = useState<any>(null);
@@ -673,39 +696,6 @@ const createCountryCandidates = createCountrySearch.trim()
       .slice(0, 6)
   : [];
 
-const createCityCandidates =
-  createSelectedCountry && createCitySearch.trim()
-    ? places
-        .filter((place) => {
-          if (!isCityOrRegionPlace(place)) return false;
-
-          const selectedCountryName = normalizeText(createSelectedCountry.name);
-          const selectedCountryCode = (
-            createSelectedCountry.country_code || ""
-          ).toUpperCase();
-
-          const placeCountry = normalizeText(place.destination_country);
-          const placeDestination = normalizeText(place.destination_name);
-          const placeCountryCode = (place.country_code || "").toUpperCase();
-
-          const search = normalizeText(createCitySearch);
-          const name = normalizeText(place.name);
-          const city = normalizeText(place.city);
-
-          const belongsToSelectedCountry =
-            selectedCountryCode && placeCountryCode
-              ? placeCountryCode === selectedCountryCode
-              : placeCountry === selectedCountryName ||
-                placeDestination === selectedCountryName;
-
-          if (!belongsToSelectedCountry) return false;
-
-          return name.includes(search) || city.includes(search);
-        })
-        .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-        .slice(0, 6)
-    : [];
-
 const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
 const selectedPlaceReviewsCount =
@@ -752,6 +742,8 @@ const openGuidedCreateFlow = () => {
   setCreateSelectedCity(null);
   setCreateCountrySearch("");
   setCreateCitySearch("");
+  setGeographyCityResults([]);
+  setGeographyCitySearchError("");
   setCreateSpecificPlaceType("nature");
   setCreateSpecificPlaceName("");
 };
@@ -761,6 +753,8 @@ const selectCreateFlowCountry = (countryPlace: any) => {
   setCreateSelectedCity(null);
   setCreateFlowError("");
   setCreateCitySearch("");
+  setGeographyCityResults([]);
+  setGeographyCitySearchError("");
   setCreateSpecificPlaceType("nature");
   setCreateSpecificPlaceName("");
 
@@ -769,6 +763,70 @@ const selectCreateFlowCountry = (countryPlace: any) => {
       .getElementById("guided-create-city-step")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, 0);
+};
+
+const handleSearchCreateFlowCities = async () => {
+  if (!createSelectedCountry) {
+    setCreateFlowError("Please choose a country first.");
+    return;
+  }
+
+  const query = createCitySearch.trim();
+  const countryCode = (
+    createSelectedCountry.country_code || ""
+  ).trim().toUpperCase();
+
+  if (query.length < 2) {
+    setGeographyCityResults([]);
+    setGeographyCitySearchError(
+      "Type at least 2 characters to search."
+    );
+    return;
+  }
+
+  if (!countryCode) {
+    setGeographyCityResults([]);
+    setGeographyCitySearchError(
+      "Could not identify the country code for this place."
+    );
+    return;
+  }
+
+  setGeographyCitySearchLoading(true);
+  setGeographyCitySearchError("");
+  setCreateFlowError("");
+  setGeographyCityResults([]);
+
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      country_code: countryCode,
+    });
+
+    const res = await fetch(
+      `${API_URL}/api/geography/cities/search/?${params.toString()}`
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setGeographyCitySearchError(
+        data.detail || "Could not search for cities or localities."
+      );
+      return;
+    }
+
+    setGeographyCityResults(
+      Array.isArray(data.results) ? data.results : []
+    );
+  } catch (error) {
+    console.error("Guided geographic city search failed:", error);
+    setGeographyCitySearchError(
+      "Could not search for cities or localities."
+    );
+  } finally {
+    setGeographyCitySearchLoading(false);
+  }
 };
 
 const selectCreateFlowCity = (cityPlace: any) => {
@@ -782,6 +840,79 @@ const selectCreateFlowCity = (cityPlace: any) => {
       .getElementById("guided-create-specific-step")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, 0);
+};
+
+const selectGeographyCityForFlow = async (
+  cityResult: GeographyCityResult
+) => {
+  if (!createSelectedCountry) {
+    setCreateFlowError("Please choose a country first.");
+    return;
+  }
+
+  const countryCode = (
+    createSelectedCountry.country_code || ""
+  ).trim().toUpperCase();
+
+  if (!countryCode) {
+    setCreateFlowError(
+      "Could not identify the country code for this place."
+    );
+    return;
+  }
+
+  setCreatingCreateFlowCity(true);
+  setCreateFlowError("");
+  setGeographyCitySearchError("");
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/geography/cities/materialize/`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          external_id: cityResult.external_id,
+          country_code: countryCode,
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setCreateFlowError(
+        data.detail || "Could not prepare this city or locality."
+      );
+      return;
+    }
+
+    setPlaces((prev) => {
+      const exists = prev.some((place) => place.id === data.id);
+
+      return exists
+        ? prev.map((place) =>
+            place.id === data.id ? data : place
+          )
+        : [data, ...prev];
+    });
+
+    setCreateCitySearch(cityResult.canonical_name);
+    selectCreateFlowCity(data);
+  } catch (error) {
+    console.error(
+      "Guided geographic city materialization failed:",
+      error
+    );
+    setCreateFlowError(
+      "Something went wrong while preparing this city or locality."
+    );
+  } finally {
+    setCreatingCreateFlowCity(false);
+  }
 };
 
 const selectCreateFlowCountryFromCatalog = async (
@@ -860,71 +991,6 @@ const selectCreateFlowCountryFromCatalog = async (
     );
   } finally {
     setCreatingCreateFlowCountry(false);
-  }
-};
-
-const createCityForFlow = async () => {
-  const cityName = formatPlaceNameForCreation(createCitySearch);
-
-  if (!createSelectedCountry) {
-    setCreateFlowError("Please choose or create a country first.");
-    return;
-  }
-
-  if (!cityName) {
-    setCreateFlowError("Please type a city or region name first.");
-    return;
-  }
-
-  setCreatingCreateFlowCity(true);
-  setCreateFlowError("");
-
-  try {
-    const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: cityName,
-        place_type: "city",
-        city: cityName,
-        country: createSelectedCountry.name,
-        country_code: createSelectedCountry.country_code || "",
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setCreateFlowError(data.detail || "Could not create this city or region.");
-      return;
-    }
-
-    setPlaces((prev) => {
-      const alreadyExists = prev.some((place) => place.id === data.id);
-
-      if (alreadyExists) return prev;
-
-      return [data, ...prev];
-    });
-
-    setCreateSelectedCity(data);
-    setCreateSpecificPlaceType("nature");
-    setCreateSpecificPlaceName("");
-
-    setTimeout(() => {
-      document
-        .getElementById("guided-create-specific-step")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-
-  } catch (error) {
-    console.error("Guided city creation failed:", error);
-    setCreateFlowError("Something went wrong while creating the city or region.");
-  } finally {
-    setCreatingCreateFlowCity(false);
   }
 };
 
@@ -1801,20 +1867,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           }}
         >
           We did not find this place in the current Trust Travel database. If this is a
-          restaurant, hotel, beach, attraction or nature spot, choose the country and
-          then the city/region first. The specific place can be added from the
-          city/region page.
+          restaurant, hotel, beach, attraction or nature spot, choose the country first,
+          then choose the matching city or locality. After that, you can add the specific
+          place in the final step.
         </p>
-
-        <div style={futureExternalSourceBox}>
-          <strong>Future external place search</strong>
-
-          <p style={futureExternalSourceText}>
-              This area is prepared for a future integration with an external places
-              database. When connected, Trust Travel can suggest official places here
-              before asking the user to create one manually.
-          </p>
-        </div>
 
         {similarPlaces.length > 0 && (
           <div style={duplicateWarningBox}>
@@ -1919,47 +1975,120 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 <div style={guidedCreateStepLabel}>Step 2</div>
 
                 <h3 style={guidedCreateTitle}>
-                  Choose or create the city / region inside {createSelectedCountry.name}
+                  Choose the city or locality inside {createSelectedCountry.name}
                 </h3>
 
                 <p style={guidedCreateText}>
-                  Now choose the city, island or region where this place belongs. Do not use
-                  this step for restaurants, hotels, beaches, alerts or event titles. After the
-                  city or region is selected, you can add the specific place from its page.
+                  Search for the city or locality where this place belongs, then choose the
+                  matching geographic result. Do not use this step for restaurants, hotels,
+                  beaches, alerts or event titles.
                 </p>
 
-                <input
-                  value={createCitySearch}
-                  onChange={(event) => {
-                    setCreateCitySearch(event.target.value);
-                    setCreateFlowError("");
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    alignItems: "stretch",
+                    flexWrap: "wrap",
                   }}
-                  placeholder="City, island or region only, e.g. Recife, Rome, Bali"
-                  style={input}
-                />
+                >
+                  <input
+                    value={createCitySearch}
+                    onChange={(event) => {
+                      setCreateCitySearch(event.target.value);
+                      setCreateFlowError("");
+                      setGeographyCitySearchError("");
+                      setGeographyCityResults([]);
+                    }}
+                    placeholder="City or locality, e.g. Recife, Rome, Antwerp"
+                    style={{
+                      ...input,
+                      flex: "1 1 260px",
+                    }}
+                  />
 
-                {createCityCandidates.length > 0 && (
-                  <div style={guidedCreateResults}>
-                    {createCityCandidates.map((cityPlace) => (
-                      <button
-                        key={cityPlace.id}
-                        type="button"
-                        onClick={() => selectCreateFlowCity(cityPlace)}
-                        style={guidedCreateResultButton}
-                      >
-                        <span>
-                          <strong>{cityPlace.name}</strong>
-                          <br />
-                          <span style={{ color: "#666", fontSize: "13px" }}>
-                            City / Region · {getPlaceLocationText(cityPlace)}
-                          </span>
-                        </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleSearchCreateFlowCities();
+                    }}
+                    disabled={geographyCitySearchLoading}
+                    style={{
+                      ...secondaryButton,
+                      flex: "0 0 auto",
+                      opacity: geographyCitySearchLoading ? 0.5 : 1,
+                      cursor: geographyCitySearchLoading
+                        ? "not-allowed"
+                        : "pointer",
+                    }}
+                  >
+                    {geographyCitySearchLoading ? "Searching..." : "Search"}
+                  </button>
+                </div>
 
-                        <span>Choose →</span>
-                      </button>
-                    ))}
+                {geographyCitySearchError && (
+                  <div style={createFlowErrorBox}>
+                    {geographyCitySearchError}
                   </div>
                 )}
+
+                {!geographyCitySearchLoading &&
+                  geographyCityResults.length > 0 && (
+                    <div style={guidedCreateResults}>
+                      {geographyCityResults.map((cityResult) => (
+                        <button
+                          key={`${cityResult.external_source}-${cityResult.external_id}`}
+                          type="button"
+                          onClick={() =>
+                            void selectGeographyCityForFlow(cityResult)
+                          }
+                          disabled={creatingCreateFlowCity}
+                          style={{
+                            ...guidedCreateResultButton,
+                            opacity: creatingCreateFlowCity ? 0.5 : 1,
+                            cursor: creatingCreateFlowCity
+                              ? "not-allowed"
+                              : "pointer",
+                          }}
+                        >
+                          <span>
+                            <strong>{cityResult.canonical_name}</strong>
+                            <br />
+
+                            <span
+                              style={{
+                                color: "#666",
+                                fontSize: "13px",
+                              }}
+                            >
+                              City / Locality
+                              {cityResult.admin_name
+                                ? ` · ${cityResult.admin_name}`
+                                : ""}
+                              {cityResult.population > 0
+                                ? ` · Population ${cityResult.population.toLocaleString()}`
+                                : ""}
+                            </span>
+                          </span>
+
+                          <span>
+                            {creatingCreateFlowCity
+                              ? "Choosing..."
+                              : "Choose →"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                {!geographyCitySearchLoading &&
+                  createCitySearch.trim().length >= 2 &&
+                  !geographyCitySearchError &&
+                  geographyCityResults.length === 0 && (
+                    <p style={guidedCreateText}>
+                      Click Search to look for matching geographic places.
+                    </p>
+                  )}
 
                 {createSelectedCountry && createSelectedCity && (
                   <div id="guided-create-specific-step">
@@ -2054,23 +2183,6 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   </div>
                 )}
 
-                {createCitySearch.trim() && createCityCandidates.length === 0 && (
-                  <button
-                    type="button"
-                    onClick={createCityForFlow}
-                    disabled={creatingCreateFlowCity}
-                    style={{
-                      ...primaryButton,
-                      width: "fit-content",
-                      opacity: creatingCreateFlowCity ? 0.5 : 1,
-                      cursor: creatingCreateFlowCity ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {creatingCreateFlowCity
-                      ? "Creating city / region..."
-                      : `Create city/region “${formatPlaceNameForCreation(createCitySearch)}” inside ${createSelectedCountry.name}`}
-                  </button>
-                )}
               </div>
             )}
 
@@ -2960,22 +3072,6 @@ const label = {
   fontSize: "13px",
   color: "#666",
   fontWeight: 600,
-};
-
-const futureExternalSourceBox = {
-  padding: "14px",
-  borderRadius: "14px",
-  border: "1px dashed #ddd",
-  background: "#fafafa",
-  color: "#333",
-  marginBottom: "16px",
-};
-
-const futureExternalSourceText = {
-  margin: "8px 0 0 0",
-  color: "#666",
-  fontSize: "13px",
-  lineHeight: 1.5,
 };
 
 const guidedCreateBox = {

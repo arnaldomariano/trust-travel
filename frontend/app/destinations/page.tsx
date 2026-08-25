@@ -1125,7 +1125,7 @@ const createSpecificPlaceForFlow = async () => {
     };
 
     // =========================
-    // Create city/region inside selected country
+    // Open city/locality selection inside selected country
     // =========================
     const openCreateCityInSelectedCountry = () => {
       if (!selectedCountryPlace) return;

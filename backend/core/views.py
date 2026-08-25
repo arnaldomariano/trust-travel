@@ -695,6 +695,17 @@ class CreateBasicPlaceView(APIView):
                 status=400,
             )
 
+        if place_type == "city":
+            return Response(
+                {
+                    "detail": (
+                        "Cities and localities must be selected through the "
+                        "geographic search and materialization flow."
+                    )
+                },
+                status=400,
+            )
+
         normalized_name = name.lower()
 
         if any(word in normalized_name for word in content_like_words):
@@ -713,19 +724,6 @@ class CreateBasicPlaceView(APIView):
             city = ""
             country = country or name
             destination_name = name
-
-        elif place_type == "city":
-            if not country:
-                return Response(
-                    {"detail": "Country is required for cities and regions."},
-                    status=400,
-                )
-
-            # City/region records must use the official city/region name as both
-            # the Place name and city field. Popular names should become aliases later,
-            # not primary Place names.
-            city = name
-            destination_name = country
 
         elif place_type in specific_place_types:
             if not country:
@@ -833,7 +831,7 @@ class CreateBasicPlaceView(APIView):
 
         country_place = None
 
-        if place_type in ["city", *specific_place_types]:
+        if place_type in specific_place_types:
             resolved_country = resolve_country(
                 value=country,
                 code=country_code,
@@ -896,9 +894,6 @@ class CreateBasicPlaceView(APIView):
                 )
 
         parent_place = None
-
-        if place_type == "city":
-            parent_place = country_place
 
         if place_type in specific_place_types:
             normalized_city = normalize_place_text(city)

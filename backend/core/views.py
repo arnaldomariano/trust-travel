@@ -68,7 +68,10 @@ from .geography.providers.geonames import (
     search_cities,
 )
 
-from .geography.services import annotate_existing_city_places
+from .geography.services import (
+    annotate_existing_city_places,
+    find_existing_city_place,
+)
 
 # ============================================================
 # AUTH / USER
@@ -408,54 +411,11 @@ class GeographyCityMaterializeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        existing_place = Place.objects.filter(
-            place_type="city",
-            external_source="geonames",
-            external_id=city_result["external_id"],
-        ).first()
-
-        if not existing_place:
-            result_values = {
-                normalize_place_text(value)
-                for value in [
-                    city_result.get("name"),
-                    city_result.get("canonical_name"),
-                    *(city_result.get("aliases") or []),
-                ]
-                if str(value or "").strip()
-            }
-
-            matching_places = []
-
-            possible_places = (
-                Place.objects.filter(
-                    place_type="city",
-                )
-                .filter(
-                    Q(country_ref=resolved_country)
-                    | Q(country_code=country["code"])
-                )
-                .distinct()
-            )
-
-            for candidate in possible_places:
-                candidate_values = {
-                    normalize_place_text(value)
-                    for value in [
-                        candidate.name,
-                        candidate.canonical_name,
-                        *(candidate.aliases or []),
-                    ]
-                    if str(value or "").strip()
-                }
-
-                if result_values.intersection(
-                        candidate_values
-                ):
-                    matching_places.append(candidate)
-
-            if len(matching_places) == 1:
-                existing_place = matching_places[0]
+        existing_place = find_existing_city_place(
+            city_result=city_result,
+            resolved_country=resolved_country,
+            country_code=country["code"],
+        )
 
         if existing_place:
             merged_aliases = []

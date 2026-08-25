@@ -88,3 +88,60 @@ def annotate_existing_city_places(results, country_code):
             result["existing_place_id"] = None
 
     return results
+
+
+def find_existing_city_place(
+    city_result,
+    resolved_country,
+    country_code,
+):
+    existing_place = Place.objects.filter(
+        place_type="city",
+        external_source="geonames",
+        external_id=city_result["external_id"],
+    ).first()
+
+    if existing_place:
+        return existing_place
+
+    result_values = {
+        normalize_place_text(value)
+        for value in [
+            city_result.get("name"),
+            city_result.get("canonical_name"),
+            *(city_result.get("aliases") or []),
+        ]
+        if str(value or "").strip()
+    }
+
+    matching_places = []
+
+    possible_places = (
+        Place.objects.filter(
+            place_type="city",
+        )
+        .filter(
+            Q(country_ref=resolved_country)
+            | Q(country_code=country_code)
+        )
+        .distinct()
+    )
+
+    for candidate in possible_places:
+        candidate_values = {
+            normalize_place_text(value)
+            for value in [
+                candidate.name,
+                candidate.canonical_name,
+                *(candidate.aliases or []),
+            ]
+            if str(value or "").strip()
+        }
+
+        if result_values.intersection(candidate_values):
+            matching_places.append(candidate)
+
+    if len(matching_places) == 1:
+        return matching_places[0]
+
+    return None

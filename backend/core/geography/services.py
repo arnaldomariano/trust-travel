@@ -232,3 +232,44 @@ def enrich_existing_city_place(
             raise
 
         return locked_place
+
+
+def create_city_place(
+    city_result,
+    resolved_country,
+    country_code,
+    country_place,
+    user,
+):
+    destination = country_place.destination
+
+    try:
+        with transaction.atomic():
+            place = Place.objects.create(
+                destination=destination,
+                country_ref=resolved_country,
+                parent_place=country_place,
+                name=city_result["canonical_name"],
+                canonical_name=city_result["canonical_name"],
+                aliases=city_result.get("aliases") or [],
+                country_code=country_code,
+                place_type="city",
+                city=city_result["canonical_name"],
+                latitude=city_result.get("latitude") or None,
+                longitude=city_result.get("longitude") or None,
+                external_source="geonames",
+                external_id=city_result["external_id"],
+                created_by=user,
+            )
+    except IntegrityError:
+        winner = Place.objects.filter(
+            external_source="geonames",
+            external_id=city_result["external_id"],
+        ).first()
+
+        if winner:
+            return winner, False
+
+        raise
+
+    return place, True

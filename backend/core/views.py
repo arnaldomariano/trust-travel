@@ -70,6 +70,7 @@ from .geography.providers.geonames import (
 
 from .geography.services import (
     annotate_existing_city_places,
+    create_city_place,
     enrich_existing_city_place,
     find_existing_city_place,
 )
@@ -437,23 +438,12 @@ class GeographyCityMaterializeView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        destination = country_place.destination
-
-        place = Place.objects.create(
-            destination=destination,
-            country_ref=resolved_country,
-            parent_place=country_place,
-            name=city_result["canonical_name"],
-            canonical_name=city_result["canonical_name"],
-            aliases=city_result.get("aliases") or [],
+        place, created = create_city_place(
+            city_result=city_result,
+            resolved_country=resolved_country,
             country_code=country["code"],
-            place_type="city",
-            city=city_result["canonical_name"],
-            latitude=city_result.get("latitude") or None,
-            longitude=city_result.get("longitude") or None,
-            external_source="geonames",
-            external_id=city_result["external_id"],
-            created_by=request.user,
+            country_place=country_place,
+            user=request.user,
         )
 
         serializer = PlaceSerializer(
@@ -463,7 +453,11 @@ class GeographyCityMaterializeView(APIView):
 
         return Response(
             serializer.data,
-            status=status.HTTP_201_CREATED,
+            status=(
+                status.HTTP_201_CREATED
+                if created
+                else status.HTTP_200_OK
+            ),
         )
 
 class PlaceListView(generics.ListAPIView):

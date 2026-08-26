@@ -6,16 +6,32 @@ from ..place_utils import normalize_place_text
 
 
 def annotate_existing_city_places(results, country_code):
-    external_ids = [
-        result["external_id"]
+    external_identities = {
+        (
+            str(result.get("external_source") or "").strip(),
+            str(result.get("external_id") or "").strip(),
+        )
         for result in results
-        if result.get("external_id")
-    ]
+        if (
+            str(result.get("external_source") or "").strip()
+            and str(result.get("external_id") or "").strip()
+        )
+    }
 
-    existing_places_by_external_id = {
-        place.external_id: place.id
+    external_sources = {
+        external_source
+        for external_source, _ in external_identities
+    }
+
+    external_ids = {
+        external_id
+        for _, external_id in external_identities
+    }
+
+    existing_places_by_external_identity = {
+        (place.external_source, place.external_id): place.id
         for place in Place.objects.filter(
-            external_source="geonames",
+            external_source__in=external_sources,
             external_id__in=external_ids,
         )
     }
@@ -52,8 +68,11 @@ def annotate_existing_city_places(results, country_code):
 
     for result in results:
         external_match_id = (
-            existing_places_by_external_id.get(
-                result.get("external_id")
+            existing_places_by_external_identity.get(
+                (
+                    str(result.get("external_source") or "").strip(),
+                    str(result.get("external_id") or "").strip(),
+                )
             )
         )
 
@@ -96,10 +115,18 @@ def find_existing_city_place(
     resolved_country,
     country_code,
 ):
+    external_source = (
+        city_result.get("external_source") or ""
+    ).strip()
+
+    external_id = str(
+        city_result.get("external_id") or ""
+    ).strip()
+
     existing_place = Place.objects.filter(
         place_type="city",
-        external_source="geonames",
-        external_id=city_result["external_id"],
+        external_source=external_source,
+        external_id=external_id,
     ).first()
 
     if existing_place:
@@ -198,8 +225,12 @@ def enrich_existing_city_place(
         locked_place.longitude = (
             city_result.get("longitude") or None
         )
-        locked_place.external_source = "geonames"
-        locked_place.external_id = city_result["external_id"]
+        locked_place.external_source = (
+            city_result.get("external_source") or ""
+        ).strip()
+        locked_place.external_id = str(
+            city_result.get("external_id") or ""
+        ).strip()
 
         if not locked_place.city:
             locked_place.city = locked_place.name
@@ -222,8 +253,8 @@ def enrich_existing_city_place(
                 )
         except IntegrityError:
             winner = Place.objects.filter(
-                external_source="geonames",
-                external_id=city_result["external_id"],
+                external_source=locked_place.external_source,
+                external_id=locked_place.external_id,
             ).first()
 
             if winner:
@@ -257,14 +288,22 @@ def create_city_place(
                 city=city_result["canonical_name"],
                 latitude=city_result.get("latitude") or None,
                 longitude=city_result.get("longitude") or None,
-                external_source="geonames",
-                external_id=city_result["external_id"],
+                external_source=(
+                    city_result.get("external_source") or ""
+                ).strip(),
+                external_id=str(
+                    city_result.get("external_id") or ""
+                ).strip(),
                 created_by=user,
             )
     except IntegrityError:
         winner = Place.objects.filter(
-            external_source="geonames",
-            external_id=city_result["external_id"],
+            external_source=(
+                city_result.get("external_source") or ""
+            ).strip(),
+            external_id=str(
+                city_result.get("external_id") or ""
+            ).strip(),
         ).first()
 
         if winner:

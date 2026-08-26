@@ -70,6 +70,7 @@ from .geography.providers.geonames import (
 
 from .geography.services import (
     annotate_existing_city_places,
+    enrich_existing_city_place,
     find_existing_city_place,
 )
 
@@ -418,69 +419,16 @@ class GeographyCityMaterializeView(APIView):
         )
 
         if existing_place:
-            merged_aliases = []
-
-            seen_aliases = {
-                normalize_place_text(
-                    city_result["canonical_name"]
-                )
-            }
-
-            for alias in [
-                *(existing_place.aliases or []),
-                *(city_result.get("aliases") or []),
-            ]:
-                alias = str(alias or "").strip()
-
-                if not alias:
-                    continue
-
-                normalized_alias = normalize_place_text(alias)
-
-                if normalized_alias in seen_aliases:
-                    continue
-
-                seen_aliases.add(normalized_alias)
-                merged_aliases.append(alias)
-
-            existing_place.country_ref = resolved_country
-            existing_place.country_code = country["code"]
-            existing_place.parent_place = country_place
-            existing_place.canonical_name = (
-                city_result["canonical_name"]
-            )
-            existing_place.aliases = merged_aliases
-            existing_place.latitude = (
-                    city_result.get("latitude") or None
-            )
-            existing_place.longitude = (
-                    city_result.get("longitude") or None
-            )
-            existing_place.external_source = "geonames"
-            existing_place.external_id = (
-                city_result["external_id"]
-            )
-
-            if not existing_place.city:
-                existing_place.city = existing_place.name
-
-            existing_place.save(
-                update_fields=[
-                    "country_ref",
-                    "country_code",
-                    "parent_place",
-                    "canonical_name",
-                    "aliases",
-                    "latitude",
-                    "longitude",
-                    "external_source",
-                    "external_id",
-                    "city",
-                ]
+            place = enrich_existing_city_place(
+                existing_place=existing_place,
+                city_result=city_result,
+                resolved_country=resolved_country,
+                country_code=country["code"],
+                country_place=country_place,
             )
 
             serializer = PlaceSerializer(
-                existing_place,
+                place,
                 context={"request": request},
             )
 

@@ -1,3 +1,4 @@
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 
 from ..models import Place
@@ -145,3 +146,89 @@ def find_existing_city_place(
         return matching_places[0]
 
     return None
+
+
+def enrich_existing_city_place(
+    existing_place,
+    city_result,
+    resolved_country,
+    country_code,
+    country_place,
+):
+    with transaction.atomic():
+        locked_place = Place.objects.select_for_update().get(
+            pk=existing_place.pk
+        )
+
+        merged_aliases = []
+
+        seen_aliases = {
+            normalize_place_text(
+                city_result["canonical_name"]
+            )
+        }
+
+        for alias in [
+            *(locked_place.aliases or []),
+            *(city_result.get("aliases") or []),
+        ]:
+            alias = str(alias or "").strip()
+
+            if not alias:
+                continue
+
+            normalized_alias = normalize_place_text(alias)
+
+            if normalized_alias in seen_aliases:
+                continue
+
+            seen_aliases.add(normalized_alias)
+            merged_aliases.append(alias)
+
+        locked_place.country_ref = resolved_country
+        locked_place.country_code = country_code
+        locked_place.parent_place = country_place
+        locked_place.canonical_name = (
+            city_result["canonical_name"]
+        )
+        locked_place.aliases = merged_aliases
+        locked_place.latitude = (
+            city_result.get("latitude") or None
+        )
+        locked_place.longitude = (
+            city_result.get("longitude") or None
+        )
+        locked_place.external_source = "geonames"
+        locked_place.external_id = city_result["external_id"]
+
+        if not locked_place.city:
+            locked_place.city = locked_place.name
+
+        try:
+            with transaction.atomic():
+                locked_place.save(
+                    update_fields=[
+                        "country_ref",
+                        "country_code",
+                        "parent_place",
+                        "canonical_name",
+                        "aliases",
+                        "latitude",
+                        "longitude",
+                        "external_source",
+                        "external_id",
+                        "city",
+                    ]
+                )
+        except IntegrityError:
+            winner = Place.objects.filter(
+                external_source="geonames",
+                external_id=city_result["external_id"],
+            ).first()
+
+            if winner:
+                return winner
+
+            raise
+
+        return locked_place

@@ -70,9 +70,7 @@ from .geography.providers.geonames import (
 
 from .geography.services import (
     annotate_existing_city_places,
-    create_city_place,
-    enrich_existing_city_place,
-    find_existing_city_place,
+    materialize_city_place,
 )
 
 # ============================================================
@@ -413,32 +411,7 @@ class GeographyCityMaterializeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        existing_place = find_existing_city_place(
-            city_result=city_result,
-            resolved_country=resolved_country,
-            country_code=country["code"],
-        )
-
-        if existing_place:
-            place = enrich_existing_city_place(
-                existing_place=existing_place,
-                city_result=city_result,
-                resolved_country=resolved_country,
-                country_code=country["code"],
-                country_place=country_place,
-            )
-
-            serializer = PlaceSerializer(
-                place,
-                context={"request": request},
-            )
-
-            return Response(
-                serializer.data,
-                status=status.HTTP_200_OK,
-            )
-
-        place, created = create_city_place(
+        place, created = materialize_city_place(
             city_result=city_result,
             resolved_country=resolved_country,
             country_code=country["code"],

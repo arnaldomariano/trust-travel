@@ -273,3 +273,36 @@ def create_city_place(
         raise
 
     return place, True
+
+
+def materialize_city_place(
+    city_result,
+    resolved_country,
+    country_code,
+    country_place,
+    user,
+):
+    existing_place = find_existing_city_place(
+        city_result=city_result,
+        resolved_country=resolved_country,
+        country_code=country_code,
+    )
+
+    if existing_place:
+        place = enrich_existing_city_place(
+            existing_place=existing_place,
+            city_result=city_result,
+            resolved_country=resolved_country,
+            country_code=country_code,
+            country_place=country_place,
+        )
+
+        return place, False
+
+    return create_city_place(
+        city_result=city_result,
+        resolved_country=resolved_country,
+        country_code=country_code,
+        country_place=country_place,
+        user=user,
+    )

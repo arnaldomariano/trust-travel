@@ -1,4 +1,5 @@
 import json
+import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -73,6 +74,47 @@ def normalize_city_result(item):
         "external_source": "geonames",
         "external_id": str(item.get("geonameId") or "").strip(),
     }
+
+
+def normalize_search_text(value):
+    value = str(value or "").strip().lower()
+    value = unicodedata.normalize("NFD", value)
+    value = "".join(
+        char
+        for char in value
+        if unicodedata.category(char) != "Mn"
+    )
+    value = " ".join(value.split())
+    return value
+
+
+def city_result_rank(result, query):
+    normalized_query = normalize_search_text(query)
+
+    identity_values = [
+        result.get("name"),
+        result.get("canonical_name"),
+        *(result.get("aliases") or []),
+    ]
+
+    normalized_values = [
+        normalize_search_text(value)
+        for value in identity_values
+        if str(value or "").strip()
+    ]
+
+    starts_with_query = any(
+        value.startswith(normalized_query)
+        for value in normalized_values
+    )
+
+    population = result.get("population") or 0
+
+    return (
+        1 if starts_with_query else 0,
+        population,
+    )
+
 
 def get_city(external_id):
     external_id = str(external_id or "").strip()
@@ -179,5 +221,13 @@ def search_cities(query, country_code, max_rows=8):
             and normalized["country_code"] == country_code
         ):
             results.append(normalized)
+
+    results.sort(
+        key=lambda result: city_result_rank(
+            result,
+            query,
+        ),
+        reverse=True,
+    )
 
     return results

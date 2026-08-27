@@ -18,6 +18,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 GEONAMES_USERNAME = os.getenv("GEONAMES_USERNAME", "")
 
+FOURSQUARE_SERVICE_KEY = os.getenv(
+    "FOURSQUARE_SERVICE_KEY",
+    "",
+)
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 

@@ -2275,7 +2275,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             onClick={openCreateCityInSelectedCountry}
             style={secondaryButton}
           >
-            Create another city/region in {selectedCountryPlace.name}
+            Choose another city/locality in {selectedCountryPlace.name}
           </button>
 
           <button

@@ -16,7 +16,28 @@ class FoursquareRequestError(RuntimeError):
 
 TT_POI_CATEGORY_IDS = {
     "hotel": [
-        "4bf58dd8d48988d1fa931735",
+        "4bf58dd8d48988d1fa931735",  # Hotel
+    ],
+    "restaurant": [
+        "4d4b7105d754a06374d81259",  # Restaurants
+        "4bf58dd8d48988d1e0931735",  # Coffee Shop
+    ],
+    "attraction": [
+        "4d4b7104d754a06370d81259",  # Arts & Entertainment
+        "50aaa49e4b90af0d42d5de11",  # Castle
+        "4deefb944765f83613cdba6e",  # Historic and Protected Site
+        "4bf58dd8d48988d12d941735",  # Monument
+        "4bf58dd8d48988d132941735",  # Church
+        "69d41dd556ec6a4ded8e8264",  # Fort
+    ],
+    "nature": [
+        "4bf58dd8d48988d1e2941735",  # Beach
+        "4bf58dd8d48988d163941735",  # Park
+        "4bf58dd8d48988d159941735",  # Hiking Trail
+        "56aa371be4b08b9a8d573560",  # Waterfall
+        "52e81612bcbc57f1066b7a13",  # Nature Preserve
+        "4bf58dd8d48988d165941735",  # Scenic Lookout
+        "52e81612bcbc57f1066b7a22",  # Botanical Garden
     ],
 }
 

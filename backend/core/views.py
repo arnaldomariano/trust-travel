@@ -76,6 +76,7 @@ from .geography.providers.foursquare import (
 
 from .geography.services import (
     annotate_existing_city_places,
+    annotate_existing_poi_places,
     materialize_city_place,
 )
 
@@ -576,10 +577,16 @@ class GeographyPOISearchView(APIView):
                 result
                 for result in results
                 if (
-                        not result.get("country_code")
-                        or result.get("country_code") == country_code
+                    not result.get("country_code")
+                    or result.get("country_code") == country_code
                 )
             ]
+
+        results = annotate_existing_poi_places(
+            results=results,
+            city_place=city_place,
+            place_type=place_type,
+        )
 
         return Response(
             {

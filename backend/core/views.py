@@ -68,6 +68,12 @@ from .geography.providers.geonames import (
     search_cities,
 )
 
+from .geography.providers.foursquare import (
+    FoursquareConfigurationError,
+    FoursquareRequestError,
+    search_pois,
+)
+
 from .geography.services import (
     annotate_existing_city_places,
     materialize_city_place,
@@ -431,6 +437,155 @@ class GeographyCityMaterializeView(APIView):
                 if created
                 else status.HTTP_200_OK
             ),
+        )
+
+class GeographyPOISearchView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        query = (
+                request.query_params.get("q") or ""
+        ).strip()
+
+        place_type = (
+                request.query_params.get("place_type") or ""
+        ).strip()
+
+        city_place_id = (
+                request.query_params.get("city_place_id") or ""
+        ).strip()
+
+        if len(query) < 2:
+            return Response(
+                {
+                    "detail": (
+                        "Search query must contain at least 2 characters."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        valid_place_types = {
+            "hotel",
+            "restaurant",
+            "attraction",
+            "nature",
+            "other",
+        }
+
+        if place_type not in valid_place_types:
+            return Response(
+                {
+                    "detail": (
+                        "A valid specific place type is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not city_place_id.isdigit():
+            return Response(
+                {
+                    "detail": (
+                        "A valid city_place_id is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        city_place = (
+            Place.objects
+            .select_related(
+                "country_ref",
+                "destination",
+            )
+            .filter(
+                id=int(city_place_id),
+                place_type="city",
+            )
+            .first()
+        )
+
+        if not city_place:
+            return Response(
+                {
+                    "detail": (
+                        "The requested city or locality was not found."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if (
+                city_place.latitude is None
+                or city_place.longitude is None
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This city or locality does not have "
+                        "geographic coordinates."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        country_code = (
+            city_place.country_ref.code
+            if city_place.country_ref
+            else city_place.country_code
+        )
+
+        country_code = (
+                country_code or ""
+        ).strip().upper()
+
+        try:
+            results = search_pois(
+                query=query,
+                latitude=city_place.latitude,
+                longitude=city_place.longitude,
+                radius=15000,
+                limit=10,
+                place_type=place_type,
+            )
+
+        except FoursquareConfigurationError:
+            return Response(
+                {
+                    "detail": (
+                        "POI search is not configured."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        except FoursquareRequestError:
+            return Response(
+                {
+                    "detail": (
+                        "POI search is temporarily unavailable."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if country_code:
+            results = [
+                result
+                for result in results
+                if (
+                        not result.get("country_code")
+                        or result.get("country_code") == country_code
+                )
+            ]
+
+        return Response(
+            {
+                "count": len(results),
+                "results": results,
+            }
         )
 
 class PlaceListView(generics.ListAPIView):

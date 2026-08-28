@@ -215,6 +215,64 @@ def annotate_existing_poi_places(
     return results
 
 
+def find_existing_poi_place(
+    poi_result,
+    city_place,
+    place_type,
+):
+    external_source = (
+        poi_result.get("external_source") or ""
+    ).strip()
+
+    external_id = str(
+        poi_result.get("external_id") or ""
+    ).strip()
+
+    existing_place = Place.objects.filter(
+        external_source=external_source,
+        external_id=external_id,
+    ).first()
+
+    if existing_place:
+        return existing_place
+
+    result_values = {
+        normalize_place_text(value)
+        for value in [
+            poi_result.get("name"),
+            poi_result.get("canonical_name"),
+            *(poi_result.get("aliases") or []),
+        ]
+        if str(value or "").strip()
+    }
+
+    matching_places = []
+
+    possible_places = Place.objects.filter(
+        parent_place=city_place,
+        place_type=place_type,
+    )
+
+    for candidate in possible_places:
+        candidate_values = {
+            normalize_place_text(value)
+            for value in [
+                candidate.name,
+                candidate.canonical_name,
+                *(candidate.aliases or []),
+            ]
+            if str(value or "").strip()
+        }
+
+        if result_values.intersection(candidate_values):
+            matching_places.append(candidate)
+
+    if len(matching_places) == 1:
+        return matching_places[0]
+
+    return None
+
+
 def find_existing_city_place(
     city_result,
     resolved_country,
@@ -370,6 +428,93 @@ def enrich_existing_city_place(
         return locked_place
 
 
+def enrich_existing_poi_place(
+    existing_place,
+    poi_result,
+    city_place,
+    country_code,
+):
+    with transaction.atomic():
+        locked_place = Place.objects.select_for_update().get(
+            pk=existing_place.pk
+        )
+
+        merged_aliases = []
+
+        seen_aliases = {
+            normalize_place_text(
+                poi_result["canonical_name"]
+            )
+        }
+
+        for alias in [
+            *(locked_place.aliases or []),
+            *(poi_result.get("aliases") or []),
+        ]:
+            alias = str(alias or "").strip()
+
+            if not alias:
+                continue
+
+            normalized_alias = normalize_place_text(alias)
+
+            if normalized_alias in seen_aliases:
+                continue
+
+            seen_aliases.add(normalized_alias)
+            merged_aliases.append(alias)
+
+        locked_place.country_ref = city_place.country_ref
+        locked_place.country_code = country_code
+        locked_place.parent_place = city_place
+        locked_place.canonical_name = (
+            poi_result["canonical_name"]
+        )
+        locked_place.aliases = merged_aliases
+        locked_place.latitude = (
+            poi_result.get("latitude") or None
+        )
+        locked_place.longitude = (
+            poi_result.get("longitude") or None
+        )
+        locked_place.external_source = (
+            poi_result.get("external_source") or ""
+        ).strip()
+        locked_place.external_id = str(
+            poi_result.get("external_id") or ""
+        ).strip()
+        locked_place.city = city_place.name
+
+        try:
+            with transaction.atomic():
+                locked_place.save(
+                    update_fields=[
+                        "country_ref",
+                        "country_code",
+                        "parent_place",
+                        "canonical_name",
+                        "aliases",
+                        "latitude",
+                        "longitude",
+                        "external_source",
+                        "external_id",
+                        "city",
+                    ]
+                )
+        except IntegrityError:
+            winner = Place.objects.filter(
+                external_source=locked_place.external_source,
+                external_id=locked_place.external_id,
+            ).first()
+
+            if winner:
+                return winner
+
+            raise
+
+        return locked_place
+
+
 def create_city_place(
     city_result,
     resolved_country,
@@ -417,6 +562,87 @@ def create_city_place(
         raise
 
     return place, True
+
+
+def create_poi_place(
+    poi_result,
+    city_place,
+    country_code,
+    place_type,
+    user,
+):
+    destination = city_place.destination
+
+    try:
+        with transaction.atomic():
+            place = Place.objects.create(
+                destination=destination,
+                country_ref=city_place.country_ref,
+                parent_place=city_place,
+                name=poi_result["canonical_name"],
+                canonical_name=poi_result["canonical_name"],
+                aliases=poi_result.get("aliases") or [],
+                country_code=country_code,
+                place_type=place_type,
+                city=city_place.name,
+                latitude=poi_result.get("latitude") or None,
+                longitude=poi_result.get("longitude") or None,
+                external_source=(
+                    poi_result.get("external_source") or ""
+                ).strip(),
+                external_id=str(
+                    poi_result.get("external_id") or ""
+                ).strip(),
+                created_by=user,
+            )
+    except IntegrityError:
+        winner = Place.objects.filter(
+            external_source=(
+                poi_result.get("external_source") or ""
+            ).strip(),
+            external_id=str(
+                poi_result.get("external_id") or ""
+            ).strip(),
+        ).first()
+
+        if winner:
+            return winner, False
+
+        raise
+
+    return place, True
+
+
+def materialize_poi_place(
+    poi_result,
+    city_place,
+    country_code,
+    place_type,
+    user,
+):
+    existing_place = find_existing_poi_place(
+        poi_result=poi_result,
+        city_place=city_place,
+        place_type=place_type,
+    )
+
+    if existing_place:
+        place = enrich_existing_poi_place(
+            existing_place=existing_place,
+            poi_result=poi_result,
+            city_place=city_place,
+            country_code=country_code,
+        )
+
+        return place, False
+
+    return create_poi_place(
+        poi_result=poi_result,
+        city_place=city_place,
+        country_code=country_code,
+        place_type=place_type,
+        user=user,
+    )
 
 
 def materialize_city_place(

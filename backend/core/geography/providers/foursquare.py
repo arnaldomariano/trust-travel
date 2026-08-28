@@ -136,6 +136,51 @@ def normalize_poi_result(item):
     }
 
 
+def get_poi(external_id):
+    external_id = str(external_id or "").strip()
+
+    if not external_id:
+        raise ValueError(
+            "A Foursquare place ID is required."
+        )
+
+    service_key = get_foursquare_service_key()
+
+    url = (
+        "https://places-api.foursquare.com/places/"
+        + external_id
+    )
+
+    request = Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {service_key}",
+            "X-Places-Api-Version": "2025-06-17",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=5) as response:
+            payload = json.load(response)
+    except (HTTPError, URLError, TimeoutError) as error:
+        raise FoursquareRequestError(
+            "Foursquare POI lookup failed."
+        ) from error
+
+    normalized = normalize_poi_result(payload)
+
+    if (
+        not normalized["external_id"]
+        or not normalized["name"]
+    ):
+        raise FoursquareRequestError(
+            "Foursquare returned an invalid POI."
+        )
+
+    return normalized
+
+
 def search_pois(
     query,
     latitude,

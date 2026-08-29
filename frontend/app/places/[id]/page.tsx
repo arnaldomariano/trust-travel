@@ -29,7 +29,6 @@ export default function PlacePage() {
 
   const [experiences, setExperiences] = useState<any[]>([]);
   const [updates, setUpdates] = useState<any[]>([]);
-  const [photos, setPhotos] = useState<any[]>([]);
   const [filter, setFilter] = useState<"all" | "experience" | "update">("all");
 
   const [place, setPlace] = useState<any>(null);
@@ -44,8 +43,6 @@ export default function PlacePage() {
   const [locationSuggestionSubmitted, setLocationSuggestionSubmitted] = useState(false);
   const [locationSuggestionError, setLocationSuggestionError] = useState("");
   const [showLocationSuggestionForm, setShowLocationSuggestionForm] = useState(false);
-
-  const [loadingCountryContext, setLoadingCountryContext] = useState(false);
 
   const [searchInsideCountry, setSearchInsideCountry] = useState("");
   const [hasSearchedInsideCountry, setHasSearchedInsideCountry] = useState(false);
@@ -349,7 +346,6 @@ const activityFeedDescription =
   };
 
   const loadCountryContext = async (countryPlaceId: string | number) => {
-    setLoadingCountryContext(true);
 
     try {
       const res = await fetch(
@@ -371,8 +367,6 @@ const activityFeedDescription =
     } catch (error) {
       console.error("Country context error:", error);
       setCountryContext(null);
-    } finally {
-      setLoadingCountryContext(false);
     }
   };
 
@@ -461,15 +455,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     setUpdates(sorted);
   })
   .catch((err) => console.error("UPDATES ERROR:", err));
-
-    fetch(`${API_URL}/api/places/${id}/photos/`, {
-      credentials: "include",
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setPhotos(Array.isArray(data) ? data : []);
-      })
-      .catch((err) => console.error("PHOTOS ERROR:", err));
 
     fetch(`${API_URL}/api/places/`)
       .then((res) => res.json())

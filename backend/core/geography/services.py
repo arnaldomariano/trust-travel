@@ -1,8 +1,122 @@
+from math import atan2, cos, radians, sin, sqrt
+
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 
 from ..models import Place
 from ..place_utils import normalize_place_text
+
+
+def calculate_distance_km(
+    latitude_1,
+    longitude_1,
+    latitude_2,
+    longitude_2,
+):
+    latitude_1 = float(latitude_1)
+    longitude_1 = float(longitude_1)
+    latitude_2 = float(latitude_2)
+    longitude_2 = float(longitude_2)
+
+    earth_radius_km = 6371.0088
+
+    latitude_delta = radians(
+        latitude_2 - latitude_1
+    )
+
+    longitude_delta = radians(
+        longitude_2 - longitude_1
+    )
+
+    latitude_1 = radians(latitude_1)
+    latitude_2 = radians(latitude_2)
+
+    haversine_value = (
+        sin(latitude_delta / 2) ** 2
+        + cos(latitude_1)
+        * cos(latitude_2)
+        * sin(longitude_delta / 2) ** 2
+    )
+
+    haversine_value = min(
+        1,
+        max(0, haversine_value),
+    )
+
+    angular_distance = 2 * atan2(
+        sqrt(haversine_value),
+        sqrt(1 - haversine_value),
+    )
+
+    return earth_radius_km * angular_distance
+
+
+def poi_matches_city_context(
+    poi_result,
+    city_place,
+    fallback_distance_km=3,
+):
+    city_country_code = (
+        city_place.country_ref.code
+        if city_place.country_ref
+        else city_place.country_code
+    )
+
+    city_country_code = str(
+        city_country_code or ""
+    ).strip().upper()
+
+    poi_country_code = str(
+        poi_result.get("country_code") or ""
+    ).strip().upper()
+
+    if (
+        city_country_code
+        and poi_country_code
+        and city_country_code != poi_country_code
+    ):
+        return False
+
+    locality = str(
+        poi_result.get("locality") or ""
+    ).strip()
+
+    if locality:
+        normalized_locality = normalize_place_text(
+            locality
+        )
+
+        city_identity_values = {
+            normalize_place_text(value)
+            for value in [
+                city_place.name,
+                city_place.canonical_name,
+                *(city_place.aliases or []),
+            ]
+            if str(value or "").strip()
+        }
+
+        return normalized_locality in city_identity_values
+
+    poi_latitude = poi_result.get("latitude")
+    poi_longitude = poi_result.get("longitude")
+
+    if (
+        city_place.latitude is None
+        or city_place.longitude is None
+        or poi_latitude is None
+        or poi_longitude is None
+    ):
+        return False
+
+    distance_km = calculate_distance_km(
+        city_place.latitude,
+        city_place.longitude,
+        poi_latitude,
+        poi_longitude,
+    )
+
+    return distance_km <= fallback_distance_km
 
 
 def annotate_existing_city_places(results, country_code):

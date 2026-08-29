@@ -257,3 +257,49 @@ def search_pois(
 
     return results
 
+
+def poi_matches_place_type(
+    poi_result,
+    place_type,
+):
+    place_type = str(place_type or "").strip()
+
+    if place_type == "other":
+        return True
+
+    if place_type not in TT_POI_CATEGORY_IDS:
+        return False
+
+    external_id = str(
+        poi_result.get("external_id") or ""
+    ).strip()
+
+    name = str(
+        poi_result.get("name") or ""
+    ).strip()
+
+    latitude = poi_result.get("latitude")
+    longitude = poi_result.get("longitude")
+
+    if (
+        not external_id
+        or not name
+        or latitude is None
+        or longitude is None
+    ):
+        return False
+
+    results = search_pois(
+        query=name,
+        latitude=latitude,
+        longitude=longitude,
+        radius=1000,
+        limit=10,
+        place_type=place_type,
+    )
+
+    return any(
+        str(result.get("external_id") or "").strip()
+        == external_id
+        for result in results
+    )

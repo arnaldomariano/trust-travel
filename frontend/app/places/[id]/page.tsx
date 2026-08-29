@@ -65,6 +65,12 @@ export default function PlacePage() {
   const [specificPlaceHasSearched, setSpecificPlaceHasSearched] = useState(false);
   const [specificPlaceSearchLoading, setSpecificPlaceSearchLoading] = useState(false);
   const [specificPlaceSearchError, setSpecificPlaceSearchError] = useState("");
+  const [specificPlaceType, setSpecificPlaceType] = useState<
+    "nature" | "restaurant" | "hotel" | "attraction" | "other"
+  >("nature");
+  const [externalSpecificPlaceResults, setExternalSpecificPlaceResults] = useState<any[]>([]);
+  const [materializingSpecificPlaceId, setMaterializingSpecificPlaceId] =
+    useState<string | null>(null);
   const [showSpecificPlaceTools, setShowSpecificPlaceTools] = useState(false);
 
   const [showCreateSpecificPlaceForm, setShowCreateSpecificPlaceForm] = useState(false);
@@ -767,7 +773,20 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       }
     };
 
-    const hasSpecificPlaceSearch = specificPlaceHasSearched && searchInsideCity.trim().length >= 2;
+    const hasSpecificPlaceSearch =
+      specificPlaceHasSearched &&
+      searchInsideCity.trim().length >= 2;
+
+    const availableExternalSpecificPlaceResults =
+      externalSpecificPlaceResults.filter(
+        (externalPlace: any) =>
+          !specificPlaceResults.some(
+            (specificPlace: any) =>
+              specificPlace.id ===
+              externalPlace.existing_place_id
+          )
+      );
+
     const canCreateSpecificPlace =
       hasSpecificPlaceSearch &&
       !specificPlaceSearchLoading &&
@@ -838,6 +857,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
       setSpecificPlaceHasSearched(true);
       setSpecificPlaceResults([]);
+      setExternalSpecificPlaceResults([]);
       setSpecificPlaceSearchError("");
 
       if (query.length < 2) {
@@ -889,17 +909,125 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
           return (
             resultCity === currentCity &&
-            resultType !== "country" &&
-            resultType !== "city"
+            resultType === specificPlaceType
           );
         });
 
         setSpecificPlaceResults(filtered);
+
+        const externalParams = new URLSearchParams({
+          q: query,
+          place_type: specificPlaceType,
+          city_place_id: String(place.id),
+        });
+
+        const externalRes = await fetch(
+          `${API_URL}/api/geography/pois/search/?${externalParams.toString()}`,
+          {
+            credentials: "include",
+          }
+        );
+
+        if (!externalRes.ok) {
+          const text = await externalRes.text();
+          console.error(
+            "External specific place search failed:",
+            externalRes.status,
+            text
+          );
+          setSpecificPlaceSearchError(
+            "Could not search all available specific places right now."
+          );
+          return;
+        }
+
+        const externalData = await externalRes.json();
+
+        const externalResults = Array.isArray(externalData.results)
+          ? externalData.results
+          : [];
+
+        setExternalSpecificPlaceResults(externalResults);
       } catch (error) {
         console.error("Specific place search error:", error);
         setSpecificPlaceSearchError("Could not search specific places right now.");
       } finally {
         setSpecificPlaceSearchLoading(false);
+      }
+    };
+
+    const handleMaterializeSpecificPlace = async (
+      externalPlace: any
+    ) => {
+      if (!place || place.place_type !== "city") return;
+
+      if (externalPlace.existing_place_id) {
+        router.push(
+          `/places/${externalPlace.existing_place_id}`
+        );
+        return;
+      }
+
+      if (!isLoggedIn) {
+        router.push(`/login?next=/places/${place.id}`);
+        return;
+      }
+
+      const externalId = String(
+        externalPlace.external_id || ""
+      ).trim();
+
+      if (!externalId) {
+        setSpecificPlaceSearchError(
+          "Could not identify this specific place."
+        );
+        return;
+      }
+
+      setMaterializingSpecificPlaceId(externalId);
+      setSpecificPlaceSearchError("");
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/geography/pois/materialize/`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              external_id: externalId,
+              place_type: specificPlaceType,
+              city_place_id: place.id,
+            }),
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error(
+            "Specific place materialization failed:",
+            data
+          );
+          setSpecificPlaceSearchError(
+            data.detail || "Could not add this specific place."
+          );
+          return;
+        }
+
+        router.push(`/places/${data.id}`);
+      } catch (error) {
+        console.error(
+          "Specific place materialization failed:",
+          error
+        );
+        setSpecificPlaceSearchError(
+          "Could not add this specific place."
+        );
+      } finally {
+        setMaterializingSpecificPlaceId(null);
       }
     };
 
@@ -2069,6 +2197,41 @@ const handleToggleEventsInfo = () => {
 
               <div
                 style={{
+                  display: "grid",
+                  gap: "6px",
+                  maxWidth: "260px",
+                }}
+              >
+                <label style={label}>Place type</label>
+
+                <select
+                  value={specificPlaceType}
+                  onChange={(e) => {
+                    setSpecificPlaceType(
+                      e.target.value as
+                        | "nature"
+                        | "restaurant"
+                        | "hotel"
+                        | "attraction"
+                        | "other"
+                    );
+                    setSpecificPlaceResults([]);
+                    setExternalSpecificPlaceResults([]);
+                    setSpecificPlaceHasSearched(false);
+                    setSpecificPlaceSearchError("");
+                  }}
+                  style={input}
+                >
+                  <option value="nature">Beach / Nature spot</option>
+                  <option value="restaurant">Restaurant / Café</option>
+                  <option value="hotel">Hotel</option>
+                  <option value="attraction">Tourist attraction</option>
+                  <option value="other">Other place</option>
+                </select>
+              </div>
+
+              <div
+                style={{
                   display: "flex",
                   gap: "8px",
                   flexWrap: "wrap",
@@ -2079,6 +2242,7 @@ const handleToggleEventsInfo = () => {
                   onChange={(e) => {
                       setSearchInsideCity(e.target.value);
                       setSpecificPlaceResults([]);
+                      setExternalSpecificPlaceResults([]);
                       setSpecificPlaceHasSearched(false);
                       setSpecificPlaceSearchError("");
                   }}
@@ -2103,7 +2267,7 @@ const handleToggleEventsInfo = () => {
                 </button>
               </div>
 
-                          <p
+              <p
                 style={{
                   margin: 0,
                   color: "#777",
@@ -2210,6 +2374,131 @@ const handleToggleEventsInfo = () => {
               </div>
             )}
 
+            {specificPlaceHasSearched &&
+              availableExternalSpecificPlaceResults.length > 0 && (
+                <div
+                  style={{
+                    marginBottom: "18px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: "#555",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    More places found nearby
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+                      gap: "12px",
+                    }}
+                  >
+                    {availableExternalSpecificPlaceResults.map(
+                      (externalPlace: any) => {
+                        const externalId = String(
+                          externalPlace.external_id || ""
+                        );
+
+                        const isMaterializing =
+                          materializingSpecificPlaceId === externalId;
+
+                        return (
+                          <div
+                            key={externalId}
+                            style={{
+                              padding: "14px",
+                              border: "1px solid #eee",
+                              borderRadius: "14px",
+                              backgroundColor: "#fafafa",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: "12px",
+                                color: "#777",
+                                marginBottom: "6px",
+                              }}
+                            >
+                              {externalPlace.existing_place_id
+                                ? "Already in Trust Travel"
+                                : getPlaceTypeLabel(specificPlaceType)}
+                            </div>
+
+                            <h3
+                              style={{
+                                margin: 0,
+                                marginBottom: "6px",
+                                fontSize: "17px",
+                              }}
+                            >
+                              {externalPlace.name}
+                            </h3>
+
+                            <div
+                              style={{
+                                color: "#666",
+                                fontSize: "13px",
+                                marginBottom: "10px",
+                              }}
+                            >
+                              {externalPlace.address ||
+                                externalPlace.locality ||
+                                place.name}
+                            </div>
+
+                            {externalPlace.existing_place_id ? (
+                              <Link
+                                href={`/places/${externalPlace.existing_place_id}`}
+                                style={{
+                                  display: "inline-block",
+                                  padding: "8px 10px",
+                                  borderRadius: "10px",
+                                  backgroundColor: "#111",
+                                  color: "white",
+                                  textDecoration: "none",
+                                  fontSize: "13px",
+                                }}
+                              >
+                                View place
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleMaterializeSpecificPlace(
+                                    externalPlace
+                                  )
+                                }
+                                disabled={isMaterializing}
+                                style={{
+                                  ...secondaryButton,
+                                  fontSize: "13px",
+                                  padding: "8px 10px",
+                                  opacity: isMaterializing ? 0.5 : 1,
+                                  cursor: isMaterializing
+                                    ? "not-allowed"
+                                    : "pointer",
+                                }}
+                              >
+                                {isMaterializing
+                                  ? "Adding..."
+                                  : "Use this place"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
+              )}
+
             <div
               style={{
                 borderTop: "1px solid #eee",
@@ -2254,7 +2543,9 @@ const handleToggleEventsInfo = () => {
                 >
                   Searching for possible matches...
                 </p>
-              ) : specificPlaceResults.length > 0 ? (
+              ) :
+                specificPlaceResults.length > 0 ||
+                availableExternalSpecificPlaceResults.length > 0 ? (
                 <p
                   style={{
                     margin: 0,
@@ -2263,8 +2554,8 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.5,
                   }}
                 >
-                  We found possible matches. Open an existing page if it is the same
-                  place. Create a new one only if your specific place is truly different.
+                  We found possible matches above. Use an existing place when it matches
+                  what you are looking for. Create a new one only if your place is truly different.
                 </p>
               ) : (
                 <>

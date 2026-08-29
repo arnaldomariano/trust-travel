@@ -39,9 +39,7 @@ function DestinationsPageContent() {
   const isUpdateMode = mode === "update";
 
   const [places, setPlaces] = useState<any[]>([]);
-  const [destinations, setDestinations] = useState<any[]>([]);
   const [countryCatalog, setCountryCatalog] = useState<CountryCatalogItem[]>([]);
-  const [createPlaceError, setCreatePlaceError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -52,7 +50,6 @@ function DestinationsPageContent() {
   const [selectedCountryPlace, setSelectedCountryPlace] = useState<any>(null);
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [showShareForm, setShowShareForm] = useState(false);
-  const [createdPlaceId, setCreatedPlaceId] = useState<number | null>(null);
   const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
   const [relatedPlaceSearch, setRelatedPlaceSearch] = useState("");
 
@@ -147,27 +144,24 @@ function DestinationsPageContent() {
   const skipPracticalRatingsConfirmRef = useRef(false);
 
   // =========================
-  // Load places and destinations
+  // Load places and country catalog
   // =========================
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [placesRes, destinationsRes, countriesRes] = await Promise.all([
+        const [placesRes, countriesRes] = await Promise.all([
           fetch(`${API_URL}/api/places/`),
-          fetch(`${API_URL}/api/destinations/`),
           fetch(`${API_URL}/api/countries/`),
         ]);
 
-        if (!placesRes.ok || !destinationsRes.ok) {
-          console.error("Failed to load places or destinations");
+        if (!placesRes.ok) {
+          console.error("Failed to load places");
           return;
         }
 
         const placesData = await placesRes.json();
-        const destinationsData = await destinationsRes.json();
 
         setPlaces(placesData || []);
-        setDestinations(destinationsData || []);
 
         if (countriesRes.ok) {
           const countriesData = await countriesRes.json();
@@ -546,46 +540,6 @@ const filteredPlacesInsideSelectedCountry = normalizedRelatedPlaceSearch
       );
     })
   : [];
-
-const searchPlaceholderByType: Record<typeof placeType, string> = {
-  country: "Search a country, e.g. Laos, Brazil, Italy",
-  city: "Search a city or region, e.g. Recife, Tuscany, Itatiaia",
-  attraction: "Search an attraction, e.g. Coliseu, Acropolis, Kuang Si Waterfalls",
-  hotel: "Search a hotel, e.g. Hotel name, resort, hostel...",
-  restaurant: "Search a restaurant or café, e.g. Café X, restaurant Y...",
-  nature: "Search a beach, park, trail, waterfall or nature spot...",
-  other: "Search a place, area, business or travel reference...",
-};
-
-const placeNamePlaceholderByType: Record<typeof placeType, string> = {
-  country: "Country name, e.g. Laos",
-  city: "City or region name, e.g. Recife, Tuscany, Itatiaia",
-  attraction: "Attraction name, e.g. Coliseu, Acropolis",
-  hotel: "Hotel name, e.g. Hotel X",
-  restaurant: "Restaurant or café name, e.g. Café X",
-  nature: "Nature spot name, e.g. Praia de Boa Viagem, Kuang Si Waterfalls",
-  other: "Neutral place name",
-};
-
-const cityPlaceholderByType: Record<typeof placeType, string> = {
-  country: "Optional region or capital, e.g. Southeast Asia",
-  city: "City or region, e.g. Recife, Tuscany",
-  attraction: "City or region, e.g. Rome, Athens, Luang Prabang",
-  hotel: "City or region where the hotel is located",
-  restaurant: "City or region where the restaurant is located",
-  nature: "City, region or nearest location",
-  other: "City or region, if relevant",
-};
-
-const countryPlaceholderByType: Record<typeof placeType, string> = {
-  country: "Country, e.g. Laos",
-  city: "Country, e.g. Brazil",
-  attraction: "Country, e.g. Italy, Greece, Laos",
-  hotel: "Country where the hotel is located",
-  restaurant: "Country where the restaurant is located",
-  nature: "Country, e.g. Brazil, Laos, Netherlands",
-  other: "Country, if relevant",
-};
 
 // =========================
 // Place hierarchy helpers
@@ -1264,7 +1218,6 @@ const createSpecificPlaceForFlow = async () => {
       // whether to share/post about the country or choose a city/region.
       setSelectedCountryPlace(place);
       setSelectedPlace(null);
-      setCreatedPlaceId(null);
       setShowShareForm(false);
       setShowRelatedPlaces(false);
       setRelatedPlaceSearch("");
@@ -1296,7 +1249,6 @@ const createSpecificPlaceForFlow = async () => {
       if (!selectedCountryPlace) return;
 
       setSelectedPlace(selectedCountryPlace);
-      setCreatedPlaceId(null);
       setShowShareForm(true);
       setExperienceShared(false);
       setSharedExperience(null);
@@ -1337,7 +1289,6 @@ const createSpecificPlaceForFlow = async () => {
       setCreateSpecificPlaceHasSearched(false);
 
       setSelectedPlace(null);
-      setCreatedPlaceId(null);
       setShowShareForm(false);
       setExperienceShared(false);
       setSharedExperience(null);
@@ -1373,7 +1324,6 @@ const createSpecificPlaceForFlow = async () => {
   const handleChangePlace = () => {
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
-    setCreatedPlaceId(null);
     setShowRelatedPlaces(false);
     setRelatedPlaceSearch("");
     setTitle("");
@@ -1398,7 +1348,6 @@ const createSpecificPlaceForFlow = async () => {
   const resetShareFlow = () => {
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
-    setCreatedPlaceId(null);
     setSearchTerm("");
     setTitle("");
     setComment("");
@@ -3476,12 +3425,6 @@ const previewCard = {
   marginBottom: "16px",
 };
 
-const createPlaceForm = {
-  display: "grid",
-  gap: "12px",
-  marginTop: "14px",
-};
-
 const duplicateWarningBox = {
   padding: "14px",
   borderRadius: "14px",
@@ -3645,16 +3588,6 @@ const structuredRatingsPreviewBadge = {
   border: "1px solid #eee",
   background: "#fafafa",
   fontSize: "12px",
-};
-
-const createPlaceErrorBox = {
-  padding: "10px",
-  border: "1px solid #fecaca",
-  borderRadius: "10px",
-  backgroundColor: "#fef2f2",
-  color: "#b91c1c",
-  fontSize: "13px",
-  lineHeight: 1.4,
 };
 
 const experienceFormErrorBox = {

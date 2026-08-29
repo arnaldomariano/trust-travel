@@ -75,6 +75,15 @@ function DestinationsPageContent() {
   >("nature");
   const [createSpecificPlaceName, setCreateSpecificPlaceName] = useState("");
 
+  const [createSpecificPlaceSearchResults, setCreateSpecificPlaceSearchResults] =
+    useState<any[]>([]);
+  const [createSpecificPlaceSearchLoading, setCreateSpecificPlaceSearchLoading] =
+    useState(false);
+  const [createSpecificPlaceHasSearched, setCreateSpecificPlaceHasSearched] =
+    useState(false);
+  const [materializingCreateFlowSpecificPlaceId, setMaterializingCreateFlowSpecificPlaceId] =
+    useState<string | null>(null);
+
   const [creatingCreateFlowCountry, setCreatingCreateFlowCountry] = useState(false);
   const [creatingCreateFlowCity, setCreatingCreateFlowCity] = useState(false);
   const [creatingCreateFlowSpecificPlace, setCreatingCreateFlowSpecificPlace] =
@@ -228,8 +237,6 @@ const getNormalizedPlaceSearchNames = (place: any) => {
   const values = [
     place.name,
     place.canonical_name,
-    place.city,
-    place.destination_name,
   ];
 
   if (Array.isArray(place.aliases)) {
@@ -409,8 +416,9 @@ const getUnifiedSearchScore = (place: any) => {
 
   if (!search) return 0;
 
-  // Avoid showing a long list while the user is still typing.
-  if (search.length < 4) return 0;
+  // Allow short direct name searches such as "Bar",
+  // while still avoiding results from a single typed character.
+  if (search.length < 2) return 0;
 
   const searchableNames = getNormalizedPlaceSearchNames(place);
   const city = normalizeText(place.city || "");
@@ -424,14 +432,40 @@ const getUnifiedSearchScore = (place: any) => {
     return 90;
   }
 
-  if (searchableNames.some((value) => value.includes(search))) {
+  const matchesWordPrefix = searchableNames.some((value) =>
+    value
+      .split(/\s+/)
+      .some((word) => word.startsWith(search))
+  );
+
+  const matchesOnlySpecificPlaceCityPrefix =
+    place.place_type !== "country" &&
+    place.place_type !== "city" &&
+    city.startsWith(search);
+
+  if (
+    search.length >= 2 &&
+    matchesWordPrefix &&
+    !matchesOnlySpecificPlaceCityPrefix
+  ) {
+    return 85;
+  }
+
+  if (
+    search.length >= 4 &&
+    searchableNames.some((value) => value.includes(search))
+  ) {
     return 80;
   }
 
   // Only city/region records should match by city name.
   // Specific places should appear only when the user searches their own name,
   // alias or canonical name.
-  if (place.place_type === "city" && city.includes(search)) {
+  if (
+    place.place_type === "city" &&
+    search.length >= 4 &&
+    city.includes(search)
+  ) {
     return 65;
   }
 
@@ -746,6 +780,8 @@ const openGuidedCreateFlow = () => {
   setGeographyCitySearchError("");
   setCreateSpecificPlaceType("nature");
   setCreateSpecificPlaceName("");
+  setCreateSpecificPlaceSearchResults([]);
+  setCreateSpecificPlaceHasSearched(false);
 };
 
 const selectCreateFlowCountry = (countryPlace: any) => {
@@ -757,6 +793,8 @@ const selectCreateFlowCountry = (countryPlace: any) => {
   setGeographyCitySearchError("");
   setCreateSpecificPlaceType("nature");
   setCreateSpecificPlaceName("");
+  setCreateSpecificPlaceSearchResults([]);
+  setCreateSpecificPlaceHasSearched(false);
 
   setTimeout(() => {
     document
@@ -834,6 +872,8 @@ const selectCreateFlowCity = (cityPlace: any) => {
   setCreateFlowError("");
   setCreateSpecificPlaceType("nature");
   setCreateSpecificPlaceName("");
+  setCreateSpecificPlaceSearchResults([]);
+  setCreateSpecificPlaceHasSearched(false);
 
   setTimeout(() => {
     document
@@ -912,6 +952,162 @@ const selectGeographyCityForFlow = async (
     );
   } finally {
     setCreatingCreateFlowCity(false);
+  }
+};
+
+const handleSearchCreateFlowSpecificPlaces = async () => {
+  if (!createSelectedCity) {
+    setCreateFlowError("Please choose a city or locality first.");
+    return;
+  }
+
+  const query = createSpecificPlaceName.trim();
+
+  if (query.length < 2) {
+    setCreateSpecificPlaceSearchResults([]);
+    setCreateSpecificPlaceHasSearched(false);
+    setCreateFlowError(
+      "Type at least 2 characters to search for a specific place."
+    );
+    return;
+  }
+
+  setCreateSpecificPlaceSearchLoading(true);
+  setCreateSpecificPlaceHasSearched(true);
+  setCreateSpecificPlaceSearchResults([]);
+  setCreateFlowError("");
+
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      place_type: createSpecificPlaceType,
+      city_place_id: String(createSelectedCity.id),
+    });
+
+    const res = await fetch(
+      `${API_URL}/api/geography/pois/search/?${params.toString()}`,
+      {
+        credentials: "include",
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const errorDetail = String(data.detail || "");
+
+      if (
+        res.status === 400 &&
+        errorDetail ===
+          "This city or locality does not have geographic coordinates."
+      ) {
+        setCreateSpecificPlaceSearchResults([]);
+        setCreateFlowError(
+          "Nearby place discovery is not available for this city or locality yet."
+        );
+        return;
+      }
+
+      setCreateFlowError(
+        errorDetail || "Could not search for specific places."
+      );
+      return;
+    }
+
+    setCreateSpecificPlaceSearchResults(
+      Array.isArray(data.results) ? data.results : []
+    );
+  } catch (error) {
+    console.error(
+      "Guided specific place search failed:",
+      error
+    );
+    setCreateFlowError(
+      "Something went wrong while searching for specific places."
+    );
+  } finally {
+    setCreateSpecificPlaceSearchLoading(false);
+  }
+};
+
+const handleMaterializeCreateFlowSpecificPlace = async (
+  specificPlaceResult: any
+) => {
+  if (!createSelectedCity) {
+    setCreateFlowError("Please choose a city or locality first.");
+    return;
+  }
+
+  if (specificPlaceResult.existing_place_id) {
+    router.push(`/places/${specificPlaceResult.existing_place_id}`);
+    return;
+  }
+
+  const externalId = String(
+    specificPlaceResult.external_id || ""
+  ).trim();
+
+  if (!externalId) {
+    setCreateFlowError(
+      "Could not identify this specific place."
+    );
+    return;
+  }
+
+  setMaterializingCreateFlowSpecificPlaceId(externalId);
+  setCreateFlowError("");
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/geography/pois/materialize/`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          external_id: externalId,
+          place_type: createSpecificPlaceType,
+          city_place_id: createSelectedCity.id,
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setCreateFlowError(
+        data.detail || "Could not add this specific place."
+      );
+      return;
+    }
+
+    setPlaces((prev) => {
+      const alreadyExists = prev.some(
+        (place) => place.id === data.id
+      );
+
+      if (alreadyExists) {
+        return prev.map((place) =>
+          place.id === data.id ? data : place
+        );
+      }
+
+      return [data, ...prev];
+    });
+
+    router.push(`/places/${data.id}`);
+  } catch (error) {
+    console.error(
+      "Guided specific place materialization failed:",
+      error
+    );
+    setCreateFlowError(
+      "Something went wrong while adding this specific place."
+    );
+  } finally {
+    setMaterializingCreateFlowSpecificPlaceId(null);
   }
 };
 
@@ -1138,6 +1334,8 @@ const createSpecificPlaceForFlow = async () => {
       setCreateCitySearch("");
       setCreateSpecificPlaceType("nature");
       setCreateSpecificPlaceName("");
+      setCreateSpecificPlaceSearchResults([]);
+      setCreateSpecificPlaceHasSearched(false);
 
       setSelectedPlace(null);
       setCreatedPlaceId(null);
@@ -1639,7 +1837,20 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         )}
       </div>
 
-    ) : !searchTerm.trim() ? null
+    ) : !searchTerm.trim() ? (
+      <p
+        style={{
+          color: "#777",
+          fontSize: "13px",
+          lineHeight: 1.5,
+          maxWidth: "520px",
+          margin: "-10px 0 0 0",
+        }}
+      >
+        Search first for the exact place. If you cannot find it, Trust Travel
+        will help you add it using the correct country, city or locality.
+      </p>
+    )
 
       : filteredPlaces.length > 0 && !selectedCountryPlace && !selectedPlace ? (
       <section style={{ display: "grid", gap: "18px", maxWidth: "620px" }}>
@@ -1854,6 +2065,44 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             ))}
           </div>
         )}
+
+        <div
+          style={{
+            marginTop: "8px",
+            paddingTop: "16px",
+            borderTop: "1px solid #eee",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "13px",
+              fontWeight: 700,
+              marginBottom: "6px",
+            }}
+          >
+            Still can't find your place?
+          </div>
+
+          <p
+            style={{
+              color: "#666",
+              margin: "0 0 12px 0",
+              lineHeight: 1.5,
+              fontSize: "14px",
+            }}
+          >
+            Check the results above first. If none of them matches the place you
+            are looking for, Trust Travel can guide you through adding it correctly.
+          </p>
+
+          <button
+            type="button"
+            onClick={openGuidedCreateFlow}
+            style={secondaryButton}
+          >
+            Add a new place
+          </button>
+        </div>
       </section>
             ) : !selectedCountryPlace && !selectedPlace ? (
       <section style={helperCard}>
@@ -2106,7 +2355,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
                     <select
                       value={createSpecificPlaceType}
-                      onChange={(event) =>
+                      onChange={(event) => {
                         setCreateSpecificPlaceType(
                           event.target.value as
                             | "attraction"
@@ -2114,8 +2363,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                             | "restaurant"
                             | "nature"
                             | "other"
-                        )
-                      }
+                        );
+                        setCreateSpecificPlaceSearchResults([]);
+                        setCreateSpecificPlaceHasSearched(false);
+                        setCreateFlowError("");
+                      }}
                       style={input}
                     >
                       <option value="nature">Beach / Nature spot</option>
@@ -2137,48 +2389,252 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       <div style={guidedCreateStepLabel}>Step 4 — Final step</div>
 
                       <h3 style={guidedCreateTitle}>
-                        Create the specific place
+                        Find or add the specific place
                       </h3>
 
                       <p style={guidedCreateText}>
-                        This is the final step. The place has not been created yet. Confirm the
-                        exact name below to create it inside {createSelectedCity.name}.
+                        Search for the exact place inside {createSelectedCity.name} before creating
+                        a new one. This helps avoid duplicate hotels, restaurants, attractions and
+                        nature spots.
                       </p>
 
-                      <input
-                        value={createSpecificPlaceName}
-                        onChange={(event) => {
-                          setCreateSpecificPlaceName(event.target.value);
-                          setCreateFlowError("");
-                        }}
-                        placeholder="Specific place name, e.g. restaurant, beach, hotel, museum..."
-                        style={input}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={createSpecificPlaceForFlow}
-                        disabled={
-                          creatingCreateFlowSpecificPlace || !createSpecificPlaceName.trim()
-                        }
+                      <div
                         style={{
-                          ...primaryButton,
-                          width: "fit-content",
-                          marginTop: "12px",
-                          opacity:
-                            creatingCreateFlowSpecificPlace || !createSpecificPlaceName.trim()
-                              ? 0.5
-                              : 1,
-                          cursor:
-                            creatingCreateFlowSpecificPlace || !createSpecificPlaceName.trim()
-                              ? "not-allowed"
-                              : "pointer",
+                          display: "flex",
+                          gap: "10px",
+                          alignItems: "center",
+                          flexWrap: "wrap",
                         }}
                       >
-                        {creatingCreateFlowSpecificPlace
-                          ? "Creating specific place..."
-                          : `Create this ${getPlaceTypeLabel(createSpecificPlaceType)} inside ${createSelectedCity.name}`}
-                      </button>
+                        <input
+                          value={createSpecificPlaceName}
+                          onChange={(event) => {
+                            setCreateSpecificPlaceName(event.target.value);
+                            setCreateSpecificPlaceSearchResults([]);
+                            setCreateSpecificPlaceHasSearched(false);
+                            setCreateFlowError("");
+                          }}
+                          placeholder="Specific place name, e.g. hotel, restaurant, museum..."
+                          style={{
+                            ...input,
+                            flex: "1 1 280px",
+                          }}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={handleSearchCreateFlowSpecificPlaces}
+                          disabled={
+                            createSpecificPlaceSearchLoading ||
+                            createSpecificPlaceName.trim().length < 2
+                          }
+                          style={{
+                            ...primaryButton,
+                            width: "fit-content",
+                            opacity:
+                              createSpecificPlaceSearchLoading ||
+                              createSpecificPlaceName.trim().length < 2
+                                ? 0.5
+                                : 1,
+                            cursor:
+                              createSpecificPlaceSearchLoading ||
+                              createSpecificPlaceName.trim().length < 2
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {createSpecificPlaceSearchLoading
+                            ? "Searching..."
+                            : "Search"}
+                        </button>
+                      </div>
+
+                      {createSpecificPlaceHasSearched &&
+                        !createSpecificPlaceSearchLoading &&
+                        createSpecificPlaceSearchResults.length > 0 && (
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "10px",
+                              marginTop: "16px",
+                            }}
+                          >
+                            {createSpecificPlaceSearchResults.map(
+                              (specificPlaceResult: any) => (
+                                <div
+                                  key={specificPlaceResult.external_id}
+                                  style={{
+                                    padding: "12px 14px",
+                                    border: "1px solid #ddd",
+                                    borderRadius: "12px",
+                                    background: "#fff",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: "12px",
+                                      color: "#777",
+                                      marginBottom: "4px",
+                                    }}
+                                  >
+                                    {specificPlaceResult.existing_place_id
+                                      ? "Already in Trust Travel"
+                                      : getPlaceTypeLabel(createSpecificPlaceType)}
+                                  </div>
+
+                                  <strong>{specificPlaceResult.name}</strong>
+
+                                  {(specificPlaceResult.address ||
+                                    specificPlaceResult.locality) && (
+                                    <div
+                                      style={{
+                                        color: "#666",
+                                        fontSize: "13px",
+                                        marginTop: "4px",
+                                      }}
+                                    >
+                                      {specificPlaceResult.address ||
+                                        specificPlaceResult.locality}
+                                    </div>
+                                  )}
+
+                                  <div
+                                    style={{
+                                      marginTop: "10px",
+                                    }}
+                                  >
+                                    {specificPlaceResult.existing_place_id ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleMaterializeCreateFlowSpecificPlace(
+                                            specificPlaceResult
+                                          )
+                                        }
+                                        style={{
+                                          ...secondaryButton,
+                                          fontSize: "13px",
+                                          padding: "8px 10px",
+                                        }}
+                                      >
+                                        Open this place
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleMaterializeCreateFlowSpecificPlace(
+                                            specificPlaceResult
+                                          )
+                                        }
+                                        disabled={
+                                          materializingCreateFlowSpecificPlaceId ===
+                                          String(
+                                            specificPlaceResult.external_id || ""
+                                          )
+                                        }
+                                        style={{
+                                          ...secondaryButton,
+                                          fontSize: "13px",
+                                          padding: "8px 10px",
+                                          opacity:
+                                            materializingCreateFlowSpecificPlaceId ===
+                                            String(
+                                              specificPlaceResult.external_id || ""
+                                            )
+                                              ? 0.5
+                                              : 1,
+                                          cursor:
+                                            materializingCreateFlowSpecificPlaceId ===
+                                            String(
+                                              specificPlaceResult.external_id || ""
+                                            )
+                                              ? "not-allowed"
+                                              : "pointer",
+                                        }}
+                                      >
+                                        {materializingCreateFlowSpecificPlaceId ===
+                                        String(
+                                          specificPlaceResult.external_id || ""
+                                        )
+                                          ? "Adding..."
+                                          : "Use this place"}
+                                      </button>
+                                    )}
+                                  </div>
+
+                                </div>
+                              )
+                            )}
+                          </div>
+                        )}
+
+                      {createSpecificPlaceHasSearched &&
+                        !createSpecificPlaceSearchLoading &&
+                        createSpecificPlaceSearchResults.length === 0 && (
+                          <p
+                            style={{
+                              ...guidedCreateText,
+                              marginTop: "14px",
+                            }}
+                          >
+                            No matching specific places were found.
+                          </p>
+                        )}
+
+                      {createSpecificPlaceHasSearched && (
+                        <div
+                          style={{
+                            marginTop: "18px",
+                            paddingTop: "16px",
+                            borderTop: "1px solid #d7f0df",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 700,
+                              marginBottom: "6px",
+                            }}
+                          >
+                            Still not listed?
+                          </div>
+
+                          <p style={guidedCreateText}>
+                            Create a new place manually only if the place you are looking for is
+                            genuinely different from the results above.
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={createSpecificPlaceForFlow}
+                            disabled={
+                              creatingCreateFlowSpecificPlace ||
+                              !createSpecificPlaceName.trim()
+                            }
+                            style={{
+                              ...secondaryButton,
+                              width: "fit-content",
+                              opacity:
+                                creatingCreateFlowSpecificPlace ||
+                                !createSpecificPlaceName.trim()
+                                  ? 0.5
+                                  : 1,
+                              cursor:
+                                creatingCreateFlowSpecificPlace ||
+                                !createSpecificPlaceName.trim()
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                          >
+                            {creatingCreateFlowSpecificPlace
+                              ? "Creating specific place..."
+                              : `Create this ${getPlaceTypeLabel(
+                                  createSpecificPlaceType
+                                )} manually`}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2203,6 +2659,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   setCreateCitySearch("");
                   setCreateSpecificPlaceType("nature");
                   setCreateSpecificPlaceName("");
+                  setCreateSpecificPlaceSearchResults([]);
+                  setCreateSpecificPlaceHasSearched(false);
               }}
               style={secondaryButton}
             >

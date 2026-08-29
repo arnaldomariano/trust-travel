@@ -929,11 +929,33 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         );
 
         if (!externalRes.ok) {
-          const text = await externalRes.text();
+          let externalErrorDetail = "";
+
+          try {
+            const externalErrorData = await externalRes.json();
+            externalErrorDetail = String(
+              externalErrorData.detail || ""
+            );
+          } catch {
+            externalErrorDetail = "";
+          }
+
+          if (
+            externalRes.status === 400 &&
+            externalErrorDetail ===
+              "This city or locality does not have geographic coordinates."
+          ) {
+            setExternalSpecificPlaceResults([]);
+            setSpecificPlaceSearchError(
+              "Nearby place discovery is not available for this city or locality yet."
+            );
+            return;
+          }
+
           console.error(
             "External specific place search failed:",
             externalRes.status,
-            text
+            externalErrorDetail
           );
           setSpecificPlaceSearchError(
             "Could not search all available specific places right now."

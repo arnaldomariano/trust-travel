@@ -4,8 +4,10 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 
 from ..models import Place
-from ..place_utils import normalize_place_text
-
+from ..place_utils import (
+    get_place_name_identity_values,
+    normalize_place_text,
+)
 
 def calculate_distance_km(
     latitude_1,
@@ -164,15 +166,11 @@ def annotate_existing_city_places(results, country_code):
     places_by_identity_value = {}
 
     for place in country_places:
-        place_values = {
-            normalize_place_text(value)
-            for value in [
-                place.name,
-                place.canonical_name,
-                *(place.aliases or []),
-            ]
-            if str(value or "").strip()
-        }
+        place_values = get_place_name_identity_values(
+            place.name,
+            place.canonical_name,
+            place.aliases,
+        )
 
         for value in place_values:
             places_by_identity_value.setdefault(
@@ -194,15 +192,11 @@ def annotate_existing_city_places(results, country_code):
             result["existing_place_id"] = external_match_id
             continue
 
-        result_values = {
-            normalize_place_text(value)
-            for value in [
-                result.get("name"),
-                result.get("canonical_name"),
-                *(result.get("aliases") or []),
-            ]
-            if str(value or "").strip()
-        }
+        result_values = get_place_name_identity_values(
+            result.get("name"),
+            result.get("canonical_name"),
+            result.get("aliases"),
+        )
 
         candidate_place_ids = set()
 
@@ -269,15 +263,11 @@ def annotate_existing_poi_places(
     places_by_identity_value = {}
 
     for place in city_places:
-        place_values = {
-            normalize_place_text(value)
-            for value in [
-                place.name,
-                place.canonical_name,
-                *(place.aliases or []),
-            ]
-            if str(value or "").strip()
-        }
+        place_values = get_place_name_identity_values(
+            place.name,
+            place.canonical_name,
+            place.aliases,
+        )
 
         for value in place_values:
             places_by_identity_value.setdefault(
@@ -299,15 +289,11 @@ def annotate_existing_poi_places(
             result["existing_place_id"] = external_match_id
             continue
 
-        result_values = {
-            normalize_place_text(value)
-            for value in [
-                result.get("name"),
-                result.get("canonical_name"),
-                *(result.get("aliases") or []),
-            ]
-            if str(value or "").strip()
-        }
+        result_values = get_place_name_identity_values(
+            result.get("name"),
+            result.get("canonical_name"),
+            result.get("aliases"),
+        )
 
         candidate_place_ids = set()
 
@@ -350,15 +336,11 @@ def find_existing_poi_place(
     if existing_place:
         return existing_place
 
-    result_values = {
-        normalize_place_text(value)
-        for value in [
-            poi_result.get("name"),
-            poi_result.get("canonical_name"),
-            *(poi_result.get("aliases") or []),
-        ]
-        if str(value or "").strip()
-    }
+    result_values = get_place_name_identity_values(
+        poi_result.get("name"),
+        poi_result.get("canonical_name"),
+        poi_result.get("aliases"),
+    )
 
     matching_places = []
 
@@ -368,15 +350,11 @@ def find_existing_poi_place(
     )
 
     for candidate in possible_places:
-        candidate_values = {
-            normalize_place_text(value)
-            for value in [
-                candidate.name,
-                candidate.canonical_name,
-                *(candidate.aliases or []),
-            ]
-            if str(value or "").strip()
-        }
+        candidate_values = get_place_name_identity_values(
+            candidate.name,
+            candidate.canonical_name,
+            candidate.aliases,
+        )
 
         if result_values.intersection(candidate_values):
             matching_places.append(candidate)
@@ -409,15 +387,11 @@ def find_existing_city_place(
     if existing_place:
         return existing_place
 
-    result_values = {
-        normalize_place_text(value)
-        for value in [
-            city_result.get("name"),
-            city_result.get("canonical_name"),
-            *(city_result.get("aliases") or []),
-        ]
-        if str(value or "").strip()
-    }
+    result_values = get_place_name_identity_values(
+        city_result.get("name"),
+        city_result.get("canonical_name"),
+        city_result.get("aliases"),
+    )
 
     matching_places = []
 
@@ -433,15 +407,11 @@ def find_existing_city_place(
     )
 
     for candidate in possible_places:
-        candidate_values = {
-            normalize_place_text(value)
-            for value in [
-                candidate.name,
-                candidate.canonical_name,
-                *(candidate.aliases or []),
-            ]
-            if str(value or "").strip()
-        }
+        candidate_values = get_place_name_identity_values(
+            candidate.name,
+            candidate.canonical_name,
+            candidate.aliases,
+        )
 
         if result_values.intersection(candidate_values):
             matching_places.append(candidate)

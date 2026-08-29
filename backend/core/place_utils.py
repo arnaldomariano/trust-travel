@@ -26,6 +26,26 @@ def normalize_place_text(value):
     return value
 
 
+def get_place_name_identity_values(
+    name="",
+    canonical_name="",
+    aliases=None,
+):
+    values = {
+        normalize_place_text(name),
+        normalize_place_text(canonical_name),
+        *[
+            normalize_place_text(alias)
+            for alias in (aliases or [])
+            if str(alias or "").strip()
+        ],
+    }
+
+    values.discard("")
+
+    return values
+
+
 def get_country_catalog_identity_values(country):
     if not country:
         return set()

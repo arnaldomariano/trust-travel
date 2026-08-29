@@ -71,6 +71,8 @@ from .geography.providers.geonames import (
 from .geography.providers.foursquare import (
     FoursquareConfigurationError,
     FoursquareRequestError,
+    get_poi,
+    poi_matches_place_type,
     search_pois,
 )
 
@@ -78,6 +80,8 @@ from .geography.services import (
     annotate_existing_city_places,
     annotate_existing_poi_places,
     materialize_city_place,
+    materialize_poi_place,
+    poi_matches_city_context,
 )
 
 # ============================================================
@@ -593,6 +597,174 @@ class GeographyPOISearchView(APIView):
                 "count": len(results),
                 "results": results,
             }
+        )
+
+class GeographyPOIMaterializeView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        external_id = str(
+            request.data.get("external_id") or ""
+        ).strip()
+
+        place_type = str(
+            request.data.get("place_type") or ""
+        ).strip()
+
+        city_place_id = str(
+            request.data.get("city_place_id") or ""
+        ).strip()
+
+        if not external_id:
+            return Response(
+                {
+                    "detail": (
+                        "Foursquare external ID is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        valid_place_types = {
+            "hotel",
+            "restaurant",
+            "attraction",
+            "nature",
+            "other",
+        }
+
+        if place_type not in valid_place_types:
+            return Response(
+                {
+                    "detail": (
+                        "A valid specific place type is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not city_place_id.isdigit():
+            return Response(
+                {
+                    "detail": (
+                        "A valid city_place_id is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        city_place = (
+            Place.objects
+            .select_related(
+                "country_ref",
+                "destination",
+            )
+            .filter(
+                id=int(city_place_id),
+                place_type="city",
+            )
+            .first()
+        )
+
+        if not city_place:
+            return Response(
+                {
+                    "detail": (
+                        "The requested city or locality was not found."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        country_code = (
+            city_place.country_ref.code
+            if city_place.country_ref
+            else city_place.country_code
+        )
+
+        country_code = str(
+            country_code or ""
+        ).strip().upper()
+
+        try:
+            poi_result = get_poi(
+                external_id=external_id,
+            )
+
+            type_matches = poi_matches_place_type(
+                poi_result=poi_result,
+                place_type=place_type,
+            )
+        except FoursquareConfigurationError:
+            return Response(
+                {
+                    "detail": (
+                        "POI lookup is not configured."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except FoursquareRequestError:
+            return Response(
+                {
+                    "detail": (
+                        "POI lookup is temporarily unavailable."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except ValueError as error:
+            return Response(
+                {"detail": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not type_matches:
+            return Response(
+                {
+                    "detail": (
+                        "The selected POI does not match "
+                        "the requested place type."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not poi_matches_city_context(
+            poi_result=poi_result,
+            city_place=city_place,
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "The selected POI does not match "
+                        "the requested city or locality."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        place, created = materialize_poi_place(
+            poi_result=poi_result,
+            city_place=city_place,
+            country_code=country_code,
+            place_type=place_type,
+            user=request.user,
+        )
+
+        serializer = PlaceSerializer(
+            place,
+            context={"request": request},
+        )
+
+        return Response(
+            serializer.data,
+            status=(
+                status.HTTP_201_CREATED
+                if created
+                else status.HTTP_200_OK
+            ),
         )
 
 class PlaceListView(generics.ListAPIView):

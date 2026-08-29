@@ -53,6 +53,7 @@ from .serializers import (
 
 from .authentication import CookieJWTAuthentication
 from .place_utils import (
+    get_place_name_identity_values,
     normalize_place_text,
     get_country_search_values,
     resolve_country,
@@ -953,17 +954,11 @@ class CreateBasicPlaceView(APIView):
                 )
 
             for candidate in Place.objects.filter(place_type="country"):
-                candidate_names = {
-                    normalize_place_text(candidate.name),
-                    normalize_place_text(candidate.canonical_name),
-                    *[
-                        normalize_place_text(alias)
-                        for alias in (candidate.aliases or [])
-                        if alias
-                    ],
-                }
-
-                candidate_names.discard("")
+                candidate_names = get_place_name_identity_values(
+                    candidate.name,
+                    candidate.canonical_name,
+                    candidate.aliases,
+                )
 
                 if normalized_country_values.intersection(candidate_names):
                     serializer = PlaceSerializer(
@@ -993,17 +988,11 @@ class CreateBasicPlaceView(APIView):
                 )
 
                 for candidate in Place.objects.filter(place_type="country"):
-                    candidate_names = {
-                        normalize_place_text(candidate.name),
-                        normalize_place_text(candidate.canonical_name),
-                        *[
-                            normalize_place_text(alias)
-                            for alias in (candidate.aliases or [])
-                            if alias
-                        ],
-                    }
-
-                    candidate_names.discard("")
+                    candidate_names = get_place_name_identity_values(
+                        candidate.name,
+                        candidate.canonical_name,
+                        candidate.aliases,
+                    )
 
                     if normalized_country_values.intersection(candidate_names):
                         country_place = candidate
@@ -1047,18 +1036,18 @@ class CreateBasicPlaceView(APIView):
             )
 
             for candidate in possible_parent_places:
-                candidate_names = {
-                    normalize_place_text(candidate.name),
-                    normalize_place_text(candidate.city),
-                    normalize_place_text(candidate.canonical_name),
-                    *[
-                        normalize_place_text(alias)
-                        for alias in (candidate.aliases or [])
-                        if alias
-                    ],
-                }
+                candidate_names = get_place_name_identity_values(
+                    candidate.name,
+                    candidate.canonical_name,
+                    candidate.aliases,
+                )
 
-                candidate_names.discard("")
+                normalized_candidate_city = normalize_place_text(
+                    candidate.city
+                )
+
+                if normalized_candidate_city:
+                    candidate_names.add(normalized_candidate_city)
 
                 if normalized_city in candidate_names:
                     parent_place = candidate
@@ -1076,17 +1065,11 @@ class CreateBasicPlaceView(APIView):
                     status=400,
                 )
 
-        normalized_requested_names = {
-            normalize_place_text(name),
-            normalize_place_text(canonical_name),
-            *[
-                normalize_place_text(alias)
-                for alias in aliases
-                if alias
-            ],
-        }
-
-        normalized_requested_names.discard("")
+        normalized_requested_names = get_place_name_identity_values(
+            name,
+            canonical_name,
+            aliases,
+        )
 
         possible_existing_places = Place.objects.filter(
             destination=destination,
@@ -1101,17 +1084,11 @@ class CreateBasicPlaceView(APIView):
         existing_place = None
 
         for candidate in possible_existing_places:
-            candidate_names = {
-                normalize_place_text(candidate.name),
-                normalize_place_text(candidate.canonical_name),
-                *[
-                    normalize_place_text(alias)
-                    for alias in (candidate.aliases or [])
-                    if alias
-                ],
-            }
-
-            candidate_names.discard("")
+            candidate_names = get_place_name_identity_values(
+                candidate.name,
+                candidate.canonical_name,
+                candidate.aliases,
+            )
 
             if normalized_requested_names.intersection(candidate_names):
                 existing_place = candidate

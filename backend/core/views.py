@@ -1563,14 +1563,6 @@ class CountryContextView(APIView):
             }
         )
 
-
-class DestinationPlacesListView(generics.ListAPIView):
-    serializer_class = PlaceSerializer
-
-    def get_queryset(self):
-        return Place.objects.filter(destination_id=self.kwargs["destination_id"])
-
-
 class ExperienceListView(generics.ListCreateAPIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]

@@ -15,7 +15,6 @@ from .views import (
     ExperiencePhotoListCreateView,
     ExperienceDetailView,
     ExperiencePhotoDetailView,
-    DestinationPlacesListView,
     PlaceExperiencesListView,
     PlaceDetailView,
     PlaceSearchView,
@@ -105,7 +104,6 @@ urlpatterns = [
 
     path("places/<int:place_id>/updates/", PlaceUpdatesListView.as_view()),
     path("places/<int:place_id>/photos/", PlacePhotosView.as_view()),
-    path("destinations/<int:destination_id>/places/", DestinationPlacesListView.as_view()),
     path("places/<int:place_id>/experiences/", PlaceExperiencesListView.as_view()),
 
 

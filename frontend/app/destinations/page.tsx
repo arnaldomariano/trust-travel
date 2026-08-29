@@ -41,7 +41,6 @@ function DestinationsPageContent() {
   const [places, setPlaces] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [countryCatalog, setCountryCatalog] = useState<CountryCatalogItem[]>([]);
-  const [creatingPlace, setCreatingPlace] = useState(false);
   const [createPlaceError, setCreatePlaceError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);

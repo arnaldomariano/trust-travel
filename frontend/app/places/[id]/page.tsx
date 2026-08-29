@@ -3505,16 +3505,6 @@ const locationSuggestionErrorBox = {
   marginBottom: "10px",
 };
 
-const specificPlaceSearchErrorBox = {
-  padding: "10px",
-  border: "1px solid #fecaca",
-  borderRadius: "10px",
-  backgroundColor: "#fef2f2",
-  color: "#b91c1c",
-  fontSize: "13px",
-  lineHeight: 1.4,
-};
-
 const createSpecificPlaceErrorBox = {
   padding: "10px",
   border: "1px solid #fecaca",

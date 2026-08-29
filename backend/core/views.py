@@ -910,6 +910,15 @@ class CreateBasicPlaceView(APIView):
         if not isinstance(aliases, list):
             aliases = []
 
+        # Manual specific-place creation must not establish canonical or
+        # external provider identity. Those fields are added later only
+        # through a validated geographic provider materialization flow.
+        if place_type in specific_place_types:
+            canonical_name = ""
+            aliases = []
+            external_source = ""
+            external_id = ""
+
         if place_type == "country":
             resolved_country = get_or_create_country(
                 value=canonical_name or name,

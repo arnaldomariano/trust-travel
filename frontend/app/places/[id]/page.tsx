@@ -58,7 +58,6 @@ export default function PlacePage() {
     useState<string | null>(null);
 
   const [searchInsideCity, setSearchInsideCity] = useState("");
-  const [specificPlaceResults, setSpecificPlaceResults] = useState<any[]>([]);
   const [specificPlaceHasSearched, setSpecificPlaceHasSearched] = useState(false);
   const [specificPlaceSearchLoading, setSpecificPlaceSearchLoading] = useState(false);
   const [specificPlaceSearchError, setSpecificPlaceSearchError] = useState("");
@@ -763,19 +762,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       searchInsideCity.trim().length >= 2;
 
     const availableExternalSpecificPlaceResults =
-      externalSpecificPlaceResults.filter(
-        (externalPlace: any) =>
-          !specificPlaceResults.some(
-            (specificPlace: any) =>
-              specificPlace.id ===
-              externalPlace.existing_place_id
-          )
-      );
-
-    const canCreateSpecificPlace =
-      hasSpecificPlaceSearch &&
-      !specificPlaceSearchLoading &&
-      specificPlaceResults.length === 0;
+      externalSpecificPlaceResults;
 
     const handleSubmitLocationSuggestion = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -841,7 +828,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       const query = searchInsideCity.trim();
 
       setSpecificPlaceHasSearched(true);
-      setSpecificPlaceResults([]);
       setExternalSpecificPlaceResults([]);
       setSpecificPlaceSearchError("");
 
@@ -852,54 +838,9 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           return;
       }
 
-      const countryName =
-        place.destination_country ||
-        destination?.country ||
-        destination?.name ||
-        "";
-
       setSpecificPlaceSearchLoading(true);
 
       try {
-        const params = new URLSearchParams({
-          q: query,
-        });
-
-        if (countryName) {
-          params.set("country", countryName);
-        }
-
-        const res = await fetch(
-          `${API_URL}/api/places/search/?${params.toString()}`,
-          {
-            credentials: "include",
-          }
-        );
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("Specific place search failed:", res.status, text);
-          setSpecificPlaceSearchError("Could not search specific places right now.");
-          return;
-        }
-
-        const data = await res.json();
-        const results = Array.isArray(data.results) ? data.results : [];
-
-        const filtered = results.filter((result: any) => {
-          const resultCity = String(result.city || "").toLowerCase().trim();
-          const currentCity = String(place.name || "").toLowerCase().trim();
-
-          const resultType = String(result.place_type || "").toLowerCase();
-
-          return (
-            resultCity === currentCity &&
-            resultType === specificPlaceType
-          );
-        });
-
-        setSpecificPlaceResults(filtered);
-
         const externalParams = new URLSearchParams({
           q: query,
           place_type: specificPlaceType,
@@ -1099,7 +1040,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         setNewSpecificPlaceName("");
         setNewSpecificPlaceType("nature");
         setShowCreateSpecificPlaceForm(false);
-        setSpecificPlaceResults((prev) => [placeResult, ...prev]);
       } catch (error) {
           console.error("Create specific place failed:", error);
           setCreateSpecificPlaceError("Could not create this specific place.");
@@ -2222,7 +2162,6 @@ const handleToggleEventsInfo = () => {
                         | "attraction"
                         | "other"
                     );
-                    setSpecificPlaceResults([]);
                     setExternalSpecificPlaceResults([]);
                     setSpecificPlaceHasSearched(false);
                     setSpecificPlaceSearchError("");
@@ -2248,7 +2187,6 @@ const handleToggleEventsInfo = () => {
                   value={searchInsideCity}
                   onChange={(e) => {
                       setSearchInsideCity(e.target.value);
-                      setSpecificPlaceResults([]);
                       setExternalSpecificPlaceResults([]);
                       setSpecificPlaceHasSearched(false);
                       setSpecificPlaceSearchError("");
@@ -2288,99 +2226,6 @@ const handleToggleEventsInfo = () => {
 
             </form>
 
-            {specificPlaceHasSearched && specificPlaceResults.length > 0 && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-                  gap: "12px",
-                  marginBottom: "18px",
-                }}
-              >
-                {specificPlaceResults.map((specificPlace: any) => (
-                  <div
-                    key={specificPlace.id}
-                    style={{
-                      padding: "14px",
-                      border: "1px solid #eee",
-                      borderRadius: "14px",
-                      backgroundColor: "#fafafa",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#777",
-                        marginBottom: "6px",
-                      }}
-                    >
-                      {getPlaceTypeLabel(specificPlace.place_type)}
-                    </div>
-
-                    <h3
-                      style={{
-                        margin: 0,
-                        marginBottom: "6px",
-                        fontSize: "17px",
-                      }}
-                    >
-                      {specificPlace.name}
-                    </h3>
-
-                    <div
-                      style={{
-                        color: "#666",
-                        fontSize: "13px",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      {specificPlace.city || place.name}
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "8px",
-                        flexWrap: "wrap",
-                        marginTop: "10px",
-                      }}
-                    >
-                      <Link
-                        href={`/places/${specificPlace.id}`}
-                        style={{
-                          display: "inline-block",
-                          padding: "8px 10px",
-                          borderRadius: "10px",
-                          backgroundColor: "#111",
-                          color: "white",
-                          textDecoration: "none",
-                          fontSize: "13px",
-                        }}
-                      >
-                        View page
-                      </Link>
-
-                      <Link
-                        href={`/destinations?place=${specificPlace.id}&share=true`}
-                        style={{
-                          display: "inline-block",
-                          padding: "8px 10px",
-                          borderRadius: "10px",
-                          border: "1px solid #ddd",
-                          backgroundColor: "white",
-                          color: "#111",
-                          textDecoration: "none",
-                          fontSize: "13px",
-                        }}
-                      >
-                        Share experience
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {specificPlaceHasSearched &&
               availableExternalSpecificPlaceResults.length > 0 && (
                 <div
@@ -2396,7 +2241,7 @@ const handleToggleEventsInfo = () => {
                       marginBottom: "10px",
                     }}
                   >
-                    More places found nearby
+                    Places found
                   </div>
 
                   <div
@@ -2555,7 +2400,6 @@ const handleToggleEventsInfo = () => {
                   Searching for possible matches...
                 </p>
               ) :
-                specificPlaceResults.length > 0 ||
                 availableExternalSpecificPlaceResults.length > 0 ? (
                 <p
                   style={{

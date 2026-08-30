@@ -1371,17 +1371,11 @@ class PlaceSearchView(APIView):
         def get_search_rank(place):
             destination = place.destination
 
-            place_values = {
-                normalize_place_text(place.name),
-                normalize_place_text(place.canonical_name),
-                *[
-                    normalize_place_text(alias)
-                    for alias in (place.aliases or [])
-                    if alias
-                ],
-            }
-
-            place_values.discard("")
+            place_values = get_place_name_identity_values(
+                place.name,
+                place.canonical_name,
+                place.aliases,
+            )
 
             destination_values = {
                 normalize_place_text(destination.name if destination else ""),
@@ -2658,17 +2652,11 @@ class TripPlanRadarPlaceSearchView(APIView):
         def get_search_rank(place):
             destination = place.destination
 
-            place_values = {
-                normalize_place_text(place.name),
-                normalize_place_text(place.canonical_name),
-                *[
-                    normalize_place_text(alias)
-                    for alias in (place.aliases or [])
-                    if alias
-                ],
-            }
-
-            place_values.discard("")
+            place_values = get_place_name_identity_values(
+                place.name,
+                place.canonical_name,
+                place.aliases,
+            )
 
             destination_values = {
                 normalize_place_text(destination.name if destination else ""),

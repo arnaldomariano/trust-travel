@@ -140,6 +140,11 @@ class PlaceSerializer(serializers.ModelSerializer):
             "destination_name",
             "destination_country",
             "destination_city",
+            "canonical_name",
+            "aliases",
+            "country_code",
+            "external_source",
+            "external_id",
             "search_aliases",
         ]
 

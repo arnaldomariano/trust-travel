@@ -973,6 +973,12 @@ class CreateBasicPlaceView(APIView):
             )
 
             if resolved_country:
+                canonical_name = resolved_country.canonical_name
+                aliases = list(resolved_country.aliases or [])
+                country_code = resolved_country.code
+                external_source = ""
+                external_id = ""
+
                 existing_country = Place.objects.filter(
                     place_type="country",
                     country_ref=resolved_country,

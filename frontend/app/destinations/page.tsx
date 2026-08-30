@@ -2410,7 +2410,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                             {createSpecificPlaceSearchResults.map(
                               (specificPlaceResult: any) => (
                                 <div
-                                  key={specificPlaceResult.external_id}
+                                  key={
+                                    specificPlaceResult.existing_place_id
+                                      ? `tt-${specificPlaceResult.existing_place_id}`
+                                      : `external-${specificPlaceResult.external_id}`
+                                  }
                                   style={{
                                     padding: "12px 14px",
                                     border: "1px solid #ddd",

@@ -2417,7 +2417,11 @@ const handleToggleEventsInfo = () => {
 
                         return (
                           <div
-                            key={externalId}
+                            key={
+                              externalPlace.existing_place_id
+                                ? `tt-${externalPlace.existing_place_id}`
+                                : `external-${externalId}`
+                            }
                             style={{
                               padding: "14px",
                               border: "1px solid #eee",

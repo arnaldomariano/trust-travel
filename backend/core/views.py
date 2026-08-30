@@ -1302,13 +1302,34 @@ class PlaceSearchView(APIView):
             if is_country_alias_query:
                 return bool(query_values.intersection(identity_values))
 
+            if query_values.intersection(identity_values):
+                return True
+
             if any(
-                normalized_query in identity_value
+                identity_value.startswith(normalized_query)
                 for identity_value in identity_values
             ):
                 return True
 
-            return bool(query_values.intersection(identity_values))
+            matches_word_prefix = any(
+                word.startswith(normalized_query)
+                for identity_value in identity_values
+                for word in identity_value.split()
+            )
+
+            if matches_word_prefix:
+                return True
+
+            if (
+                len(normalized_query) >= 4
+                and any(
+                    normalized_query in identity_value
+                    for identity_value in identity_values
+                )
+            ):
+                return True
+
+            return False
 
         def matches_country(place):
             if resolved_filter_country:

@@ -83,6 +83,7 @@ from .geography.services import (
     materialize_city_place,
     materialize_poi_place,
     poi_matches_city_context,
+    rank_poi_search_results,
 )
 
 # ============================================================
@@ -591,6 +592,11 @@ class GeographyPOISearchView(APIView):
             results=results,
             city_place=city_place,
             place_type=place_type,
+        )
+
+        results = rank_poi_search_results(
+            results,
+            query,
         )
 
         return Response(

@@ -9,6 +9,41 @@ from ..place_utils import (
     normalize_place_text,
 )
 
+
+def get_poi_name_match_rank(
+    poi_result,
+    query,
+):
+    normalized_query = normalize_place_text(query)
+
+    if not normalized_query:
+        return 0
+
+    identity_values = get_place_name_identity_values(
+        poi_result.get("name"),
+        poi_result.get("canonical_name"),
+        poi_result.get("aliases"),
+    )
+
+    if normalized_query in identity_values:
+        return 1
+
+    if any(
+        identity_value.startswith(normalized_query)
+        for identity_value in identity_values
+    ):
+        return 1
+
+    if any(
+        word.startswith(normalized_query)
+        for identity_value in identity_values
+        for word in identity_value.split()
+    ):
+        return 1
+
+    return 0
+
+
 def calculate_distance_km(
     latitude_1,
     longitude_1,
@@ -119,6 +154,44 @@ def poi_matches_city_context(
     )
 
     return distance_km <= fallback_distance_km
+
+
+def rank_poi_search_results(
+    results,
+    query,
+):
+    ranked_results = list(results)
+
+    original_positions = {
+        id(result): position
+        for position, result in enumerate(ranked_results)
+    }
+
+    def result_rank(result):
+        name_match_rank = get_poi_name_match_rank(
+            result,
+            query,
+        )
+
+        return (
+            name_match_rank,
+            (
+                1
+                if (
+                    name_match_rank
+                    and result.get("existing_place_id")
+                )
+                else 0
+            ),
+            -original_positions[id(result)],
+        )
+
+    ranked_results.sort(
+        key=result_rank,
+        reverse=True,
+    )
+
+    return ranked_results
 
 
 def annotate_existing_city_places(results, country_code):

@@ -526,10 +526,24 @@ class GeographyPOISearchView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        registry_results = search_registry_poi_places(
+            city_place=city_place,
+            place_type=place_type,
+            query=query,
+        )
+
         if (
                 city_place.latitude is None
                 or city_place.longitude is None
         ):
+            if registry_results:
+                return Response(
+                    {
+                        "count": len(registry_results),
+                        "results": registry_results,
+                    }
+                )
+
             return Response(
                 {
                     "detail": (
@@ -550,12 +564,6 @@ class GeographyPOISearchView(APIView):
                 country_code or ""
         ).strip().upper()
 
-        registry_results = search_registry_poi_places(
-            city_place=city_place,
-            place_type=place_type,
-            query=query,
-        )
-
         try:
             results = search_pois(
                 query=query,
@@ -567,6 +575,14 @@ class GeographyPOISearchView(APIView):
             )
 
         except FoursquareConfigurationError:
+            if registry_results:
+                return Response(
+                    {
+                        "count": len(registry_results),
+                        "results": registry_results,
+                    }
+                )
+
             return Response(
                 {
                     "detail": (
@@ -577,6 +593,14 @@ class GeographyPOISearchView(APIView):
             )
 
         except FoursquareRequestError:
+            if registry_results:
+                return Response(
+                    {
+                        "count": len(registry_results),
+                        "results": registry_results,
+                    }
+                )
+
             return Response(
                 {
                     "detail": (

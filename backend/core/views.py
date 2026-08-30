@@ -967,9 +967,8 @@ class CreateBasicPlaceView(APIView):
 
         if place_type == "country":
             resolved_country = get_or_create_country(
-                value=canonical_name or name,
+                value=name,
                 code=country_code,
-                aliases=aliases,
             )
 
             if resolved_country:

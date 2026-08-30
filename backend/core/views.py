@@ -82,8 +82,10 @@ from .geography.services import (
     annotate_existing_poi_places,
     materialize_city_place,
     materialize_poi_place,
+    merge_registry_and_provider_poi_results,
     poi_matches_city_context,
     rank_poi_search_results,
+    search_registry_poi_places,
 )
 
 # ============================================================
@@ -548,6 +550,12 @@ class GeographyPOISearchView(APIView):
                 country_code or ""
         ).strip().upper()
 
+        registry_results = search_registry_poi_places(
+            city_place=city_place,
+            place_type=place_type,
+            query=query,
+        )
+
         try:
             results = search_pois(
                 query=query,
@@ -597,6 +605,12 @@ class GeographyPOISearchView(APIView):
         results = rank_poi_search_results(
             results,
             query,
+        )
+
+        results = merge_registry_and_provider_poi_results(
+            registry_results,
+            results,
+            limit=10,
         )
 
         return Response(

@@ -190,6 +190,165 @@ def rank_poi_search_results(
     return ranked_results
 
 
+def search_registry_poi_places(
+    city_place,
+    place_type,
+    query,
+):
+    normalized_query = normalize_place_text(query)
+
+    if len(normalized_query) < 2:
+        return []
+
+    possible_places = (
+        Place.objects
+        .select_related("country_ref")
+        .filter(
+            parent_place=city_place,
+            place_type=place_type,
+        )
+    )
+
+    matched_places = []
+
+    for place in possible_places:
+        identity_values = get_place_name_identity_values(
+            place.name,
+            place.canonical_name,
+            place.aliases,
+        )
+
+        match_rank = None
+
+        if normalized_query in identity_values:
+            match_rank = 3
+
+        elif any(
+            identity_value.startswith(normalized_query)
+            for identity_value in identity_values
+        ):
+            match_rank = 2
+
+        elif any(
+            word.startswith(normalized_query)
+            for identity_value in identity_values
+            for word in identity_value.split()
+        ):
+            match_rank = 1
+
+        elif (
+            len(normalized_query) >= 4
+            and any(
+                normalized_query in identity_value
+                for identity_value in identity_values
+            )
+        ):
+            match_rank = 0
+
+        if match_rank is not None:
+            matched_places.append(
+                (
+                    match_rank,
+                    place,
+                )
+            )
+
+    matched_places.sort(
+        key=lambda item: (
+            -item[0],
+            normalize_place_text(item[1].name),
+            item[1].id,
+        )
+    )
+
+    return [
+        {
+            "name": place.name,
+            "canonical_name": place.canonical_name,
+            "aliases": place.aliases,
+            "country_code": (
+                place.country_ref.code
+                if place.country_ref
+                else place.country_code
+            ),
+            "latitude": place.latitude,
+            "longitude": place.longitude,
+            "address": "",
+            "locality": city_place.name,
+            "region": "",
+            "postcode": "",
+            "categories": [],
+            "chains": [],
+            "distance": None,
+            "external_source": place.external_source,
+            "external_id": place.external_id,
+            "existing_place_id": place.id,
+        }
+        for _, place in matched_places
+    ]
+
+
+def merge_registry_and_provider_poi_results(
+    registry_results,
+    provider_results,
+    limit=10,
+):
+    merged_results = list(registry_results)
+
+    registry_place_ids = {
+        result.get("existing_place_id")
+        for result in registry_results
+        if result.get("existing_place_id")
+    }
+
+    seen_external_identities = {
+        (
+            str(result.get("external_source") or "").strip(),
+            str(result.get("external_id") or "").strip(),
+        )
+        for result in registry_results
+        if (
+            str(result.get("external_source") or "").strip()
+            and str(result.get("external_id") or "").strip()
+        )
+    }
+
+    for result in provider_results:
+        if len(merged_results) >= limit:
+            break
+
+        existing_place_id = result.get(
+            "existing_place_id"
+        )
+
+        if (
+            existing_place_id
+            and existing_place_id in registry_place_ids
+        ):
+            continue
+
+        external_identity = (
+            str(result.get("external_source") or "").strip(),
+            str(result.get("external_id") or "").strip(),
+        )
+
+        if (
+            external_identity[0]
+            and external_identity[1]
+            and external_identity in seen_external_identities
+        ):
+            continue
+
+        merged_results.append(result)
+
+        if external_identity[0] and external_identity[1]:
+            seen_external_identities.add(
+                external_identity
+            )
+
+    return merged_results[:limit]
+
+
 def annotate_existing_city_places(results, country_code):
     external_identities = {
         (

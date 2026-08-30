@@ -1289,44 +1289,26 @@ class PlaceSearchView(APIView):
             "country_ref",
         ).all()
 
-        def get_place_search_values(place):
-            destination = place.destination
-
-            values = [
-                place.name,
-                place.canonical_name,
-                place.city,
-                place.place_type,
-                destination.name if destination else "",
-                destination.country if destination else "",
-                destination.city if destination else "",
-            ]
-
-            values.extend(place.aliases or [])
-
-            return values
-
         def matches_search(place):
             if resolved_query_country:
                 return place.country_ref_id == resolved_query_country.id
-            normalized_values = {
-                normalize_place_text(value)
-                for value in get_place_search_values(place)
-                if value
-            }
 
-            normalized_values.discard("")
+            identity_values = get_place_name_identity_values(
+                place.name,
+                place.canonical_name,
+                place.aliases,
+            )
 
             if is_country_alias_query:
-                return bool(query_values.intersection(normalized_values))
+                return bool(query_values.intersection(identity_values))
 
             if any(
-                normalized_query in normalized_value
-                for normalized_value in normalized_values
+                normalized_query in identity_value
+                for identity_value in identity_values
             ):
                 return True
 
-            return bool(query_values.intersection(normalized_values))
+            return bool(query_values.intersection(identity_values))
 
         def matches_country(place):
             if resolved_filter_country:

@@ -123,15 +123,11 @@ def poi_matches_city_context(
             locality
         )
 
-        city_identity_values = {
-            normalize_place_text(value)
-            for value in [
-                city_place.name,
-                city_place.canonical_name,
-                *(city_place.aliases or []),
-            ]
-            if str(value or "").strip()
-        }
+        city_identity_values = get_place_name_identity_values(
+            city_place.name,
+            city_place.canonical_name,
+            city_place.aliases,
+        )
 
         return normalized_locality in city_identity_values
 

@@ -46,6 +46,36 @@ def get_place_name_identity_values(
     return values
 
 
+def get_matching_places_by_name_identity(
+    candidates,
+    name="",
+    canonical_name="",
+    aliases=None,
+):
+    requested_values = get_place_name_identity_values(
+        name,
+        canonical_name,
+        aliases,
+    )
+
+    if not requested_values:
+        return []
+
+    matching_places = []
+
+    for candidate in candidates:
+        candidate_values = get_place_name_identity_values(
+            candidate.name,
+            candidate.canonical_name,
+            candidate.aliases,
+        )
+
+        if requested_values.intersection(candidate_values):
+            matching_places.append(candidate)
+
+    return matching_places
+
+
 def get_country_catalog_identity_values(country):
     if not country:
         return set()

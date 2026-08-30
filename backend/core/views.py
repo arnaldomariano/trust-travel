@@ -53,6 +53,7 @@ from .serializers import (
 
 from .authentication import CookieJWTAuthentication
 from .place_utils import (
+    get_matching_places_by_name_identity,
     get_place_name_identity_values,
     normalize_place_text,
     get_country_search_values,
@@ -1109,12 +1110,6 @@ class CreateBasicPlaceView(APIView):
                     status=400,
                 )
 
-        normalized_requested_names = get_place_name_identity_values(
-            name,
-            canonical_name,
-            aliases,
-        )
-
         possible_existing_places = Place.objects.filter(
             destination=destination,
             place_type=place_type,
@@ -1125,18 +1120,18 @@ class CreateBasicPlaceView(APIView):
                 parent_place=parent_place
             )
 
-        existing_place = None
+        matching_places = get_matching_places_by_name_identity(
+            possible_existing_places,
+            name=name,
+            canonical_name=canonical_name,
+            aliases=aliases,
+        )
 
-        for candidate in possible_existing_places:
-            candidate_names = get_place_name_identity_values(
-                candidate.name,
-                candidate.canonical_name,
-                candidate.aliases,
-            )
-
-            if normalized_requested_names.intersection(candidate_names):
-                existing_place = candidate
-                break
+        existing_place = (
+            matching_places[0]
+            if matching_places
+            else None
+        )
 
         if existing_place:
             serializer = PlaceSerializer(

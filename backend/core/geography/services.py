@@ -5,6 +5,7 @@ from django.db.models import Q
 
 from ..models import Place
 from ..place_utils import (
+    get_matching_places_by_name_identity,
     get_place_name_identity_values,
     normalize_place_text,
 )
@@ -556,36 +557,26 @@ def find_existing_poi_place(
         poi_result.get("external_id") or ""
     ).strip()
 
-    existing_place = Place.objects.filter(
-        external_source=external_source,
-        external_id=external_id,
-    ).first()
+    if external_source and external_id:
+        existing_place = Place.objects.filter(
+            external_source=external_source,
+            external_id=external_id,
+        ).first()
 
-    if existing_place:
-        return existing_place
-
-    result_values = get_place_name_identity_values(
-        poi_result.get("name"),
-        poi_result.get("canonical_name"),
-        poi_result.get("aliases"),
-    )
-
-    matching_places = []
+        if existing_place:
+            return existing_place
 
     possible_places = Place.objects.filter(
         parent_place=city_place,
         place_type=place_type,
     )
 
-    for candidate in possible_places:
-        candidate_values = get_place_name_identity_values(
-            candidate.name,
-            candidate.canonical_name,
-            candidate.aliases,
-        )
-
-        if result_values.intersection(candidate_values):
-            matching_places.append(candidate)
+    matching_places = get_matching_places_by_name_identity(
+        possible_places,
+        name=poi_result.get("name"),
+        canonical_name=poi_result.get("canonical_name"),
+        aliases=poi_result.get("aliases"),
+    )
 
     if len(matching_places) == 1:
         return matching_places[0]
@@ -606,22 +597,15 @@ def find_existing_city_place(
         city_result.get("external_id") or ""
     ).strip()
 
-    existing_place = Place.objects.filter(
-        place_type="city",
-        external_source=external_source,
-        external_id=external_id,
-    ).first()
+    if external_source and external_id:
+        existing_place = Place.objects.filter(
+            place_type="city",
+            external_source=external_source,
+            external_id=external_id,
+        ).first()
 
-    if existing_place:
-        return existing_place
-
-    result_values = get_place_name_identity_values(
-        city_result.get("name"),
-        city_result.get("canonical_name"),
-        city_result.get("aliases"),
-    )
-
-    matching_places = []
+        if existing_place:
+            return existing_place
 
     possible_places = (
         Place.objects.filter(
@@ -634,15 +618,12 @@ def find_existing_city_place(
         .distinct()
     )
 
-    for candidate in possible_places:
-        candidate_values = get_place_name_identity_values(
-            candidate.name,
-            candidate.canonical_name,
-            candidate.aliases,
-        )
-
-        if result_values.intersection(candidate_values):
-            matching_places.append(candidate)
+    matching_places = get_matching_places_by_name_identity(
+        possible_places,
+        name=city_result.get("name"),
+        canonical_name=city_result.get("canonical_name"),
+        aliases=city_result.get("aliases"),
+    )
 
     if len(matching_places) == 1:
         return matching_places[0]

@@ -27,6 +27,48 @@ type UpdateDetail = {
   updated_at?: string;
 };
 
+type TripPlanDestination = {
+  place_name: string;
+  place_city?: string;
+  destination_name?: string;
+  destination_country?: string;
+};
+
+type TripPlan = {
+  id: number;
+  title: string;
+  destination_text: string;
+  saved_count: number;
+  primary_destination: TripPlanDestination | null;
+};
+
+const getTripPlanDestinationLabel = (plan: TripPlan) => {
+  if (plan.primary_destination) {
+    const {
+      place_name,
+      place_city,
+      destination_country,
+      destination_name,
+    } = plan.primary_destination;
+
+    const normalizedPlaceName = (place_name || "").trim().toLowerCase();
+    const normalizedPlaceCity = (place_city || "").trim().toLowerCase();
+
+    return [
+      place_name,
+      normalizedPlaceCity &&
+      normalizedPlaceCity !== normalizedPlaceName
+        ? place_city
+        : "",
+      destination_country || destination_name,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return plan.destination_text || "";
+};
+
 export default function UpdateDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -35,6 +77,34 @@ export default function UpdateDetailPage() {
 
   const [update, setUpdate] = useState<UpdateDetail | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
+  const [selectedTripPlanId, setSelectedTripPlanId] = useState("");
+  const [showTripPlanPicker, setShowTripPlanPicker] = useState(false);
+  const [addingToPlan, setAddingToPlan] = useState(false);
+  const [tripPlanMessage, setTripPlanMessage] = useState("");
+  const [tripPlanError, setTripPlanError] = useState("");
+
+  const loadTripPlans = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/trip-plans/`, {
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to load trip plans:", res.status, text);
+        setTripPlans([]);
+        return;
+      }
+
+      const data = await res.json();
+      setTripPlans(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Trip plans fetch error:", error);
+      setTripPlans([]);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -78,7 +148,65 @@ export default function UpdateDetailPage() {
     };
 
     loadUpdate();
+    loadTripPlans();
   }, [id]);
+
+  const addUpdateToTripPlan = async () => {
+    if (!update?.id) {
+      setTripPlanError("Update not loaded yet.");
+      return;
+    }
+
+    if (!selectedTripPlanId) {
+      setTripPlanError("Choose one of your trip plans first.");
+      return;
+    }
+
+    setTripPlanError("");
+    setTripPlanMessage("");
+    setAddingToPlan(true);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${selectedTripPlanId}/updates/${update.id}/`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Add update to trip plan error:", data);
+        setTripPlanError(
+          data.detail || "Could not save this update to your trip plan."
+        );
+        return;
+      }
+
+      const selectedPlan = tripPlans.find(
+        (plan) => String(plan.id) === String(selectedTripPlanId)
+      );
+
+      setTripPlanMessage(
+        data.created === false
+          ? selectedPlan
+            ? `${getTypeLabel(update.type)} is already saved in ${selectedPlan.title}.`
+            : "This update is already saved in your trip plan."
+          : selectedPlan
+            ? `${getTypeLabel(update.type)} saved to ${selectedPlan.title}.`
+            : "Update saved to your trip plan."
+      );
+
+      setShowTripPlanPicker(false);
+    } catch (error) {
+      console.error("Failed to save update to trip plan:", error);
+      setTripPlanError("Could not save this update to your trip plan.");
+    } finally {
+      setAddingToPlan(false);
+    }
+  };
 
   const getTypeLabel = (type?: string) => {
     if (type === "event") return "Event";
@@ -349,7 +477,134 @@ export default function UpdateDetailPage() {
           </div>
         </div>
 
+        {tripPlanMessage && (
+          <div
+            style={{
+              padding: "12px",
+              border: "1px solid #bbf7d0",
+              borderRadius: "10px",
+              background: "#f0fdf4",
+              color: "#166534",
+              fontSize: "14px",
+              lineHeight: 1.5,
+            }}
+          >
+            {tripPlanMessage}
+          </div>
+        )}
+
+        {tripPlanError && (
+          <div
+            style={{
+              padding: "12px",
+              border: "1px solid #fecaca",
+              borderRadius: "10px",
+              background: "#fef2f2",
+              color: "#b91c1c",
+              fontSize: "14px",
+              lineHeight: 1.5,
+            }}
+          >
+            {tripPlanError}
+          </div>
+        )}
+
+        {showTripPlanPicker && (
+          <section
+            style={{
+              padding: "16px",
+              border: "1px solid #e5e7eb",
+              borderRadius: "12px",
+              background: "#fafafa",
+              display: "grid",
+              gap: "12px",
+            }}
+          >
+            <strong>Save this {getTypeLabel(update.type).toLowerCase()} to a trip plan</strong>
+
+            {tripPlans.length > 0 ? (
+              <>
+                <select
+                  value={selectedTripPlanId}
+                  onChange={(event) => {
+                    setSelectedTripPlanId(event.target.value);
+                    setTripPlanError("");
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "11px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "10px",
+                    background: "white",
+                  }}
+                >
+                  <option value="">Choose a trip plan</option>
+
+                  {tripPlans.map((plan) => {
+                    const destinationLabel =
+                      getTripPlanDestinationLabel(plan);
+
+                    return (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.title}
+                        {destinationLabel
+                          ? ` — ${destinationLabel}`
+                          : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                <div style={actions}>
+                  <button
+                    type="button"
+                    onClick={addUpdateToTripPlan}
+                    disabled={addingToPlan}
+                    style={{
+                      ...primaryButton,
+                      opacity: addingToPlan ? 0.5 : 1,
+                      cursor: addingToPlan
+                        ? "not-allowed"
+                        : "pointer",
+                    }}
+                  >
+                    {addingToPlan ? "Saving..." : "Save to selected plan"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTripPlanPicker(false);
+                      setTripPlanError("");
+                    }}
+                    style={secondaryButton}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ color: "#666", lineHeight: 1.5 }}>
+                You do not have a trip plan yet. Create one first, then return
+                here to save this update.
+              </div>
+            )}
+          </section>
+        )}
+
         <div style={actions}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowTripPlanPicker((current) => !current);
+              setTripPlanError("");
+              setTripPlanMessage("");
+            }}
+            style={primaryButton}
+          >
+            Save to trip plan
+          </button>
+
           <Link href={`/places/${update.place_id}`} style={primaryLink}>
             View place
           </Link>

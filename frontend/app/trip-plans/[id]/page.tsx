@@ -39,6 +39,26 @@ type SavedPlace = {
   has_related_content: boolean;
 };
 
+type SavedUpdate = {
+  id: number;
+  trip_plan_id: number;
+  update_id: number;
+  type: "event" | "alert" | "info" | string;
+  category: string;
+  title: string;
+  text: string;
+  event_date: string | null;
+  external_link: string;
+  source_name: string;
+  source_url: string;
+  priority: string;
+  place_id: number | null;
+  place: string;
+  destination: string;
+  saved_at: string;
+  update_created_at: string;
+};
+
 type TripPlanDestination = {
   id: number;
   place: number;
@@ -64,10 +84,12 @@ type TripPlanDetail = {
   saved_count: number;
   saved_items_count?: number;
   saved_places_count?: number;
+  saved_updates_count?: number;
   created_at: string;
   updated_at: string;
   saved_items: SavedItem[];
   saved_places: SavedPlace[];
+  saved_updates: SavedUpdate[];
 };
 
 type RadarPlace = {
@@ -169,6 +191,10 @@ export default function TripPlanDetailPage() {
 
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
   const [pendingRemove, setPendingRemove] = useState<SavedItem | null>(null);
+
+  const [removingUpdateId, setRemovingUpdateId] = useState<number | null>(null);
+  const [pendingUpdateRemove, setPendingUpdateRemove] =
+    useState<SavedUpdate | null>(null);
 
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
@@ -554,7 +580,10 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           ...prev,
           saved_items: updatedItems,
           saved_items_count: updatedItems.length,
-          saved_count: updatedItems.length + (prev.saved_places?.length || 0),
+          saved_count:
+            updatedItems.length
+            + (prev.saved_places?.length || 0)
+            + (prev.saved_updates?.length || 0),
         };
       });
 
@@ -578,6 +607,69 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
   const cancelPendingRemove = () => {
     setPendingRemove(null);
+  };
+
+  const removeUpdateFromPlan = async (savedUpdate: SavedUpdate) => {
+    if (!plan) return;
+
+    clearActionFeedback();
+    setRemovingUpdateId(savedUpdate.id);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${plan.id}/updates/${savedUpdate.update_id}/`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Remove update from trip plan error:", data);
+        setActionError(data.detail || "Error removing update from plan.");
+        return;
+      }
+
+      setPlan((prev) => {
+        if (!prev) return prev;
+
+        const updatedSavedUpdates = prev.saved_updates.filter(
+          (item) => item.id !== savedUpdate.id
+        );
+
+        return {
+          ...prev,
+          saved_updates: updatedSavedUpdates,
+          saved_updates_count: updatedSavedUpdates.length,
+          saved_count:
+            (prev.saved_items?.length || 0)
+            + (prev.saved_places?.length || 0)
+            + updatedSavedUpdates.length,
+        };
+      });
+
+      setActionMessage("Update removed from this trip plan.");
+    } catch (error) {
+      console.error("Failed to remove update from trip plan:", error);
+      setActionError("Error removing update from plan.");
+    } finally {
+      setRemovingUpdateId(null);
+    }
+  };
+
+  const confirmPendingUpdateRemove = async () => {
+    if (!pendingUpdateRemove) return;
+
+    const updateToRemove = pendingUpdateRemove;
+    setPendingUpdateRemove(null);
+
+    await removeUpdateFromPlan(updateToRemove);
+  };
+
+  const cancelPendingUpdateRemove = () => {
+    setPendingUpdateRemove(null);
   };
 
   const saveTripPlanChanges = async () => {
@@ -1313,6 +1405,109 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
         )}
       </section>
 
+      <section style={section}>
+        <h2 style={sectionTitle}>Saved events & info</h2>
+
+        {plan.saved_updates.length === 0 ? (
+          <div style={emptyBox}>
+            <p style={{ marginTop: 0 }}>
+              This plan does not have any saved events, alerts or useful
+              information yet.
+            </p>
+
+            <p style={helperText}>
+              Save useful updates when they matter to this trip, so they stay
+              together with the places and experiences you are planning.
+            </p>
+          </div>
+        ) : (
+          <div style={list}>
+            {plan.saved_updates.map((savedUpdate) => (
+              <article key={savedUpdate.id} style={experienceCard}>
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <div style={label}>
+                    {savedUpdate.type === "event"
+                      ? "🎭 Saved event"
+                      : savedUpdate.type === "alert"
+                        ? "⚠️ Saved alert"
+                        : "ℹ️ Saved info"}
+                  </div>
+
+                  <h3 style={experienceTitle}>
+                    {savedUpdate.title?.trim()
+                      || savedUpdate.place
+                      || "Saved update"}
+                  </h3>
+
+                  {savedUpdate.place && (
+                    <div style={placeText}>
+                      {savedUpdate.place}
+                      {savedUpdate.destination
+                      && savedUpdate.destination !== savedUpdate.place
+                        ? ` · ${savedUpdate.destination}`
+                        : ""}
+                    </div>
+                  )}
+
+                  <p style={commentText}>{savedUpdate.text}</p>
+
+                  {savedUpdate.event_date && (
+                    <div style={metaRow}>
+                      <span>
+                        Related date:{" "}
+                        {new Date(savedUpdate.event_date).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={metaRow}>
+                    <span>
+                      Saved{" "}
+                      {new Date(savedUpdate.saved_at).toLocaleDateString()}
+                    </span>
+
+                    <span>
+                      Published{" "}
+                      {new Date(
+                        savedUpdate.update_created_at
+                      ).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  <div style={actions}>
+                    <Link
+                      href={`/updates/${savedUpdate.update_id}`}
+                      style={primaryLink}
+                    >
+                      View update
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => setPendingUpdateRemove(savedUpdate)}
+                      disabled={removingUpdateId === savedUpdate.id}
+                      style={{
+                        ...dangerButton,
+                        opacity:
+                          removingUpdateId === savedUpdate.id ? 0.5 : 1,
+                        cursor:
+                          removingUpdateId === savedUpdate.id
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      {removingUpdateId === savedUpdate.id
+                        ? "Removing..."
+                        : "Remove"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
         {pendingRadarRemove && (
           <div style={removeConfirmOverlay}>
             <section style={removeConfirmBox}>
@@ -1359,6 +1554,50 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
             </section>
           </div>
         )}
+
+      {pendingUpdateRemove && (
+        <div style={removeConfirmOverlay}>
+          <section style={removeConfirmBox}>
+            <div>
+              <div style={removeConfirmEyebrow}>Remove from trip plan</div>
+
+              <h2 style={removeConfirmTitle}>
+                Remove this update from your trip?
+              </h2>
+
+              <p style={removeConfirmText}>
+                This will only remove the saved update from this trip plan. The
+                original event, alert or information post will remain available
+                on Trust Travel.
+              </p>
+
+              <p style={removeConfirmItem}>
+                {pendingUpdateRemove.title
+                  || pendingUpdateRemove.place
+                  || "Saved update"}
+              </p>
+            </div>
+
+            <div style={actions}>
+              <button
+                type="button"
+                onClick={cancelPendingUpdateRemove}
+                style={secondaryButton}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmPendingUpdateRemove}
+                style={dangerButton}
+              >
+                Remove from plan
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {pendingRemove && (
         <div style={removeConfirmOverlay}>

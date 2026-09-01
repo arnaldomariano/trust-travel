@@ -316,7 +316,7 @@ function EvaluationsPageContent() {
 
           <div className="mt-6">
             <p className="text-sm uppercase tracking-[0.25em] text-sky-400">
-              Trust Travel Analytics
+              Trust Travel Insights
             </p>
 
             <h1 className="mt-3 break-words text-2xl font-bold tracking-tight text-white sm:text-3xl md:text-4xl">

@@ -27,6 +27,7 @@ from .models import (
     ExperienceReply,
     SavedItem,
     SavedPlace,
+    SavedUpdate,
     TripPlanWatchedPlace,
     TripPlanActivitySeen,
     TripPlan,
@@ -2513,6 +2514,121 @@ class TripPlanPlaceView(APIView):
         return Response(
             {
                 "detail": "Place removed from trip plan.",
+                "saved": False,
+            }
+        )
+
+class TripPlanUpdateView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, update_id):
+        try:
+            plan = TripPlan.objects.get(
+                id=pk,
+                user=request.user,
+            )
+        except TripPlan.DoesNotExist:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        try:
+            update = Update.objects.select_related(
+                "place",
+            ).get(
+                id=update_id,
+            )
+        except Update.DoesNotExist:
+            return Response(
+                {"detail": "Update not found."},
+                status=404,
+            )
+
+        if update.type == "experience":
+            return Response(
+                {
+                    "detail": (
+                        "Experience updates cannot be saved separately. "
+                        "Save the original experience to the trip plan instead."
+                    )
+                },
+                status=400,
+            )
+
+        if update.type not in {"event", "alert", "info"}:
+            return Response(
+                {
+                    "detail": (
+                        "Only events, alerts and useful information "
+                        "can be saved to a trip plan."
+                    )
+                },
+                status=400,
+            )
+
+        saved_update, created = SavedUpdate.objects.get_or_create(
+            user=request.user,
+            trip_plan=plan,
+            update=update,
+        )
+
+        # Touch the plan so recently used plans rise to the top.
+        plan.save()
+
+        return Response(
+            {
+                "detail": "Update added to trip plan.",
+                "saved": True,
+                "created": created,
+                "update": {
+                    "id": saved_update.id,
+                    "update_id": update.id,
+                    "type": update.type,
+                    "title": update.title,
+                    "text": update.text,
+                    "place_id": update.place_id,
+                    "place": update.place.name if update.place else "",
+                    "event_date": update.event_date,
+                    "saved_at": saved_update.created_at,
+                },
+            },
+            status=201 if created else 200,
+        )
+
+    def delete(self, request, pk, update_id):
+        try:
+            plan = TripPlan.objects.get(
+                id=pk,
+                user=request.user,
+            )
+        except TripPlan.DoesNotExist:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        deleted_count, _ = SavedUpdate.objects.filter(
+            user=request.user,
+            trip_plan=plan,
+            update_id=update_id,
+        ).delete()
+
+        if deleted_count == 0:
+            return Response(
+                {
+                    "detail": "Update was not in this trip plan.",
+                    "saved": False,
+                },
+                status=404,
+            )
+
+        plan.save()
+
+        return Response(
+            {
+                "detail": "Update removed from trip plan.",
                 "saved": False,
             }
         )

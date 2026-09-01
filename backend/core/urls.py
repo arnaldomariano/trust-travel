@@ -47,6 +47,7 @@ from .views import (
     TripPlanDetailView,
     TripPlanExperienceView,
     TripPlanPlaceView,
+    TripPlanUpdateView,
     TripPlanSuggestionsView,
     TripPlanRadarView,
     TripPlanRadarPlaceSearchView,
@@ -129,6 +130,11 @@ urlpatterns = [
     path(
         "trip-plans/<int:pk>/experiences/<int:experience_id>/",
         TripPlanExperienceView.as_view(),
+    ),
+
+    path(
+        "trip-plans/<int:pk>/updates/<int:update_id>/",
+        TripPlanUpdateView.as_view(),
     ),
 
     path(

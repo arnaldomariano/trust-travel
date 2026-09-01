@@ -211,10 +211,10 @@ useEffect(() => {
   return (
     <main style={page}>
       <div style={breadcrumb}>
-        <Link href="/" style={breadcrumbLink}>
-          Home
+        <Link href="/insights" style={breadcrumbLink}>
+          Insights
         </Link>{" "}
-        / Analytics
+        / Planning Analytics
       </div>
 
       <section style={heroCard}>

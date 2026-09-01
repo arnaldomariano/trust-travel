@@ -307,8 +307,11 @@ function EvaluationsPageContent() {
     <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8">
         <div className="mb-8">
-          <Link href="/" className="text-sm text-sky-400 hover:text-sky-300">
-            ← Back to home
+          <Link
+            href="/insights"
+            className="text-sm text-sky-400 hover:text-sky-300"
+          >
+            ← Back to insights
           </Link>
 
           <div className="mt-6">

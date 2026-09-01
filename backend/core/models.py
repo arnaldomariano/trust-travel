@@ -710,6 +710,42 @@ class SavedPlace(models.Model):
     def __str__(self):
         return f"{self.user} saved place {self.place_id} in plan {self.trip_plan_id}"
 
+# ===================== Saved Update =====================
+class SavedUpdate(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="saved_updates",
+    )
+
+    trip_plan = models.ForeignKey(
+        TripPlan,
+        on_delete=models.CASCADE,
+        related_name="saved_updates",
+    )
+
+    update = models.ForeignKey(
+        Update,
+        on_delete=models.CASCADE,
+        related_name="saved_in_trip_plans",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trip_plan", "update"],
+                name="unique_update_per_trip_plan",
+            )
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return (
+            f"{self.user} saved update {self.update_id} "
+            f"in plan {self.trip_plan_id}"
+        )
 
 # ===================== Trip Plan Activity Seen =====================
 class TripPlanActivitySeen(models.Model):

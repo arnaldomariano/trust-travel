@@ -2126,6 +2126,7 @@ def resolve_trip_plan_scope(plan):
 def serialize_trip_plan(plan):
     saved_items_count = plan.saved_items.count()
     saved_places_count = plan.saved_places.count()
+    saved_updates_count = plan.saved_updates.count()
 
     destinations = plan.destinations.select_related(
         "place",
@@ -2158,9 +2159,14 @@ def serialize_trip_plan(plan):
         "description": plan.description,
         "start_date": plan.start_date,
         "end_date": plan.end_date,
-        "saved_count": saved_items_count + saved_places_count,
+        "saved_count": (
+            saved_items_count
+            + saved_places_count
+            + saved_updates_count
+        ),
         "saved_items_count": saved_items_count,
         "saved_places_count": saved_places_count,
+        "saved_updates_count": saved_updates_count,
         "created_at": plan.created_at,
         "updated_at": plan.updated_at,
     }
@@ -2230,6 +2236,30 @@ def serialize_saved_place(saved_place, request=None):
         ),
     }
 
+def serialize_saved_update(saved_update, request=None):
+    update = saved_update.update
+    place = update.place if update else None
+    destination = place.destination if place else None
+
+    return {
+        "id": saved_update.id,
+        "trip_plan_id": saved_update.trip_plan_id,
+        "update_id": update.id,
+        "type": update.type,
+        "category": update.category,
+        "title": update.title,
+        "text": update.text,
+        "event_date": update.event_date,
+        "external_link": update.external_link,
+        "source_name": update.source_name,
+        "source_url": update.source_url,
+        "priority": update.priority,
+        "place_id": place.id if place else None,
+        "place": place.name if place else "",
+        "destination": destination.name if destination else "",
+        "saved_at": saved_update.created_at,
+        "update_created_at": update.created_at,
+    }
 
 class TripPlanListCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -2316,6 +2346,15 @@ class TripPlanDetailView(APIView):
             "place__destination",
         ).order_by("-created_at")
 
+        saved_updates = SavedUpdate.objects.filter(
+            user=request.user,
+            trip_plan=plan,
+        ).select_related(
+            "update",
+            "update__place",
+            "update__place__destination",
+        ).order_by("-created_at")
+
         data = serialize_trip_plan(plan)
 
         data["saved_items"] = [
@@ -2326,6 +2365,11 @@ class TripPlanDetailView(APIView):
         data["saved_places"] = [
             serialize_saved_place(saved_place, request)
             for saved_place in saved_places
+        ]
+
+        data["saved_updates"] = [
+            serialize_saved_update(saved_update, request)
+            for saved_update in saved_updates
         ]
 
         return Response(data)
@@ -2582,17 +2626,10 @@ class TripPlanUpdateView(APIView):
                 "detail": "Update added to trip plan.",
                 "saved": True,
                 "created": created,
-                "update": {
-                    "id": saved_update.id,
-                    "update_id": update.id,
-                    "type": update.type,
-                    "title": update.title,
-                    "text": update.text,
-                    "place_id": update.place_id,
-                    "place": update.place.name if update.place else "",
-                    "event_date": update.event_date,
-                    "saved_at": saved_update.created_at,
-                },
+                "update": serialize_saved_update(
+                    saved_update,
+                    request,
+                ),
             },
             status=201 if created else 200,
         )

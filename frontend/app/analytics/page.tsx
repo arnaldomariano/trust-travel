@@ -220,7 +220,7 @@ useEffect(() => {
       <section style={heroCard}>
         <div style={eyebrow}>Trust Travel insights</div>
 
-        <h1 style={title}>Analytics</h1>
+        <h1 style={title}>Planning Analytics</h1>
 
         <p style={description}>
           Early planning signals based on what users are saving to their trip

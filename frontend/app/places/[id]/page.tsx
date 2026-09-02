@@ -21,6 +21,48 @@ type GeographyCityResult = {
   existing_place_id: number | null;
 };
 
+type TripPlanDestination = {
+  place_name: string;
+  place_city?: string;
+  destination_name?: string;
+  destination_country?: string;
+};
+
+type TripPlan = {
+  id: number;
+  title: string;
+  destination_text: string;
+  saved_count: number;
+  primary_destination: TripPlanDestination | null;
+};
+
+const getTripPlanDestinationLabel = (plan: TripPlan) => {
+  if (plan.primary_destination) {
+    const {
+      place_name,
+      place_city,
+      destination_country,
+      destination_name,
+    } = plan.primary_destination;
+
+    const normalizedPlaceName = (place_name || "").trim().toLowerCase();
+    const normalizedPlaceCity = (place_city || "").trim().toLowerCase();
+
+    return [
+      place_name,
+      normalizedPlaceCity &&
+      normalizedPlaceCity !== normalizedPlaceName
+        ? place_city
+        : "",
+      destination_country || destination_name,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return plan.destination_text || "";
+};
+
 export default function PlacePage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -81,6 +123,18 @@ export default function PlacePage() {
   const [ratingsSummary, setRatingsSummary] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
+  const [selectedTripPlanId, setSelectedTripPlanId] = useState("");
+  const [showTripPlanPicker, setShowTripPlanPicker] = useState(false);
+  const [addingPlaceToPlan, setAddingPlaceToPlan] = useState(false);
+
+  const [showCreateTripPlanForm, setShowCreateTripPlanForm] = useState(false);
+  const [newTripPlanTitle, setNewTripPlanTitle] = useState("");
+  const [creatingTripPlan, setCreatingTripPlan] = useState(false);
+
+  const [tripPlanMessage, setTripPlanMessage] = useState("");
+  const [tripPlanError, setTripPlanError] = useState("");
+
   const [showUpdateForm, setShowUpdateForm] = useState(false);
   const [updateFormError, setUpdateFormError] = useState("");
   const [updateType, setUpdateType] = useState<"event" | "alert" | "info">("info");
@@ -104,6 +158,148 @@ export default function PlacePage() {
     }, [shouldOpenUpdateForm]);
 
   const router = useRouter();
+
+  const savePlaceToTripPlan = async () => {
+    if (!place?.id) {
+      setTripPlanError("Place not loaded yet.");
+      return;
+    }
+
+    if (!selectedTripPlanId) {
+      setTripPlanError("Choose one of your trip plans first.");
+      return;
+    }
+
+    setTripPlanError("");
+    setTripPlanMessage("");
+    setAddingPlaceToPlan(true);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${selectedTripPlanId}/places/${place.id}/`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Add place to trip plan error:", data);
+        setTripPlanError(
+          data.detail || "Could not save this place to your trip plan."
+        );
+        return;
+      }
+
+      const selectedPlan = tripPlans.find(
+        (plan) => String(plan.id) === String(selectedTripPlanId)
+      );
+
+      setTripPlanMessage(
+        data.created === false
+          ? selectedPlan
+            ? `${place.name} is already saved in ${selectedPlan.title}.`
+            : "This place is already saved in your trip plan."
+          : selectedPlan
+            ? `${place.name} saved to ${selectedPlan.title}.`
+            : "Place saved to your trip plan."
+      );
+
+      setShowTripPlanPicker(false);
+    } catch (error) {
+      console.error("Failed to save place to trip plan:", error);
+      setTripPlanError("Could not save this place to your trip plan.");
+    } finally {
+      setAddingPlaceToPlan(false);
+    }
+  };
+
+  const createTripPlanAndSavePlace = async () => {
+    if (!place?.id) {
+      setTripPlanError("Place not loaded yet.");
+      return;
+    }
+
+    const title = newTripPlanTitle.trim();
+
+    if (!title) {
+      setTripPlanError("Please give your trip plan a title.");
+      return;
+    }
+
+    setCreatingTripPlan(true);
+    setTripPlanError("");
+    setTripPlanMessage("");
+
+    try {
+      const createRes = await fetch(`${API_URL}/api/trip-plans/`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          destinations: [
+            {
+              place_id: place.id,
+              role: "primary",
+              position: 0,
+            },
+          ],
+        }),
+      });
+
+      const createdPlan = await createRes.json();
+
+      if (!createRes.ok) {
+        console.error("Create trip plan error:", createdPlan);
+        setTripPlanError(
+          createdPlan.detail || "Could not create trip plan."
+        );
+        return;
+      }
+
+      const addRes = await fetch(
+        `${API_URL}/api/trip-plans/${createdPlan.id}/places/${place.id}/`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const addData = await addRes.json();
+
+      if (!addRes.ok) {
+        console.error("Add place to new trip plan error:", addData);
+        setTripPlanError(
+          addData.detail ||
+            "Trip plan was created, but the place was not saved."
+        );
+        return;
+      }
+
+      setTripPlans((prev) => [createdPlan, ...prev]);
+      setSelectedTripPlanId(String(createdPlan.id));
+
+      setTripPlanMessage(
+        `${place.name} saved to ${createdPlan.title}.`
+      );
+
+      setNewTripPlanTitle("");
+      setShowCreateTripPlanForm(false);
+      setShowTripPlanPicker(false);
+    } catch (error) {
+      console.error("Create trip plan and save place error:", error);
+      setTripPlanError(
+        "Something went wrong while creating the trip plan."
+      );
+    } finally {
+      setCreatingTripPlan(false);
+    }
+  };
 
   const getPlaceTypeLabel = (type?: string) => {
     const labels: Record<string, string> = {
@@ -393,6 +589,27 @@ const activityFeedDescription =
     }
   };
 
+  const loadTripPlans = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/trip-plans/`, {
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to load trip plans:", res.status, text);
+        setTripPlans([]);
+        return;
+      }
+
+      const data = await res.json();
+      setTripPlans(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Trip plans fetch error:", error);
+      setTripPlans([]);
+    }
+  };
+
 useEffect(() => {
   const checkLogin = async () => {
     try {
@@ -401,6 +618,12 @@ useEffect(() => {
       });
 
       setIsLoggedIn(res.ok);
+
+      if (res.ok) {
+        loadTripPlans();
+      } else {
+        setTripPlans([]);
+      }
     } catch (error) {
       console.error("Login check failed:", error);
       setIsLoggedIn(false);
@@ -1557,7 +1780,232 @@ const handleToggleEventsInfo = () => {
             >
               {filter === "update" ? "Hide events & info" : "Events & info"}
             </button>
+
+            {isLoggedIn && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTripPlanPicker((current) => !current);
+                  setTripPlanError("");
+                  setTripPlanMessage("");
+                }}
+                style={secondaryButton}
+              >
+                Save to trip plan
+              </button>
+            )}
             </div>
+
+        {tripPlanMessage && (
+          <div
+            style={{
+              marginTop: "14px",
+              padding: "12px",
+              border: "1px solid #bbf7d0",
+              borderRadius: "10px",
+              background: "#f0fdf4",
+              color: "#166534",
+              fontSize: "14px",
+              lineHeight: 1.5,
+            }}
+          >
+            {tripPlanMessage}
+          </div>
+        )}
+
+        {tripPlanError && (
+          <div
+            style={{
+              marginTop: "14px",
+              padding: "12px",
+              border: "1px solid #fecaca",
+              borderRadius: "10px",
+              background: "#fef2f2",
+              color: "#b91c1c",
+              fontSize: "14px",
+              lineHeight: 1.5,
+            }}
+          >
+            {tripPlanError}
+          </div>
+        )}
+
+        {showTripPlanPicker && (
+          <section
+            style={{
+              marginTop: "14px",
+              padding: "16px",
+              border: "1px solid #e5e7eb",
+              borderRadius: "12px",
+              background: "#fafafa",
+              display: "grid",
+              gap: "12px",
+            }}
+          >
+            <strong>
+              Save {place?.name || "this place"} to a trip plan
+            </strong>
+
+            <p
+              style={{
+                margin: 0,
+                color: "#666",
+                fontSize: "14px",
+                lineHeight: 1.5,
+              }}
+            >
+              Keep this place together with the experiences, events and useful
+              information you want for a trip.
+            </p>
+
+            {tripPlans.length > 0 && (
+              <>
+                <select
+                  value={selectedTripPlanId}
+                  onChange={(event) => {
+                    setSelectedTripPlanId(event.target.value);
+                    setTripPlanError("");
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "11px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "10px",
+                    background: "white",
+                  }}
+                >
+                  <option value="">Choose an existing trip plan</option>
+
+                  {tripPlans.map((plan) => {
+                    const destinationLabel =
+                      getTripPlanDestinationLabel(plan);
+
+                    return (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.title}
+                        {destinationLabel
+                          ? ` — ${destinationLabel}`
+                          : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={savePlaceToTripPlan}
+                  disabled={addingPlaceToPlan}
+                  style={{
+                    ...primaryButton,
+                    opacity: addingPlaceToPlan ? 0.5 : 1,
+                    cursor: addingPlaceToPlan
+                      ? "not-allowed"
+                      : "pointer",
+                  }}
+                >
+                  {addingPlaceToPlan
+                    ? "Saving..."
+                    : "Save to selected plan"}
+                </button>
+              </>
+            )}
+
+            <div
+              style={{
+                color: "#777",
+                fontSize: "13px",
+              }}
+            >
+              {tripPlans.length > 0
+                ? "Or create a new trip plan"
+                : "Create your first trip plan"}
+            </div>
+
+            {!showCreateTripPlanForm ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateTripPlanForm(true);
+                  setTripPlanError("");
+                }}
+                style={secondaryButton}
+              >
+                Create new trip plan here
+              </button>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  type="text"
+                  value={newTripPlanTitle}
+                  onChange={(event) =>
+                    setNewTripPlanTitle(event.target.value)
+                  }
+                  placeholder="Trip plan title, e.g. Italy 2026"
+                  style={{
+                    width: "100%",
+                    padding: "11px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "10px",
+                    boxSizing: "border-box",
+                  }}
+                />
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={createTripPlanAndSavePlace}
+                    disabled={creatingTripPlan}
+                    style={{
+                      ...primaryButton,
+                      opacity: creatingTripPlan ? 0.5 : 1,
+                      cursor: creatingTripPlan
+                        ? "not-allowed"
+                        : "pointer",
+                    }}
+                  >
+                    {creatingTripPlan
+                      ? "Creating..."
+                      : "Create and save place"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateTripPlanForm(false);
+                      setTripPlanError("");
+                    }}
+                    style={secondaryButton}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowTripPlanPicker(false);
+                setShowCreateTripPlanForm(false);
+                setTripPlanError("");
+              }}
+              style={secondaryButton}
+            >
+              Close
+            </button>
+          </section>
+        )}
 
         <div style={actionHelperBox}>
           <strong>Want to rate or review?</strong>{" "}

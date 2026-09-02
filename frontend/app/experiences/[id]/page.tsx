@@ -200,9 +200,14 @@ export default function ExperienceDetailPage() {
         );
 
         setTripPlanMessage({
-          text: selectedPlan
-            ? `Experience added to ${selectedPlan.title}.`
-            : "Experience added to your trip plan.",
+          text:
+            data.created === false
+              ? selectedPlan
+                ? `Experience is already saved in ${selectedPlan.title}.`
+                : "This experience is already saved in your trip plan."
+              : selectedPlan
+                ? `Experience added to ${selectedPlan.title}.`
+                : "Experience added to your trip plan.",
           planId: selectedPlan ? selectedPlan.id : null,
         });
 

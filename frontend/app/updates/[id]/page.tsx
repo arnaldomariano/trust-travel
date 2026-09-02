@@ -82,6 +82,11 @@ export default function UpdateDetailPage() {
   const [selectedTripPlanId, setSelectedTripPlanId] = useState("");
   const [showTripPlanPicker, setShowTripPlanPicker] = useState(false);
   const [addingToPlan, setAddingToPlan] = useState(false);
+
+  const [showCreateTripPlanForm, setShowCreateTripPlanForm] = useState(false);
+  const [newTripPlanTitle, setNewTripPlanTitle] = useState("");
+  const [creatingTripPlan, setCreatingTripPlan] = useState(false);
+
   const [tripPlanMessage, setTripPlanMessage] = useState("");
   const [tripPlanError, setTripPlanError] = useState("");
 
@@ -205,6 +210,91 @@ export default function UpdateDetailPage() {
       setTripPlanError("Could not save this update to your trip plan.");
     } finally {
       setAddingToPlan(false);
+    }
+  };
+
+  const createTripPlanAndSaveUpdate = async () => {
+    if (!update?.id || !update.place_id) {
+      setTripPlanError("Update not loaded yet.");
+      return;
+    }
+
+    const title = newTripPlanTitle.trim();
+
+    if (!title) {
+      setTripPlanError("Please give your trip plan a title.");
+      return;
+    }
+
+    setCreatingTripPlan(true);
+    setTripPlanError("");
+    setTripPlanMessage("");
+
+    try {
+      const createRes = await fetch(`${API_URL}/api/trip-plans/`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          destinations: [
+            {
+              place_id: update.place_id,
+              role: "primary",
+              position: 0,
+            },
+          ],
+        }),
+      });
+
+      const createdPlan = await createRes.json();
+
+      if (!createRes.ok) {
+        console.error("Create trip plan error:", createdPlan);
+        setTripPlanError(
+          createdPlan.detail || "Could not create trip plan."
+        );
+        return;
+      }
+
+      const addRes = await fetch(
+        `${API_URL}/api/trip-plans/${createdPlan.id}/updates/${update.id}/`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const addData = await addRes.json();
+
+      if (!addRes.ok) {
+        console.error("Add update to new trip plan error:", addData);
+        setTripPlanError(
+          addData.detail ||
+            "Trip plan was created, but the update was not saved."
+        );
+        return;
+      }
+
+      setTripPlans((prev) => [createdPlan, ...prev]);
+      setSelectedTripPlanId(String(createdPlan.id));
+
+      setTripPlanMessage(
+        `${getTypeLabel(update.type)} saved to ${createdPlan.title}.`
+      );
+
+      setNewTripPlanTitle("");
+      setShowCreateTripPlanForm(false);
+      setShowTripPlanPicker(false);
+    } catch (error) {
+      console.error("Create trip plan and save update error:", error);
+      setTripPlanError(
+        "Something went wrong while creating the trip plan."
+      );
+    } finally {
+      setCreatingTripPlan(false);
     }
   };
 
@@ -522,7 +612,7 @@ export default function UpdateDetailPage() {
           >
             <strong>Save this {getTypeLabel(update.type).toLowerCase()} to a trip plan</strong>
 
-            {tripPlans.length > 0 ? (
+            {tripPlans.length > 0 && (
               <>
                 <select
                   value={selectedTripPlanId}
@@ -555,26 +645,90 @@ export default function UpdateDetailPage() {
                   })}
                 </select>
 
+                <button
+                  type="button"
+                  onClick={addUpdateToTripPlan}
+                  disabled={addingToPlan}
+                  style={{
+                    ...primaryButton,
+                    opacity: addingToPlan ? 0.5 : 1,
+                    cursor: addingToPlan
+                      ? "not-allowed"
+                      : "pointer",
+                  }}
+                >
+                  {addingToPlan ? "Saving..." : "Save to selected plan"}
+                </button>
+              </>
+            )}
+
+            <div
+              style={{
+                color: "#777",
+                fontSize: "13px",
+              }}
+            >
+              {tripPlans.length > 0
+                ? "Or create a new trip plan"
+                : "Create your first trip plan"}
+            </div>
+
+            {!showCreateTripPlanForm ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateTripPlanForm(true);
+                  setTripPlanError("");
+                }}
+                style={secondaryButton}
+              >
+                Create new trip plan here
+              </button>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  type="text"
+                  value={newTripPlanTitle}
+                  onChange={(event) =>
+                    setNewTripPlanTitle(event.target.value)
+                  }
+                  placeholder="Trip plan title, e.g. Italy 2026"
+                  style={{
+                    width: "100%",
+                    padding: "11px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "10px",
+                    boxSizing: "border-box",
+                  }}
+                />
+
                 <div style={actions}>
                   <button
                     type="button"
-                    onClick={addUpdateToTripPlan}
-                    disabled={addingToPlan}
+                    onClick={createTripPlanAndSaveUpdate}
+                    disabled={creatingTripPlan}
                     style={{
                       ...primaryButton,
-                      opacity: addingToPlan ? 0.5 : 1,
-                      cursor: addingToPlan
+                      opacity: creatingTripPlan ? 0.5 : 1,
+                      cursor: creatingTripPlan
                         ? "not-allowed"
                         : "pointer",
                     }}
                   >
-                    {addingToPlan ? "Saving..." : "Save to selected plan"}
+                    {creatingTripPlan
+                      ? "Creating..."
+                      : "Create and save update"}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setShowTripPlanPicker(false);
+                      setShowCreateTripPlanForm(false);
                       setTripPlanError("");
                     }}
                     style={secondaryButton}
@@ -582,13 +736,20 @@ export default function UpdateDetailPage() {
                     Cancel
                   </button>
                 </div>
-              </>
-            ) : (
-              <div style={{ color: "#666", lineHeight: 1.5 }}>
-                You do not have a trip plan yet. Create one first, then return
-                here to save this update.
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowTripPlanPicker(false);
+                setShowCreateTripPlanForm(false);
+                setTripPlanError("");
+              }}
+              style={secondaryButton}
+            >
+              Close
+            </button>
           </section>
         )}
 

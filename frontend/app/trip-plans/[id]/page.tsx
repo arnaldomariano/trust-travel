@@ -219,6 +219,9 @@ export default function TripPlanDetailPage() {
   const savedExperiencesCount =
     plan?.saved_items_count ?? plan?.saved_items.length ?? 0;
 
+  const savedUpdatesCount =
+    plan?.saved_updates_count ?? plan?.saved_updates.length ?? 0;
+
   const watchedPlaces = radar?.watched_places ?? [];
 
   const clearActionFeedback = () => {
@@ -841,6 +844,11 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           <span>
             {savedExperiencesCount} saved experience
             {savedExperiencesCount === 1 ? "" : "s"}
+          </span>
+
+          <span>
+            {savedUpdatesCount} saved event/info
+            {savedUpdatesCount === 1 ? "" : "s"}
           </span>
 
           {plan.start_date && (

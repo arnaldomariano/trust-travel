@@ -509,7 +509,8 @@ function TripPlansPageContent() {
           <div style={emptyBox}>
             <p style={{ marginTop: 0 }}>You do not have any trip plans yet.</p>
             <p style={helperText}>
-              Create your first plan, then add experiences from place pages.
+              Create your first plan, then save places, experiences and useful
+              updates as you plan your trip.
             </p>
           </div>
         ) : (

@@ -192,6 +192,10 @@ export default function TripPlanDetailPage() {
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
   const [pendingRemove, setPendingRemove] = useState<SavedItem | null>(null);
 
+  const [removingPlaceId, setRemovingPlaceId] = useState<number | null>(null);
+  const [pendingPlaceRemove, setPendingPlaceRemove] =
+    useState<SavedPlace | null>(null);
+
   const [removingUpdateId, setRemovingUpdateId] = useState<number | null>(null);
   const [pendingUpdateRemove, setPendingUpdateRemove] =
     useState<SavedUpdate | null>(null);
@@ -218,6 +222,9 @@ export default function TripPlanDetailPage() {
 
   const savedExperiencesCount =
     plan?.saved_items_count ?? plan?.saved_items.length ?? 0;
+
+  const savedPlacesCount =
+    plan?.saved_places_count ?? plan?.saved_places.length ?? 0;
 
   const savedUpdatesCount =
     plan?.saved_updates_count ?? plan?.saved_updates.length ?? 0;
@@ -612,6 +619,69 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
     setPendingRemove(null);
   };
 
+  const removePlaceFromPlan = async (savedPlace: SavedPlace) => {
+    if (!plan) return;
+
+    clearActionFeedback();
+    setRemovingPlaceId(savedPlace.id);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${plan.id}/places/${savedPlace.place_id}/`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Remove place from trip plan error:", data);
+        setActionError(data.detail || "Error removing place from plan.");
+        return;
+      }
+
+      setPlan((prev) => {
+        if (!prev) return prev;
+
+        const updatedSavedPlaces = prev.saved_places.filter(
+          (item) => item.id !== savedPlace.id
+        );
+
+        return {
+          ...prev,
+          saved_places: updatedSavedPlaces,
+          saved_places_count: updatedSavedPlaces.length,
+          saved_count:
+            (prev.saved_items?.length || 0)
+            + updatedSavedPlaces.length
+            + (prev.saved_updates?.length || 0),
+        };
+      });
+
+      setActionMessage("Place removed from this trip plan.");
+    } catch (error) {
+      console.error("Failed to remove place from trip plan:", error);
+      setActionError("Error removing place from plan.");
+    } finally {
+      setRemovingPlaceId(null);
+    }
+  };
+
+  const confirmPendingPlaceRemove = async () => {
+    if (!pendingPlaceRemove) return;
+
+    const placeToRemove = pendingPlaceRemove;
+    setPendingPlaceRemove(null);
+
+    await removePlaceFromPlan(placeToRemove);
+  };
+
+  const cancelPendingPlaceRemove = () => {
+    setPendingPlaceRemove(null);
+  };
+
   const removeUpdateFromPlan = async (savedUpdate: SavedUpdate) => {
     if (!plan) return;
 
@@ -844,6 +914,11 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           <span>
             {savedExperiencesCount} saved experience
             {savedExperiencesCount === 1 ? "" : "s"}
+          </span>
+
+          <span>
+            {savedPlacesCount} saved place
+            {savedPlacesCount === 1 ? "" : "s"}
           </span>
 
           <span>
@@ -1319,6 +1394,118 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
       {actionError && <div style={errorBox}>{actionError}</div>}
 
       <section style={section}>
+        <h2 style={sectionTitle}>Saved places</h2>
+
+        {plan.saved_places.length === 0 ? (
+          <div style={emptyBox}>
+            <p style={{ marginTop: 0 }}>
+              This plan does not have any saved places yet.
+            </p>
+
+            <p style={helperText}>
+              Save places you want to keep as part of this trip. Monitoring a
+              place with Trust Radar is separate from saving it to the plan.
+            </p>
+
+            <Link href="/destinations" style={primaryLink}>
+              Find places
+            </Link>
+          </div>
+        ) : (
+          <div style={list}>
+            {plan.saved_places.map((savedPlace) => {
+              const locationParts = [
+                savedPlace.city,
+                savedPlace.destination_country || savedPlace.destination,
+              ].filter(Boolean);
+
+              const uniqueLocationParts = locationParts.filter(
+                (value, index, values) =>
+                  values.findIndex(
+                    (candidate) =>
+                      candidate.trim().toLowerCase()
+                      === value.trim().toLowerCase()
+                  ) === index
+              );
+
+              return (
+                <article key={savedPlace.id} style={experienceCard}>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    <div style={label}>Saved place</div>
+
+                    <h3 style={experienceTitle}>
+                      {savedPlace.name || "Place"}
+                    </h3>
+
+                    {uniqueLocationParts.length > 0 && (
+                      <div style={placeText}>
+                        {uniqueLocationParts.join(" · ")}
+                      </div>
+                    )}
+
+                    {savedPlace.note?.trim() && (
+                      <p style={commentText}>{savedPlace.note}</p>
+                    )}
+
+                    <div style={metaRow}>
+                      <span>
+                        {savedPlace.related_experiences_count} related{" "}
+                        {savedPlace.related_experiences_count === 1
+                          ? "experience"
+                          : "experiences"}
+                      </span>
+
+                      <span>
+                        {savedPlace.related_updates_count} related{" "}
+                        {savedPlace.related_updates_count === 1
+                          ? "update"
+                          : "updates"}
+                      </span>
+                    </div>
+
+                    <div style={metaRow}>
+                      <span>
+                        Saved{" "}
+                        {new Date(savedPlace.saved_at).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <div style={actions}>
+                      <Link
+                        href={`/places/${savedPlace.place_id}`}
+                        style={primaryLink}
+                      >
+                        View place
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => setPendingPlaceRemove(savedPlace)}
+                        disabled={removingPlaceId === savedPlace.id}
+                        style={{
+                          ...dangerButton,
+                          opacity:
+                            removingPlaceId === savedPlace.id ? 0.5 : 1,
+                          cursor:
+                            removingPlaceId === savedPlace.id
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        {removingPlaceId === savedPlace.id
+                          ? "Removing..."
+                          : "Remove"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section style={section}>
         <h2 style={sectionTitle}>Saved experiences</h2>
 
         {plan.saved_items.length === 0 ? (
@@ -1562,6 +1749,48 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
             </section>
           </div>
         )}
+
+      {pendingPlaceRemove && (
+        <div style={removeConfirmOverlay}>
+          <section style={removeConfirmBox}>
+            <div>
+              <div style={removeConfirmEyebrow}>Remove from trip plan</div>
+
+              <h2 style={removeConfirmTitle}>
+                Remove this place from your trip?
+              </h2>
+
+              <p style={removeConfirmText}>
+                This will only remove the saved place from this trip plan. The
+                place itself, its experiences and its updates will remain
+                available on Trust Travel.
+              </p>
+
+              <p style={removeConfirmItem}>
+                {pendingPlaceRemove.name || "Saved place"}
+              </p>
+            </div>
+
+            <div style={actions}>
+              <button
+                type="button"
+                onClick={cancelPendingPlaceRemove}
+                style={secondaryButton}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmPendingPlaceRemove}
+                style={dangerButton}
+              >
+                Remove from plan
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {pendingUpdateRemove && (
         <div style={removeConfirmOverlay}>

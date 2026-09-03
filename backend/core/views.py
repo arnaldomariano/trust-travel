@@ -2302,8 +2302,8 @@ class TripPlanListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        plans = TripPlan.objects.filter(
-            user=request.user
+        plans = get_trip_plans_accessible_to_user(
+            request.user
         ).prefetch_related(
             "saved_items"
         ).order_by("-updated_at", "-created_at")
@@ -2360,13 +2360,15 @@ class TripPlanDetailView(APIView):
             return None
 
     def get(self, request, pk):
-        plan = self.get_object(request, pk)
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
 
         if not plan:
             return Response({"detail": "Trip plan not found."}, status=404)
 
         saved_items = SavedItem.objects.filter(
-            user=request.user,
             trip_plan=plan,
         ).select_related(
             "experience",
@@ -2375,7 +2377,6 @@ class TripPlanDetailView(APIView):
         ).order_by("-created_at")
 
         saved_places = SavedPlace.objects.filter(
-            user=request.user,
             trip_plan=plan,
         ).select_related(
             "place",
@@ -2383,7 +2384,6 @@ class TripPlanDetailView(APIView):
         ).order_by("-created_at")
 
         saved_updates = SavedUpdate.objects.filter(
-            user=request.user,
             trip_plan=plan,
         ).select_related(
             "update",

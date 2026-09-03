@@ -2663,15 +2663,24 @@ class TripPlanUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk, update_id):
-        try:
-            plan = TripPlan.objects.get(
-                id=pk,
-                user=request.user,
-            )
-        except TripPlan.DoesNotExist:
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
             return Response(
                 {"detail": "Trip plan not found."},
                 status=404,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=403,
             )
 
         try:
@@ -2709,9 +2718,11 @@ class TripPlanUpdateView(APIView):
             )
 
         saved_update, created = SavedUpdate.objects.get_or_create(
-            user=request.user,
             trip_plan=plan,
             update=update,
+            defaults={
+                "user": request.user,
+            },
         )
 
         # Touch the plan so recently used plans rise to the top.
@@ -2731,19 +2742,27 @@ class TripPlanUpdateView(APIView):
         )
 
     def delete(self, request, pk, update_id):
-        try:
-            plan = TripPlan.objects.get(
-                id=pk,
-                user=request.user,
-            )
-        except TripPlan.DoesNotExist:
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
             return Response(
                 {"detail": "Trip plan not found."},
                 status=404,
             )
 
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=403,
+            )
+
         deleted_count, _ = SavedUpdate.objects.filter(
-            user=request.user,
             trip_plan=plan,
             update_id=update_id,
         ).delete()

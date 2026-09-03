@@ -2159,6 +2159,18 @@ def user_can_contribute_to_trip_plan(user, plan):
         role="collaborator",
     ).exists()
 
+def serialize_trip_plan_member(member):
+    profile = getattr(member.user, "profile", None)
+
+    return {
+        "id": member.id,
+        "user_id": member.user_id,
+        "username": member.user.username,
+        "display_name": profile.display_name if profile else "",
+        "role": member.role,
+        "joined_at": member.joined_at,
+    }
+
 def serialize_trip_plan(plan):
     saved_items_count = plan.saved_items.count()
     saved_places_count = plan.saved_places.count()
@@ -2460,6 +2472,39 @@ class TripPlanDetailView(APIView):
         plan.delete()
 
         return Response({"detail": "Trip plan deleted."})
+
+class TripPlanMembersView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            plan = TripPlan.objects.get(
+                id=pk,
+                user=request.user,
+            )
+        except TripPlan.DoesNotExist:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        members = (
+            TripPlanMember.objects
+            .filter(trip_plan=plan)
+            .select_related("user", "user__profile")
+            .order_by("joined_at")
+        )
+
+        return Response(
+            {
+                "trip_plan_id": plan.id,
+                "members": [
+                    serialize_trip_plan_member(member)
+                    for member in members
+                ],
+            }
+        )
 
 class TripPlanExperienceView(APIView):
     authentication_classes = [CookieJWTAuthentication]

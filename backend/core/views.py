@@ -2790,11 +2790,25 @@ class TripPlanWatchedPlaceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk, place_id):
-        trip_plan = get_object_or_404(
-            TripPlan,
-            pk=pk,
-            user=request.user,
+        trip_plan = get_trip_plan_for_user(
+            request.user,
+            pk,
         )
+
+        if not trip_plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            trip_plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         place = get_object_or_404(
             Place,
@@ -2815,9 +2829,11 @@ class TripPlanWatchedPlaceView(APIView):
             )
 
         watched_place, created = TripPlanWatchedPlace.objects.get_or_create(
-            user=request.user,
             trip_plan=trip_plan,
             place=place,
+            defaults={
+                "user": request.user,
+            },
         )
 
         return Response(
@@ -2837,14 +2853,27 @@ class TripPlanWatchedPlaceView(APIView):
         )
 
     def delete(self, request, pk, place_id):
-        trip_plan = get_object_or_404(
-            TripPlan,
-            pk=pk,
-            user=request.user,
+        trip_plan = get_trip_plan_for_user(
+            request.user,
+            pk,
         )
 
+        if not trip_plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            trip_plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         watched_place = TripPlanWatchedPlace.objects.filter(
-            user=request.user,
             trip_plan=trip_plan,
             place_id=place_id,
         ).first()
@@ -2867,11 +2896,16 @@ class TripPlanRadarPlaceSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        trip_plan = get_object_or_404(
-            TripPlan,
-            pk=pk,
-            user=request.user,
+        trip_plan = get_trip_plan_for_user(
+            request.user,
+            pk,
         )
+
+        if not trip_plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         query = (request.query_params.get("q") or "").strip()
 
@@ -3048,29 +3082,32 @@ class TripPlanRadarView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        try:
-            plan = TripPlan.objects.get(id=pk, user=request.user)
-        except TripPlan.DoesNotExist:
-            return Response({"detail": "Trip plan not found."}, status=404)
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
 
         destination_text = (plan.destination_text or "").strip()
 
         saved_experience_ids = list(
             SavedItem.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).values_list("experience_id", flat=True)
         )
 
         saved_place_ids = list(
             SavedPlace.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).values_list("place_id", flat=True)
         )
 
         watched_places = TripPlanWatchedPlace.objects.filter(
-            user=request.user,
             trip_plan=plan,
         ).select_related("place", "place__destination")
 

@@ -31,6 +31,7 @@ from .models import (
     TripPlanWatchedPlace,
     TripPlanActivitySeen,
     TripPlan,
+    TripPlanMember,
     TripPlanDestination,
     Update,
     Profile,
@@ -2122,6 +2123,41 @@ def resolve_trip_plan_scope(plan):
         "matched_place_ids": [],
         "is_legacy": False,
     }
+
+def get_trip_plans_accessible_to_user(user):
+    return TripPlan.objects.filter(
+        Q(user=user)
+        | Q(members__user=user)
+    ).distinct()
+
+
+def get_trip_plan_for_user(user, pk):
+    try:
+        return get_trip_plans_accessible_to_user(user).get(id=pk)
+    except TripPlan.DoesNotExist:
+        return None
+
+
+def user_owns_trip_plan(user, plan):
+    return bool(
+        user
+        and plan
+        and plan.user_id == user.id
+    )
+
+
+def user_can_contribute_to_trip_plan(user, plan):
+    if not user or not plan:
+        return False
+
+    if user_owns_trip_plan(user, plan):
+        return True
+
+    return TripPlanMember.objects.filter(
+        trip_plan=plan,
+        user=user,
+        role="collaborator",
+    ).exists()
 
 def serialize_trip_plan(plan):
     saved_items_count = plan.saved_items.count()

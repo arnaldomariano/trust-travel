@@ -621,6 +621,48 @@ class TripPlan(models.Model):
         return f"{self.user} - {self.title}"
 
 
+# ===================== Trip Plan Member =====================
+class TripPlanMember(models.Model):
+    ROLE_CHOICES = [
+        ("collaborator", "Collaborator"),
+    ]
+
+    trip_plan = models.ForeignKey(
+        TripPlan,
+        on_delete=models.CASCADE,
+        related_name="members",
+    )
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="shared_trip_plans",
+    )
+
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default="collaborator",
+    )
+
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trip_plan", "user"],
+                name="unique_trip_plan_member",
+            )
+        ]
+        ordering = ["joined_at"]
+
+    def __str__(self):
+        return (
+            f"{self.user} in {self.trip_plan.title} "
+            f"({self.role})"
+        )
+
+
 # ===================== Trip Plan Destination =====================
 class TripPlanDestination(models.Model):
     ROLE_CHOICES = [

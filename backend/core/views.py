@@ -2466,10 +2466,25 @@ class TripPlanExperienceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk, experience_id):
-        try:
-            plan = TripPlan.objects.get(id=pk, user=request.user)
-        except TripPlan.DoesNotExist:
-            return Response({"detail": "Trip plan not found."}, status=404)
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=403,
+            )
 
         try:
             experience = Experience.objects.get(id=experience_id)
@@ -2477,9 +2492,11 @@ class TripPlanExperienceView(APIView):
             return Response({"detail": "Experience not found."}, status=404)
 
         saved_item, created = SavedItem.objects.get_or_create(
-            user=request.user,
             trip_plan=plan,
             experience=experience,
+            defaults={
+                "user": request.user,
+            },
         )
 
         # Touch the plan so recently used plans rise to the top.
@@ -2496,13 +2513,27 @@ class TripPlanExperienceView(APIView):
         )
 
     def delete(self, request, pk, experience_id):
-        try:
-            plan = TripPlan.objects.get(id=pk, user=request.user)
-        except TripPlan.DoesNotExist:
-            return Response({"detail": "Trip plan not found."}, status=404)
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=403,
+            )
 
         deleted_count, _ = SavedItem.objects.filter(
-            user=request.user,
             trip_plan=plan,
             experience_id=experience_id,
         ).delete()

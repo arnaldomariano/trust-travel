@@ -2506,6 +2506,74 @@ class TripPlanMembersView(APIView):
             }
         )
 
+    def post(self, request, pk):
+        try:
+            plan = TripPlan.objects.get(
+                id=pk,
+                user=request.user,
+            )
+        except TripPlan.DoesNotExist:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        public_code = (
+            request.data.get("public_code") or ""
+        ).strip()
+
+        if not public_code:
+            return Response(
+                {"detail": "public_code is required."},
+                status=400,
+            )
+
+        try:
+            profile = Profile.objects.select_related(
+                "user"
+            ).get(
+                public_code=public_code,
+            )
+        except Profile.DoesNotExist:
+            return Response(
+                {"detail": "User not found."},
+                status=404,
+            )
+
+        collaborator = profile.user
+
+        if collaborator.id == plan.user_id:
+            return Response(
+                {
+                    "detail": (
+                        "The trip plan owner cannot be added "
+                        "as a collaborator."
+                    )
+                },
+                status=400,
+            )
+
+        member, created = TripPlanMember.objects.get_or_create(
+            trip_plan=plan,
+            user=collaborator,
+            defaults={
+                "role": "collaborator",
+            },
+        )
+
+        return Response(
+            {
+                "detail": (
+                    "Collaborator added to trip plan."
+                    if created
+                    else "User is already a collaborator."
+                ),
+                "created": created,
+                "member": serialize_trip_plan_member(member),
+            },
+            status=201 if created else 200,
+        )
+
 class TripPlanExperienceView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]

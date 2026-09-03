@@ -2561,10 +2561,25 @@ class TripPlanPlaceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk, place_id):
-        try:
-            plan = TripPlan.objects.get(id=pk, user=request.user)
-        except TripPlan.DoesNotExist:
-            return Response({"detail": "Trip plan not found."}, status=404)
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=403,
+            )
 
         try:
             place = Place.objects.get(id=place_id)
@@ -2574,10 +2589,10 @@ class TripPlanPlaceView(APIView):
         note = (request.data.get("note") or "").strip()
 
         saved_place, created = SavedPlace.objects.get_or_create(
-            user=request.user,
             trip_plan=plan,
             place=place,
             defaults={
+                "user": request.user,
                 "note": note,
             },
         )
@@ -2600,13 +2615,27 @@ class TripPlanPlaceView(APIView):
         )
 
     def delete(self, request, pk, place_id):
-        try:
-            plan = TripPlan.objects.get(id=pk, user=request.user)
-        except TripPlan.DoesNotExist:
-            return Response({"detail": "Trip plan not found."}, status=404)
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=403,
+            )
 
         deleted_count, _ = SavedPlace.objects.filter(
-            user=request.user,
             trip_plan=plan,
             place_id=place_id,
         ).delete()

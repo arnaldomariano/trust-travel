@@ -3313,7 +3313,9 @@ class TripPlanActivitySummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        plans = TripPlan.objects.filter(user=request.user)
+        plans = get_trip_plans_accessible_to_user(
+            request.user
+        )
 
         plans_with_activity_count = 0
         total_related_count = 0
@@ -3329,17 +3331,14 @@ class TripPlanActivitySummaryView(APIView):
             last_seen_at = seen_record.last_seen_at if seen_record else None
 
             saved_places = SavedPlace.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).select_related("place", "place__destination")
 
             watched_places = TripPlanWatchedPlace.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).select_related("place", "place__destination")
 
             saved_experience_ids = SavedItem.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).values_list("experience_id", flat=True)
 
@@ -3609,7 +3608,9 @@ class TripPlanActivitySeenView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        plans = TripPlan.objects.filter(user=request.user)
+        plans = get_trip_plans_accessible_to_user(
+            request.user
+        )
         now = timezone.now()
 
         marked_count = 0
@@ -3635,25 +3636,24 @@ class TripPlanActivityItemsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        plans = TripPlan.objects.filter(user=request.user)
+        plans = get_trip_plans_accessible_to_user(
+            request.user
+        )
 
         activity_items = []
 
         for plan in plans:
             saved_experience_ids = list(
                 SavedItem.objects.filter(
-                    user=request.user,
                     trip_plan=plan,
                 ).values_list("experience_id", flat=True)
             )
 
             watched_places = TripPlanWatchedPlace.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).select_related("place", "place__destination")
 
             saved_places = SavedPlace.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).select_related("place", "place__destination")
 

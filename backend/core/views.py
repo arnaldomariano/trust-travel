@@ -2574,6 +2574,42 @@ class TripPlanMembersView(APIView):
             status=201 if created else 200,
         )
 
+class TripPlanMemberDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk, user_id):
+        try:
+            plan = TripPlan.objects.get(
+                id=pk,
+                user=request.user,
+            )
+        except TripPlan.DoesNotExist:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        try:
+            member = TripPlanMember.objects.get(
+                trip_plan=plan,
+                user_id=user_id,
+            )
+        except TripPlanMember.DoesNotExist:
+            return Response(
+                {"detail": "Collaborator not found."},
+                status=404,
+            )
+
+        member.delete()
+
+        return Response(
+            {
+                "detail": "Collaborator removed from trip plan.",
+                "removed_user_id": user_id,
+            }
+        )
+
 class TripPlanExperienceView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]

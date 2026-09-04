@@ -74,6 +74,7 @@ type TripPlanDestination = {
 
 type TripPlanDetail = {
   id: number;
+  is_owner: boolean;
   title: string;
   destination_text: string;
   description: string;
@@ -948,29 +949,37 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
             Explore feed
           </button>
 
-          <button type="button" onClick={startEditingPlan} style={secondaryButton}>
-            Edit trip plan
-          </button>
+          {plan.is_owner && (
+            <>
+              <button
+                type="button"
+                onClick={startEditingPlan}
+                style={secondaryButton}
+              >
+                Edit trip plan
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                clearActionFeedback();
-                setShowDeletePlanConfirm(true);
-              }}
-              disabled={deletingPlan}
-              style={{
-                ...dangerButton,
-                opacity: deletingPlan ? 0.5 : 1,
-                cursor: deletingPlan ? "not-allowed" : "pointer",
-              }}
-            >
-              Delete trip plan
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearActionFeedback();
+                  setShowDeletePlanConfirm(true);
+                }}
+                disabled={deletingPlan}
+                style={{
+                  ...dangerButton,
+                  opacity: deletingPlan ? 0.5 : 1,
+                  cursor: deletingPlan ? "not-allowed" : "pointer",
+                }}
+              >
+                Delete trip plan
+              </button>
+            </>
+          )}
         </div>
       </section>
 
-      {showDeletePlanConfirm && (
+      {plan.is_owner && showDeletePlanConfirm && (
           <section style={deleteConfirmBox}>
             <div>
               <strong>Delete this trip plan?</strong>

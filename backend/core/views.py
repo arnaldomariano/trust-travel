@@ -2405,6 +2405,11 @@ class TripPlanDetailView(APIView):
 
         data = serialize_trip_plan(plan)
 
+        data["is_owner"] = user_owns_trip_plan(
+            request.user,
+            plan,
+        )
+
         data["saved_items"] = [
             serialize_saved_item(item, request)
             for item in saved_items

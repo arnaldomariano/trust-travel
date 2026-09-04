@@ -179,6 +179,51 @@ type PlaceSearchResult = {
   destination_city?: string;
 };
 
+type TripPlanSearchPlace = {
+  place_id: number;
+  name: string;
+  place_type: string;
+  city: string;
+  destination: string;
+  destination_country: string;
+  destination_city: string;
+  already_saved_place: boolean;
+  already_has_saved_experience: boolean;
+  already_in_trip_plan: boolean;
+};
+
+type TripPlanSearchExperience = {
+  experience_id: number;
+  title: string;
+  comment: string;
+  rating: number | null;
+  image_url: string | null;
+  place: string;
+  place_id: number | null;
+  place_type: string;
+  destination: string;
+  created_at: string;
+  already_saved: boolean;
+};
+
+type TripPlanSearchUpdate = {
+  id: number;
+  type: "event" | "alert" | "info" | string;
+  category: string;
+  title: string;
+  text: string;
+  event_date: string | null;
+  place: string;
+  place_id: number;
+  already_saved: boolean;
+};
+
+type TripPlanContentSearchResults = {
+  matched_places: TripPlanSearchPlace[];
+  experiences: TripPlanSearchExperience[];
+  updates: TripPlanSearchUpdate[];
+};
+
 export default function TripPlanDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -218,6 +263,16 @@ export default function TripPlanDetailPage() {
   const [removingUpdateId, setRemovingUpdateId] = useState<number | null>(null);
   const [pendingUpdateRemove, setPendingUpdateRemove] =
     useState<SavedUpdate | null>(null);
+
+  const [tripPlanContentSearch, setTripPlanContentSearch] = useState("");
+  const [tripPlanContentResults, setTripPlanContentResults] =
+    useState<TripPlanContentSearchResults | null>(null);
+  const [tripPlanContentSearchLoading, setTripPlanContentSearchLoading] =
+    useState(false);
+  const [tripPlanContentHasSearched, setTripPlanContentHasSearched] =
+    useState(false);
+  const [savingTripPlanContentKey, setSavingTripPlanContentKey] =
+    useState<string | null>(null);
 
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
@@ -319,6 +374,160 @@ export default function TripPlanDetailPage() {
       console.error("Trip plan detail fetch error:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const searchTripPlanContent = async () => {
+    if (!plan) return;
+
+    clearActionFeedback();
+
+    const query = tripPlanContentSearch.trim();
+
+    if (query.length < 2) {
+      setActionError("Type at least 2 characters to search.");
+      return;
+    }
+
+    setTripPlanContentSearchLoading(true);
+    setTripPlanContentHasSearched(true);
+
+    try {
+      const params = new URLSearchParams({
+        q: query,
+      });
+
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${plan.id}/suggestions/?${params.toString()}`,
+        {
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setActionError(
+          data.detail || "Could not search trip content right now."
+        );
+        setTripPlanContentResults(null);
+        return;
+      }
+
+      setTripPlanContentResults({
+        matched_places: Array.isArray(data.matched_places)
+          ? data.matched_places
+          : [],
+        experiences: Array.isArray(data.experiences)
+          ? data.experiences
+          : [],
+        updates: Array.isArray(data.updates)
+          ? data.updates
+          : [],
+      });
+    } catch (error) {
+      console.error("Trip plan content search error:", error);
+      setActionError("Could not search trip content right now.");
+      setTripPlanContentResults(null);
+    } finally {
+      setTripPlanContentSearchLoading(false);
+    }
+  };
+
+  const saveTripPlanSearchResult = async (
+    contentType: "place" | "experience" | "update",
+    contentId: number,
+    labelText: string
+  ) => {
+    if (!plan) return;
+
+    clearActionFeedback();
+
+    const contentKey = `${contentType}-${contentId}`;
+    setSavingTripPlanContentKey(contentKey);
+
+    const endpointSegment =
+      contentType === "place"
+        ? "places"
+        : contentType === "experience"
+          ? "experiences"
+          : "updates";
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${plan.id}/${endpointSegment}/${contentId}/`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setActionError(
+          data.detail || "Could not save this content to the trip plan."
+        );
+        return;
+      }
+
+      setTripPlanContentResults((prev) => {
+        if (!prev) return prev;
+
+        if (contentType === "place") {
+          return {
+            ...prev,
+            matched_places: prev.matched_places.map((place) =>
+              place.place_id === contentId
+                ? {
+                    ...place,
+                    already_saved_place: true,
+                    already_in_trip_plan: true,
+                  }
+                : place
+            ),
+          };
+        }
+
+        if (contentType === "experience") {
+          return {
+            ...prev,
+            experiences: prev.experiences.map((experience) =>
+              experience.experience_id === contentId
+                ? {
+                    ...experience,
+                    already_saved: true,
+                  }
+                : experience
+            ),
+          };
+        }
+
+        return {
+          ...prev,
+          updates: prev.updates.map((update) =>
+            update.id === contentId
+              ? {
+                  ...update,
+                  already_saved: true,
+                }
+              : update
+          ),
+        };
+      });
+
+      await loadPlan();
+
+      setActionMessage(
+        data.created === false
+          ? `${labelText} is already saved in this trip plan.`
+          : `${labelText} saved to this trip plan.`
+      );
+    } catch (error) {
+      console.error("Save trip plan search result error:", error);
+      setActionError("Could not save this content to the trip plan.");
+    } finally {
+      setSavingTripPlanContentKey(null);
     }
   };
 
@@ -1706,6 +1915,269 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
       {actionMessage && <div style={successBox}>{actionMessage}</div>}
 
       {actionError && <div style={errorBox}>{actionError}</div>}
+
+      <section style={section}>
+        <h2 style={sectionTitle}>Find something for this trip</h2>
+
+        <p style={mutedSmall}>
+          Search Trust Travel for places, experiences, events, alerts or useful
+          information and save what matters to this trip.
+        </p>
+
+        <form
+          style={radarSearchRow}
+          onSubmit={(event) => {
+            event.preventDefault();
+            searchTripPlanContent();
+          }}
+        >
+          <input
+            type="text"
+            value={tripPlanContentSearch}
+            onChange={(event) => {
+              setTripPlanContentSearch(event.target.value);
+              clearActionFeedback();
+            }}
+            placeholder="Search places, experiences, events or useful info..."
+            style={radarSearchInput}
+          />
+
+          <button
+            type="submit"
+            disabled={tripPlanContentSearchLoading}
+            style={{
+              ...secondaryButton,
+              opacity: tripPlanContentSearchLoading ? 0.5 : 1,
+              cursor: tripPlanContentSearchLoading
+                ? "not-allowed"
+                : "pointer",
+            }}
+          >
+            {tripPlanContentSearchLoading ? "Searching..." : "Search"}
+          </button>
+        </form>
+
+        {tripPlanContentHasSearched
+          && !tripPlanContentSearchLoading
+          && tripPlanContentResults
+          && tripPlanContentResults.matched_places.length === 0
+          && tripPlanContentResults.experiences.length === 0
+          && tripPlanContentResults.updates.length === 0 && (
+            <div style={emptyBox}>
+              No matching content found.
+            </div>
+          )}
+
+        {tripPlanContentResults
+          && tripPlanContentResults.matched_places.length > 0 && (
+            <div style={{ display: "grid", gap: "10px" }}>
+              <h3 style={experienceTitle}>Places</h3>
+
+              {tripPlanContentResults.matched_places.map((place) => {
+                const contentKey = `place-${place.place_id}`;
+                const saving = savingTripPlanContentKey === contentKey;
+
+                return (
+                  <article key={contentKey} style={experienceCard}>
+                    <div style={{ display: "grid", gap: "8px" }}>
+                      <div style={label}>Place · {place.place_type}</div>
+
+                      <h3 style={experienceTitle}>{place.name}</h3>
+
+                      <div style={placeText}>
+                        {[place.city, place.destination_country]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+
+                      <div style={actions}>
+                        <Link
+                          href={`/places/${place.place_id}`}
+                          style={primaryLink}
+                        >
+                          View place
+                        </Link>
+
+                        <button
+                          type="button"
+                          disabled={place.already_in_trip_plan || saving}
+                          onClick={() =>
+                            saveTripPlanSearchResult(
+                              "place",
+                              place.place_id,
+                              place.name
+                            )
+                          }
+                          style={{
+                            ...secondaryButton,
+                            opacity:
+                              place.already_in_trip_plan || saving ? 0.5 : 1,
+                            cursor:
+                              place.already_in_trip_plan || saving
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {place.already_in_trip_plan
+                            ? "Saved"
+                            : saving
+                              ? "Saving..."
+                              : "Save to plan"}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+        {tripPlanContentResults
+          && tripPlanContentResults.experiences.length > 0 && (
+            <div style={{ display: "grid", gap: "10px" }}>
+              <h3 style={experienceTitle}>Experiences</h3>
+
+              {tripPlanContentResults.experiences.map((experience) => {
+                const contentKey = `experience-${experience.experience_id}`;
+                const saving = savingTripPlanContentKey === contentKey;
+
+                return (
+                  <article key={contentKey} style={experienceCard}>
+                    <div style={{ display: "grid", gap: "8px" }}>
+                      <div style={label}>Experience</div>
+
+                      <h3 style={experienceTitle}>
+                        {experience.title || experience.place || "Experience"}
+                      </h3>
+
+                      <div style={placeText}>
+                        {experience.place}
+                        {experience.destination
+                          && experience.destination !== experience.place
+                          ? ` · ${experience.destination}`
+                          : ""}
+                      </div>
+
+                      {experience.comment && (
+                        <p style={commentText}>{experience.comment}</p>
+                      )}
+
+                      <div style={actions}>
+                        <Link
+                          href={`/experiences/${experience.experience_id}`}
+                          style={primaryLink}
+                        >
+                          View experience
+                        </Link>
+
+                        <button
+                          type="button"
+                          disabled={experience.already_saved || saving}
+                          onClick={() =>
+                            saveTripPlanSearchResult(
+                              "experience",
+                              experience.experience_id,
+                              experience.title || "Experience"
+                            )
+                          }
+                          style={{
+                            ...secondaryButton,
+                            opacity:
+                              experience.already_saved || saving ? 0.5 : 1,
+                            cursor:
+                              experience.already_saved || saving
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {experience.already_saved
+                            ? "Saved"
+                            : saving
+                              ? "Saving..."
+                              : "Save to plan"}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+        {tripPlanContentResults
+          && tripPlanContentResults.updates.length > 0 && (
+            <div style={{ display: "grid", gap: "10px" }}>
+              <h3 style={experienceTitle}>Events & info</h3>
+
+              {tripPlanContentResults.updates.map((update) => {
+                const contentKey = `update-${update.id}`;
+                const saving = savingTripPlanContentKey === contentKey;
+
+                return (
+                  <article key={contentKey} style={experienceCard}>
+                    <div style={{ display: "grid", gap: "8px" }}>
+                      <div style={label}>
+                        {update.type === "event"
+                          ? "Event"
+                          : update.type === "alert"
+                            ? "Alert"
+                            : "Useful info"}
+                      </div>
+
+                      <h3 style={experienceTitle}>
+                        {update.title || update.place || "Update"}
+                      </h3>
+
+                      {update.place && (
+                        <div style={placeText}>{update.place}</div>
+                      )}
+
+                      {update.text && (
+                        <p style={commentText}>{update.text}</p>
+                      )}
+
+                      <div style={actions}>
+                        <Link
+                          href={`/updates/${update.id}`}
+                          style={primaryLink}
+                        >
+                          View
+                        </Link>
+
+                        <button
+                          type="button"
+                          disabled={update.already_saved || saving}
+                          onClick={() =>
+                            saveTripPlanSearchResult(
+                              "update",
+                              update.id,
+                              update.title || "Update"
+                            )
+                          }
+                          style={{
+                            ...secondaryButton,
+                            opacity:
+                              update.already_saved || saving ? 0.5 : 1,
+                            cursor:
+                              update.already_saved || saving
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {update.already_saved
+                            ? "Saved"
+                            : saving
+                              ? "Saving..."
+                              : "Save to plan"}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+      </section>
 
       <section style={section}>
         <h2 style={sectionTitle}>Saved places</h2>

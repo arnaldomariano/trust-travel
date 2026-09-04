@@ -1101,6 +1101,14 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             return;
           }
 
+          if (externalRes.status === 503) {
+            setExternalSpecificPlaceResults([]);
+            setSpecificPlaceSearchError(
+              "External place discovery is temporarily unavailable. Trust Travel results are still available."
+            );
+            return;
+          }
+
           console.error(
             "External specific place search failed:",
             externalRes.status,
@@ -2672,6 +2680,12 @@ const handleToggleEventsInfo = () => {
                 specific place. If it does not appear, you can create it in Step 2.
               </p>
 
+              {specificPlaceSearchError && (
+                <div style={createSpecificPlaceErrorBox}>
+                  {specificPlaceSearchError}
+                </div>
+              )}
+
             </form>
 
             {specificPlaceHasSearched &&
@@ -2847,8 +2861,18 @@ const handleToggleEventsInfo = () => {
                 >
                   Searching for possible matches...
                 </p>
-              ) :
-                availableExternalSpecificPlaceResults.length > 0 ? (
+              ) : specificPlaceSearchError ? (
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#777",
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  The search could not be completed right now. Try again before creating a new place.
+                </p>
+              ) : availableExternalSpecificPlaceResults.length > 0 ? (
                 <p
                   style={{
                     margin: 0,

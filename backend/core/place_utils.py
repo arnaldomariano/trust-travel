@@ -75,6 +75,110 @@ def get_matching_places_by_name_identity(
 
     return matching_places
 
+def get_place_search_identity_context(query):
+    normalized_query = normalize_place_text(query)
+    resolved_query_country = resolve_country(value=query)
+    query_values = get_country_search_values(query)
+
+    return {
+        "normalized_query": normalized_query,
+        "resolved_query_country": resolved_query_country,
+        "query_values": query_values,
+        "is_country_alias_query": (
+            resolved_query_country is not None
+            or query_values != {normalized_query}
+        ),
+    }
+
+
+def place_matches_search_identity(place, search_context):
+    normalized_query = search_context["normalized_query"]
+    resolved_query_country = search_context["resolved_query_country"]
+    query_values = search_context["query_values"]
+    is_country_alias_query = search_context["is_country_alias_query"]
+
+    if resolved_query_country:
+        return place.country_ref_id == resolved_query_country.id
+
+    identity_values = get_place_name_identity_values(
+        place.name,
+        place.canonical_name,
+        place.aliases,
+    )
+
+    if is_country_alias_query:
+        return bool(query_values.intersection(identity_values))
+
+    if query_values.intersection(identity_values):
+        return True
+
+    if any(
+        identity_value.startswith(normalized_query)
+        for identity_value in identity_values
+    ):
+        return True
+
+    matches_word_prefix = any(
+        word.startswith(normalized_query)
+        for identity_value in identity_values
+        for word in identity_value.split()
+    )
+
+    if matches_word_prefix:
+        return True
+
+    if (
+        len(normalized_query) >= 4
+        and any(
+            normalized_query in identity_value
+            for identity_value in identity_values
+        )
+    ):
+        return True
+
+    return False
+
+
+def get_place_search_rank(place, search_context):
+    resolved_query_country = search_context["resolved_query_country"]
+    query_values = search_context["query_values"]
+
+    destination = place.destination
+
+    place_values = get_place_name_identity_values(
+        place.name,
+        place.canonical_name,
+        place.aliases,
+    )
+
+    destination_values = {
+        normalize_place_text(destination.name if destination else ""),
+        normalize_place_text(destination.country if destination else ""),
+        normalize_place_text(destination.city if destination else ""),
+    }
+
+    destination_values.discard("")
+
+    if resolved_query_country:
+        if (
+            place.place_type == "country"
+            and place.country_ref_id == resolved_query_country.id
+        ):
+            return 0
+
+        if place.country_ref_id == resolved_query_country.id:
+            return 1
+
+    if (
+        place.place_type == "country"
+        and query_values.intersection(place_values)
+    ):
+        return 0
+
+    if query_values.intersection(destination_values):
+        return 1
+
+    return 2
 
 def get_country_catalog_identity_values(country):
     if not country:

@@ -57,6 +57,9 @@ from .authentication import CookieJWTAuthentication
 from .place_utils import (
     get_matching_places_by_name_identity,
     get_place_name_identity_values,
+    get_place_search_identity_context,
+    place_matches_search_identity,
+    get_place_search_rank,
     normalize_place_text,
     get_country_search_values,
     resolve_country,
@@ -1317,18 +1320,10 @@ class PlaceSearchView(APIView):
                 }
             )
 
-        normalized_query = normalize_place_text(query)
+        search_context = get_place_search_identity_context(query)
 
-        resolved_query_country = resolve_country(value=query)
         resolved_filter_country = resolve_country(value=country)
-
-        query_values = get_country_search_values(query)
         country_values = get_country_search_values(country)
-
-        is_country_alias_query = (
-                resolved_query_country is not None
-                or query_values != {normalized_query}
-        )
 
         places_queryset = Place.objects.select_related(
             "destination",
@@ -1336,46 +1331,10 @@ class PlaceSearchView(APIView):
         ).all()
 
         def matches_search(place):
-            if resolved_query_country:
-                return place.country_ref_id == resolved_query_country.id
-
-            identity_values = get_place_name_identity_values(
-                place.name,
-                place.canonical_name,
-                place.aliases,
+            return place_matches_search_identity(
+                place,
+                search_context,
             )
-
-            if is_country_alias_query:
-                return bool(query_values.intersection(identity_values))
-
-            if query_values.intersection(identity_values):
-                return True
-
-            if any(
-                identity_value.startswith(normalized_query)
-                for identity_value in identity_values
-            ):
-                return True
-
-            matches_word_prefix = any(
-                word.startswith(normalized_query)
-                for identity_value in identity_values
-                for word in identity_value.split()
-            )
-
-            if matches_word_prefix:
-                return True
-
-            if (
-                len(normalized_query) >= 4
-                and any(
-                    normalized_query in identity_value
-                    for identity_value in identity_values
-                )
-            ):
-                return True
-
-            return False
 
         def matches_country(place):
             if resolved_filter_country:
@@ -1418,42 +1377,10 @@ class PlaceSearchView(APIView):
         ]
 
         def get_search_rank(place):
-            destination = place.destination
-
-            place_values = get_place_name_identity_values(
-                place.name,
-                place.canonical_name,
-                place.aliases,
+            return get_place_search_rank(
+                place,
+                search_context,
             )
-
-            destination_values = {
-                normalize_place_text(destination.name if destination else ""),
-                normalize_place_text(destination.country if destination else ""),
-                normalize_place_text(destination.city if destination else ""),
-            }
-
-            destination_values.discard("")
-
-            if resolved_query_country:
-                if (
-                        place.place_type == "country"
-                        and place.country_ref_id == resolved_query_country.id
-                ):
-                    return 0
-
-                if place.country_ref_id == resolved_query_country.id:
-                    return 1
-
-            if (
-                    place.place_type == "country"
-                    and query_values.intersection(place_values)
-            ):
-                return 0
-
-            if query_values.intersection(destination_values):
-                return 1
-
-            return 2
 
         places = sorted(
             places,
@@ -3074,16 +3001,7 @@ class TripPlanRadarPlaceSearchView(APIView):
 
         resolved_scope = resolve_trip_plan_scope(trip_plan)
 
-        normalized_query = normalize_place_text(query)
-
-        resolved_query_country = resolve_country(value=query)
-
-        query_values = get_country_search_values(query)
-
-        is_country_alias_query = (
-                resolved_query_country is not None
-                or query_values != {normalized_query}
-        )
+        search_context = get_place_search_identity_context(query)
 
         places_queryset = Place.objects.filter(
             id__in=resolved_scope["matched_place_ids"]
@@ -3093,46 +3011,10 @@ class TripPlanRadarPlaceSearchView(APIView):
         )
 
         def matches_search(place):
-            if resolved_query_country:
-                return place.country_ref_id == resolved_query_country.id
-
-            identity_values = get_place_name_identity_values(
-                place.name,
-                place.canonical_name,
-                place.aliases,
+            return place_matches_search_identity(
+                place,
+                search_context,
             )
-
-            if is_country_alias_query:
-                return bool(query_values.intersection(identity_values))
-
-            if query_values.intersection(identity_values):
-                return True
-
-            if any(
-                identity_value.startswith(normalized_query)
-                for identity_value in identity_values
-            ):
-                return True
-
-            matches_word_prefix = any(
-                word.startswith(normalized_query)
-                for identity_value in identity_values
-                for word in identity_value.split()
-            )
-
-            if matches_word_prefix:
-                return True
-
-            if (
-                len(normalized_query) >= 4
-                and any(
-                    normalized_query in identity_value
-                    for identity_value in identity_values
-                )
-            ):
-                return True
-
-            return False
 
         places = [
             place
@@ -3156,42 +3038,10 @@ class TripPlanRadarPlaceSearchView(APIView):
             )
 
         def get_search_rank(place):
-            destination = place.destination
-
-            place_values = get_place_name_identity_values(
-                place.name,
-                place.canonical_name,
-                place.aliases,
+            return get_place_search_rank(
+                place,
+                search_context,
             )
-
-            destination_values = {
-                normalize_place_text(destination.name if destination else ""),
-                normalize_place_text(destination.country if destination else ""),
-                normalize_place_text(destination.city if destination else ""),
-            }
-
-            destination_values.discard("")
-
-            if resolved_query_country:
-                if (
-                        place.place_type == "country"
-                        and place.country_ref_id == resolved_query_country.id
-                ):
-                    return 0
-
-                if place.country_ref_id == resolved_query_country.id:
-                    return 1
-
-            if (
-                    place.place_type == "country"
-                    and query_values.intersection(place_values)
-            ):
-                return 0
-
-            if query_values.intersection(destination_values):
-                return 1
-
-            return 2
 
         places = sorted(
             places,
@@ -4023,10 +3873,16 @@ class TripPlanSuggestionsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        try:
-            plan = TripPlan.objects.get(id=pk, user=request.user)
-        except TripPlan.DoesNotExist:
-            return Response({"detail": "Trip plan not found."}, status=404)
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
 
         query = (request.query_params.get("q") or "").strip()
         place_type = (request.query_params.get("place_type") or "").strip()
@@ -4048,26 +3904,49 @@ class TripPlanSuggestionsView(APIView):
 
         saved_experience_ids = set(
             SavedItem.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).values_list("experience_id", flat=True)
         )
 
         saved_place_ids_from_experiences = set(
             SavedItem.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).values_list("experience__place_id", flat=True)
         )
 
         saved_place_ids_direct = set(
             SavedPlace.objects.filter(
-                user=request.user,
                 trip_plan=plan,
             ).values_list("place_id", flat=True)
         )
 
         saved_place_ids = saved_place_ids_from_experiences | saved_place_ids_direct
+
+        saved_update_ids = set(
+            SavedUpdate.objects.filter(
+                trip_plan=plan,
+            ).values_list("update_id", flat=True)
+        )
+
+        place_search_context = None
+        matching_place_ids = set()
+
+        if search_text:
+            place_search_context = get_place_search_identity_context(
+                search_text
+            )
+
+            matching_place_ids = {
+                place.id
+                for place in Place.objects.select_related(
+                    "destination",
+                    "country_ref",
+                ).all()
+                if place_matches_search_identity(
+                    place,
+                    place_search_context,
+                )
+            }
 
         # ============================================================
         # Suggested experiences
@@ -4083,6 +3962,7 @@ class TripPlanSuggestionsView(APIView):
             experiences = experiences.filter(
                 Q(title__icontains=search_text)
                 | Q(comment__icontains=search_text)
+                | Q(place_id__in=matching_place_ids)
                 | Q(place__name__icontains=search_text)
                 | Q(place__city__icontains=search_text)
                 | Q(place__destination__name__icontains=search_text)
@@ -4124,22 +4004,35 @@ class TripPlanSuggestionsView(APIView):
         # Related places
         # ============================================================
         places = Place.objects.select_related(
-            "destination"
+            "destination",
+            "country_ref",
         ).all()
-
-        if search_text:
-            places = places.filter(
-                Q(name__icontains=search_text)
-                | Q(city__icontains=search_text)
-                | Q(destination__name__icontains=search_text)
-                | Q(destination__country__icontains=search_text)
-                | Q(destination__city__icontains=search_text)
-            )
 
         if place_type:
             places = places.filter(place_type=place_type)
 
-        places = places.order_by("name")[:30]
+        if search_text:
+            places = [
+                place
+                for place in places
+                if place.id in matching_place_ids
+            ]
+
+            places = sorted(
+                places,
+                key=lambda place: (
+                    get_place_search_rank(
+                        place,
+                        place_search_context,
+                    ),
+                    place.place_type or "",
+                    place.name or "",
+                ),
+            )[:30]
+        else:
+            places = list(
+                places.order_by("name")[:30]
+            )
 
         place_results = []
 
@@ -4159,9 +4052,54 @@ class TripPlanSuggestionsView(APIView):
                 "already_in_trip_plan": place.id in saved_place_ids,
             })
 
+        # ============================================================
+        # Events, alerts and useful info
+        # ============================================================
+        updates = Update.objects.select_related(
+            "place",
+            "place__destination",
+            "user",
+            "user__profile",
+            "experience",
+        ).filter(
+            type__in=["event", "alert", "info"],
+        )
+
+        if search_text:
+            updates = updates.filter(
+                Q(title__icontains=search_text)
+                | Q(text__icontains=search_text)
+                | Q(place_id__in=matching_place_ids)
+                | Q(place__name__icontains=search_text)
+                | Q(place__city__icontains=search_text)
+                | Q(place__destination__name__icontains=search_text)
+                | Q(place__destination__country__icontains=search_text)
+                | Q(place__destination__city__icontains=search_text)
+            )
+
+        if place_type:
+            updates = updates.filter(place__place_type=place_type)
+
+        updates = updates.order_by("-created_at")[:30]
+
+        update_results = []
+
+        for update in updates:
+            update_data = serialize_update(
+                update,
+                request,
+            )
+
+            update_data["already_saved"] = (
+                update.id in saved_update_ids
+            )
+
+            update_results.append(update_data)
+
         return Response({
             "experiences": experience_results,
             "matched_places": place_results,
+            "updates": update_results,
         })
 
 # ============================================================

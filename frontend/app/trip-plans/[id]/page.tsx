@@ -93,6 +93,15 @@ type TripPlanDetail = {
   saved_updates: SavedUpdate[];
 };
 
+type TripPlanMember = {
+  id: number;
+  user_id: number;
+  username: string;
+  display_name: string;
+  role: "collaborator" | string;
+  joined_at: string;
+};
+
 type RadarPlace = {
   id: number;
   name: string;
@@ -177,6 +186,11 @@ export default function TripPlanDetailPage() {
 
   const [plan, setPlan] = useState<TripPlanDetail | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [members, setMembers] = useState<TripPlanMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [collaboratorCode, setCollaboratorCode] = useState("");
+  const [addingCollaborator, setAddingCollaborator] = useState(false);
 
   const [radar, setRadar] = useState<TripRadar | null>(null);
   const [radarLoading, setRadarLoading] = useState(false);
@@ -304,6 +318,106 @@ export default function TripPlanDetailPage() {
     }
   };
 
+  const loadMembers = async () => {
+    if (!id) return;
+
+    setMembersLoading(true);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${id}/members/`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) {
+        setMembers([]);
+        return;
+      }
+
+      const data = await res.json();
+
+      setMembers(
+        Array.isArray(data.members)
+          ? data.members
+          : []
+      );
+    } catch (error) {
+      console.error("Trip plan members fetch error:", error);
+      setMembers([]);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const addCollaborator = async () => {
+    if (!plan || !plan.is_owner) return;
+
+    clearActionFeedback();
+
+    const publicCode = collaboratorCode.trim();
+
+    if (!publicCode) {
+      setActionError("Enter a public code to add a collaborator.");
+      return;
+    }
+
+    setAddingCollaborator(true);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${plan.id}/members/`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            public_code: publicCode,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setActionError(
+          data.detail || "Could not add this collaborator."
+        );
+        return;
+      }
+
+      if (data.member) {
+        setMembers((prev) => {
+          const exists = prev.some(
+            (member) => member.id === data.member.id
+          );
+
+          return exists
+            ? prev
+            : [...prev, data.member];
+        });
+      }
+
+      setCollaboratorCode("");
+
+      setActionMessage(
+        data.created === false
+          ? "This person is already a collaborator."
+          : "Collaborator added successfully."
+      );
+    } catch (error) {
+      console.error("Add collaborator error:", error);
+      setActionError(
+        "Something went wrong while adding this collaborator."
+      );
+    } finally {
+      setAddingCollaborator(false);
+    }
+  };
+
   const loadRadar = async () => {
     if (!id) return;
 
@@ -335,6 +449,15 @@ export default function TripPlanDetailPage() {
     loadPlan();
     loadRadar();
   }, [id]);
+
+  useEffect(() => {
+    if (!plan?.is_owner) {
+      setMembers([]);
+      return;
+    }
+
+    loadMembers();
+  }, [id, plan?.is_owner]);
 
   const startEditingPlan = () => {
     if (!plan) return;
@@ -1014,6 +1137,68 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
             </div>
           </section>
         )}
+
+      {plan.is_owner && (
+        <section style={section}>
+          <h2 style={sectionTitle}>Collaborators</h2>
+
+          <p style={mutedSmall}>
+            People you add here can contribute places, experiences, useful
+            updates and Trust Radar choices to this trip plan.
+          </p>
+
+          <form
+            style={radarSearchRow}
+            onSubmit={(event) => {
+              event.preventDefault();
+              addCollaborator();
+            }}
+          >
+            <input
+              type="text"
+              value={collaboratorCode}
+              onChange={(event) => {
+                setCollaboratorCode(event.target.value);
+                clearActionFeedback();
+              }}
+              placeholder="Enter public code"
+              style={radarSearchInput}
+            />
+
+            <button
+              type="submit"
+              disabled={addingCollaborator}
+              style={{
+                ...secondaryButton,
+                opacity: addingCollaborator ? 0.5 : 1,
+                cursor: addingCollaborator
+                  ? "not-allowed"
+                  : "pointer",
+              }}
+            >
+              {addingCollaborator
+                ? "Adding..."
+                : "Add collaborator"}
+            </button>
+          </form>
+
+          {membersLoading ? (
+            <p style={mutedSmall}>Loading collaborators...</p>
+          ) : members.length === 0 ? (
+            <div style={emptyBox}>
+              No collaborators yet.
+            </div>
+          ) : (
+            <div style={metaRow}>
+              {members.map((member) => (
+                <span key={member.id}>
+                  {member.display_name || member.username} · Collaborator
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <section style={radarBox}>
         <div style={radarHeaderRow}>

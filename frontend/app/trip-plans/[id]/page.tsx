@@ -191,6 +191,10 @@ export default function TripPlanDetailPage() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [collaboratorCode, setCollaboratorCode] = useState("");
   const [addingCollaborator, setAddingCollaborator] = useState(false);
+  const [pendingCollaboratorRemove, setPendingCollaboratorRemove] =
+    useState<TripPlanMember | null>(null);
+  const [removingCollaboratorId, setRemovingCollaboratorId] =
+    useState<number | null>(null);
 
   const [radar, setRadar] = useState<TripRadar | null>(null);
   const [radarLoading, setRadarLoading] = useState(false);
@@ -415,6 +419,53 @@ export default function TripPlanDetailPage() {
       );
     } finally {
       setAddingCollaborator(false);
+    }
+  };
+
+  const removeCollaborator = async (member: TripPlanMember) => {
+    if (!plan || !plan.is_owner) return;
+
+    clearActionFeedback();
+    setRemovingCollaboratorId(member.user_id);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${plan.id}/members/${member.user_id}/`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      let data: { detail?: string } = {};
+
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        setActionError(
+          data.detail || "Could not remove this collaborator."
+        );
+        return;
+      }
+
+      setMembers((prev) =>
+        prev.filter(
+          (item) => item.user_id !== member.user_id
+        )
+      );
+
+      setActionMessage("Collaborator removed successfully.");
+    } catch (error) {
+      console.error("Remove collaborator error:", error);
+      setActionError(
+        "Something went wrong while removing this collaborator."
+      );
+    } finally {
+      setRemovingCollaboratorId(null);
     }
   };
 
@@ -1189,15 +1240,84 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
               No collaborators yet.
             </div>
           ) : (
-            <div style={metaRow}>
+            <div style={list}>
               {members.map((member) => (
-                <span key={member.id}>
-                  {member.display_name || member.username} · Collaborator
-                </span>
+                <div key={member.id} style={compactActions}>
+                  <span>
+                    {member.display_name || member.username} · Collaborator
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setPendingCollaboratorRemove(member)}
+                    disabled={removingCollaboratorId === member.user_id}
+                    style={{
+                      ...dangerButton,
+                      opacity:
+                        removingCollaboratorId === member.user_id ? 0.5 : 1,
+                      cursor:
+                        removingCollaboratorId === member.user_id
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                  >
+                    {removingCollaboratorId === member.user_id
+                      ? "Removing..."
+                      : "Remove"}
+                  </button>
+                </div>
               ))}
             </div>
           )}
         </section>
+      )}
+
+      {pendingCollaboratorRemove && (
+        <div style={removeConfirmOverlay}>
+          <section style={removeConfirmBox}>
+            <div>
+              <div style={removeConfirmEyebrow}>
+                Remove collaborator
+              </div>
+
+              <h2 style={removeConfirmTitle}>
+                Remove this collaborator?
+              </h2>
+
+              <p style={removeConfirmText}>
+                This person will lose access to this shared trip plan.
+                Content they already added will remain in the plan.
+              </p>
+
+              <p style={removeConfirmItem}>
+                {pendingCollaboratorRemove.display_name
+                  || pendingCollaboratorRemove.username}
+              </p>
+            </div>
+
+            <div style={actions}>
+              <button
+                type="button"
+                onClick={() => setPendingCollaboratorRemove(null)}
+                style={secondaryButton}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const memberToRemove = pendingCollaboratorRemove;
+                  setPendingCollaboratorRemove(null);
+                  await removeCollaborator(memberToRemove);
+                }}
+                style={dangerButton}
+              >
+                Remove collaborator
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       <section style={radarBox}>

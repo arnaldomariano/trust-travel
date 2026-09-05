@@ -4,6 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
 
+type OfficialSource = {
+  id: number;
+  name: string;
+  website_url: string;
+  source_type: string;
+  is_verified: boolean;
+  place_id: number | null;
+};
+
 type ActivityItem = {
   type: string;
   category?: string;
@@ -16,6 +25,7 @@ type ActivityItem = {
   external_link?: string;
   source_name?: string;
   source_url?: string;
+  official_source?: OfficialSource | null;
   place_id: number | null;
   place_name: string;
   destination_name: string;
@@ -340,6 +350,12 @@ export default function TripPlanActivityPage() {
                 </p>
               )}
 
+              {item.official_source?.is_verified && (
+                <div style={officialSourceLine}>
+                  ✓ Official source · {item.official_source.name}
+                </div>
+              )}
+
               {item.event_date && (
                 <div style={eventDate}>
                   Date: {new Date(item.event_date).toLocaleDateString()}
@@ -538,6 +554,12 @@ const activityText = {
   margin: 0,
   color: "#333",
   lineHeight: 1.5,
+};
+
+const officialSourceLine = {
+  color: "#555",
+  fontSize: "13px",
+  fontWeight: 600,
 };
 
 const activityTime = {

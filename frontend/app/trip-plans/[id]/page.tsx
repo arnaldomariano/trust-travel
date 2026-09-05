@@ -51,6 +51,15 @@ type SavedPlace = {
   has_related_content: boolean;
 };
 
+type OfficialSource = {
+  id: number;
+  name: string;
+  website_url: string;
+  source_type: string;
+  is_verified: boolean;
+  place_id: number | null;
+};
+
 type SavedUpdate = {
   id: number;
   trip_plan_id: number;
@@ -63,6 +72,7 @@ type SavedUpdate = {
   external_link: string;
   source_name: string;
   source_url: string;
+  official_source: OfficialSource | null;
   priority: string;
   place_id: number | null;
   place: string;
@@ -2976,6 +2986,12 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
                   <p style={commentText}>{savedUpdate.text}</p>
 
+                  {savedUpdate.official_source?.is_verified && (
+                    <div style={officialSourceLine}>
+                      ✓ Official source · {savedUpdate.official_source.name}
+                    </div>
+                  )}
+
                   {savedUpdate.event_date && (
                     <div style={metaRow}>
                       <span>
@@ -3328,6 +3344,13 @@ const descriptionText = {
   margin: "12px 0 0 0",
   color: "#555",
   lineHeight: 1.6,
+};
+
+const officialSourceLine = {
+  color: "#555",
+  fontSize: "13px",
+  fontWeight: 600,
+  marginTop: "2px",
 };
 
 const metaRow = {

@@ -4,6 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
 
+type OfficialSource = {
+  id: number;
+  name: string;
+  website_url: string;
+  source_type: string;
+  is_verified: boolean;
+  place_id: number | null;
+};
+
 type MyPost = {
   id: number;
   type: "event" | "alert" | "info" | string;
@@ -14,6 +23,7 @@ type MyPost = {
   external_link?: string;
   source_name?: string;
   source_url?: string;
+  official_source?: OfficialSource | null;
   priority?: "low" | "normal" | "high" | "urgent" | string;
   place: string;
   place_id: number;
@@ -593,6 +603,12 @@ const formatDateTime = (value?: string | null) => {
 
                       <p style={text}>{post.text}</p>
 
+                      {post.official_source?.is_verified && (
+                        <div style={officialSourceLine}>
+                          ✓ Official source · {post.official_source.name}
+                        </div>
+                      )}
+
                       <div style={detailsGrid}>
                         {post.event_date && (
                           <span style={detailChip}>
@@ -608,7 +624,7 @@ const formatDateTime = (value?: string | null) => {
 
                         {post.source_name && (
                           <span style={detailChip}>
-                            Source: {post.source_name}
+                            Source cited: {post.source_name}
                           </span>
                         )}
                       </div>
@@ -622,7 +638,7 @@ const formatDateTime = (value?: string | null) => {
                               rel="noopener noreferrer"
                               style={smallLink}
                             >
-                              Open source
+                              Open cited source
                             </a>
                           )}
 
@@ -780,6 +796,13 @@ const categoryBadge = {
   border: "1px solid #ddd",
   borderRadius: "999px",
   padding: "4px 8px",
+};
+
+const officialSourceLine = {
+  color: "#555",
+  fontSize: "13px",
+  fontWeight: 600,
+  marginBottom: "2px",
 };
 
 const text = {

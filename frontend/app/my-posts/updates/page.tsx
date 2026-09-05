@@ -547,6 +547,20 @@ const formatDateTime = (value?: string | null) => {
                         </div>
                       )}
 
+                      {post.official_source?.is_verified && (
+                        <div style={officialSourceEditBox}>
+                          <strong style={{ fontSize: "14px" }}>Official source</strong>
+
+                          <div style={officialSourceLine}>
+                            ✓ {post.official_source.name}
+                          </div>
+
+                          <p style={{ margin: 0, color: "#666", fontSize: "13px", lineHeight: 1.5 }}>
+                            This verified source is linked to the post and cannot be edited here.
+                          </p>
+                        </div>
+                      )}
+
                       <div style={sourceEditBox}>
                         <strong style={{ fontSize: "14px" }}>Optional source and links</strong>
 
@@ -909,6 +923,15 @@ const sourceEditBox = {
   background: "#fafafa",
   display: "grid",
   gap: "12px",
+};
+
+const officialSourceEditBox = {
+  padding: "14px",
+  border: "1px solid #dbeafe",
+  borderRadius: "14px",
+  background: "#f8fbff",
+  display: "grid",
+  gap: "8px",
 };
 
 const postTitle = {

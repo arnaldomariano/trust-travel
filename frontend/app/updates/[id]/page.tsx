@@ -16,6 +16,14 @@ type UpdateDetail = {
   external_link?: string;
   source_name?: string;
   source_url?: string;
+  official_source?: {
+    id: number;
+    name: string;
+    website_url: string;
+    source_type: string;
+    is_verified: boolean;
+    place_id: number | null;
+  } | null;
   priority?: "low" | "normal" | "high" | "urgent" | string;
   place: string;
   place_id: number;
@@ -503,13 +511,47 @@ export default function UpdateDetailPage() {
 
         <p style={text}>{update.text}</p>
 
-        {(update.external_link || update.source_name || update.source_url) && (
+        {(
+          update.external_link ||
+          update.source_name ||
+          update.source_url ||
+          update.official_source
+        ) && (
           <section style={sourceBox}>
             <h2 style={sourceTitle}>Source and links</h2>
 
+            {update.official_source && (
+              <div style={officialSourceBox}>
+                {update.official_source.is_verified && (
+                  <div style={verifiedSourceBadge}>
+                    ✓ Verified official source
+                  </div>
+                )}
+
+                <div style={officialSourceName}>
+                  {update.official_source.name}
+                </div>
+
+                <div style={officialSourceMeta}>
+                  {update.official_source.source_type.replaceAll("_", " ")}
+                </div>
+
+                {update.official_source.website_url && (
+                  <a
+                    href={update.official_source.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={inlineLink}
+                  >
+                    Open official website
+                  </a>
+                )}
+              </div>
+            )}
+
             {update.source_name && (
               <div style={sourceRow}>
-                <strong>Source:</strong>
+                <strong>Source cited:</strong>
                 <span>{update.source_name}</span>
               </div>
             )}
@@ -523,7 +565,7 @@ export default function UpdateDetailPage() {
                   rel="noopener noreferrer"
                   style={inlineLink}
                 >
-                  Open source
+                  Open cited source
                 </a>
               </div>
             )}
@@ -934,6 +976,37 @@ const sourceTitle = {
   marginTop: 0,
   marginBottom: "12px",
   fontSize: "17px",
+};
+
+const officialSourceBox = {
+  padding: "12px",
+  border: "1px solid #ddd",
+  borderRadius: "12px",
+  background: "white",
+  marginBottom: "14px",
+};
+
+const verifiedSourceBadge = {
+  display: "inline-block",
+  padding: "4px 8px",
+  borderRadius: "999px",
+  border: "1px solid #ccc",
+  fontSize: "12px",
+  fontWeight: 700,
+  marginBottom: "8px",
+};
+
+const officialSourceName = {
+  fontWeight: 700,
+  fontSize: "15px",
+  marginBottom: "3px",
+};
+
+const officialSourceMeta = {
+  color: "#666",
+  fontSize: "13px",
+  textTransform: "capitalize" as const,
+  marginBottom: "8px",
 };
 
 const sourceRow = {

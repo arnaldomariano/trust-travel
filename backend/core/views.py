@@ -4103,9 +4103,7 @@ class TripPlanActivityItemsView(APIView):
                         "watch_mode": watch_mode,
                         "created_at": update.created_at,
                         "is_saved": False,
-                        "url": f"/places/{place.id}/experiences?update={update.id}&trip_plan={plan.id}&radar=1"
-                        if place
-                        else "",
+                        "url": f"/updates/{update.id}?trip_plan={plan.id}&radar=1",
                     }
                 )
 

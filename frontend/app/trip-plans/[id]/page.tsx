@@ -59,6 +59,31 @@ type SavedUpdate = {
   update_created_at: string;
 };
 
+type TripPlanResource = {
+  id: number;
+  trip_plan_id: number;
+  title: string;
+  url: string;
+  note: string;
+  category:
+    | "official_info"
+    | "tickets_booking"
+    | "restaurant"
+    | "transport"
+    | "accommodation"
+    | "attraction"
+    | "other"
+    | string;
+  place_id: number | null;
+  place: string;
+  destination: string;
+  added_by_user_id: number | null;
+  added_by_username: string;
+  added_by_display_name: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type TripPlanDestination = {
   id: number;
   place: number;
@@ -86,11 +111,13 @@ type TripPlanDetail = {
   saved_items_count?: number;
   saved_places_count?: number;
   saved_updates_count?: number;
+  resources_count?: number;
   created_at: string;
   updated_at: string;
   saved_items: SavedItem[];
   saved_places: SavedPlace[];
   saved_updates: SavedUpdate[];
+  resources: TripPlanResource[];
 };
 
 type TripPlanMember = {
@@ -264,6 +291,17 @@ export default function TripPlanDetailPage() {
   const [pendingUpdateRemove, setPendingUpdateRemove] =
     useState<SavedUpdate | null>(null);
 
+  const [showResourceForm, setShowResourceForm] = useState(false);
+  const [resourceTitle, setResourceTitle] = useState("");
+  const [resourceUrl, setResourceUrl] = useState("");
+  const [resourceNote, setResourceNote] = useState("");
+  const [resourceCategory, setResourceCategory] = useState("other");
+  const [savingResource, setSavingResource] = useState(false);
+  const [removingResourceId, setRemovingResourceId] =
+    useState<number | null>(null);
+  const [pendingResourceRemove, setPendingResourceRemove] =
+    useState<TripPlanResource | null>(null);
+
   const [tripPlanContentSearch, setTripPlanContentSearch] = useState("");
   const [tripPlanContentResults, setTripPlanContentResults] =
     useState<TripPlanContentSearchResults | null>(null);
@@ -302,6 +340,9 @@ export default function TripPlanDetailPage() {
 
   const savedUpdatesCount =
     plan?.saved_updates_count ?? plan?.saved_updates.length ?? 0;
+
+  const resourcesCount =
+    plan?.resources_count ?? plan?.resources.length ?? 0;
 
   const watchedPlaces = radar?.watched_places ?? [];
 
@@ -977,7 +1018,8 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           saved_count:
             updatedItems.length
             + (prev.saved_places?.length || 0)
-            + (prev.saved_updates?.length || 0),
+            + (prev.saved_updates?.length || 0)
+            + (prev.resources?.length || 0),
         };
       });
 
@@ -1040,7 +1082,8 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           saved_count:
             (prev.saved_items?.length || 0)
             + updatedSavedPlaces.length
-            + (prev.saved_updates?.length || 0),
+            + (prev.saved_updates?.length || 0)
+            + (prev.resources?.length || 0),
         };
       });
 
@@ -1103,7 +1146,8 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           saved_count:
             (prev.saved_items?.length || 0)
             + (prev.saved_places?.length || 0)
-            + updatedSavedUpdates.length,
+            + updatedSavedUpdates.length
+            + (prev.resources?.length || 0),
         };
       });
 
@@ -1127,6 +1171,132 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
 
   const cancelPendingUpdateRemove = () => {
     setPendingUpdateRemove(null);
+  };
+
+  const addResourceToPlan = async () => {
+    if (!plan) return;
+
+    clearActionFeedback();
+
+    const title = resourceTitle.trim();
+    const url = resourceUrl.trim();
+    const note = resourceNote.trim();
+
+    if (!title) {
+      setActionError("Resource title is required.");
+      return;
+    }
+
+    if (!url) {
+      setActionError("Resource URL is required.");
+      return;
+    }
+
+    setSavingResource(true);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${plan.id}/resources/`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title,
+            url,
+            note,
+            category: resourceCategory,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const urlError = Array.isArray(data.url)
+          ? data.url[0]
+          : "";
+
+        setActionError(
+          urlError
+          || data.detail
+          || "Error adding resource to trip plan."
+        );
+        return;
+      }
+
+      await loadPlan();
+
+      setResourceTitle("");
+      setResourceUrl("");
+      setResourceNote("");
+      setResourceCategory("other");
+      setShowResourceForm(false);
+
+      setActionMessage(
+        data.created
+          ? "Resource added to this trip plan."
+          : "This resource is already in the trip plan."
+      );
+    } catch (error) {
+      console.error("Failed to add resource to trip plan:", error);
+      setActionError("Error adding resource to trip plan.");
+    } finally {
+      setSavingResource(false);
+    }
+  };
+
+  const removeResourceFromPlan = async (
+    resource: TripPlanResource
+  ) => {
+    if (!plan) return;
+
+    clearActionFeedback();
+    setRemovingResourceId(resource.id);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/trip-plans/${plan.id}/resources/${resource.id}/`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Remove resource from trip plan error:", data);
+        setActionError(
+          data.detail || "Error removing resource from trip plan."
+        );
+        return;
+      }
+
+      await loadPlan();
+
+      setActionMessage("Resource removed from this trip plan.");
+    } catch (error) {
+      console.error("Failed to remove resource from trip plan:", error);
+      setActionError("Error removing resource from trip plan.");
+    } finally {
+      setRemovingResourceId(null);
+    }
+  };
+
+  const confirmPendingResourceRemove = async () => {
+    if (!pendingResourceRemove) return;
+
+    const resourceToRemove = pendingResourceRemove;
+    setPendingResourceRemove(null);
+
+    await removeResourceFromPlan(resourceToRemove);
+  };
+
+  const cancelPendingResourceRemove = () => {
+    setPendingResourceRemove(null);
   };
 
   const saveTripPlanChanges = async () => {
@@ -1308,6 +1478,11 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           <span>
             {savedUpdatesCount} saved event/info
             {savedUpdatesCount === 1 ? "" : "s"}
+          </span>
+
+          <span>
+            {resourcesCount} external resource
+            {resourcesCount === 1 ? "" : "s"}
           </span>
 
           {plan.start_date && (
@@ -2180,6 +2355,244 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
       </section>
 
       <section style={section}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "16px",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <h2 style={sectionTitle}>External resources</h2>
+
+            <p style={helperText}>
+              Keep useful links, booking pages, official information and other
+              planning resources together with this trip.
+            </p>
+
+            <div style={mutedSmall}>
+              {resourcesCount} {resourcesCount === 1 ? "resource" : "resources"}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowResourceForm((current) => !current);
+              clearActionFeedback();
+            }}
+            style={secondaryButton}
+          >
+            {showResourceForm ? "Close form" : "Add resource"}
+          </button>
+        </div>
+
+        {showResourceForm && (
+          <div
+            style={{
+              display: "grid",
+              gap: "14px",
+              marginTop: "18px",
+            }}
+          >
+            <label style={formLabel}>
+              Title
+              <input
+                type="text"
+                value={resourceTitle}
+                onChange={(event) => {
+                  setResourceTitle(event.target.value);
+                  setActionError("");
+                }}
+                placeholder="Example: Official museum tickets"
+                style={textInput}
+              />
+            </label>
+
+            <label style={formLabel}>
+              URL
+              <input
+                type="url"
+                value={resourceUrl}
+                onChange={(event) => {
+                  setResourceUrl(event.target.value);
+                  setActionError("");
+                }}
+                placeholder="https://..."
+                style={textInput}
+              />
+            </label>
+
+            <label style={formLabel}>
+              Category
+              <select
+                value={resourceCategory}
+                onChange={(event) => {
+                  setResourceCategory(event.target.value);
+                  setActionError("");
+                }}
+                style={textInput}
+              >
+                <option value="official_info">Official information</option>
+                <option value="tickets_booking">Tickets / booking</option>
+                <option value="restaurant">Restaurant</option>
+                <option value="transport">Transport</option>
+                <option value="accommodation">Accommodation</option>
+                <option value="attraction">Attraction</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <label style={formLabel}>
+              Note
+              <textarea
+                value={resourceNote}
+                onChange={(event) => {
+                  setResourceNote(event.target.value);
+                  setActionError("");
+                }}
+                placeholder="Optional note about why this link matters for the trip..."
+                rows={3}
+                style={textareaInput}
+              />
+            </label>
+
+            <div style={actions}>
+              <button
+                type="button"
+                onClick={addResourceToPlan}
+                disabled={savingResource}
+                style={{
+                  ...primaryButton,
+                  opacity: savingResource ? 0.5 : 1,
+                  cursor: savingResource ? "not-allowed" : "pointer",
+                }}
+              >
+                {savingResource ? "Saving..." : "Save resource"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResourceForm(false);
+                  setResourceTitle("");
+                  setResourceUrl("");
+                  setResourceNote("");
+                  setResourceCategory("other");
+                  setActionError("");
+                }}
+                style={secondaryButton}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {plan.resources.length === 0 ? (
+          <div style={emptyBox}>
+            <p style={{ marginTop: 0 }}>
+              This trip does not have any external resources yet.
+            </p>
+
+            <p style={helperText}>
+              Add useful links so important planning information does not get
+              lost across messages, tabs or different websites.
+            </p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gap: "12px",
+              marginTop: "18px",
+            }}
+          >
+            {plan.resources.map((resource) => {
+              const categoryLabel =
+                resource.category === "official_info"
+                  ? "Official information"
+                  : resource.category === "tickets_booking"
+                    ? "Tickets / booking"
+                    : resource.category === "restaurant"
+                      ? "Restaurant"
+                      : resource.category === "transport"
+                        ? "Transport"
+                        : resource.category === "accommodation"
+                          ? "Accommodation"
+                          : resource.category === "attraction"
+                            ? "Attraction"
+                            : "Other";
+
+              const contributor =
+                resource.added_by_display_name
+                || resource.added_by_username;
+
+              return (
+                <article key={resource.id} style={experienceCard}>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    <div style={label}>{categoryLabel}</div>
+
+                    <h3 style={experienceTitle}>{resource.title}</h3>
+
+                    {(resource.place || resource.destination) && (
+                      <div style={mutedSmall}>
+                        {[resource.place, resource.destination]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    )}
+
+                    {resource.note && (
+                      <p style={helperText}>{resource.note}</p>
+                    )}
+
+                    {contributor && (
+                      <div style={mutedSmall}>
+                        Added by {contributor}
+                      </div>
+                    )}
+
+                    <div style={actions}>
+                      <a
+                        href={resource.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={primaryLink}
+                      >
+                        Open resource
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => setPendingResourceRemove(resource)}
+                        disabled={removingResourceId === resource.id}
+                        style={{
+                          ...dangerButton,
+                          opacity:
+                            removingResourceId === resource.id ? 0.5 : 1,
+                          cursor:
+                            removingResourceId === resource.id
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        {removingResourceId === resource.id
+                          ? "Removing..."
+                          : "Remove"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section style={section}>
         <h2 style={sectionTitle}>Saved places</h2>
 
         {plan.saved_places.length === 0 ? (
@@ -2535,6 +2948,47 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
             </section>
           </div>
         )}
+
+      {pendingResourceRemove && (
+        <div style={removeConfirmOverlay}>
+          <section style={removeConfirmBox}>
+            <div>
+              <div style={removeConfirmEyebrow}>Remove from trip plan</div>
+
+              <h2 style={removeConfirmTitle}>
+                Remove this resource from your trip?
+              </h2>
+
+              <p style={removeConfirmText}>
+                This will remove the saved link from this trip plan. The
+                external website or page itself will not be affected.
+              </p>
+
+              <p style={removeConfirmItem}>
+                {pendingResourceRemove.title || "Saved resource"}
+              </p>
+            </div>
+
+            <div style={actions}>
+              <button
+                type="button"
+                onClick={cancelPendingResourceRemove}
+                style={secondaryButton}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmPendingResourceRemove}
+                style={dangerButton}
+              >
+                Remove from plan
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {pendingPlaceRemove && (
         <div style={removeConfirmOverlay}>

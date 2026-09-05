@@ -321,6 +321,61 @@ class PlaceLocationSuggestion(models.Model):
         def __str__(self):
             return f"{self.place} → {self.suggested_parent_place} ({self.status})"
 
+# ===================== Official Source =====================
+
+class OfficialSource(models.Model):
+    SOURCE_TYPE_CHOICES = [
+        ("local_authority", "Local authority"),
+        ("tourism_board", "Tourism board"),
+        ("transport_authority", "Transport authority"),
+        ("government_agency", "Government agency"),
+        ("venue", "Venue"),
+        ("official_organization", "Official organization"),
+        ("other", "Other"),
+    ]
+
+    name = models.CharField(
+        max_length=160,
+    )
+
+    website_url = models.URLField(
+        max_length=500,
+        blank=True,
+    )
+
+    source_type = models.CharField(
+        max_length=30,
+        choices=SOURCE_TYPE_CHOICES,
+        default="other",
+    )
+
+    place = models.ForeignKey(
+        Place,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="official_sources",
+    )
+
+    is_verified = models.BooleanField(
+        default=False,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 # ===================== Update (Feed do app) =====================
 
 class Update(models.Model):
@@ -407,6 +462,18 @@ class Update(models.Model):
         max_length=500,
         blank=True,
         help_text="Optional source URL for verification.",
+    )
+
+    official_source = models.ForeignKey(
+        OfficialSource,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updates",
+        help_text=(
+            "Optional Trust Travel-recognized official source. "
+            "This is separate from the user-provided source name and URL."
+        ),
     )
 
     # Mainly useful for alerts, but can remain optional for all update types.

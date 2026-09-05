@@ -2252,6 +2252,18 @@ def serialize_saved_update(saved_update, request=None):
         "external_link": update.external_link,
         "source_name": update.source_name,
         "source_url": update.source_url,
+        "official_source": (
+            {
+                "id": update.official_source.id,
+                "name": update.official_source.name,
+                "website_url": update.official_source.website_url,
+                "source_type": update.official_source.source_type,
+                "is_verified": update.official_source.is_verified,
+                "place_id": update.official_source.place_id,
+            }
+            if update.official_source
+            else None
+        ),
         "priority": update.priority,
         "place_id": place.id if place else None,
         "place": place.name if place else "",
@@ -2401,6 +2413,7 @@ class TripPlanDetailView(APIView):
             "update",
             "update__place",
             "update__place__destination",
+            "update__official_source",
         ).order_by("-created_at")
 
         resources = TripPlanResource.objects.filter(
@@ -3469,6 +3482,7 @@ class TripPlanRadarView(APIView):
             "place",
             "place__destination",
             "user",
+            "official_source",
         ).order_by(
             "-created_at"
         )[:20]
@@ -3580,6 +3594,18 @@ class TripPlanRadarView(APIView):
                         "external_link": update.external_link,
                         "source_name": update.source_name,
                         "source_url": update.source_url,
+                        "official_source": (
+                            {
+                                "id": update.official_source.id,
+                                "name": update.official_source.name,
+                                "website_url": update.official_source.website_url,
+                                "source_type": update.official_source.source_type,
+                                "is_verified": update.official_source.is_verified,
+                                "place_id": update.official_source.place_id,
+                            }
+                            if update.official_source
+                            else None
+                        ),
                         "place_id": update.place_id,
                         "place_name": update.place.name
                         if update.place
@@ -4033,6 +4059,7 @@ class TripPlanActivityItemsView(APIView):
                 "place",
                 "place__destination",
                 "user",
+                "official_source",
             ).order_by(
                 "-created_at"
             )
@@ -4053,6 +4080,18 @@ class TripPlanActivityItemsView(APIView):
                         "external_link": update.external_link,
                         "source_name": update.source_name,
                         "source_url": update.source_url,
+                        "official_source": (
+                            {
+                                "id": update.official_source.id,
+                                "name": update.official_source.name,
+                                "website_url": update.official_source.website_url,
+                                "source_type": update.official_source.source_type,
+                                "is_verified": update.official_source.is_verified,
+                                "place_id": update.official_source.place_id,
+                            }
+                            if update.official_source
+                            else None
+                        ),
                         "place_id": place.id if place else None,
                         "place_name": place.name if place else "",
                         "destination_name": destination.name if destination else "",
@@ -4117,6 +4156,19 @@ def serialize_update(update, request=None):
         "source_name": update.source_name,
 
         "source_url": update.source_url,
+
+        "official_source": (
+            {
+                "id": update.official_source.id,
+                "name": update.official_source.name,
+                "website_url": update.official_source.website_url,
+                "source_type": update.official_source.source_type,
+                "is_verified": update.official_source.is_verified,
+                "place_id": update.official_source.place_id,
+            }
+            if update.official_source
+            else None
+        ),
 
         "priority": update.priority,
 
@@ -4352,6 +4404,7 @@ class TripPlanSuggestionsView(APIView):
             "user",
             "user__profile",
             "experience",
+            "official_source",
         ).filter(
             type__in=["event", "alert", "info"],
         )
@@ -4429,13 +4482,23 @@ class UpdateListView(APIView):
 
         network_updates = Update.objects.filter(
             user__in=friends
-        ).select_related("user__profile", "place", "experience").order_by("-created_at")
+        ).select_related(
+            "user__profile",
+            "place",
+            "experience",
+            "official_source",
+        ).order_by("-created_at")
 
         other_updates = Update.objects.exclude(
             user__in=friends
         ).exclude(
             user=user
-        ).select_related("user__profile", "place", "experience").order_by("-created_at")
+        ).select_related(
+            "user__profile",
+            "place",
+            "experience",
+            "official_source",
+        ).order_by("-created_at")
 
         requests_qs = Friendship.objects.filter(
             to_user=user,
@@ -4553,6 +4616,7 @@ class UpdateDetailView(APIView):
                 "user__profile",
                 "place",
                 "experience",
+                "official_source",
             ).get(id=pk)
 
         except Update.DoesNotExist:

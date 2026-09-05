@@ -3,8 +3,10 @@ from .models import Destination, Place, Experience
 from .models import Friendship
 from .models import ExperienceReply
 from .models import Update
+from .models import OfficialSource
 
 admin.site.register(Update)
+admin.site.register(OfficialSource)
 
 @admin.register(Destination)
 class DestinationAdmin(admin.ModelAdmin):

@@ -808,7 +808,7 @@ export default function UpdateDetailPage() {
             Save to trip plan
           </button>
 
-          <Link href={`/places/${update.place_id}`} style={primaryLink}>
+          <Link href={`/places/${update.place_id}`} style={secondaryLink}>
             View place
           </Link>
 
@@ -921,6 +921,16 @@ const primaryLink = {
   borderRadius: "10px",
   background: "black",
   color: "white",
+  textDecoration: "none",
+};
+
+const secondaryLink = {
+  display: "inline-block",
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "white",
+  color: "black",
   textDecoration: "none",
 };
 

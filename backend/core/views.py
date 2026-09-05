@@ -28,6 +28,7 @@ from .models import (
     SavedItem,
     SavedPlace,
     SavedUpdate,
+    TripPlanResource,
     TripPlanWatchedPlace,
     TripPlanActivitySeen,
     TripPlan,
@@ -2102,6 +2103,7 @@ def serialize_trip_plan(plan):
     saved_items_count = plan.saved_items.count()
     saved_places_count = plan.saved_places.count()
     saved_updates_count = plan.saved_updates.count()
+    resources_count = plan.resources.count()
 
     destinations = plan.destinations.select_related(
         "place",
@@ -2138,10 +2140,12 @@ def serialize_trip_plan(plan):
             saved_items_count
             + saved_places_count
             + saved_updates_count
+            + resources_count
         ),
         "saved_items_count": saved_items_count,
         "saved_places_count": saved_places_count,
         "saved_updates_count": saved_updates_count,
+        "resources_count": resources_count,
         "created_at": plan.created_at,
         "updated_at": plan.updated_at,
     }
@@ -2234,6 +2238,45 @@ def serialize_saved_update(saved_update, request=None):
         "destination": destination.name if destination else "",
         "saved_at": saved_update.created_at,
         "update_created_at": update.created_at,
+    }
+
+def serialize_trip_plan_resource(resource):
+    place = resource.place
+    destination = place.destination if place else None
+
+    added_by_profile = (
+        getattr(resource.added_by, "profile", None)
+        if resource.added_by
+        else None
+    )
+
+    return {
+        "id": resource.id,
+        "trip_plan_id": resource.trip_plan_id,
+        "title": resource.title,
+        "url": resource.url,
+        "note": resource.note,
+        "category": resource.category,
+        "place_id": place.id if place else None,
+        "place": place.name if place else "",
+        "destination": destination.name if destination else "",
+        "added_by_user_id": (
+            resource.added_by_id
+            if resource.added_by
+            else None
+        ),
+        "added_by_username": (
+            resource.added_by.username
+            if resource.added_by
+            else ""
+        ),
+        "added_by_display_name": (
+            added_by_profile.display_name
+            if added_by_profile
+            else ""
+        ),
+        "created_at": resource.created_at,
+        "updated_at": resource.updated_at,
     }
 
 class TripPlanListCreateView(APIView):
@@ -2330,6 +2373,15 @@ class TripPlanDetailView(APIView):
             "update__place__destination",
         ).order_by("-created_at")
 
+        resources = TripPlanResource.objects.filter(
+            trip_plan=plan,
+        ).select_related(
+            "place",
+            "place__destination",
+            "added_by",
+            "added_by__profile",
+        ).order_by("-created_at")
+
         data = serialize_trip_plan(plan)
 
         data["is_owner"] = user_owns_trip_plan(
@@ -2350,6 +2402,11 @@ class TripPlanDetailView(APIView):
         data["saved_updates"] = [
             serialize_saved_update(saved_update, request)
             for saved_update in saved_updates
+        ]
+
+        data["resources"] = [
+            serialize_trip_plan_resource(resource)
+            for resource in resources
         ]
 
         return Response(data)
@@ -2539,6 +2596,190 @@ class TripPlanMemberDetailView(APIView):
             {
                 "detail": "Collaborator removed from trip plan.",
                 "removed_user_id": user_id,
+            }
+        )
+
+class TripPlanResourcesView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        resources = TripPlanResource.objects.filter(
+            trip_plan=plan,
+        ).select_related(
+            "place",
+            "place__destination",
+            "added_by",
+            "added_by__profile",
+        ).order_by("-created_at")
+
+        return Response({
+            "resources": [
+                serialize_trip_plan_resource(resource)
+                for resource in resources
+            ],
+        })
+
+    def post(self, request, pk):
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=403,
+            )
+
+        title = (request.data.get("title") or "").strip()
+        url = (request.data.get("url") or "").strip()
+        note = (request.data.get("note") or "").strip()
+        category = (request.data.get("category") or "other").strip()
+        raw_place_id = request.data.get("place_id")
+
+        if not title:
+            return Response(
+                {"detail": "Resource title is required."},
+                status=400,
+            )
+
+        if not url:
+            return Response(
+                {"detail": "Resource URL is required."},
+                status=400,
+            )
+
+        try:
+            url = serializers.URLField(
+                max_length=1000,
+            ).run_validation(url)
+        except serializers.ValidationError as exc:
+            return Response(
+                {"url": exc.detail},
+                status=400,
+            )
+
+        valid_categories = {
+            value
+            for value, _ in TripPlanResource.CATEGORY_CHOICES
+        }
+
+        if category not in valid_categories:
+            return Response(
+                {"detail": "Invalid resource category."},
+                status=400,
+            )
+
+        place = None
+
+        if raw_place_id not in (None, ""):
+            try:
+                place_id = int(raw_place_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "Invalid place_id."},
+                    status=400,
+                )
+
+            try:
+                place = Place.objects.get(id=place_id)
+            except Place.DoesNotExist:
+                return Response(
+                    {"detail": "Place not found."},
+                    status=404,
+                )
+
+        resource, created = TripPlanResource.objects.get_or_create(
+            trip_plan=plan,
+            url=url,
+            defaults={
+                "added_by": request.user,
+                "title": title,
+                "note": note,
+                "category": category,
+                "place": place,
+            },
+        )
+
+        # Touch the plan so recently used plans rise to the top.
+        plan.save()
+
+        return Response(
+            {
+                "detail": (
+                    "Resource added to trip plan."
+                    if created
+                    else "Resource is already in this trip plan."
+                ),
+                "created": created,
+                "resource": serialize_trip_plan_resource(resource),
+            },
+            status=201 if created else 200,
+        )
+
+class TripPlanResourceDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk, resource_id):
+        plan = get_trip_plan_for_user(
+            request.user,
+            pk,
+        )
+
+        if not plan:
+            return Response(
+                {"detail": "Trip plan not found."},
+                status=404,
+            )
+
+        if not user_can_contribute_to_trip_plan(
+            request.user,
+            plan,
+        ):
+            return Response(
+                {"detail": "You cannot contribute to this trip plan."},
+                status=403,
+            )
+
+        deleted_count, _ = TripPlanResource.objects.filter(
+            trip_plan=plan,
+            id=resource_id,
+        ).delete()
+
+        if deleted_count == 0:
+            return Response(
+                {"detail": "Resource not found in this trip plan."},
+                status=404,
+            )
+
+        plan.save()
+
+        return Response(
+            {
+                "detail": "Resource removed from trip plan.",
+                "removed_resource_id": resource_id,
             }
         )
 

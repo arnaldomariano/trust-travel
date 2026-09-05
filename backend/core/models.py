@@ -789,6 +789,77 @@ class SavedUpdate(models.Model):
             f"in plan {self.trip_plan_id}"
         )
 
+
+# ===================== Trip Plan Resource =====================
+class TripPlanResource(models.Model):
+    CATEGORY_CHOICES = [
+        ("official_info", "Official information"),
+        ("tickets_booking", "Tickets / booking"),
+        ("restaurant", "Restaurant"),
+        ("transport", "Transport"),
+        ("accommodation", "Accommodation"),
+        ("attraction", "Attraction"),
+        ("other", "Other"),
+    ]
+
+    trip_plan = models.ForeignKey(
+        TripPlan,
+        on_delete=models.CASCADE,
+        related_name="resources",
+    )
+
+    added_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="trip_plan_resources_added",
+    )
+
+    title = models.CharField(
+        max_length=200,
+    )
+
+    url = models.URLField(
+        max_length=1000,
+    )
+
+    note = models.TextField(
+        blank=True,
+    )
+
+    category = models.CharField(
+        max_length=30,
+        choices=CATEGORY_CHOICES,
+        default="other",
+    )
+
+    place = models.ForeignKey(
+        Place,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="trip_plan_resources",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trip_plan", "url"],
+                name="unique_resource_url_per_trip_plan",
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.title} in trip plan {self.trip_plan_id}"
+        )
+
+
 # ===================== Trip Plan Activity Seen =====================
 class TripPlanActivitySeen(models.Model):
     user = models.ForeignKey(

@@ -6,7 +6,31 @@ from .models import Update
 from .models import OfficialSource
 
 admin.site.register(Update)
-admin.site.register(OfficialSource)
+
+
+@admin.register(OfficialSource)
+class OfficialSourceAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "source_type",
+        "place",
+        "is_verified",
+        "updated_at",
+    )
+
+    list_filter = (
+        "source_type",
+        "is_verified",
+    )
+
+    search_fields = (
+        "name",
+        "website_url",
+        "place__name",
+    )
+
+    ordering = ("name",)
+
 
 @admin.register(Destination)
 class DestinationAdmin(admin.ModelAdmin):

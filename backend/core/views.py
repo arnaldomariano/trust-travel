@@ -2174,6 +2174,16 @@ def serialize_saved_item(saved_item, request=None):
         "place": place.name if place else "",
         "place_id": place.id if place else None,
         "destination": destination.name if destination else "",
+        "latitude": (
+            str(place.latitude)
+            if place and place.latitude is not None
+            else None
+        ),
+        "longitude": (
+            str(place.longitude)
+            if place and place.longitude is not None
+            else None
+        ),
         "saved_at": saved_item.created_at,
         "experience_created_at": experience.created_at,
     }
@@ -2206,6 +2216,16 @@ def serialize_saved_place(saved_place, request=None):
         "destination": destination.name if destination else "",
         "destination_country": destination.country if destination else "",
         "destination_city": destination.city if destination else "",
+        "latitude": (
+            str(place.latitude)
+            if place and place.latitude is not None
+            else None
+        ),
+        "longitude": (
+            str(place.longitude)
+            if place and place.longitude is not None
+            else None
+        ),
         "note": saved_place.note,
         "saved_at": saved_place.created_at,
         "related_experiences_count": related_experiences_count,
@@ -2236,6 +2256,16 @@ def serialize_saved_update(saved_update, request=None):
         "place_id": place.id if place else None,
         "place": place.name if place else "",
         "destination": destination.name if destination else "",
+        "latitude": (
+            str(place.latitude)
+            if place and place.latitude is not None
+            else None
+        ),
+        "longitude": (
+            str(place.longitude)
+            if place and place.longitude is not None
+            else None
+        ),
         "saved_at": saved_update.created_at,
         "update_created_at": update.created_at,
     }
@@ -3394,6 +3424,16 @@ class TripPlanRadarView(APIView):
                                 if watched_place.place.destination
                                 else ""
                             ),
+                            "latitude": (
+                                str(watched_place.place.latitude)
+                                if watched_place.place.latitude is not None
+                                else None
+                            ),
+                            "longitude": (
+                                str(watched_place.place.longitude)
+                                if watched_place.place.longitude is not None
+                                else None
+                            ),
                             "is_saved": watched_place.place.id in saved_place_ids,
                         }
                         for watched_place in watched_places
@@ -3457,6 +3497,16 @@ class TripPlanRadarView(APIView):
                         "destination_country": place.destination.country
                         if place.destination
                         else "",
+                        "latitude": (
+                            str(place.latitude)
+                            if place.latitude is not None
+                            else None
+                        ),
+                        "longitude": (
+                            str(place.longitude)
+                            if place.longitude is not None
+                            else None
+                        ),
                         "is_saved": place.id in saved_place_ids,
                     }
                     for watched_place in watched_places

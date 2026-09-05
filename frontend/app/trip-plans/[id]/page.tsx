@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
+
+const TripPlanMap = dynamic(
+  () => import("../../components/TripPlanMap"),
+  {
+    ssr: false,
+  }
+);
 
 type SavedItem = {
   id: number;
@@ -18,6 +26,8 @@ type SavedItem = {
   place: string;
   place_id: number;
   destination: string;
+  latitude: string | null;
+  longitude: string | null;
   saved_at: string;
   experience_created_at: string;
 };
@@ -32,6 +42,8 @@ type SavedPlace = {
   destination: string;
   destination_country: string;
   destination_city: string;
+  latitude: string | null;
+  longitude: string | null;
   note: string;
   saved_at: string;
   related_experiences_count: number;
@@ -55,6 +67,8 @@ type SavedUpdate = {
   place_id: number | null;
   place: string;
   destination: string;
+  latitude: string | null;
+  longitude: string | null;
   saved_at: string;
   update_created_at: string;
 };
@@ -137,6 +151,8 @@ type RadarPlace = {
   destination_id?: number;
   destination_name: string;
   destination_country: string;
+  latitude?: string | null;
+  longitude?: string | null;
   is_saved?: boolean;
   created_at?: string;
 };
@@ -345,6 +361,121 @@ export default function TripPlanDetailPage() {
     plan?.resources_count ?? plan?.resources.length ?? 0;
 
   const watchedPlaces = radar?.watched_places ?? [];
+
+  const tripPlanMapPoints = (() => {
+    const points = new Map<
+      number,
+      {
+        place_id: number;
+        name: string;
+        latitude: number;
+        longitude: number;
+        context?: string;
+        sources: string[];
+      }
+    >();
+
+    const addPoint = ({
+      place_id,
+      name,
+      latitude,
+      longitude,
+      context,
+      source,
+    }: {
+      place_id: number | null | undefined;
+      name: string;
+      latitude: string | null | undefined;
+      longitude: string | null | undefined;
+      context?: string;
+      source: string;
+    }) => {
+      if (!place_id || !latitude || !longitude) {
+        return;
+      }
+
+      const latitudeNumber = Number(latitude);
+      const longitudeNumber = Number(longitude);
+
+      if (
+        !Number.isFinite(latitudeNumber)
+        || !Number.isFinite(longitudeNumber)
+      ) {
+        return;
+      }
+
+      const existing = points.get(place_id);
+
+      if (existing) {
+        if (!existing.sources.includes(source)) {
+          existing.sources.push(source);
+        }
+
+        return;
+      }
+
+      points.set(place_id, {
+        place_id,
+        name,
+        latitude: latitudeNumber,
+        longitude: longitudeNumber,
+        context,
+        sources: [source],
+      });
+    };
+
+    plan?.saved_places.forEach((savedPlace) => {
+      addPoint({
+        place_id: savedPlace.place_id,
+        name: savedPlace.name,
+        latitude: savedPlace.latitude,
+        longitude: savedPlace.longitude,
+        context:
+          savedPlace.destination_country
+          || savedPlace.destination
+          || savedPlace.city,
+        source: "saved place",
+      });
+    });
+
+    plan?.saved_items.forEach((savedItem) => {
+      addPoint({
+        place_id: savedItem.place_id,
+        name: savedItem.place,
+        latitude: savedItem.latitude,
+        longitude: savedItem.longitude,
+        context: savedItem.destination,
+        source: "experience",
+      });
+    });
+
+    plan?.saved_updates.forEach((savedUpdate) => {
+      addPoint({
+        place_id: savedUpdate.place_id,
+        name: savedUpdate.place,
+        latitude: savedUpdate.latitude,
+        longitude: savedUpdate.longitude,
+        context: savedUpdate.destination,
+        source: "event/info",
+      });
+    });
+
+    watchedPlaces.forEach((watchedPlace) => {
+      addPoint({
+        place_id: watchedPlace.id,
+        name: watchedPlace.name,
+        latitude: watchedPlace.latitude,
+        longitude: watchedPlace.longitude,
+        context:
+          watchedPlace.destination_country
+          || watchedPlace.destination_name
+          || watchedPlace.city,
+        source: "Radar",
+      });
+    });
+
+    return Array.from(points.values());
+  })();
 
   const clearActionFeedback = () => {
     setActionMessage("");
@@ -2899,6 +3030,46 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
               </article>
             ))}
           </div>
+        )}
+      </section>
+
+      <section style={section}>
+        <h2 style={sectionTitle}>Trip map</h2>
+
+        <p style={helperText}>
+          See the places connected to this trip through saved places,
+          experiences, events, useful information and Trust Radar.
+        </p>
+
+        <div style={mutedSmall}>
+          {tripPlanMapPoints.length}{" "}
+          {tripPlanMapPoints.length === 1
+            ? "place mapped"
+            : "places mapped"}
+        </div>
+
+        {tripPlanMapPoints.length === 0 ? (
+          <div style={emptyBox}>
+            <p style={{ marginTop: 0 }}>
+              There are no mapped places in this trip yet.
+            </p>
+
+            <p style={helperText}>
+              Places need geographic coordinates before they can appear on the
+              map.
+            </p>
+          </div>
+        ) : (
+          <div style={{ marginTop: "18px" }}>
+            <TripPlanMap points={tripPlanMapPoints} />
+          </div>
+        )}
+
+        {tripPlanMapPoints.length > 0 && (
+          <p style={mutedSmall}>
+            Some saved content may not appear on the map yet if its place does
+            not have geographic coordinates.
+          </p>
         )}
       </section>
 

@@ -245,6 +245,34 @@ const getNormalizedPlaceSearchNames = (place: any) => {
     .map((value) => normalizeText(String(value)));
 };
 
+const placeBelongsToSelectedCountry = (place: any) => {
+  if (!selectedCountryPlace) return true;
+
+  const selectedCountryCode = String(
+    selectedCountryPlace.country_code || ""
+  )
+    .trim()
+    .toUpperCase();
+
+  const placeCountryCode = String(place.country_code || "")
+    .trim()
+    .toUpperCase();
+
+  if (selectedCountryCode && placeCountryCode) {
+    return placeCountryCode === selectedCountryCode;
+  }
+
+  const selectedCountryNames = getNormalizedPlaceSearchNames(
+    selectedCountryPlace
+  );
+
+  const placeCountryName = normalizeText(
+    place.destination_country || ""
+  );
+
+  return selectedCountryNames.includes(placeCountryName);
+};
+
 const getBestTextMatchScore = (values: string[]) => {
   if (!normalizedSearchText) return 0;
 
@@ -303,10 +331,7 @@ const getSimilarityScore = (place: any) => {
     if (place.place_type !== placeType) return 0;
 
     if (selectedCountryPlace) {
-      const selectedCountryName = normalizeText(selectedCountryPlace.name);
-      const placeCountry = normalizeText(place.destination_country);
-
-      if (placeCountry !== selectedCountryName) return 0;
+      if (!placeBelongsToSelectedCountry(place)) return 0;
     }
 
     const textMatchScore = getBestTextMatchScore(searchableNames);
@@ -385,10 +410,7 @@ const getSearchMatchScore = (place: any) => {
     if (!isSpecific) return 0;
 
     if (selectedCountryPlace) {
-      const selectedCountryName = normalizeText(selectedCountryPlace.name);
-      const placeCountry = normalizeText(place.destination_country);
-
-      if (placeCountry !== selectedCountryName) return 0;
+      if (!placeBelongsToSelectedCountry(place)) return 0;
     }
 
     const textMatchScore = getBestTextMatchScore(searchableNames);
@@ -503,10 +525,7 @@ const placesInsideSelectedCountry = selectedCountryPlace
       .filter((place) => {
         if (place.place_type === "country") return false;
 
-        const selectedCountryName = normalizeText(selectedCountryPlace.name);
-        const placeCountry = normalizeText(place.destination_country);
-
-        return placeCountry === selectedCountryName;
+        return placeBelongsToSelectedCountry(place);
       })
       .sort((a, b) => {
         const typeOrder: Record<string, number> = {

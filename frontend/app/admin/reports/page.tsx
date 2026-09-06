@@ -177,6 +177,10 @@ export default function ReportsPage() {
       return `/experiences/${report.experience}`;
     }
 
+    if (report.content_type === "update" && report.update) {
+      return `/updates/${report.update}`;
+    }
+
     if (report.content_type === "place" && report.place) {
       return `/places/${report.place}`;
     }

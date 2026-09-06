@@ -1275,7 +1275,7 @@ const createSpecificPlaceForFlow = async () => {
   // =========================
   const handleSelectExistingPlace = (place: any) => {
   if (isUpdateMode) {
-    router.push(`/create?place=${place.id}`);
+    router.push(`/places/${place.id}?share=update`);
     return;
   }
 
@@ -2629,7 +2629,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               type="button"
               onClick={() => {
                 if (isUpdateMode) {
-                  router.push(`/create?place=${selectedCountryPlace.id}`);
+                  router.push(`/places/${selectedCountryPlace.id}?share=update`);
                   return;
                 }
 
@@ -2792,7 +2792,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           {isUpdateMode ? (
             <button
               type="button"
-              onClick={() => router.push(`/create?place=${selectedPlace.id}`)}
+              onClick={() => router.push(`/places/${selectedPlace.id}?share=update`)}
               style={primaryButton}
             >
               Post alert, event or info here

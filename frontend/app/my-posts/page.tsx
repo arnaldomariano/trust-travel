@@ -775,7 +775,7 @@ const formatTripValue = (value: string) => {
       {posts.length === 0 && experiences.length === 0 ? (
         <section style={emptyBox}>
           <p>You have not created any posts yet.</p>
-          <Link href="/create" style={primaryLink}>
+          <Link href="/destinations?mode=update" style={primaryLink}>
             Create your first post
           </Link>
         </section>

@@ -648,9 +648,33 @@ const loadPlace = async () => {
         ? placesData.find((candidate: any) => {
             if (candidate.place_type !== "country") return false;
 
-            return (
-              Number(candidate.destination) === Number(data.destination) ||
-              normalizeText(candidate.name) === normalizeText(data.destination_country)
+            const dataCountryCode = String(data.country_code || "")
+              .trim()
+              .toUpperCase();
+
+            const candidateCountryCode = String(candidate.country_code || "")
+              .trim()
+              .toUpperCase();
+
+            if (dataCountryCode && candidateCountryCode) {
+              return candidateCountryCode === dataCountryCode;
+            }
+
+            if (Number(candidate.destination) === Number(data.destination)) {
+              return true;
+            }
+
+            const candidateNames = [
+              candidate.name,
+              candidate.canonical_name,
+              ...(candidate.aliases || []),
+              ...(candidate.search_aliases || []),
+            ]
+              .filter(Boolean)
+              .map((value) => normalizeText(String(value)));
+
+            return candidateNames.includes(
+              normalizeText(data.destination_country)
             );
           })
         : null;

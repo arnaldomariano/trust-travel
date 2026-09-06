@@ -14,6 +14,8 @@ from .official_source_services import (
 
 @admin.register(Update)
 class UpdateAdmin(admin.ModelAdmin):
+    actions = None
+
     def has_change_permission(self, request, obj=None):
         if obj is not None and obj.official_source_id:
             return False

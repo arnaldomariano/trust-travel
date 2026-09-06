@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 from .models import Destination, Place, Experience
 from .models import Friendship
@@ -38,8 +39,31 @@ class OfficialSourceAdmin(admin.ModelAdmin):
     ordering = ("name",)
 
 
+class OfficialSourceEntryAdminForm(forms.ModelForm):
+    class Meta:
+        model = OfficialSourceEntry
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        status_field = self.fields.get("status")
+
+        if status_field:
+            if self.instance.status == "published":
+                status_field.disabled = True
+            else:
+                status_field.choices = [
+                    choice
+                    for choice in status_field.choices
+                    if choice[0] != "published"
+                ]
+
+
 @admin.register(OfficialSourceEntry)
 class OfficialSourceEntryAdmin(admin.ModelAdmin):
+    form = OfficialSourceEntryAdminForm
+
     list_display = (
         "title",
         "official_source",

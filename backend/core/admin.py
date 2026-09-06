@@ -73,6 +73,48 @@ class OfficialSourceEntryAdmin(admin.ModelAdmin):
         "updated_at",
     )
 
+    fieldsets = (
+        (
+            "Source and location",
+            {
+                "fields": (
+                    "official_source",
+                    "place",
+                    "external_url",
+                    "external_id",
+                )
+            },
+        ),
+        (
+            "Content",
+            {
+                "fields": (
+                    "title",
+                    "text",
+                    "update_type",
+                    "category",
+                    "priority",
+                    "event_date",
+                    "published_at",
+                    "discovered_at",
+                )
+            },
+        ),
+        (
+            "Review and publication",
+            {
+                "fields": (
+                    "status",
+                    "reviewed_by",
+                    "reviewed_at",
+                    "resulting_update",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
     actions = ("publish_selected_entries",)
 
     @admin.action(description="Publish selected official source entries")

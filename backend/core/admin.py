@@ -146,6 +146,15 @@ class OfficialSourceEntryAdmin(admin.ModelAdmin):
         published_count = 0
 
         for entry in queryset:
+            if entry.status != "pending":
+                self.message_user(
+                    request,
+                    f'Could not publish "{entry.title}": '
+                    "only pending entries can be published.",
+                    level="warning",
+                )
+                continue
+
             try:
                 publish_official_source_entry(
                     entry_id=entry.id,

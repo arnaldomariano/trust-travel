@@ -66,19 +66,7 @@ export default function UserActivityPage() {
   }, [updates, username]);
 
   const handleOpenUpdate = (item: any) => {
-    if (item.type === "experience" && item.experience_id) {
-      router.push(
-        `/experiences/${item.experience_id}`
-      );
-      return;
-    }
-
-    if (item.type === "experience") {
-      router.push(`/places/${item.place_id}/experiences`);
-      return;
-    }
-
-    router.push(`/places/${item.place_id}`);
+    router.push(`/updates/${item.id}`);
   };
 
   return (
@@ -93,7 +81,7 @@ export default function UserActivityPage() {
       <h1>Activity from {displayName}</h1>
 
       <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
-        Recent experiences, events, alerts and information shared by this user.
+        Recent events, alerts and useful information shared by this user.
       </p>
 
       {loading ? (

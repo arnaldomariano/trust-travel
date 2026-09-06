@@ -641,12 +641,32 @@ const selectedPlaceParentCountryName = selectedPlace
   ? getParentCountryName(selectedPlace)
   : "";
 
-const selectedPlaceParentCountryPlace = selectedPlaceParentCountryName
-  ? places.find(
-      (place) =>
-        isCountryPlace(place) &&
-        normalizeText(place.name) === normalizeText(selectedPlaceParentCountryName)
-    )
+const selectedPlaceParentCountryPlace = selectedPlace
+  ? places.find((place) => {
+      if (!isCountryPlace(place)) return false;
+
+      const selectedPlaceCountryCode = String(
+        selectedPlace.country_code || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      const candidateCountryCode = String(
+        place.country_code || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      if (selectedPlaceCountryCode && candidateCountryCode) {
+        return candidateCountryCode === selectedPlaceCountryCode;
+      }
+
+      const candidateNames = getNormalizedPlaceSearchNames(place);
+
+      return candidateNames.includes(
+        normalizeText(selectedPlaceParentCountryName)
+      );
+    })
   : null;
 
 const selectedPlaceHasNoExperiences =

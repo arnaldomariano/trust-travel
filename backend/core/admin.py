@@ -12,7 +12,17 @@ from .official_source_services import (
     publish_official_source_entry,
 )
 
-admin.site.register(Update)
+@admin.register(Update)
+class UpdateAdmin(admin.ModelAdmin):
+    def has_change_permission(self, request, obj=None):
+        if obj is not None and obj.official_source_id:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.official_source_id:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(OfficialSource)

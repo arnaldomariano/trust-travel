@@ -69,6 +69,11 @@ def publish_official_source_entry(entry_id, reviewed_by):
     if entry.resulting_update_id:
         return entry.resulting_update
 
+    if entry.status != "pending":
+        raise OfficialSourcePublicationError(
+            "Only pending official source entries can be published."
+        )
+
     if entry.place_id is None:
         raise OfficialSourcePublicationError(
             "Official source entry must have a place before publication."

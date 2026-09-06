@@ -322,6 +322,47 @@ def get_or_create_country(value="", code="", aliases=None):
     country = resolve_country(value=value, code=code)
 
     if country:
+        catalog_country = resolve_country_catalog_entry(
+            value=value,
+            code=country.code,
+        )
+
+        if catalog_country:
+            merged_aliases = sorted({
+                *[
+                    str(alias).strip()
+                    for alias in (country.aliases or [])
+                    if str(alias).strip()
+                ],
+                *[
+                    str(alias).strip()
+                    for alias in (catalog_country.get("aliases") or [])
+                    if str(alias).strip()
+                ],
+                *[
+                    str(alias).strip()
+                    for alias in (aliases or [])
+                    if str(alias).strip()
+                ],
+            })
+
+            update_fields = []
+
+            if country.aliases != merged_aliases:
+                country.aliases = merged_aliases
+                update_fields.append("aliases")
+
+            catalog_name = (
+                catalog_country.get("canonical_name") or ""
+            ).strip()
+
+            if catalog_name and country.canonical_name != catalog_name:
+                country.canonical_name = catalog_name
+                update_fields.append("canonical_name")
+
+            if update_fields:
+                country.save(update_fields=update_fields)
+
         return country
 
     catalog_country = resolve_country_catalog_entry(

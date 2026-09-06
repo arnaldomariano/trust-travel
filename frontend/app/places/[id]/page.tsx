@@ -418,22 +418,66 @@ const specificPlaceTypes = ["attraction", "hotel", "restaurant", "nature", "othe
 
   const topChildSpecificPlaces = childSpecificPlaces.slice(0, 5);
 
-  const countryPlaceForHierarchy = allPlaces.find(
-  (p) =>
-    p.place_type === "country" &&
-    normalizeText(p.name) === normalizeText(parentLocationLabel)
-);
+const countryPlaceForHierarchy = allPlaces.find((p) => {
+  if (p.place_type !== "country") return false;
+
+  const placeCountryCode = String(place?.country_code || "")
+    .trim()
+    .toUpperCase();
+
+  const candidateCountryCode = String(p.country_code || "")
+    .trim()
+    .toUpperCase();
+
+  if (placeCountryCode && candidateCountryCode) {
+    return candidateCountryCode === placeCountryCode;
+  }
+
+  const candidateNames = [
+    p.name,
+    p.canonical_name,
+    ...(p.aliases || []),
+    ...(p.search_aliases || []),
+  ]
+    .filter(Boolean)
+    .map((value) => normalizeText(String(value)));
+
+  return candidateNames.includes(
+    normalizeText(parentLocationLabel)
+  );
+});
 
 const cityPlaceForHierarchy =
   place?.parent_place
-    ? allPlaces.find((p) => p.id === place.parent_place)
-    : allPlaces.find(
-        (p) =>
-          p.place_type === "city" &&
-          normalizeText(p.name) === normalizeText(place?.city) &&
-          normalizeText(p.destination_country || p.destination_name) ===
-            normalizeText(parentLocationLabel)
-      );
+    ? allPlaces.find(
+        (p) => Number(p.id) === Number(place.parent_place)
+      )
+    : allPlaces.find((p) => {
+        if (p.place_type !== "city") return false;
+
+        const sameCity =
+          normalizeText(p.name) === normalizeText(place?.city);
+
+        if (!sameCity) return false;
+
+        const placeCountryCode = String(place?.country_code || "")
+          .trim()
+          .toUpperCase();
+
+        const candidateCountryCode = String(p.country_code || "")
+          .trim()
+          .toUpperCase();
+
+        if (placeCountryCode && candidateCountryCode) {
+          return candidateCountryCode === placeCountryCode;
+        }
+
+        return (
+          normalizeText(
+            p.destination_country || p.destination_name
+          ) === normalizeText(parentLocationLabel)
+        );
+      });
 
 const hierarchyLevelLabel =
   place?.place_type === "country"

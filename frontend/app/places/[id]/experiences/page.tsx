@@ -682,13 +682,34 @@ const loadPlace = async () => {
     setParentCountryPlace(parentCountry || null);
 
     if (data.place_type === "country") {
-      const countryName = normalizeText(data.name);
+      const countryCode = String(data.country_code || "")
+        .trim()
+        .toUpperCase();
+
+      const countryNames = [
+        data.name,
+        data.canonical_name,
+        ...(data.aliases || []),
+        ...(data.search_aliases || []),
+      ]
+        .filter(Boolean)
+        .map((value) => normalizeText(String(value)));
 
       const related = Array.isArray(placesData)
         ? placesData
             .filter((relatedPlace: any) => {
               if (relatedPlace.id === data.id) return false;
               if (relatedPlace.place_type === "country") return false;
+
+              const relatedCountryCode = String(
+                relatedPlace.country_code || ""
+              )
+                .trim()
+                .toUpperCase();
+
+              if (countryCode && relatedCountryCode) {
+                return relatedCountryCode === countryCode;
+              }
 
               const relatedCountry = normalizeText(
                 relatedPlace.destination_country
@@ -699,8 +720,8 @@ const loadPlace = async () => {
               );
 
               return (
-                relatedCountry === countryName ||
-                relatedDestination === countryName
+                countryNames.includes(relatedCountry) ||
+                countryNames.includes(relatedDestination)
               );
             })
             .sort((a: any, b: any) => {

@@ -9,6 +9,41 @@ import random
 import secrets
 import string
 
+
+UPDATE_TYPE_CHOICES = [
+    ("event", "Event"),
+    ("alert", "Alert"),
+    ("info", "Info"),
+    ("experience", "Experience"),
+]
+
+OFFICIAL_SOURCE_UPDATE_TYPE_CHOICES = [
+    choice
+    for choice in UPDATE_TYPE_CHOICES
+    if choice[0] != "experience"
+]
+
+UPDATE_CATEGORY_CHOICES = [
+    ("music", "Music"),
+    ("religious", "Religious"),
+    ("social", "Social"),
+    ("tourism", "Tourism"),
+    ("transport", "Transport"),
+    ("safety", "Safety"),
+    ("weather", "Weather"),
+    ("food", "Food"),
+    ("culture", "Culture"),
+    ("general", "General"),
+]
+
+UPDATE_PRIORITY_CHOICES = [
+    ("low", "Low"),
+    ("normal", "Normal"),
+    ("high", "High"),
+    ("urgent", "Urgent"),
+]
+
+
 def generate_public_code(country_code: str):
     prefix = (country_code or "xx").upper()[:2]
 
@@ -376,35 +411,128 @@ class OfficialSource(models.Model):
         return self.name
 
 
+# ===================== Official Source Entry =====================
+
+class OfficialSourceEntry(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("published", "Published"),
+        ("ignored", "Ignored"),
+        ("duplicate", "Duplicate"),
+    ]
+
+    official_source = models.ForeignKey(
+        OfficialSource,
+        on_delete=models.CASCADE,
+        related_name="entries",
+    )
+
+    place = models.ForeignKey(
+        Place,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="official_source_entries",
+    )
+
+    external_url = models.URLField(
+        max_length=1000,
+        blank=True,
+    )
+
+    external_id = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    title = models.CharField(
+        max_length=160,
+    )
+
+    text = models.TextField(
+        blank=True,
+    )
+
+    published_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    update_type = models.CharField(
+        max_length=20,
+        choices=OFFICIAL_SOURCE_UPDATE_TYPE_CHOICES,
+        default="info",
+    )
+
+    category = models.CharField(
+        max_length=20,
+        choices=UPDATE_CATEGORY_CHOICES,
+        default="general",
+    )
+
+    priority = models.CharField(
+        max_length=20,
+        choices=UPDATE_PRIORITY_CHOICES,
+        default="normal",
+    )
+
+    event_date = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    discovered_at = models.DateTimeField(
+        default=timezone.now,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending",
+    )
+
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_official_source_entries",
+    )
+
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    resulting_update = models.OneToOneField(
+        "Update",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="official_source_entry",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-published_at", "-discovered_at", "-created_at"]
+
+    def __str__(self):
+        return f"{self.official_source} - {self.title}"
+
+
 # ===================== Update (Feed do app) =====================
 
 class Update(models.Model):
-    TYPE_CHOICES = [
-        ("event", "Event"),
-        ("alert", "Alert"),
-        ("info", "Info"),
-        ("experience", "Experience"),
-    ]
-
-    CATEGORY_CHOICES = [
-        ("music", "Music"),
-        ("religious", "Religious"),
-        ("social", "Social"),
-        ("tourism", "Tourism"),
-        ("transport", "Transport"),
-        ("safety", "Safety"),
-        ("weather", "Weather"),
-        ("food", "Food"),
-        ("culture", "Culture"),
-        ("general", "General"),
-    ]
-
-    PRIORITY_CHOICES = [
-        ("low", "Low"),
-        ("normal", "Normal"),
-        ("high", "High"),
-        ("urgent", "Urgent"),
-    ]
+    TYPE_CHOICES = UPDATE_TYPE_CHOICES
+    CATEGORY_CHOICES = UPDATE_CATEGORY_CHOICES
+    PRIORITY_CHOICES = UPDATE_PRIORITY_CHOICES
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     place = models.ForeignKey(Place, on_delete=models.CASCADE)

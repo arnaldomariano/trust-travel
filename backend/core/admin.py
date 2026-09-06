@@ -4,6 +4,7 @@ from .models import Friendship
 from .models import ExperienceReply
 from .models import Update
 from .models import OfficialSource
+from .models import OfficialSourceEntry
 
 admin.site.register(Update)
 
@@ -30,6 +31,39 @@ class OfficialSourceAdmin(admin.ModelAdmin):
     )
 
     ordering = ("name",)
+
+
+@admin.register(OfficialSourceEntry)
+class OfficialSourceEntryAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "official_source",
+        "place",
+        "status",
+        "published_at",
+        "discovered_at",
+    )
+
+    list_filter = (
+        "status",
+        "official_source",
+        "published_at",
+        "discovered_at",
+    )
+
+    search_fields = (
+        "title",
+        "text",
+        "external_url",
+        "external_id",
+        "official_source__name",
+        "place__name",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+    )
 
 
 @admin.register(Destination)

@@ -6,6 +6,11 @@ from .models import Update
 from .models import OfficialSource
 from .models import OfficialSourceEntry
 
+from .official_source_services import (
+    OfficialSourcePublicationError,
+    publish_official_source_entry,
+)
+
 admin.site.register(Update)
 
 
@@ -61,9 +66,41 @@ class OfficialSourceEntryAdmin(admin.ModelAdmin):
     )
 
     readonly_fields = (
+        "reviewed_by",
+        "reviewed_at",
+        "resulting_update",
         "created_at",
         "updated_at",
     )
+
+    actions = ("publish_selected_entries",)
+
+    @admin.action(description="Publish selected official source entries")
+    def publish_selected_entries(self, request, queryset):
+        published_count = 0
+
+        for entry in queryset:
+            try:
+                publish_official_source_entry(
+                    entry_id=entry.id,
+                    reviewed_by=request.user,
+                )
+            except OfficialSourcePublicationError as exc:
+                self.message_user(
+                    request,
+                    f'Could not publish "{entry.title}": {exc}',
+                    level="error",
+                )
+            else:
+                published_count += 1
+
+        if published_count:
+            self.message_user(
+                request,
+                f"{published_count} official source entr"
+                f"{'y' if published_count == 1 else 'ies'} published.",
+                level="success",
+            )
 
 
 @admin.register(Destination)

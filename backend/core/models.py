@@ -581,7 +581,7 @@ class Update(models.Model):
     )
 
     source_name = models.CharField(
-        max_length=120,
+        max_length=160,
         blank=True,
         help_text="Optional source name, e.g. official website, local authority, venue page.",
     )

@@ -256,13 +256,23 @@ const formatPlaceNameForCreation = (value: string) => {
 
 const filteredRelatedPlaces = normalizedRelatedPlaceSearch
   ? sortedRelatedPlaces.filter((relatedPlace) => {
-      const name = normalizeText(relatedPlace.name);
+      const searchableNames = [
+        relatedPlace.name,
+        relatedPlace.canonical_name,
+        ...(relatedPlace.aliases || []),
+        ...(relatedPlace.search_aliases || []),
+      ]
+        .filter(Boolean)
+        .map((value) => normalizeText(String(value)));
+
       const city = normalizeText(relatedPlace.city);
       const destinationName = normalizeText(relatedPlace.destination_name);
       const destinationCountry = normalizeText(relatedPlace.destination_country);
 
       return (
-        name.includes(normalizedRelatedPlaceSearch) ||
+        searchableNames.some((value) =>
+          value.includes(normalizedRelatedPlaceSearch)
+        ) ||
         city.includes(normalizedRelatedPlaceSearch) ||
         destinationName.includes(normalizedRelatedPlaceSearch) ||
         destinationCountry.includes(normalizedRelatedPlaceSearch)

@@ -480,11 +480,13 @@ const normalizedRelatedPlaceSearch = normalizeText(relatedPlaceSearch);
 
 const filteredPlacesInsideSelectedCountry = normalizedRelatedPlaceSearch
   ? placesInsideSelectedCountry.filter((place) => {
-      const name = normalizeText(place.name);
+      const searchableNames = getNormalizedPlaceSearchNames(place);
       const city = normalizeText(place.city || place.destination_name);
 
       return (
-        name.includes(normalizedRelatedPlaceSearch) ||
+        searchableNames.some((value) =>
+          value.includes(normalizedRelatedPlaceSearch)
+        ) ||
         city.includes(normalizedRelatedPlaceSearch)
       );
     })

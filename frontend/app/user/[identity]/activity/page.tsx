@@ -10,9 +10,9 @@ export default function UserActivityPage() {
   const params = useParams();
   const router = useRouter();
 
-  const username = Array.isArray(params.username)
-    ? params.username[0]
-    : params.username;
+  const identity = Array.isArray(params.identity)
+    ? params.identity[0]
+    : params.identity;
 
   const [updates, setUpdates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,9 +38,8 @@ export default function UserActivityPage() {
 
         const filtered = allUpdates.filter((item: any) => {
           return (
-            item.user === username ||
-            item.username === username ||
-            item.display_name === username
+            item.user === identity ||
+            item.username === identity
           );
         });
 
@@ -52,18 +51,18 @@ export default function UserActivityPage() {
       }
     };
 
-    if (username) {
+    if (identity) {
       loadActivity();
     }
-  }, [username]);
+  }, [identity]);
 
   const displayName = useMemo(() => {
     const first = updates[0];
 
-    if (!first) return username;
+    if (!first) return identity;
 
-    return first.display_name || first.username || first.user || username;
-  }, [updates, username]);
+    return first.display_name || first.username || first.user || identity;
+  }, [updates, identity]);
 
   const handleOpenUpdate = (item: any) => {
     router.push(`/updates/${item.id}`);
@@ -100,7 +99,6 @@ export default function UserActivityPage() {
               style={activityCard}
             >
               <div style={{ fontSize: "13px", color: "#777", marginBottom: "8px" }}>
-                {item.type === "experience" && "⭐ Experience"}
                 {item.type === "event" && "🎭 Event"}
                 {item.type === "alert" && "⚠️ Alert"}
                 {item.type === "info" && "ℹ️ Info"}

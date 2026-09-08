@@ -18,6 +18,9 @@ type AnalysisType =
 type Place = {
   id: number;
   name: string;
+  canonical_name?: string;
+  aliases?: string[];
+  search_aliases?: string[];
   place_type?: string;
   city?: string | null;
   destination_name?: string | null;
@@ -237,12 +240,17 @@ function EvaluationsPageContent() {
         const searchableText = normalizeText(
           [
             place.name,
+            place.canonical_name,
+            ...(place.aliases || []),
+            ...(place.search_aliases || []),
             place.city,
             place.destination_name,
             place.destination_country,
             place.destination_city,
             place.place_type,
-          ].join(" ")
+          ]
+            .filter(Boolean)
+            .join(" ")
         );
 
         return searchableText.includes(normalizedSearch);

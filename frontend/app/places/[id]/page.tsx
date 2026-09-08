@@ -455,8 +455,18 @@ const cityPlaceForHierarchy =
     : allPlaces.find((p) => {
         if (p.place_type !== "city") return false;
 
-        const sameCity =
-          normalizeText(p.name) === normalizeText(place?.city);
+        const candidateCityNames = [
+          p.name,
+          p.canonical_name,
+          ...(p.aliases || []),
+          ...(p.search_aliases || []),
+        ]
+          .filter(Boolean)
+          .map((value) => normalizeText(String(value)));
+
+        const sameCity = candidateCityNames.includes(
+          normalizeText(place?.city)
+        );
 
         if (!sameCity) return false;
 

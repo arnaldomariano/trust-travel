@@ -6,8 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
 
-const TripPlanMap = dynamic(
-  () => import("../../components/TripPlanMap"),
+const PlacesMap = dynamic(
+  () => import("../../components/PlacesMap"),
   {
     ssr: false,
   }
@@ -381,7 +381,7 @@ export default function TripPlanDetailPage() {
         latitude: number;
         longitude: number;
         context?: string;
-        sources: string[];
+        details: string[];
       }
     >();
 
@@ -391,14 +391,14 @@ export default function TripPlanDetailPage() {
       latitude,
       longitude,
       context,
-      source,
+      detail,
     }: {
       place_id: number | null | undefined;
       name: string;
       latitude: string | null | undefined;
       longitude: string | null | undefined;
       context?: string;
-      source: string;
+      detail: string;
     }) => {
       if (!place_id || !latitude || !longitude) {
         return;
@@ -417,8 +417,8 @@ export default function TripPlanDetailPage() {
       const existing = points.get(place_id);
 
       if (existing) {
-        if (!existing.sources.includes(source)) {
-          existing.sources.push(source);
+        if (!existing.details.includes(detail)) {
+          existing.details.push(detail);
         }
 
         return;
@@ -430,7 +430,7 @@ export default function TripPlanDetailPage() {
         latitude: latitudeNumber,
         longitude: longitudeNumber,
         context,
-        sources: [source],
+        details: [detail],
       });
     };
 
@@ -444,7 +444,7 @@ export default function TripPlanDetailPage() {
           savedPlace.destination_country
           || savedPlace.destination
           || savedPlace.city,
-        source: "saved place",
+        detail: "saved place",
       });
     });
 
@@ -455,7 +455,7 @@ export default function TripPlanDetailPage() {
         latitude: savedItem.latitude,
         longitude: savedItem.longitude,
         context: savedItem.destination,
-        source: "experience",
+        detail: "experience",
       });
     });
 
@@ -466,7 +466,7 @@ export default function TripPlanDetailPage() {
         latitude: savedUpdate.latitude,
         longitude: savedUpdate.longitude,
         context: savedUpdate.destination,
-        source: "event/info",
+        detail: "event/info",
       });
     });
 
@@ -480,7 +480,7 @@ export default function TripPlanDetailPage() {
           watchedPlace.destination_country
           || watchedPlace.destination_name
           || watchedPlace.city,
-        source: "Radar",
+        detail: "Radar",
       });
     });
 
@@ -3077,7 +3077,7 @@ const watchRadarPlace = async (place: { id: number; name: string }) => {
           </div>
         ) : (
           <div style={{ marginTop: "18px" }}>
-            <TripPlanMap points={tripPlanMapPoints} />
+            <PlacesMap points={tripPlanMapPoints} />
           </div>
         )}
 

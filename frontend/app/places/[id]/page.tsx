@@ -1,9 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
+
+const PlacesMap = dynamic(
+  () => import("../../components/PlacesMap"),
+  {
+    ssr: false,
+  }
+);
 
 type GeographyCityResult = {
   name: string;
@@ -394,6 +402,29 @@ const placeIntroText =
         ]
           .filter(Boolean)
           .join(" · ");
+
+  const placeMapPoints = (() => {
+    if (!place?.id || !place?.latitude || !place?.longitude) {
+      return [];
+    }
+
+    const latitude = Number(place.latitude);
+    const longitude = Number(place.longitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return [];
+    }
+
+    return [
+      {
+        place_id: place.id,
+        name: place.name,
+        latitude,
+        longitude,
+        context: placeLocation || undefined,
+      },
+    ];
+  })();
 
 const specificPlaceTypes = ["attraction", "hotel", "restaurant", "nature", "other"];
 
@@ -1560,6 +1591,15 @@ const handleToggleEventsInfo = () => {
                 ))}
               </div>
           </div>
+
+          {placeMapPoints.length > 0 && (
+            <div style={{ marginTop: "18px" }}>
+              <PlacesMap
+                points={placeMapPoints}
+                showPlaceLink={false}
+              />
+            </div>
+          )}
 
           {place && place.place_type !== "country" && (
             <div

@@ -11,17 +11,18 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 
-type TripPlanMapPoint = {
+type PlacesMapPoint = {
   place_id: number;
   name: string;
   latitude: number;
   longitude: number;
   context?: string;
-  sources?: string[];
+  details?: string[];
 };
 
-type TripPlanMapProps = {
-  points: TripPlanMapPoint[];
+type PlacesMapProps = {
+  points: PlacesMapPoint[];
+  showPlaceLink?: boolean;
 };
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -38,7 +39,7 @@ L.Icon.Default.mergeOptions({
 function FitMapToPoints({
   points,
 }: {
-  points: TripPlanMapPoint[];
+  points: PlacesMapPoint[];
 }) {
   const map = useMap();
 
@@ -68,9 +69,10 @@ function FitMapToPoints({
   return null;
 }
 
-export default function TripPlanMap({
+export default function PlacesMap({
   points,
-}: TripPlanMapProps) {
+  showPlaceLink = true,
+}: PlacesMapProps) {
   if (points.length === 0) {
     return null;
   }
@@ -126,15 +128,17 @@ export default function TripPlanMap({
                   <span>{point.context}</span>
                 )}
 
-                {point.sources && point.sources.length > 0 && (
+                {point.details && point.details.length > 0 && (
                   <span>
-                    In this trip: {point.sources.join(", ")}
+                    {point.details.join(" · ")}
                   </span>
                 )}
 
-                <Link href={`/places/${point.place_id}`}>
-                  View place
-                </Link>
+                {showPlaceLink && (
+                  <Link href={`/places/${point.place_id}`}>
+                    View place
+                  </Link>
+                )}
               </div>
             </Popup>
           </Marker>

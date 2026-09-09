@@ -18,6 +18,8 @@ type PlacesMapPoint = {
   longitude: number;
   context?: string;
   details?: string[];
+  image_url?: string;
+  experience_id?: number;
 };
 
 type PlacesMapProps = {
@@ -123,6 +125,22 @@ export default function PlacesMap({
                 }}
               >
                 <strong>{point.name}</strong>
+
+                {point.image_url && point.experience_id && (
+                  <Link href={`/experiences/${point.experience_id}`}>
+                    <img
+                      src={point.image_url}
+                      alt={point.name}
+                      style={{
+                        width: "100%",
+                        height: "110px",
+                        objectFit: "cover",
+                        borderRadius: "8px",
+                        display: "block",
+                      }}
+                    />
+                  </Link>
+                )}
 
                 {point.context && (
                   <span>{point.context}</span>

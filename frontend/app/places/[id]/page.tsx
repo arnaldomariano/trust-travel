@@ -419,6 +419,10 @@ const placeIntroText =
       return [];
     }
 
+  const mapPreviewExperience = experiences.find(
+    (experience) => experience.image_url
+  );
+
     return [
       {
         place_id: place.id,
@@ -426,6 +430,8 @@ const placeIntroText =
         latitude,
         longitude,
         context: placeLocation || undefined,
+        image_url: mapPreviewExperience?.image_url || undefined,
+        experience_id: mapPreviewExperience?.id || undefined,
       },
     ];
   })();

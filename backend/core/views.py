@@ -1,7 +1,7 @@
 
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.db.models import Count, Q
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 
@@ -1184,6 +1184,71 @@ class CreateBasicPlaceView(APIView):
 class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
+
+class PlaceMapPointsView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, place_id):
+        preview_experience = (
+            Experience.objects.filter(
+                place_id=OuterRef("pk"),
+                image__isnull=False,
+            )
+            .exclude(image="")
+            .order_by("-created_at")
+        )
+
+        places = (
+            Place.objects.filter(
+                Q(id=place_id) | Q(parent_place_id=place_id),
+                latitude__isnull=False,
+                longitude__isnull=False,
+            )
+            .annotate(
+                preview_experience_id=Subquery(
+                    preview_experience.values("id")[:1]
+                )
+            )
+            .order_by("name")
+        )
+
+        preview_ids = [
+            place.preview_experience_id
+            for place in places
+            if place.preview_experience_id
+        ]
+
+        preview_experiences = {
+            experience.id: experience
+            for experience in Experience.objects.filter(id__in=preview_ids)
+        }
+
+        result = []
+
+        for place in places:
+            preview = preview_experiences.get(
+                place.preview_experience_id
+            )
+
+            image_url = None
+
+            if preview and preview.image:
+                image_url = request.build_absolute_uri(
+                    preview.image.url
+                )
+
+            result.append({
+                "place_id": place.id,
+                "name": place.name,
+                "place_type": place.place_type,
+                "latitude": str(place.latitude),
+                "longitude": str(place.longitude),
+                "image_url": image_url,
+                "experience_id": preview.id if preview else None,
+            })
+
+        return Response(result)
 
 class PlaceLocationSuggestionCreateView(generics.CreateAPIView):
     serializer_class = PlaceLocationSuggestionSerializer

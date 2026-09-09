@@ -85,6 +85,8 @@ export default function PlacePage() {
 
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
 
+  const [mapPoints, setMapPoints] = useState<any[]>([]);
+
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
   const [countryContext, setCountryContext] = useState<any>(null);
@@ -407,46 +409,6 @@ const placeIntroText =
           .filter(Boolean)
           .join(" · ");
 
-  const placeMapPoints = (() => {
-    if (!place?.id || !place?.latitude || !place?.longitude) {
-      return [];
-    }
-
-    const latitude = Number(place.latitude);
-    const longitude = Number(place.longitude);
-
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      return [];
-    }
-
-  const mapPreviewExperience = experiences.find(
-    (experience) => experience.image_url
-  );
-
-    return [
-      {
-        place_id: place.id,
-        name: place.name,
-        latitude,
-        longitude,
-        context: placeLocation || undefined,
-        image_url: mapPreviewExperience?.image_url || undefined,
-        experience_id: mapPreviewExperience?.id || undefined,
-      },
-    ];
-  })();
-
-  useEffect(() => {
-    if (!shouldFocusMap || placeMapPoints.length === 0) {
-      return;
-    }
-
-    mapSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
-  }, [shouldFocusMap, placeMapPoints.length]);
-
   const specificPlaceTypes = [
     "attraction",
     "hotel",
@@ -476,8 +438,29 @@ const placeIntroText =
 
   const topChildSpecificPlaces = childSpecificPlaces.slice(0, 5);
 
-const countryPlaceForHierarchy = allPlaces.find((p) => {
-  if (p.place_type !== "country") return false;
+  const placeMapPoints = mapPoints.map((point) => ({
+    place_id: point.place_id,
+    name: point.name,
+    latitude: Number(point.latitude),
+    longitude: Number(point.longitude),
+    context: getPlaceTypeLabel(point.place_type),
+    image_url: point.image_url || undefined,
+    experience_id: point.experience_id || undefined,
+  }));
+
+  useEffect(() => {
+    if (!shouldFocusMap || placeMapPoints.length === 0) {
+      return;
+    }
+
+    mapSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [shouldFocusMap, placeMapPoints.length]);
+
+  const countryPlaceForHierarchy = allPlaces.find((p) => {
+    if (p.place_type !== "country") return false;
 
   const placeCountryCode = String(place?.country_code || "")
     .trim()
@@ -750,6 +733,16 @@ useEffect(() => {
 
        loadRatingsSummary(id);
        loadLocationSuggestions(id);
+
+       fetch(`${API_URL}/api/places/${id}/map-points/`)
+          .then((res) => res.json())
+          .then((data) => {
+            setMapPoints(Array.isArray(data) ? data : []);
+          })
+          .catch((err) => {
+            console.error("MAP POINTS ERROR:", err);
+            setMapPoints([]);
+          });
 
        fetch(`${API_URL}/api/places/${id}/experiences/`)
       .then((res) => res.json())

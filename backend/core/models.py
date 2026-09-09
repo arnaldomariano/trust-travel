@@ -356,6 +356,52 @@ class PlaceLocationSuggestion(models.Model):
         def __str__(self):
             return f"{self.place} → {self.suggested_parent_place} ({self.status})"
 
+# ===================== Business Presence =====================
+
+class BusinessPresence(models.Model):
+    STATUS_CHOICES = [
+        ("unclaimed", "Unclaimed"),
+        ("claimed", "Claimed"),
+        ("suspended", "Suspended"),
+    ]
+
+    place = models.OneToOneField(
+        Place,
+        on_delete=models.CASCADE,
+        related_name="business_presence",
+    )
+
+    official_name = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    website_url = models.URLField(
+        max_length=500,
+        blank=True,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="unclaimed",
+    )
+
+    is_verified = models.BooleanField(
+        default=False,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    def __str__(self):
+        return self.official_name or self.place.name
+
 # ===================== Official Source =====================
 
 class OfficialSource(models.Model):

@@ -6,6 +6,7 @@ from .models import ExperienceReply
 from .models import Update
 from .models import OfficialSource
 from .models import OfficialSourceEntry
+from .models import BusinessPresence
 
 from .official_source_services import (
     OfficialSourcePublicationError,
@@ -26,6 +27,28 @@ class UpdateAdmin(admin.ModelAdmin):
             return False
         return super().has_delete_permission(request, obj)
 
+@admin.register(BusinessPresence)
+class BusinessPresenceAdmin(admin.ModelAdmin):
+    list_display = (
+        "place",
+        "official_name",
+        "status",
+        "is_verified",
+        "updated_at",
+    )
+
+    list_filter = (
+        "status",
+        "is_verified",
+    )
+
+    search_fields = (
+        "place__name",
+        "official_name",
+        "website_url",
+    )
+
+    ordering = ("place__name",)
 
 @admin.register(OfficialSource)
 class OfficialSourceAdmin(admin.ModelAdmin):

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
@@ -75,11 +75,15 @@ export default function PlacePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const shouldOpenUpdateForm = searchParams.get("share") === "update";
+  const shouldFocusMap = searchParams.get("focus") === "map";
+
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [experiences, setExperiences] = useState<any[]>([]);
   const [updates, setUpdates] = useState<any[]>([]);
   const [filter, setFilter] = useState<"all" | "experience" | "update">("all");
+
+  const mapSectionRef = useRef<HTMLDivElement | null>(null);
 
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
@@ -426,7 +430,24 @@ const placeIntroText =
     ];
   })();
 
-const specificPlaceTypes = ["attraction", "hotel", "restaurant", "nature", "other"];
+  useEffect(() => {
+    if (!shouldFocusMap || placeMapPoints.length === 0) {
+      return;
+    }
+
+    mapSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [shouldFocusMap, placeMapPoints.length]);
+
+  const specificPlaceTypes = [
+    "attraction",
+    "hotel",
+    "restaurant",
+    "nature",
+    "other",
+  ];
 
   const childSpecificPlaces = allPlaces
     .filter(
@@ -1593,7 +1614,10 @@ const handleToggleEventsInfo = () => {
           </div>
 
           {placeMapPoints.length > 0 && (
-            <div style={{ marginTop: "18px" }}>
+            <div
+              ref={mapSectionRef}
+              style={{ marginTop: "18px" }}
+            >
               <PlacesMap
                 points={placeMapPoints}
                 showPlaceLink={false}

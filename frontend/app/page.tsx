@@ -548,15 +548,45 @@ const getActivityMetaText = (item: any) => {
                   <div style={{ color: "#999", fontSize: "11px" }}>
                     {formatActivityDate(item.created_at)}
                   </div>
-
-                  <div style={{ color: "#111", fontSize: "11px", fontWeight: 600 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                  }}
+                >
+                  <span style={{ color: "#111" }}>
                     {item.type === "experience" ? "Read experience →" : "Read update →"}
-                     </div>
+                  </span>
+
+                  {item.place_id && item.has_map && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/places/${item.place_id}?focus=map`);
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        padding: 0,
+                        color: "#2563eb",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      View on map →
+                    </button>
+                  )}
+                </div>
                    </div>
                 </div>
               </div>
             ))}
-
         {remainingCount > 0 && (
           <button
             type="button"

@@ -4174,6 +4174,11 @@ def serialize_update(update, request=None):
 
         "place_id": update.place.id,
 
+        "has_map": (
+                update.place.latitude is not None
+                and update.place.longitude is not None
+        ),
+
         "user": profile.public_code if profile and profile.public_code else update.user.username,
 
         "username": update.user.username,

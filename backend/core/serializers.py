@@ -5,6 +5,7 @@ from .models import (
     Destination,
     Place,
     PlaceLocationSuggestion,
+    BusinessClaimRequest,
     Experience,
     ExperiencePhoto,
     ExperienceReply,
@@ -289,6 +290,69 @@ class PlaceLocationSuggestionSerializer(serializers.ModelSerializer):
                         )
                     }
                 )
+
+        return attrs
+
+class BusinessClaimRequestSerializer(serializers.ModelSerializer):
+    business_name = serializers.CharField(
+        source="business_presence.place.name",
+        read_only=True,
+    )
+
+    requested_by_username = serializers.CharField(
+        source="requested_by.username",
+        read_only=True,
+    )
+
+    class Meta:
+        model = BusinessClaimRequest
+        fields = [
+            "id",
+            "business_presence",
+            "business_name",
+            "requested_by",
+            "requested_by_username",
+            "role",
+            "evidence",
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "requested_by",
+            "requested_by_username",
+            "business_name",
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+        ]
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        business_presence = attrs.get("business_presence")
+
+        if (
+            request
+            and request.user.is_authenticated
+            and business_presence
+            and BusinessClaimRequest.objects.filter(
+                business_presence=business_presence,
+                requested_by=request.user,
+                status="pending",
+            ).exists()
+        ):
+            raise serializers.ValidationError(
+                {
+                    "business_presence": (
+                        "You already have a pending claim request "
+                        "for this business."
+                    )
+                }
+            )
 
         return attrs
 

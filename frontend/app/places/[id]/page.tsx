@@ -86,6 +86,7 @@ export default function PlacePage() {
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
 
   const [mapPoints, setMapPoints] = useState<any[]>([]);
+  const [businessContext, setBusinessContext] = useState<any>(null);
 
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
@@ -137,6 +138,12 @@ export default function PlacePage() {
   const [ratingsSummary, setRatingsSummary] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  const [showBusinessClaimForm, setShowBusinessClaimForm] = useState(false);
+  const [businessClaimRole, setBusinessClaimRole] = useState("");
+  const [businessClaimEvidence, setBusinessClaimEvidence] = useState("");
+  const [submittingBusinessClaim, setSubmittingBusinessClaim] = useState(false);
+  const [businessClaimError, setBusinessClaimError] = useState("");
+
   const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
   const [selectedTripPlanId, setSelectedTripPlanId] = useState("");
   const [showTripPlanPicker, setShowTripPlanPicker] = useState(false);
@@ -172,6 +179,59 @@ export default function PlacePage() {
     }, [shouldOpenUpdateForm]);
 
   const router = useRouter();
+
+  const submitBusinessClaim = async () => {
+    const presenceId = businessContext?.business_presence?.id;
+
+    if (!presenceId) {
+      setBusinessClaimError("Business presence is not available.");
+      return;
+    }
+
+    setSubmittingBusinessClaim(true);
+    setBusinessClaimError("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/business-claim-requests/`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          business_presence: presenceId,
+          role: businessClaimRole.trim(),
+          evidence: businessClaimEvidence.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const message =
+          data?.business_presence?.[0] ||
+          data?.detail ||
+          "Could not submit this business claim.";
+
+        setBusinessClaimError(message);
+        return;
+      }
+
+      setBusinessContext((current: any) => ({
+        ...current,
+        has_pending_claim_for_me: true,
+      }));
+
+      setShowBusinessClaimForm(false);
+      setBusinessClaimRole("");
+      setBusinessClaimEvidence("");
+    } catch (err) {
+      console.error("BUSINESS CLAIM ERROR:", err);
+      setBusinessClaimError("Could not submit this business claim.");
+    } finally {
+      setSubmittingBusinessClaim(false);
+    }
+  };
 
   const savePlaceToTripPlan = async () => {
     if (!place?.id) {
@@ -743,6 +803,18 @@ useEffect(() => {
             console.error("MAP POINTS ERROR:", err);
             setMapPoints([]);
           });
+
+       fetch(`${API_URL}/api/places/${id}/business-context/`, {
+         credentials: "include",
+       })
+         .then((res) => res.json())
+         .then((data) => {
+           setBusinessContext(data);
+         })
+         .catch((err) => {
+           console.error("BUSINESS CONTEXT ERROR:", err);
+           setBusinessContext(null);
+         });
 
        fetch(`${API_URL}/api/places/${id}/experiences/`)
       .then((res) => res.json())
@@ -1623,6 +1695,171 @@ const handleToggleEventsInfo = () => {
               />
             </div>
           )}
+
+        {businessContext?.business_presence && (
+          <div
+            style={{
+              marginTop: "16px",
+              marginBottom: "18px",
+              padding: "16px",
+              border: "1px solid #e5e7eb",
+              borderRadius: "14px",
+              backgroundColor: "#fafafa",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "14px",
+                fontWeight: 700,
+                color: "#333",
+                marginBottom: "6px",
+              }}
+            >
+              Business presence
+            </div>
+
+            <div
+              style={{
+                fontSize: "14px",
+                color: "#555",
+                lineHeight: 1.5,
+              }}
+            >
+              {businessContext.business_presence.official_name || place?.name}
+            </div>
+
+            <div
+              style={{
+                marginTop: "6px",
+                fontSize: "13px",
+                color: "#777",
+              }}
+            >
+              {businessContext.business_presence.status === "claimed"
+                ? "Claimed business presence"
+                : businessContext.has_pending_claim_for_me
+                ? "Your claim request is pending review"
+                : "This business presence has not been claimed yet"}
+            </div>
+
+            {businessContext.business_presence.status === "unclaimed" &&
+              !businessContext.has_pending_claim_for_me && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBusinessClaimForm((current) => !current);
+                      setBusinessClaimError("");
+                    }}
+                    style={{
+                      ...secondaryButton,
+                      marginTop: "12px",
+                    }}
+                  >
+                    {showBusinessClaimForm ? "Cancel claim" : "Claim this business"}
+                  </button>
+
+                  {showBusinessClaimForm && (
+                    <div
+                      style={{
+                        marginTop: "14px",
+                        display: "grid",
+                        gap: "10px",
+                      }}
+                    >
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            marginBottom: "6px",
+                            color: "#444",
+                          }}
+                        >
+                          Your role
+                        </label>
+
+                        <input
+                          type="text"
+                          value={businessClaimRole}
+                          onChange={(e) => setBusinessClaimRole(e.target.value)}
+                          placeholder="Example: Owner, manager, authorized representative"
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            border: "1px solid #ddd",
+                            borderRadius: "10px",
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            marginBottom: "6px",
+                            color: "#444",
+                          }}
+                        >
+                          Evidence or context
+                        </label>
+
+                        <textarea
+                          value={businessClaimEvidence}
+                          onChange={(e) => setBusinessClaimEvidence(e.target.value)}
+                          placeholder="Briefly explain your connection to this business."
+                          rows={3}
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            border: "1px solid #ddd",
+                            borderRadius: "10px",
+                            resize: "vertical",
+                          }}
+                        />
+                      </div>
+
+                      {businessClaimError && (
+                        <div
+                          style={{
+                            padding: "10px",
+                            borderRadius: "10px",
+                            backgroundColor: "#fef2f2",
+                            color: "#b91c1c",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {businessClaimError}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={submitBusinessClaim}
+                        disabled={submittingBusinessClaim}
+                        style={{
+                          ...primaryButton,
+                          justifySelf: "start",
+                          opacity: submittingBusinessClaim ? 0.6 : 1,
+                          cursor: submittingBusinessClaim
+                            ? "not-allowed"
+                            : "pointer",
+                        }}
+                      >
+                        {submittingBusinessClaim
+                          ? "Submitting..."
+                          : "Submit claim request"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+          </div>
+        )}
 
           {place && place.place_type !== "country" && (
             <div

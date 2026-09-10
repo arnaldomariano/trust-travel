@@ -9,6 +9,7 @@ from .views import (
     GeographyPOIMaterializeView,
     PlaceListView,
     PlaceLocationSuggestionCreateView,
+    BusinessClaimRequestCreateView,
     PlaceLocationSuggestionListView,
     ExperienceListView,
     PlaceRatingsSummaryView,
@@ -18,6 +19,7 @@ from .views import (
     PlaceExperiencesListView,
     PlaceDetailView,
     PlaceMapPointsView,
+    PlaceBusinessContextView,
     PlaceSearchView,
     CountryContextView,
     UserRegisterView,
@@ -95,6 +97,12 @@ urlpatterns = [
         "place-location-suggestions/",
         PlaceLocationSuggestionCreateView.as_view(),
     ),
+
+    path(
+        "business-claim-requests/",
+        BusinessClaimRequestCreateView.as_view(),
+    ),
+
     path(
         "places/<int:place_id>/location-suggestions/",
         PlaceLocationSuggestionListView.as_view(),
@@ -107,6 +115,11 @@ urlpatterns = [
     ),
 
     path("places/<int:pk>/", PlaceDetailView.as_view()),
+
+    path(
+        "places/<int:place_id>/business-context/",
+        PlaceBusinessContextView.as_view(),
+    ),
 
     path(
         "places/<int:place_id>/map-points/",

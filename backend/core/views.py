@@ -21,6 +21,8 @@ from rest_framework import serializers
 from .models import (
     Destination,
     Place,
+    BusinessPresence,
+    BusinessClaimRequest,
     Experience,
     ExperiencePhoto,
     Friendship,
@@ -45,6 +47,7 @@ from .serializers import (
     DestinationSerializer,
     PlaceSerializer,
     PlaceLocationSuggestionSerializer,
+    BusinessClaimRequestSerializer,
     ExperienceSerializer,
     ExperiencePhotoSerializer,
     UserRegisterSerializer,
@@ -1185,6 +1188,38 @@ class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
 
+class PlaceBusinessContextView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, place_id):
+        try:
+            presence = BusinessPresence.objects.get(place_id=place_id)
+        except BusinessPresence.DoesNotExist:
+            return Response({
+                "business_presence": None,
+                "has_pending_claim_for_me": False,
+            })
+
+        has_pending_claim_for_me = False
+
+        if request.user.is_authenticated:
+            has_pending_claim_for_me = BusinessClaimRequest.objects.filter(
+                business_presence=presence,
+                requested_by=request.user,
+                status="pending",
+            ).exists()
+
+        return Response({
+            "business_presence": {
+                "id": presence.id,
+                "official_name": presence.official_name,
+                "status": presence.status,
+                "is_verified": presence.is_verified,
+            },
+            "has_pending_claim_for_me": has_pending_claim_for_me,
+        })
+
 class PlaceMapPointsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -1258,6 +1293,15 @@ class PlaceLocationSuggestionCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         serializer.save(suggested_by=self.request.user)
 
+class BusinessClaimRequestCreateView(generics.CreateAPIView):
+    serializer_class = BusinessClaimRequestSerializer
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(
+            requested_by=self.request.user
+        )
 
 class PlaceLocationSuggestionListView(generics.ListAPIView):
     serializer_class = PlaceLocationSuggestionSerializer

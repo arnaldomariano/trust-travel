@@ -7,10 +7,16 @@ from .models import Update
 from .models import OfficialSource
 from .models import OfficialSourceEntry
 from .models import BusinessPresence
+from .models import BusinessClaimRequest
 
 from .official_source_services import (
     OfficialSourcePublicationError,
     publish_official_source_entry,
+)
+
+from .business_presence_services import (
+    BusinessClaimApprovalError,
+    approve_business_claim_request,
 )
 
 @admin.register(Update)
@@ -49,6 +55,67 @@ class BusinessPresenceAdmin(admin.ModelAdmin):
     )
 
     ordering = ("place__name",)
+
+@admin.register(BusinessClaimRequest)
+class BusinessClaimRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "business_presence",
+        "requested_by",
+        "role",
+        "status",
+        "reviewed_by",
+        "reviewed_at",
+        "created_at",
+    )
+
+    list_filter = (
+        "status",
+        "created_at",
+    )
+
+    search_fields = (
+        "business_presence__place__name",
+        "business_presence__official_name",
+        "requested_by__username",
+        "role",
+        "evidence",
+    )
+
+    ordering = ("-created_at",)
+
+    readonly_fields = (
+        "status",
+        "reviewed_by",
+        "reviewed_at",
+    )
+
+    actions = ["approve_selected_claims"]
+
+    @admin.action(description="Approve selected business claims")
+    def approve_selected_claims(self, request, queryset):
+        approved_count = 0
+
+        for claim in queryset:
+            try:
+                approve_business_claim_request(
+                    claim_id=claim.id,
+                    reviewed_by=request.user,
+                )
+                approved_count += 1
+            except BusinessClaimApprovalError as exc:
+                self.message_user(
+                    request,
+                    f"{claim}: {exc}",
+                    level="error",
+                )
+
+        if approved_count:
+            self.message_user(
+                request,
+                f"{approved_count} business claim(s) approved.",
+                level="success",
+            )
 
 @admin.register(OfficialSource)
 class OfficialSourceAdmin(admin.ModelAdmin):

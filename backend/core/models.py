@@ -402,6 +402,68 @@ class BusinessPresence(models.Model):
     def __str__(self):
         return self.official_name or self.place.name
 
+# ===================== Business Claim Request =====================
+
+class BusinessClaimRequest(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
+    business_presence = models.ForeignKey(
+        BusinessPresence,
+        on_delete=models.CASCADE,
+        related_name="claim_requests",
+    )
+
+    requested_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="business_claim_requests",
+    )
+
+    role = models.CharField(
+        max_length=120,
+        blank=True,
+    )
+
+    evidence = models.TextField(
+        blank=True,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending",
+    )
+
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_business_claim_requests",
+    )
+
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return (
+            f"{self.business_presence} — "
+            f"{self.requested_by.username} ({self.status})"
+        )
+
 # ===================== Official Source =====================
 
 class OfficialSource(models.Model):

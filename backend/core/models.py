@@ -409,6 +409,7 @@ class BusinessClaimRequest(models.Model):
         ("pending", "Pending"),
         ("approved", "Approved"),
         ("rejected", "Rejected"),
+        ("withdrawn", "Withdrawn"),
     ]
 
     business_presence = models.ForeignKey(
@@ -457,6 +458,13 @@ class BusinessClaimRequest(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business_presence"],
+                condition=Q(status="pending"),
+                name="unique_pending_business_claim_per_presence",
+            ),
+        ]
 
     def __str__(self):
         return (

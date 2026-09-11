@@ -10,6 +10,7 @@ from .views import (
     PlaceListView,
     PlaceLocationSuggestionCreateView,
     BusinessClaimRequestCreateView,
+    BusinessClaimRequestWithdrawView,
     PlaceLocationSuggestionListView,
     ExperienceListView,
     PlaceRatingsSummaryView,
@@ -101,6 +102,11 @@ urlpatterns = [
     path(
         "business-claim-requests/",
         BusinessClaimRequestCreateView.as_view(),
+    ),
+
+    path(
+        "business-claim-requests/<int:claim_id>/withdraw/",
+        BusinessClaimRequestWithdrawView.as_view(),
     ),
 
     path(

@@ -341,14 +341,13 @@ class BusinessClaimRequestSerializer(serializers.ModelSerializer):
             and business_presence
             and BusinessClaimRequest.objects.filter(
                 business_presence=business_presence,
-                requested_by=request.user,
                 status="pending",
             ).exists()
         ):
             raise serializers.ValidationError(
                 {
                     "business_presence": (
-                        "You already have a pending claim request "
+                        "A claim request is already under review "
                         "for this business."
                     )
                 }

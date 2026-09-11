@@ -58,6 +58,12 @@ from .serializers import (
 )
 
 from .authentication import CookieJWTAuthentication
+
+from .business_presence_services import (
+    BusinessClaimWithdrawalError,
+    withdraw_business_claim_request,
+)
+
 from .place_utils import (
     get_matching_places_by_name_identity,
     get_place_name_identity_values,
@@ -1199,16 +1205,63 @@ class PlaceBusinessContextView(APIView):
             return Response({
                 "business_presence": None,
                 "has_pending_claim_for_me": False,
+                "my_pending_claim": None,
+                "pending_claim": None,
             })
 
         has_pending_claim_for_me = False
+        my_pending_claim = None
+        pending_claim = None
 
-        if request.user.is_authenticated:
-            has_pending_claim_for_me = BusinessClaimRequest.objects.filter(
+        current_pending_claim = (
+            BusinessClaimRequest.objects
+            .filter(
                 business_presence=presence,
-                requested_by=request.user,
                 status="pending",
-            ).exists()
+            )
+            .select_related("requested_by__profile")
+            .order_by("-created_at")
+            .first()
+        )
+
+        if current_pending_claim:
+            if (
+                request.user.is_authenticated
+                and current_pending_claim.requested_by_id == request.user.id
+            ):
+                has_pending_claim_for_me = True
+
+                my_pending_claim = {
+                    "id": current_pending_claim.id,
+                    "status": current_pending_claim.status,
+                    "role": current_pending_claim.role,
+                    "created_at": current_pending_claim.created_at,
+                }
+
+            elif request.user.is_authenticated:
+                profile = getattr(
+                    current_pending_claim.requested_by,
+                    "profile",
+                    None,
+                )
+
+                pending_claim = {
+                    "claimant": {
+                        "display_name": (
+                            profile.display_name
+                            if profile and profile.display_name
+                            else ""
+                        ),
+                        "public_code": (
+                            profile.public_code
+                            if profile
+                            else None
+                        ),
+                    },
+                    "role": current_pending_claim.role,
+                    "status": current_pending_claim.status,
+                    "created_at": current_pending_claim.created_at,
+                }
 
         return Response({
             "business_presence": {
@@ -1218,6 +1271,8 @@ class PlaceBusinessContextView(APIView):
                 "is_verified": presence.is_verified,
             },
             "has_pending_claim_for_me": has_pending_claim_for_me,
+            "my_pending_claim": my_pending_claim,
+            "pending_claim": pending_claim,
         })
 
 class PlaceMapPointsView(APIView):
@@ -1302,6 +1357,27 @@ class BusinessClaimRequestCreateView(generics.CreateAPIView):
         serializer.save(
             requested_by=self.request.user
         )
+
+class BusinessClaimRequestWithdrawView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, claim_id):
+        try:
+            claim = withdraw_business_claim_request(
+                claim_id=claim_id,
+                requested_by=request.user,
+            )
+        except BusinessClaimWithdrawalError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({
+            "id": claim.id,
+            "status": claim.status,
+        })
 
 class PlaceLocationSuggestionListView(generics.ListAPIView):
     serializer_class = PlaceLocationSuggestionSerializer

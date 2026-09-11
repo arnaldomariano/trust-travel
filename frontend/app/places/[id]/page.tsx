@@ -143,6 +143,8 @@ export default function PlacePage() {
   const [businessClaimEvidence, setBusinessClaimEvidence] = useState("");
   const [submittingBusinessClaim, setSubmittingBusinessClaim] = useState(false);
   const [businessClaimError, setBusinessClaimError] = useState("");
+  const [withdrawingBusinessClaim, setWithdrawingBusinessClaim] = useState(false);
+  const [businessClaimWithdrawError, setBusinessClaimWithdrawError] = useState("");
 
   const [tripPlans, setTripPlans] = useState<TripPlan[]>([]);
   const [selectedTripPlanId, setSelectedTripPlanId] = useState("");
@@ -220,6 +222,12 @@ export default function PlacePage() {
       setBusinessContext((current: any) => ({
         ...current,
         has_pending_claim_for_me: true,
+        my_pending_claim: {
+          id: data.id,
+          status: data.status,
+          role: data.role,
+          created_at: data.created_at,
+        },
       }));
 
       setShowBusinessClaimForm(false);
@@ -230,6 +238,51 @@ export default function PlacePage() {
       setBusinessClaimError("Could not submit this business claim.");
     } finally {
       setSubmittingBusinessClaim(false);
+    }
+  };
+
+  const withdrawBusinessClaim = async () => {
+    const claimId = businessContext?.my_pending_claim?.id;
+
+    if (!claimId) {
+      setBusinessClaimWithdrawError("Pending claim request is not available.");
+      return;
+    }
+
+    setWithdrawingBusinessClaim(true);
+    setBusinessClaimWithdrawError("");
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/business-claim-requests/${claimId}/withdraw/`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setBusinessClaimWithdrawError(
+          data?.detail || "Could not withdraw this business claim."
+        );
+        return;
+      }
+
+      setBusinessContext((current: any) => ({
+        ...current,
+        has_pending_claim_for_me: false,
+        my_pending_claim: null,
+        pending_claim: null,
+      }));
+    } catch (err) {
+      console.error("BUSINESS CLAIM WITHDRAW ERROR:", err);
+      setBusinessClaimWithdrawError(
+        "Could not withdraw this business claim."
+      );
+    } finally {
+      setWithdrawingBusinessClaim(false);
     }
   };
 
@@ -1735,15 +1788,116 @@ const handleToggleEventsInfo = () => {
                 color: "#777",
               }}
             >
-              {businessContext.business_presence.status === "claimed"
-                ? "Claimed business presence"
-                : businessContext.has_pending_claim_for_me
-                ? "Your claim request is pending review"
-                : "This business presence has not been claimed yet"}
+            {businessContext.business_presence.status === "claimed"
+              ? "Claimed business presence"
+              : businessContext.has_pending_claim_for_me
+              ? "Your claim request is pending review"
+              : businessContext.pending_claim
+              ? ""
+              : "This business presence has not been claimed yet"}
             </div>
 
+            {businessContext.pending_claim && (
+              <div
+                style={{
+                  marginTop: "14px",
+                  padding: "12px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "10px",
+                  backgroundColor: "#fafafa",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    marginBottom: "8px",
+                    color: "#444",
+                  }}
+                >
+                  A claim request is already under review
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "13px",
+                    color: "#555",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <strong>
+                    {businessContext.pending_claim.claimant?.display_name ||
+                      businessContext.pending_claim.claimant?.public_code ||
+                      "Another representative"}
+                  </strong>
+
+                  {businessContext.pending_claim.role
+                    ? ` · ${businessContext.pending_claim.role}`
+                    : ""}
+
+                  {businessContext.pending_claim.created_at
+                    ? ` · ${new Date(
+                        businessContext.pending_claim.created_at
+                      ).toLocaleDateString()}`
+                    : ""}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "8px",
+                    fontSize: "13px",
+                    color: "#666",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Please wait until this request has been reviewed before submitting
+                  another claim.
+                </div>
+              </div>
+            )}
+            {businessContext.has_pending_claim_for_me && (
+              <div
+                style={{
+                  marginTop: "14px",
+                }}
+              >
+                {businessClaimWithdrawError && (
+                  <div
+                    style={{
+                      marginBottom: "10px",
+                      padding: "10px",
+                      borderRadius: "10px",
+                      backgroundColor: "#fef2f2",
+                      color: "#b91c1c",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {businessClaimWithdrawError}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={withdrawBusinessClaim}
+                  disabled={withdrawingBusinessClaim}
+                  style={{
+                    ...secondaryButton,
+                    opacity: withdrawingBusinessClaim ? 0.6 : 1,
+                    cursor: withdrawingBusinessClaim
+                      ? "not-allowed"
+                      : "pointer",
+                  }}
+                >
+                  {withdrawingBusinessClaim
+                    ? "Cancelling..."
+                    : "Cancel my claim request"}
+                </button>
+              </div>
+            )}
+
             {businessContext.business_presence.status === "unclaimed" &&
-              !businessContext.has_pending_claim_for_me && (
+              !businessContext.has_pending_claim_for_me &&
+              !businessContext.pending_claim && (
                 <>
                   <button
                     type="button"

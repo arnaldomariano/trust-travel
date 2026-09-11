@@ -64,3 +64,44 @@ def approve_business_claim_request(claim_id, reviewed_by):
     )
 
     return claim
+
+class BusinessClaimWithdrawalError(Exception):
+    pass
+
+
+@transaction.atomic
+def withdraw_business_claim_request(claim_id, requested_by):
+    try:
+        claim = (
+            BusinessClaimRequest.objects
+            .select_for_update()
+            .get(id=claim_id)
+        )
+    except BusinessClaimRequest.DoesNotExist as exc:
+        raise BusinessClaimWithdrawalError(
+            "Business claim request does not exist."
+        ) from exc
+
+    if requested_by is None or not getattr(requested_by, "pk", None):
+        raise BusinessClaimWithdrawalError(
+            "A valid requester is required."
+        )
+
+    if claim.requested_by_id != requested_by.id:
+        raise BusinessClaimWithdrawalError(
+            "You can only withdraw your own business claim request."
+        )
+
+    if claim.status != "pending":
+        raise BusinessClaimWithdrawalError(
+            "Only pending business claim requests can be withdrawn."
+        )
+
+    claim.status = "withdrawn"
+    claim.save(
+        update_fields=[
+            "status",
+        ]
+    )
+
+    return claim

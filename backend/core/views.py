@@ -41,6 +41,7 @@ from .models import (
     Update,
     Profile,
     ProfessionalPresence,
+    ProfessionalPresenceLink,
     FeedState,
     SeenUpdate,
     ContentReport,
@@ -244,6 +245,221 @@ class ProfessionalPresenceView(APIView):
         return Response(
             serializer.errors,
             status=400,
+        )
+
+class ProfessionalPresenceLinkCreateView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        if presence.status != "active":
+            return Response(
+                {
+                    "detail": (
+                        "Suspended professional presences cannot be managed."
+                    )
+                },
+                status=403,
+            )
+
+        link_type = str(
+            request.data.get("link_type") or "other"
+        ).strip()
+        label = str(
+            request.data.get("label") or ""
+        ).strip()
+        url = str(
+            request.data.get("url") or ""
+        ).strip()
+
+        if not url:
+            return Response(
+                {"detail": "Link URL is required."},
+                status=400,
+            )
+
+        if len(label) > 120:
+            return Response(
+                {"detail": "Link label is too long."},
+                status=400,
+            )
+
+        valid_link_types = {
+            value
+            for value, _ in ProfessionalPresenceLink.LINK_TYPE_CHOICES
+        }
+
+        if link_type not in valid_link_types:
+            return Response(
+                {"detail": "Invalid professional link type."},
+                status=400,
+            )
+
+        try:
+            url = serializers.URLField(
+                max_length=1000,
+            ).run_validation(url)
+        except serializers.ValidationError as exc:
+            return Response(
+                {"url": exc.detail},
+                status=400,
+            )
+
+        link = ProfessionalPresenceLink.objects.create(
+            professional_presence=presence,
+            link_type=link_type,
+            label=label,
+            url=url,
+        )
+
+        return Response(
+            {
+                "id": link.id,
+                "link_type": link.link_type,
+                "label": link.label,
+                "url": link.url,
+            },
+            status=201,
+        )
+
+
+class ProfessionalPresenceLinkDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_link(self, request, link_id):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return None, Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        if presence.status != "active":
+            return None, Response(
+                {
+                    "detail": (
+                        "Suspended professional presences cannot be managed."
+                    )
+                },
+                status=403,
+            )
+
+        try:
+            link = ProfessionalPresenceLink.objects.get(
+                id=link_id,
+                professional_presence=presence,
+            )
+        except ProfessionalPresenceLink.DoesNotExist:
+            return None, Response(
+                {"detail": "Professional link not found."},
+                status=404,
+            )
+
+        return link, None
+
+    def patch(self, request, link_id):
+        link, error_response = self.get_link(
+            request,
+            link_id,
+        )
+
+        if error_response:
+            return error_response
+
+        link_type = str(
+            request.data.get("link_type", link.link_type)
+        ).strip()
+        label = str(
+            request.data.get("label", link.label) or ""
+        ).strip()
+        url = str(
+            request.data.get("url", link.url) or ""
+        ).strip()
+
+        if not url:
+            return Response(
+                {"detail": "Link URL is required."},
+                status=400,
+            )
+
+        if len(label) > 120:
+            return Response(
+                {"detail": "Link label is too long."},
+                status=400,
+            )
+
+        valid_link_types = {
+            value
+            for value, _ in ProfessionalPresenceLink.LINK_TYPE_CHOICES
+        }
+
+        if link_type not in valid_link_types:
+            return Response(
+                {"detail": "Invalid professional link type."},
+                status=400,
+            )
+
+        try:
+            url = serializers.URLField(
+                max_length=1000,
+            ).run_validation(url)
+        except serializers.ValidationError as exc:
+            return Response(
+                {"url": exc.detail},
+                status=400,
+            )
+
+        link.link_type = link_type
+        link.label = label
+        link.url = url
+        link.save(
+            update_fields=[
+                "link_type",
+                "label",
+                "url",
+                "updated_at",
+            ]
+        )
+
+        return Response({
+            "id": link.id,
+            "link_type": link.link_type,
+            "label": link.label,
+            "url": link.url,
+        })
+
+    def delete(self, request, link_id):
+        link, error_response = self.get_link(
+            request,
+            link_id,
+        )
+
+        if error_response:
+            return error_response
+
+        link.delete()
+
+        return Response(
+            {"detail": "Professional link removed."},
+            status=200,
         )
 
 class UserRegisterView(generics.CreateAPIView):

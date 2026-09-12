@@ -1,5 +1,7 @@
 from django import forms
 from django.contrib import admin
+from django.contrib.admin.helpers import ActionForm
+from django.contrib.auth.models import User
 from .models import Destination, Place, Experience
 from .models import Friendship
 from .models import ExperienceReply
@@ -18,6 +20,8 @@ from .official_source_services import (
 from .business_presence_services import (
     BusinessClaimApprovalError,
     BusinessPresenceManagerStatusError,
+    BusinessPresenceManagerCreationError,
+    add_business_presence_manager,
     approve_business_claim_request,
     deactivate_business_presence_manager,
     reactivate_business_presence_manager,
@@ -36,6 +40,19 @@ class UpdateAdmin(admin.ModelAdmin):
         if obj is not None and obj.official_source_id:
             return False
         return super().has_delete_permission(request, obj)
+
+class BusinessPresenceManagerActionForm(ActionForm):
+    manager_user = forms.ModelChoiceField(
+        queryset=User.objects.order_by("username"),
+        required=False,
+        label="Manager user",
+    )
+
+    manager_role = forms.CharField(
+        max_length=120,
+        required=False,
+        label="Manager role",
+    )
 
 @admin.register(BusinessPresence)
 class BusinessPresenceAdmin(admin.ModelAdmin):
@@ -59,6 +76,74 @@ class BusinessPresenceAdmin(admin.ModelAdmin):
     )
 
     ordering = ("place__name",)
+
+    action_form = BusinessPresenceManagerActionForm
+    actions = ["add_business_manager"]
+
+    @admin.action(description="Add business manager")
+    def add_business_manager(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                "Select exactly one business presence.",
+                level="error",
+            )
+            return
+
+        manager_user_id = request.POST.get("manager_user")
+        manager_role = (request.POST.get("manager_role") or "").strip()
+
+        if not manager_user_id:
+            self.message_user(
+                request,
+                "Choose a manager user.",
+                level="error",
+            )
+            return
+
+        if not manager_role:
+            self.message_user(
+                request,
+                "Enter the manager role.",
+                level="error",
+            )
+            return
+
+        try:
+            manager_user = User.objects.get(pk=manager_user_id)
+        except User.DoesNotExist:
+            self.message_user(
+                request,
+                "The selected manager user does not exist.",
+                level="error",
+            )
+            return
+
+        business_presence = queryset.first()
+
+        try:
+            manager = add_business_presence_manager(
+                business_presence=business_presence,
+                user=manager_user,
+                role=manager_role,
+                added_by=request.user,
+            )
+        except BusinessPresenceManagerCreationError as exc:
+            self.message_user(
+                request,
+                str(exc),
+                level="error",
+            )
+            return
+
+        self.message_user(
+            request,
+            (
+                f"{manager.user.username} was added as "
+                f"{manager.role} for {business_presence}."
+            ),
+            level="success",
+        )
 
 @admin.register(BusinessClaimRequest)
 class BusinessClaimRequestAdmin(admin.ModelAdmin):

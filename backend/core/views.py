@@ -40,6 +40,7 @@ from .models import (
     TripPlanDestination,
     Update,
     Profile,
+    ProfessionalPresence,
     FeedState,
     SeenUpdate,
     ContentReport,
@@ -48,6 +49,7 @@ from .models import (
 from .serializers import (
     DestinationSerializer,
     PlaceSerializer,
+    ProfessionalPresenceSerializer,
     PlaceLocationSuggestionSerializer,
     BusinessClaimRequestSerializer,
     ExperienceSerializer,
@@ -158,6 +160,91 @@ class ProfileView(APIView):
             return Response(serializer.data)
 
         return Response(serializer.errors, status=400)
+
+class ProfessionalPresenceView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        serializer = ProfessionalPresenceSerializer(presence)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if hasattr(request.user, "professional_presence"):
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence already exists."
+                    )
+                },
+                status=400,
+            )
+
+        serializer = ProfessionalPresenceSerializer(
+            data=request.data,
+        )
+
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(
+                serializer.data,
+                status=201,
+            )
+
+        return Response(
+            serializer.errors,
+            status=400,
+        )
+
+    def patch(self, request):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        if presence.status != "active":
+            return Response(
+                {
+                    "detail": (
+                        "Suspended professional presences cannot be edited."
+                    )
+                },
+                status=403,
+            )
+
+        serializer = ProfessionalPresenceSerializer(
+            presence,
+            data=request.data,
+            partial=True,
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=400,
+        )
 
 class UserRegisterView(generics.CreateAPIView):
     serializer_class = UserRegisterSerializer

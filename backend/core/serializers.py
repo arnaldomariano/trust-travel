@@ -11,6 +11,7 @@ from .models import (
     ExperienceReply,
     Friendship,
     Profile,
+    ProfessionalPresence,
     Update,
     ContentReport,
     TripPlan,
@@ -786,6 +787,33 @@ class ProfileSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.avatar.url)
 
         return obj.avatar.url
+
+class ProfessionalPresenceSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(
+        source="user.username",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ProfessionalPresence
+        fields = [
+            "id",
+            "username",
+            "professional_name",
+            "professional_type",
+            "bio",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "username",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
 
 class ContentReportSerializer(serializers.ModelSerializer):
     reported_by_username = serializers.CharField(

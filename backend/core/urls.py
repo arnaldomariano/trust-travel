@@ -30,6 +30,7 @@ from .views import (
     RecoverPasswordView,
     MeView,
     ProfileView,
+    ProfessionalPresenceView,
     ExperienceReplyListCreateView,
     UpdateListView,
     UpdateDetailView,
@@ -157,6 +158,10 @@ urlpatterns = [
 
     path("register/", UserRegisterView.as_view()),
     path("recover-password/", RecoverPasswordView.as_view()),
+    path(
+        "professional-presence/",
+        ProfessionalPresenceView.as_view(),
+    ),
     path("updates/", UpdateListView.as_view()),
     path("updates/<int:pk>/", UpdateDetailView.as_view()),
     path("connections/", ConnectionsListView.as_view()),

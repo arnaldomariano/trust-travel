@@ -1870,6 +1870,27 @@ const handleToggleEventsInfo = () => {
               : "This business presence has not been claimed yet"}
             </div>
 
+            {businessContext.business_presence.website_url && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  fontSize: "13px",
+                }}
+              >
+                <a
+                  href={businessContext.business_presence.website_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "#2563eb",
+                    textDecoration: "none",
+                  }}
+                >
+                  Visit official website
+                </a>
+              </div>
+            )}
+
             {businessContext.is_business_manager &&
               businessContext.business_manager && (
                 <div

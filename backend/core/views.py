@@ -1376,6 +1376,7 @@ class PlaceBusinessContextView(APIView):
             "business_presence": {
                 "id": presence.id,
                 "official_name": presence.official_name,
+                "website_url": presence.website_url,
                 "status": presence.status,
                 "is_verified": presence.is_verified,
             },

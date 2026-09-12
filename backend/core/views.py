@@ -1195,6 +1195,89 @@ class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
 
+class BusinessPresenceDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, presence_id):
+        try:
+            presence = BusinessPresence.objects.get(id=presence_id)
+        except BusinessPresence.DoesNotExist:
+            return Response(
+                {"detail": "Business presence not found."},
+                status=404,
+            )
+
+        is_manager = BusinessPresenceManager.objects.filter(
+            business_presence=presence,
+            user=request.user,
+            status="active",
+        ).exists()
+
+        if not is_manager:
+            return Response(
+                {
+                    "detail": (
+                        "You are not authorized to manage this "
+                        "business presence."
+                    )
+                },
+                status=403,
+            )
+
+        official_name = request.data.get(
+            "official_name",
+            presence.official_name,
+        )
+        website_url = request.data.get(
+            "website_url",
+            presence.website_url,
+        )
+
+        official_name = str(official_name or "").strip()
+        website_url = str(website_url or "").strip()
+
+        if len(official_name) > 255:
+            return Response(
+                {"detail": "Official name is too long."},
+                status=400,
+            )
+
+        if len(website_url) > 500:
+            return Response(
+                {"detail": "Website URL is too long."},
+                status=400,
+            )
+
+        if website_url:
+            try:
+                website_url = serializers.URLField().run_validation(
+                    website_url
+                )
+            except serializers.ValidationError:
+                return Response(
+                    {"detail": "Enter a valid website URL."},
+                    status=400,
+                )
+
+        presence.official_name = official_name
+        presence.website_url = website_url
+        presence.save(
+            update_fields=[
+                "official_name",
+                "website_url",
+                "updated_at",
+            ]
+        )
+
+        return Response({
+            "id": presence.id,
+            "official_name": presence.official_name,
+            "website_url": presence.website_url,
+            "status": presence.status,
+            "is_verified": presence.is_verified,
+        })
+
 class PlaceBusinessContextView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]

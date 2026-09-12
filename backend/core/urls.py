@@ -11,6 +11,7 @@ from .views import (
     PlaceLocationSuggestionCreateView,
     BusinessClaimRequestCreateView,
     BusinessClaimRequestWithdrawView,
+    BusinessPresenceDetailView,
     PlaceLocationSuggestionListView,
     ExperienceListView,
     PlaceRatingsSummaryView,
@@ -121,6 +122,11 @@ urlpatterns = [
     ),
 
     path("places/<int:pk>/", PlaceDetailView.as_view()),
+
+    path(
+        "business-presences/<int:presence_id>/",
+        BusinessPresenceDetailView.as_view(),
+    ),
 
     path(
         "places/<int:place_id>/business-context/",

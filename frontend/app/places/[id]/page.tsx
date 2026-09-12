@@ -88,6 +88,16 @@ export default function PlacePage() {
   const [mapPoints, setMapPoints] = useState<any[]>([]);
   const [businessContext, setBusinessContext] = useState<any>(null);
 
+  const [showBusinessPresenceEditForm, setShowBusinessPresenceEditForm] =
+  useState(false);
+  const [businessOfficialName, setBusinessOfficialName] = useState("");
+  const [businessWebsiteUrl, setBusinessWebsiteUrl] = useState("");
+  const [savingBusinessPresence, setSavingBusinessPresence] = useState(false);
+  const [businessPresenceEditError, setBusinessPresenceEditError] =
+    useState("");
+  const [businessPresenceEditSuccess, setBusinessPresenceEditSuccess] =
+    useState("");
+
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
   const [countryContext, setCountryContext] = useState<any>(null);
@@ -182,6 +192,69 @@ export default function PlacePage() {
 
   const router = useRouter();
 
+  const saveBusinessPresence = async () => {
+    const presenceId = businessContext?.business_presence?.id;
+
+    if (!presenceId) {
+      setBusinessPresenceEditError(
+        "Business presence is not available."
+      );
+      return;
+    }
+
+    setSavingBusinessPresence(true);
+    setBusinessPresenceEditError("");
+    setBusinessPresenceEditSuccess("");
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/business-presences/${presenceId}/`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            official_name: businessOfficialName.trim(),
+            website_url: businessWebsiteUrl.trim(),
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setBusinessPresenceEditError(
+          data?.detail ||
+            "Could not update the business presence."
+        );
+        return;
+      }
+
+      setBusinessContext((current: any) => ({
+        ...current,
+        business_presence: {
+          ...current?.business_presence,
+          official_name: data.official_name,
+          website_url: data.website_url,
+        },
+      }));
+
+      setBusinessOfficialName(data.official_name || "");
+      setBusinessWebsiteUrl(data.website_url || "");
+      setBusinessPresenceEditSuccess(
+        "Business details updated."
+      );
+      setShowBusinessPresenceEditForm(false);
+    } catch {
+      setBusinessPresenceEditError(
+        "Could not update the business presence."
+      );
+    } finally {
+      setSavingBusinessPresence(false);
+    }
+  };
   const submitBusinessClaim = async () => {
     const presenceId = businessContext?.business_presence?.id;
 
@@ -1811,11 +1884,167 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.5,
                   }}
                 >
-                  <strong>You manage this business presence</strong>
+                  <div>
+                    <strong>You manage this business presence</strong>
 
-                  {businessContext.business_manager.role
-                    ? ` · ${businessContext.business_manager.role}`
-                    : ""}
+                    {businessContext.business_manager.role
+                      ? ` · ${businessContext.business_manager.role}`
+                      : ""}
+                  </div>
+
+                  {!showBusinessPresenceEditForm && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBusinessOfficialName(
+                          businessContext.business_presence.official_name || ""
+                        );
+                        setBusinessWebsiteUrl(
+                          businessContext.business_presence.website_url || ""
+                        );
+                        setBusinessPresenceEditError("");
+                        setBusinessPresenceEditSuccess("");
+                        setShowBusinessPresenceEditForm(true);
+                      }}
+                      style={{
+                        marginTop: "10px",
+                        padding: "7px 10px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        backgroundColor: "#fff",
+                        cursor: "pointer",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Edit business details
+                    </button>
+                  )}
+
+                  {showBusinessPresenceEditForm && (
+                    <div style={{ marginTop: "12px" }}>
+                      <div style={{ marginBottom: "10px" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Official name
+                        </label>
+
+                        <input
+                          type="text"
+                          value={businessOfficialName}
+                          onChange={(event) =>
+                            setBusinessOfficialName(event.target.value)
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ marginBottom: "10px" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Website
+                        </label>
+
+                        <input
+                          type="url"
+                          value={businessWebsiteUrl}
+                          onChange={(event) =>
+                            setBusinessWebsiteUrl(event.target.value)
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                          }}
+                        />
+                      </div>
+
+                      {businessPresenceEditError && (
+                        <div
+                          style={{
+                            marginBottom: "10px",
+                            color: "#b91c1c",
+                          }}
+                        >
+                          {businessPresenceEditError}
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={saveBusinessPresence}
+                          disabled={savingBusinessPresence}
+                          style={{
+                            padding: "7px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            backgroundColor: "#fff",
+                            cursor: savingBusinessPresence
+                              ? "default"
+                              : "pointer",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {savingBusinessPresence
+                            ? "Saving..."
+                            : "Save changes"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowBusinessPresenceEditForm(false);
+                            setBusinessPresenceEditError("");
+                          }}
+                          disabled={savingBusinessPresence}
+                          style={{
+                            padding: "7px 10px",
+                            border: "none",
+                            backgroundColor: "transparent",
+                            cursor: savingBusinessPresence
+                              ? "default"
+                              : "pointer",
+                            fontSize: "13px",
+                            color: "#666",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {businessPresenceEditSuccess && (
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        color: "#555",
+                      }}
+                    >
+                      {businessPresenceEditSuccess}
+                    </div>
+                  )}
                 </div>
               )}
 

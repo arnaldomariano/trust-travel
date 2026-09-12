@@ -815,6 +815,43 @@ class ProfessionalPresenceSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+class ProfessionalPresencePublicSerializer(serializers.ModelSerializer):
+    public_code = serializers.CharField(
+        source="user.profile.public_code",
+        read_only=True,
+    )
+
+    display_name = serializers.CharField(
+        source="user.profile.display_name",
+        read_only=True,
+    )
+
+    official_links = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProfessionalPresence
+        fields = [
+            "public_code",
+            "display_name",
+            "professional_name",
+            "professional_type",
+            "bio",
+            "official_links",
+        ]
+
+        read_only_fields = fields
+
+    def get_official_links(self, obj):
+        return [
+            {
+                "id": link.id,
+                "link_type": link.link_type,
+                "label": link.label,
+                "url": link.url,
+            }
+            for link in obj.official_links.all()
+        ]
+
 class ContentReportSerializer(serializers.ModelSerializer):
     reported_by_username = serializers.CharField(
         source="reported_by.username",

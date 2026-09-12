@@ -51,6 +51,7 @@ from .serializers import (
     DestinationSerializer,
     PlaceSerializer,
     ProfessionalPresenceSerializer,
+    ProfessionalPresencePublicSerializer,
     PlaceLocationSuggestionSerializer,
     BusinessClaimRequestSerializer,
     ExperienceSerializer,
@@ -246,6 +247,41 @@ class ProfessionalPresenceView(APIView):
             serializer.errors,
             status=400,
         )
+
+class ProfessionalPresencePublicView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, public_code):
+        try:
+            presence = (
+                ProfessionalPresence.objects
+                .select_related(
+                    "user",
+                    "user__profile",
+                )
+                .prefetch_related(
+                    "official_links",
+                )
+                .get(
+                    user__profile__public_code=public_code,
+                    status="active",
+                )
+            )
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence not found."
+                    )
+                },
+                status=404,
+            )
+
+        serializer = ProfessionalPresencePublicSerializer(
+            presence,
+        )
+
+        return Response(serializer.data)
 
 class ProfessionalPresenceLinkCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]

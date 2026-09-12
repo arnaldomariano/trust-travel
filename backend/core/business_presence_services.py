@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from .models import (
     BusinessClaimRequest,
+    BusinessPresence,
     BusinessPresenceManager,
 )
 
@@ -14,6 +15,9 @@ class BusinessPresenceManagerCreationError(Exception):
     pass
 
 class BusinessPresenceManagerStatusError(Exception):
+    pass
+
+class BusinessPresenceStatusError(Exception):
     pass
 
 
@@ -188,6 +192,72 @@ def reactivate_business_presence_manager(manager_id, changed_by):
     )
 
     return manager
+
+@transaction.atomic
+def suspend_business_presence(presence_id, changed_by):
+    try:
+        presence = (
+            BusinessPresence.objects
+            .select_for_update()
+            .get(id=presence_id)
+        )
+    except BusinessPresence.DoesNotExist as exc:
+        raise BusinessPresenceStatusError(
+            "Business presence does not exist."
+        ) from exc
+
+    if changed_by is None or not getattr(changed_by, "pk", None):
+        raise BusinessPresenceStatusError(
+            "A valid user is required to change this business presence."
+        )
+
+    if presence.status != "claimed":
+        raise BusinessPresenceStatusError(
+            "Only claimed business presences can be suspended."
+        )
+
+    presence.status = "suspended"
+    presence.save(
+        update_fields=[
+            "status",
+            "updated_at",
+        ]
+    )
+
+    return presence
+
+@transaction.atomic
+def restore_business_presence(presence_id, changed_by):
+    try:
+        presence = (
+            BusinessPresence.objects
+            .select_for_update()
+            .get(id=presence_id)
+        )
+    except BusinessPresence.DoesNotExist as exc:
+        raise BusinessPresenceStatusError(
+            "Business presence does not exist."
+        ) from exc
+
+    if changed_by is None or not getattr(changed_by, "pk", None):
+        raise BusinessPresenceStatusError(
+            "A valid user is required to change this business presence."
+        )
+
+    if presence.status != "suspended":
+        raise BusinessPresenceStatusError(
+            "Only suspended business presences can be restored."
+        )
+
+    presence.status = "claimed"
+    presence.save(
+        update_fields=[
+            "status",
+            "updated_at",
+        ]
+    )
+
+    return presence
 
 @transaction.atomic
 def approve_business_claim_request(claim_id, reviewed_by):

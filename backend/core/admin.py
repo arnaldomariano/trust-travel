@@ -22,10 +22,13 @@ from .business_presence_services import (
     BusinessClaimApprovalError,
     BusinessPresenceManagerStatusError,
     BusinessPresenceManagerCreationError,
+    BusinessPresenceStatusError,
     add_business_presence_manager,
     approve_business_claim_request,
     deactivate_business_presence_manager,
     reactivate_business_presence_manager,
+    restore_business_presence,
+    suspend_business_presence,
 )
 
 @admin.register(Update)
@@ -78,8 +81,16 @@ class BusinessPresenceAdmin(admin.ModelAdmin):
 
     ordering = ("place__name",)
 
+    readonly_fields = (
+        "status",
+    )
+
     action_form = BusinessPresenceManagerActionForm
-    actions = ["add_business_manager"]
+    actions = [
+        "add_business_manager",
+        "suspend_selected_business_presences",
+        "restore_selected_business_presences",
+    ]
 
     @admin.action(description="Add business manager")
     def add_business_manager(self, request, queryset):
@@ -145,6 +156,50 @@ class BusinessPresenceAdmin(admin.ModelAdmin):
             ),
             level="success",
         )
+
+    @admin.action(description="Suspend selected business presences")
+    def suspend_selected_business_presences(self, request, queryset):
+        for presence in queryset:
+            try:
+                suspend_business_presence(
+                    presence_id=presence.id,
+                    changed_by=request.user,
+                )
+            except BusinessPresenceStatusError as exc:
+                self.message_user(
+                    request,
+                    f"{presence}: {exc}",
+                    level="error",
+                )
+                continue
+
+            self.message_user(
+                request,
+                f"{presence} was suspended.",
+                level="success",
+            )
+
+    @admin.action(description="Restore selected business presences")
+    def restore_selected_business_presences(self, request, queryset):
+        for presence in queryset:
+            try:
+                restore_business_presence(
+                    presence_id=presence.id,
+                    changed_by=request.user,
+                )
+            except BusinessPresenceStatusError as exc:
+                self.message_user(
+                    request,
+                    f"{presence}: {exc}",
+                    level="error",
+                )
+                continue
+
+            self.message_user(
+                request,
+                f"{presence} was restored to claimed status.",
+                level="success",
+            )
 
 @admin.register(BusinessPresenceLink)
 class BusinessPresenceLinkAdmin(admin.ModelAdmin):

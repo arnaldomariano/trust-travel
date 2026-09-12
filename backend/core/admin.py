@@ -12,6 +12,7 @@ from .models import BusinessPresence
 from .models import BusinessPresenceLink
 from .models import BusinessClaimRequest
 from .models import BusinessPresenceManager
+from .models import ProfessionalPresence
 
 from .official_source_services import (
     OfficialSourcePublicationError,
@@ -30,6 +31,31 @@ from .business_presence_services import (
     restore_business_presence,
     suspend_business_presence,
 )
+
+@admin.register(ProfessionalPresence)
+class ProfessionalPresenceAdmin(admin.ModelAdmin):
+    list_display = (
+        "professional_name",
+        "user",
+        "professional_type",
+        "status",
+        "updated_at",
+    )
+
+    list_filter = (
+        "professional_type",
+        "status",
+    )
+
+    search_fields = (
+        "professional_name",
+        "user__username",
+        "bio",
+    )
+
+    ordering = (
+        "professional_name",
+    )
 
 @admin.register(Update)
 class UpdateAdmin(admin.ModelAdmin):

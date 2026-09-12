@@ -98,6 +98,14 @@ export default function PlacePage() {
   const [businessPresenceEditSuccess, setBusinessPresenceEditSuccess] =
     useState("");
 
+  const [businessLinkType, setBusinessLinkType] = useState("website");
+  const [businessLinkLabel, setBusinessLinkLabel] = useState("");
+  const [businessLinkUrl, setBusinessLinkUrl] = useState("");
+  const [savingBusinessLink, setSavingBusinessLink] = useState(false);
+  const [businessLinkError, setBusinessLinkError] = useState("");
+  const [editingBusinessLinkId, setEditingBusinessLinkId] =
+    useState<number | null>(null);
+
   const [place, setPlace] = useState<any>(null);
   const [destination, setDestination] = useState<any>(null);
   const [countryContext, setCountryContext] = useState<any>(null);
@@ -253,6 +261,137 @@ export default function PlacePage() {
       );
     } finally {
       setSavingBusinessPresence(false);
+    }
+  };
+  const saveBusinessLink = async () => {
+    const presenceId = businessContext?.business_presence?.id;
+
+    if (!presenceId) {
+      setBusinessLinkError("Business presence is not available.");
+      return;
+    }
+
+    if (!businessLinkUrl.trim()) {
+      setBusinessLinkError("Link URL is required.");
+      return;
+    }
+
+    setSavingBusinessLink(true);
+    setBusinessLinkError("");
+
+    try {
+      const isEditing = editingBusinessLinkId !== null;
+
+      const endpoint = isEditing
+        ? `${API_URL}/api/business-presences/${presenceId}/links/${editingBusinessLinkId}/`
+        : `${API_URL}/api/business-presences/${presenceId}/links/`;
+
+      const res = await fetch(endpoint, {
+        method: isEditing ? "PATCH" : "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          link_type: businessLinkType,
+          label: businessLinkLabel.trim(),
+          url: businessLinkUrl.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setBusinessLinkError(
+          data?.detail ||
+            data?.url?.[0] ||
+            "Could not save this business link."
+        );
+        return;
+      }
+
+      setBusinessContext((current: any) => {
+        const currentLinks =
+          current?.business_presence?.official_links || [];
+
+        const updatedLinks = isEditing
+          ? currentLinks.map((link: any) =>
+              link.id === data.id ? data : link
+            )
+          : [...currentLinks, data];
+
+        return {
+          ...current,
+          business_presence: {
+            ...current?.business_presence,
+            official_links: updatedLinks,
+          },
+        };
+      });
+
+      setBusinessLinkType("website");
+      setBusinessLinkLabel("");
+      setBusinessLinkUrl("");
+      setEditingBusinessLinkId(null);
+    } catch {
+      setBusinessLinkError(
+        "Could not save this business link."
+      );
+    } finally {
+      setSavingBusinessLink(false);
+    }
+  };
+  const removeBusinessLink = async (linkId: number) => {
+    const presenceId = businessContext?.business_presence?.id;
+
+    if (!presenceId) {
+      setBusinessLinkError("Business presence is not available.");
+      return;
+    }
+
+    setSavingBusinessLink(true);
+    setBusinessLinkError("");
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/business-presences/${presenceId}/links/${linkId}/`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setBusinessLinkError(
+          data?.detail || "Could not remove this business link."
+        );
+        return;
+      }
+
+      setBusinessContext((current: any) => ({
+        ...current,
+        business_presence: {
+          ...current?.business_presence,
+          official_links: (
+            current?.business_presence?.official_links || []
+          ).filter((link: any) => link.id !== linkId),
+        },
+      }));
+
+      if (editingBusinessLinkId === linkId) {
+        setEditingBusinessLinkId(null);
+        setBusinessLinkType("website");
+        setBusinessLinkLabel("");
+        setBusinessLinkUrl("");
+      }
+    } catch {
+      setBusinessLinkError(
+        "Could not remove this business link."
+      );
+    } finally {
+      setSavingBusinessLink(false);
     }
   };
   const submitBusinessClaim = async () => {
@@ -2035,7 +2174,271 @@ const handleToggleEventsInfo = () => {
                           }}
                         />
                       </div>
+                      {Array.isArray(
+                        businessContext.business_presence.official_links
+                      ) &&
+                        businessContext.business_presence.official_links.length >
+                          0 && (
+                          <div
+                            style={{
+                              marginBottom: "14px",
+                              paddingTop: "4px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                marginBottom: "8px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Official links
+                            </div>
 
+                            {businessContext.business_presence.official_links.map(
+                              (link: any) => (
+                                <div
+                                  key={link.id}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: "10px",
+                                    padding: "8px 0",
+                                    borderBottom: "1px solid #f0f0f0",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      minWidth: 0,
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {link.label ||
+                                        (link.link_type === "website"
+                                          ? "Official website"
+                                          : link.link_type === "instagram"
+                                          ? "Instagram"
+                                          : link.link_type === "facebook"
+                                          ? "Facebook"
+                                          : link.link_type === "reservation"
+                                          ? "Reservation / Booking"
+                                          : "Official link")}
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        marginTop: "2px",
+                                        fontSize: "12px",
+                                        color: "#777",
+                                        wordBreak: "break-word",
+                                      }}
+                                    >
+                                      {link.url}
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: "6px",
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingBusinessLinkId(link.id);
+                                        setBusinessLinkType(link.link_type);
+                                        setBusinessLinkLabel(link.label || "");
+                                        setBusinessLinkUrl(link.url || "");
+                                        setBusinessLinkError("");
+                                      }}
+                                      disabled={savingBusinessLink}
+                                      style={{
+                                        padding: "5px 8px",
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: "7px",
+                                        backgroundColor: "#fff",
+                                        cursor: savingBusinessLink
+                                          ? "default"
+                                          : "pointer",
+                                        fontSize: "12px",
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        removeBusinessLink(link.id)
+                                      }
+                                      disabled={savingBusinessLink}
+                                      style={{
+                                        padding: "5px 8px",
+                                        border: "none",
+                                        backgroundColor: "transparent",
+                                        cursor: savingBusinessLink
+                                          ? "default"
+                                          : "pointer",
+                                        fontSize: "12px",
+                                        color: "#b91c1c",
+                                      }}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        )}
+                                          <div
+                        style={{
+                          marginBottom: "14px",
+                          paddingTop: "4px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            marginBottom: "8px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {editingBusinessLinkId
+                            ? "Edit official link"
+                            : "Add official link"}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: "8px",
+                          }}
+                        >
+                          <select
+                            value={businessLinkType}
+                            onChange={(event) =>
+                              setBusinessLinkType(event.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "8px 10px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px",
+                              backgroundColor: "#fff",
+                            }}
+                          >
+                            <option value="website">Website</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="reservation">
+                              Reservation / Booking
+                            </option>
+                            <option value="other">Other</option>
+                          </select>
+
+                          <input
+                            type="text"
+                            placeholder="Label"
+                            value={businessLinkLabel}
+                            onChange={(event) =>
+                              setBusinessLinkLabel(event.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "8px 10px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px",
+                            }}
+                          />
+
+                          <input
+                            type="url"
+                            placeholder="https://..."
+                            value={businessLinkUrl}
+                            onChange={(event) =>
+                              setBusinessLinkUrl(event.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "8px 10px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px",
+                            }}
+                          />
+
+                          {businessLinkError && (
+                            <div
+                              style={{
+                                color: "#b91c1c",
+                                fontSize: "12px",
+                              }}
+                            >
+                              {businessLinkError}
+                            </div>
+                          )}
+
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "8px",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={saveBusinessLink}
+                              disabled={savingBusinessLink}
+                              style={{
+                                padding: "7px 10px",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "8px",
+                                backgroundColor: "#fff",
+                                cursor: savingBusinessLink
+                                  ? "default"
+                                  : "pointer",
+                                fontSize: "13px",
+                              }}
+                            >
+                              {savingBusinessLink
+                                ? "Saving..."
+                                : editingBusinessLinkId
+                                ? "Update link"
+                                : "Add link"}
+                            </button>
+
+                            {editingBusinessLinkId && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingBusinessLinkId(null);
+                                  setBusinessLinkType("website");
+                                  setBusinessLinkLabel("");
+                                  setBusinessLinkUrl("");
+                                  setBusinessLinkError("");
+                                }}
+                                disabled={savingBusinessLink}
+                                style={{
+                                  padding: "7px 10px",
+                                  border: "none",
+                                  backgroundColor: "transparent",
+                                  cursor: savingBusinessLink
+                                    ? "default"
+                                    : "pointer",
+                                  fontSize: "13px",
+                                  color: "#666",
+                                }}
+                              >
+                                Cancel edit
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                       {businessPresenceEditError && (
                         <div
                           style={{

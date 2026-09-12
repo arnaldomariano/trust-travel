@@ -22,8 +22,9 @@ from .models import (
     Destination,
     Place,
     BusinessPresence,
-    BusinessClaimRequest,
+    BusinessPresenceLink,
     BusinessPresenceManager,
+    BusinessClaimRequest,
     Experience,
     ExperiencePhoto,
     Friendship,
@@ -1277,6 +1278,228 @@ class BusinessPresenceDetailView(APIView):
             "status": presence.status,
             "is_verified": presence.is_verified,
         })
+
+class BusinessPresenceLinkCreateView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, presence_id):
+        try:
+            presence = BusinessPresence.objects.get(id=presence_id)
+        except BusinessPresence.DoesNotExist:
+            return Response(
+                {"detail": "Business presence not found."},
+                status=404,
+            )
+
+        is_manager = BusinessPresenceManager.objects.filter(
+            business_presence=presence,
+            user=request.user,
+            status="active",
+        ).exists()
+
+        if not is_manager:
+            return Response(
+                {
+                    "detail": (
+                        "You are not authorized to manage this "
+                        "business presence."
+                    )
+                },
+                status=403,
+            )
+
+        link_type = str(
+            request.data.get("link_type") or "other"
+        ).strip()
+        label = str(
+            request.data.get("label") or ""
+        ).strip()
+        url = str(
+            request.data.get("url") or ""
+        ).strip()
+
+        if not url:
+            return Response(
+                {"detail": "Link URL is required."},
+                status=400,
+            )
+
+        if len(label) > 120:
+            return Response(
+                {"detail": "Link label is too long."},
+                status=400,
+            )
+
+        valid_link_types = {
+            value
+            for value, _ in BusinessPresenceLink.LINK_TYPE_CHOICES
+        }
+
+        if link_type not in valid_link_types:
+            return Response(
+                {"detail": "Invalid business link type."},
+                status=400,
+            )
+
+        try:
+            url = serializers.URLField(
+                max_length=1000,
+            ).run_validation(url)
+        except serializers.ValidationError as exc:
+            return Response(
+                {"url": exc.detail},
+                status=400,
+            )
+
+        link = BusinessPresenceLink.objects.create(
+            business_presence=presence,
+            link_type=link_type,
+            label=label,
+            url=url,
+        )
+
+        return Response(
+            {
+                "id": link.id,
+                "link_type": link.link_type,
+                "label": link.label,
+                "url": link.url,
+            },
+            status=201,
+        )
+
+class BusinessPresenceLinkDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_link(self, request, presence_id, link_id):
+        try:
+            presence = BusinessPresence.objects.get(id=presence_id)
+        except BusinessPresence.DoesNotExist:
+            return None, None, Response(
+                {"detail": "Business presence not found."},
+                status=404,
+            )
+
+        is_manager = BusinessPresenceManager.objects.filter(
+            business_presence=presence,
+            user=request.user,
+            status="active",
+        ).exists()
+
+        if not is_manager:
+            return None, None, Response(
+                {
+                    "detail": (
+                        "You are not authorized to manage this "
+                        "business presence."
+                    )
+                },
+                status=403,
+            )
+
+        try:
+            link = BusinessPresenceLink.objects.get(
+                id=link_id,
+                business_presence=presence,
+            )
+        except BusinessPresenceLink.DoesNotExist:
+            return presence, None, Response(
+                {"detail": "Business link not found."},
+                status=404,
+            )
+
+        return presence, link, None
+
+    def patch(self, request, presence_id, link_id):
+        _, link, error_response = self.get_link(
+            request,
+            presence_id,
+            link_id,
+        )
+
+        if error_response:
+            return error_response
+
+        link_type = str(
+            request.data.get("link_type", link.link_type)
+        ).strip()
+        label = str(
+            request.data.get("label", link.label) or ""
+        ).strip()
+        url = str(
+            request.data.get("url", link.url) or ""
+        ).strip()
+
+        if not url:
+            return Response(
+                {"detail": "Link URL is required."},
+                status=400,
+            )
+
+        if len(label) > 120:
+            return Response(
+                {"detail": "Link label is too long."},
+                status=400,
+            )
+
+        valid_link_types = {
+            value
+            for value, _ in BusinessPresenceLink.LINK_TYPE_CHOICES
+        }
+
+        if link_type not in valid_link_types:
+            return Response(
+                {"detail": "Invalid business link type."},
+                status=400,
+            )
+
+        try:
+            url = serializers.URLField(
+                max_length=1000,
+            ).run_validation(url)
+        except serializers.ValidationError as exc:
+            return Response(
+                {"url": exc.detail},
+                status=400,
+            )
+
+        link.link_type = link_type
+        link.label = label
+        link.url = url
+        link.save(
+            update_fields=[
+                "link_type",
+                "label",
+                "url",
+                "updated_at",
+            ]
+        )
+
+        return Response({
+            "id": link.id,
+            "link_type": link.link_type,
+            "label": link.label,
+            "url": link.url,
+        })
+
+    def delete(self, request, presence_id, link_id):
+        _, link, error_response = self.get_link(
+            request,
+            presence_id,
+            link_id,
+        )
+
+        if error_response:
+            return error_response
+
+        link.delete()
+
+        return Response(
+            {"detail": "Business link removed."},
+            status=200,
+        )
 
 class PlaceBusinessContextView(APIView):
     authentication_classes = [CookieJWTAuthentication]

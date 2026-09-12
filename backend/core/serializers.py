@@ -335,6 +335,25 @@ class BusinessClaimRequestSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         business_presence = attrs.get("business_presence")
 
+        if business_presence:
+            if business_presence.status == "claimed":
+                raise serializers.ValidationError(
+                    {
+                        "business_presence": (
+                            "This business presence is already claimed."
+                        )
+                    }
+                )
+
+            if business_presence.status == "suspended":
+                raise serializers.ValidationError(
+                    {
+                        "business_presence": (
+                            "A suspended business presence cannot be claimed."
+                        )
+                    }
+                )
+
         if (
             request
             and request.user.is_authenticated

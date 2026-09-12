@@ -13,6 +13,7 @@ from .models import BusinessPresenceLink
 from .models import BusinessClaimRequest
 from .models import BusinessPresenceManager
 from .models import ProfessionalPresence
+from .models import ProfessionalPresenceLink
 
 from .official_source_services import (
     OfficialSourcePublicationError,
@@ -55,6 +56,33 @@ class ProfessionalPresenceAdmin(admin.ModelAdmin):
 
     ordering = (
         "professional_name",
+    )
+
+@admin.register(ProfessionalPresenceLink)
+class ProfessionalPresenceLinkAdmin(admin.ModelAdmin):
+    list_display = (
+        "professional_presence",
+        "link_type",
+        "label",
+        "url",
+        "updated_at",
+    )
+
+    list_filter = (
+        "link_type",
+        "created_at",
+    )
+
+    search_fields = (
+        "professional_presence__professional_name",
+        "professional_presence__user__username",
+        "label",
+        "url",
+    )
+
+    ordering = (
+        "professional_presence__professional_name",
+        "link_type",
     )
 
 @admin.register(Update)

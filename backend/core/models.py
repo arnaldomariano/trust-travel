@@ -212,6 +212,58 @@ class ProfessionalPresence(models.Model):
             f"{self.get_professional_type_display()}"
         )
 
+class ProfessionalPresenceLink(models.Model):
+    LINK_TYPE_CHOICES = [
+        ("website", "Website"),
+        ("instagram", "Instagram"),
+        ("youtube", "YouTube"),
+        ("linkedin", "LinkedIn"),
+        ("portfolio", "Portfolio"),
+        ("newsletter", "Newsletter"),
+        ("other", "Other"),
+    ]
+
+    professional_presence = models.ForeignKey(
+        ProfessionalPresence,
+        on_delete=models.CASCADE,
+        related_name="official_links",
+    )
+
+    link_type = models.CharField(
+        max_length=30,
+        choices=LINK_TYPE_CHOICES,
+        default="other",
+    )
+
+    label = models.CharField(
+        max_length=120,
+        blank=True,
+    )
+
+    url = models.URLField(
+        max_length=1000,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "link_type",
+            "created_at",
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.professional_presence} — "
+            f"{self.label or self.get_link_type_display()}"
+        )
+
 # ===================== Destination =====================
 class Destination(models.Model):
     name = models.CharField(max_length=150)

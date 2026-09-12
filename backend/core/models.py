@@ -402,6 +402,55 @@ class BusinessPresence(models.Model):
     def __str__(self):
         return self.official_name or self.place.name
 
+# ===================== Business Presence Link =====================
+
+class BusinessPresenceLink(models.Model):
+    LINK_TYPE_CHOICES = [
+        ("website", "Website"),
+        ("instagram", "Instagram"),
+        ("facebook", "Facebook"),
+        ("reservation", "Reservation / Booking"),
+        ("other", "Other"),
+    ]
+
+    business_presence = models.ForeignKey(
+        BusinessPresence,
+        on_delete=models.CASCADE,
+        related_name="official_links",
+    )
+
+    link_type = models.CharField(
+        max_length=30,
+        choices=LINK_TYPE_CHOICES,
+        default="other",
+    )
+
+    label = models.CharField(
+        max_length=120,
+        blank=True,
+    )
+
+    url = models.URLField(
+        max_length=1000,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["link_type", "created_at"]
+
+    def __str__(self):
+        return (
+            f"{self.business_presence} — "
+            f"{self.label or self.get_link_type_display()}"
+        )
+
 # ===================== Business Claim Request =====================
 
 class BusinessClaimRequest(models.Model):

@@ -1373,13 +1373,23 @@ class PlaceBusinessContextView(APIView):
                 }
 
         return Response({
-            "business_presence": {
-                "id": presence.id,
-                "official_name": presence.official_name,
-                "website_url": presence.website_url,
-                "status": presence.status,
-                "is_verified": presence.is_verified,
-            },
+
+        "business_presence": {
+            "id": presence.id,
+            "official_name": presence.official_name,
+            "website_url": presence.website_url,
+            "official_links": [
+                {
+                    "id": link.id,
+                    "link_type": link.link_type,
+                    "label": link.label,
+                    "url": link.url,
+                }
+                for link in presence.official_links.all()
+            ],
+            "status": presence.status,
+            "is_verified": presence.is_verified,
+        },
             "has_pending_claim_for_me": has_pending_claim_for_me,
             "my_pending_claim": my_pending_claim,
             "pending_claim": pending_claim,

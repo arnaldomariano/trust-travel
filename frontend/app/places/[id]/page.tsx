@@ -1870,25 +1870,66 @@ const handleToggleEventsInfo = () => {
               : "This business presence has not been claimed yet"}
             </div>
 
-            {businessContext.business_presence.website_url && (
+            {Array.isArray(
+              businessContext.business_presence.official_links
+            ) &&
+            businessContext.business_presence.official_links.length > 0 ? (
               <div
                 style={{
                   marginTop: "8px",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "10px",
                   fontSize: "13px",
                 }}
               >
-                <a
-                  href={businessContext.business_presence.website_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                {businessContext.business_presence.official_links.map(
+                  (link: any) => (
+                    <a
+                      key={link.id}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: "#2563eb",
+                        textDecoration: "none",
+                      }}
+                    >
+                      {link.label ||
+                        (link.link_type === "website"
+                          ? "Official website"
+                          : link.link_type === "instagram"
+                          ? "Instagram"
+                          : link.link_type === "facebook"
+                          ? "Facebook"
+                          : link.link_type === "reservation"
+                          ? "Reservation / Booking"
+                          : "Official link")}
+                    </a>
+                  )
+                )}
+              </div>
+            ) : (
+              businessContext.business_presence.website_url && (
+                <div
                   style={{
-                    color: "#2563eb",
-                    textDecoration: "none",
+                    marginTop: "8px",
+                    fontSize: "13px",
                   }}
                 >
-                  Visit official website
-                </a>
-              </div>
+                  <a
+                    href={businessContext.business_presence.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#2563eb",
+                      textDecoration: "none",
+                    }}
+                  >
+                    Visit official website
+                  </a>
+                </div>
+              )
             )}
 
             {businessContext.is_business_manager &&

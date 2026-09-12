@@ -9,6 +9,7 @@ from .models import Update
 from .models import OfficialSource
 from .models import OfficialSourceEntry
 from .models import BusinessPresence
+from .models import BusinessPresenceLink
 from .models import BusinessClaimRequest
 from .models import BusinessPresenceManager
 
@@ -144,6 +145,33 @@ class BusinessPresenceAdmin(admin.ModelAdmin):
             ),
             level="success",
         )
+
+@admin.register(BusinessPresenceLink)
+class BusinessPresenceLinkAdmin(admin.ModelAdmin):
+    list_display = (
+        "business_presence",
+        "link_type",
+        "label",
+        "url",
+        "updated_at",
+    )
+
+    list_filter = (
+        "link_type",
+        "created_at",
+    )
+
+    search_fields = (
+        "business_presence__place__name",
+        "business_presence__official_name",
+        "label",
+        "url",
+    )
+
+    ordering = (
+        "business_presence__place__name",
+        "link_type",
+    )
 
 @admin.register(BusinessClaimRequest)
 class BusinessClaimRequestAdmin(admin.ModelAdmin):

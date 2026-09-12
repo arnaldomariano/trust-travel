@@ -1209,6 +1209,16 @@ class BusinessPresenceDetailView(APIView):
                 status=404,
             )
 
+        if presence.status != "claimed":
+            return Response(
+                {
+                    "detail": (
+                        "Only claimed business presences can be managed."
+                    )
+                },
+                status=403,
+            )
+
         is_manager = BusinessPresenceManager.objects.filter(
             business_presence=presence,
             user=request.user,
@@ -1290,6 +1300,16 @@ class BusinessPresenceLinkCreateView(APIView):
             return Response(
                 {"detail": "Business presence not found."},
                 status=404,
+            )
+
+        if presence.status != "claimed":
+            return Response(
+                {
+                    "detail": (
+                        "Only claimed business presences can be managed."
+                    )
+                },
+                status=403,
             )
 
         is_manager = BusinessPresenceManager.objects.filter(

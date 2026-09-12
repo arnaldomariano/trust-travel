@@ -2002,6 +2002,8 @@ const handleToggleEventsInfo = () => {
             >
             {businessContext.business_presence.status === "claimed"
               ? "Claimed business presence"
+              : businessContext.business_presence.status === "suspended"
+              ? "Business presence suspended"
               : businessContext.has_pending_claim_for_me
               ? "Your claim request is pending review"
               : businessContext.pending_claim
@@ -2009,7 +2011,8 @@ const handleToggleEventsInfo = () => {
               : "This business presence has not been claimed yet"}
             </div>
 
-            {Array.isArray(
+            {businessContext.business_presence.status === "claimed" &&
+            Array.isArray(
               businessContext.business_presence.official_links
             ) &&
             businessContext.business_presence.official_links.length > 0 ? (
@@ -2049,6 +2052,7 @@ const handleToggleEventsInfo = () => {
                 )}
               </div>
             ) : (
+              businessContext.business_presence.status === "claimed" &&
               businessContext.business_presence.website_url && (
                 <div
                   style={{
@@ -2093,7 +2097,8 @@ const handleToggleEventsInfo = () => {
                       : ""}
                   </div>
 
-                  {!showBusinessPresenceEditForm && (
+                  {businessContext.business_presence.status === "claimed" &&
+                    !showBusinessPresenceEditForm && (
                     <button
                       type="button"
                       onClick={() => {
@@ -2120,7 +2125,8 @@ const handleToggleEventsInfo = () => {
                       Edit business details
                     </button>
                   )}
-
+                  {businessContext.business_presence.status === "claimed" &&
+                    showBusinessPresenceEditForm && (
                     <div style={{ marginTop: "12px" }}>
                       <div
                         style={{
@@ -2523,6 +2529,24 @@ const handleToggleEventsInfo = () => {
                         </div>
                       </div>
                     </div>
+                  )}
+
+                  {businessContext.business_presence.status === "suspended" && (
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        backgroundColor: "#f9fafb",
+                        fontSize: "12px",
+                        color: "#666",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Management is temporarily unavailable while this business
+                      presence is suspended.
+                    </div>
+                  )}
                   {businessPresenceEditSuccess && (
                     <div
                       style={{

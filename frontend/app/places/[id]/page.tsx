@@ -1797,6 +1797,28 @@ const handleToggleEventsInfo = () => {
               : "This business presence has not been claimed yet"}
             </div>
 
+            {businessContext.is_business_manager &&
+              businessContext.business_manager && (
+                <div
+                  style={{
+                    marginTop: "12px",
+                    padding: "10px 12px",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "10px",
+                    backgroundColor: "#fff",
+                    fontSize: "13px",
+                    color: "#555",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <strong>You manage this business presence</strong>
+
+                  {businessContext.business_manager.role
+                    ? ` · ${businessContext.business_manager.role}`
+                    : ""}
+                </div>
+              )}
+
             {businessContext.pending_claim && (
               <div
                 style={{

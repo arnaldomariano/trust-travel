@@ -472,6 +472,81 @@ class BusinessClaimRequest(models.Model):
             f"{self.requested_by.username} ({self.status})"
         )
 
+# ===================== Business Presence Manager =====================
+
+class BusinessPresenceManager(models.Model):
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("inactive", "Inactive"),
+    ]
+
+    business_presence = models.ForeignKey(
+        BusinessPresence,
+        on_delete=models.CASCADE,
+        related_name="managers",
+    )
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="managed_business_presences",
+    )
+
+    role = models.CharField(
+        max_length=120,
+        blank=True,
+    )
+
+    source_claim = models.OneToOneField(
+        BusinessClaimRequest,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="manager_link",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="active",
+    )
+
+    added_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="business_managers_added",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    ended_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business_presence", "user"],
+                name="unique_business_presence_manager",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user.username} — "
+            f"{self.business_presence} ({self.status})"
+        )
+
 # ===================== Official Source =====================
 
 class OfficialSource(models.Model):

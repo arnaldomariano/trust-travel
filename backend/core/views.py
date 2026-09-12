@@ -23,6 +23,7 @@ from .models import (
     Place,
     BusinessPresence,
     BusinessClaimRequest,
+    BusinessPresenceManager,
     Experience,
     ExperiencePhoto,
     Friendship,
@@ -1207,11 +1208,36 @@ class PlaceBusinessContextView(APIView):
                 "has_pending_claim_for_me": False,
                 "my_pending_claim": None,
                 "pending_claim": None,
+                "is_business_manager": False,
+                "business_manager": None,
             })
 
         has_pending_claim_for_me = False
         my_pending_claim = None
         pending_claim = None
+
+        is_business_manager = False
+        business_manager = None
+
+        if request.user.is_authenticated:
+            current_manager = (
+                BusinessPresenceManager.objects
+                .filter(
+                    business_presence=presence,
+                    user=request.user,
+                    status="active",
+                )
+                .first()
+            )
+
+            if current_manager:
+                is_business_manager = True
+                business_manager = {
+                    "id": current_manager.id,
+                    "role": current_manager.role,
+                    "status": current_manager.status,
+                    "created_at": current_manager.created_at,
+                }
 
         current_pending_claim = (
             BusinessClaimRequest.objects
@@ -1273,6 +1299,8 @@ class PlaceBusinessContextView(APIView):
             "has_pending_claim_for_me": has_pending_claim_for_me,
             "my_pending_claim": my_pending_claim,
             "pending_claim": pending_claim,
+            "is_business_manager": is_business_manager,
+            "business_manager": business_manager,
         })
 
 class PlaceMapPointsView(APIView):

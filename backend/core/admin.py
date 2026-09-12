@@ -8,6 +8,7 @@ from .models import OfficialSource
 from .models import OfficialSourceEntry
 from .models import BusinessPresence
 from .models import BusinessClaimRequest
+from .models import BusinessPresenceManager
 
 from .official_source_services import (
     OfficialSourcePublicationError,
@@ -16,7 +17,10 @@ from .official_source_services import (
 
 from .business_presence_services import (
     BusinessClaimApprovalError,
+    BusinessPresenceManagerStatusError,
     approve_business_claim_request,
+    deactivate_business_presence_manager,
+    reactivate_business_presence_manager,
 )
 
 @admin.register(Update)
@@ -114,6 +118,105 @@ class BusinessClaimRequestAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f"{approved_count} business claim(s) approved.",
+                level="success",
+            )
+
+@admin.register(BusinessPresenceManager)
+class BusinessPresenceManagerAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "business_presence",
+        "user",
+        "role",
+        "status",
+        "source_claim",
+        "added_by",
+        "created_at",
+        "ended_at",
+    )
+
+    list_filter = (
+        "status",
+        "created_at",
+        "ended_at",
+    )
+
+    search_fields = (
+        "business_presence__place__name",
+        "business_presence__official_name",
+        "user__username",
+        "role",
+    )
+
+    ordering = ("-created_at",)
+
+    readonly_fields = (
+        "source_claim",
+        "added_by",
+        "status",
+        "created_at",
+        "updated_at",
+        "ended_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    actions = [
+        "deactivate_selected_managers",
+        "reactivate_selected_managers",
+    ]
+
+    @admin.action(description="Deactivate selected business managers")
+    def deactivate_selected_managers(self, request, queryset):
+        deactivated_count = 0
+
+        for manager in queryset:
+            try:
+                deactivate_business_presence_manager(
+                    manager_id=manager.id,
+                    changed_by=request.user,
+                )
+                deactivated_count += 1
+            except BusinessPresenceManagerStatusError as exc:
+                self.message_user(
+                    request,
+                    f"{manager}: {exc}",
+                    level="error",
+                )
+
+        if deactivated_count:
+            self.message_user(
+                request,
+                f"{deactivated_count} business manager(s) deactivated.",
+                level="success",
+            )
+
+    @admin.action(description="Reactivate selected business managers")
+    def reactivate_selected_managers(self, request, queryset):
+        reactivated_count = 0
+
+        for manager in queryset:
+            try:
+                reactivate_business_presence_manager(
+                    manager_id=manager.id,
+                    changed_by=request.user,
+                )
+                reactivated_count += 1
+            except BusinessPresenceManagerStatusError as exc:
+                self.message_user(
+                    request,
+                    f"{manager}: {exc}",
+                    level="error",
+                )
+
+        if reactivated_count:
+            self.message_user(
+                request,
+                f"{reactivated_count} business manager(s) reactivated.",
                 level="success",
             )
 

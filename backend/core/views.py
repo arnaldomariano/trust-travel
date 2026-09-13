@@ -332,6 +332,153 @@ class ProfessionalEvaluationSummaryView(APIView):
             }
         )
 
+class ProfessionalEvaluationAnalyticsView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, public_code):
+        try:
+            presence = (
+                ProfessionalPresence.objects
+                .select_related(
+                    "user",
+                    "user__profile",
+                )
+                .get(
+                    user__profile__public_code=public_code,
+                    status="active",
+                )
+            )
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence not found."
+                    )
+                },
+                status=404,
+            )
+
+        nationality_code = (
+            request.query_params.get("nationality_code") or ""
+        ).strip().upper()
+
+        age_range = (
+            request.query_params.get("age_range") or ""
+        ).strip()
+
+        trip_context = (
+            request.query_params.get("trip_context") or ""
+        ).strip()
+
+        trip_style = (
+            request.query_params.get("trip_style") or ""
+        ).strip()
+
+        valid_age_ranges = {
+            value
+            for value, _ in Profile.AGE_RANGE_CHOICES
+        }
+
+        valid_trip_contexts = {
+            value
+            for value, _ in Experience.TRIP_CONTEXT_CHOICES
+        }
+
+        valid_trip_styles = {
+            value
+            for value, _ in Experience.TRIP_STYLE_CHOICES
+        }
+
+        if nationality_code and len(nationality_code) != 2:
+            return Response(
+                {
+                    "nationality_code": (
+                        "Nationality code must contain two letters."
+                    )
+                },
+                status=400,
+            )
+
+        if age_range and age_range not in valid_age_ranges:
+            return Response(
+                {
+                    "age_range": (
+                        "Invalid age range."
+                    )
+                },
+                status=400,
+            )
+
+        if (
+            trip_context
+            and trip_context not in valid_trip_contexts
+        ):
+            return Response(
+                {
+                    "trip_context": (
+                        "Invalid trip context."
+                    )
+                },
+                status=400,
+            )
+
+        if trip_style and trip_style not in valid_trip_styles:
+            return Response(
+                {
+                    "trip_style": (
+                        "Invalid trip style."
+                    )
+                },
+                status=400,
+            )
+
+        evaluations = ProfessionalEvaluation.objects.filter(
+            contribution__professional_presence=presence,
+        )
+
+        if nationality_code:
+            evaluations = evaluations.filter(
+                evaluated_by__profile__nationality_country_code=(
+                    nationality_code
+                )
+            )
+
+        if age_range:
+            evaluations = evaluations.filter(
+                evaluated_by__profile__age_range=age_range,
+            )
+
+        if trip_context:
+            evaluations = evaluations.filter(
+                qualifying_experience__trip_context=trip_context,
+            )
+
+        if trip_style:
+            evaluations = evaluations.filter(
+                qualifying_experience__trip_style=trip_style,
+            )
+
+        summary = evaluations.aggregate(
+            evaluations_count=Count("id"),
+            knowledge_average=Avg("knowledge_rating"),
+            reliability_average=Avg("reliability_rating"),
+            usefulness_average=Avg("usefulness_rating"),
+            transparency_average=Avg("transparency_rating"),
+        )
+
+        return Response(
+            {
+                "professional_name": presence.professional_name,
+                "filters": {
+                    "nationality_code": nationality_code or None,
+                    "age_range": age_range or None,
+                    "trip_context": trip_context or None,
+                    "trip_style": trip_style or None,
+                },
+                **summary,
+            }
+        )
+
 class ProfessionalContributionPublicListView(APIView):
     permission_classes = [permissions.AllowAny]
 

@@ -81,6 +81,8 @@ export default function PlacePage() {
 
   const [experiences, setExperiences] = useState<any[]>([]);
   const [updates, setUpdates] = useState<any[]>([]);
+  const [professionalContributions, setProfessionalContributions] =
+    useState<any[]>([]);
   const [filter, setFilter] = useState<"all" | "experience" | "update">("all");
 
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1120,6 +1122,23 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
   })
   .catch((err) => console.error("UPDATES ERROR:", err));
 
+      fetch(`${API_URL}/api/places/${id}/professional-contributions/`)
+        .then((res) => res.json())
+        .then((data) => {
+          const list = Array.isArray(data) ? data : [];
+
+          const sorted = [...list].sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+
+          setProfessionalContributions(sorted);
+        })
+        .catch((err) => {
+          console.error("PROFESSIONAL CONTRIBUTIONS ERROR:", err);
+          setProfessionalContributions([]);
+        });
+
     fetch(`${API_URL}/api/places/`)
       .then((res) => res.json())
       .then((data) => {
@@ -1228,6 +1247,10 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
     const combinedFeed = [
       ...visibleExperiences.map((e) => ({ ...e, content_type: "experience" })),
       ...visibleUpdates.map((u) => ({ ...u, content_type: "update" })),
+      ...professionalContributions.map((contribution) => ({
+        ...contribution,
+        content_type: "professional_contribution",
+      })),
     ].sort(
       (a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -4684,7 +4707,12 @@ const handleToggleEventsInfo = () => {
           filteredFeed.map((item) => {
             const isExperience = item.content_type === "experience";
 
-            const label = isExperience
+            const isProfessionalContribution =
+              item.content_type === "professional_contribution";
+
+            const label = isProfessionalContribution
+              ? "Professional contribution"
+              : isExperience
               ? "Review"
               : item.type === "event"
               ? "Event"
@@ -4692,7 +4720,9 @@ const handleToggleEventsInfo = () => {
               ? "Alert"
               : "Info";
 
-            const icon = isExperience
+            const icon = isProfessionalContribution
+              ? "◆"
+              : isExperience
               ? "⭐"
               : item.type === "event"
               ? "🎭"
@@ -4706,9 +4736,13 @@ const handleToggleEventsInfo = () => {
                 style={{
                   padding: "18px",
                   marginBottom: "14px",
-                  border: "1px solid #eee",
+                  border: isProfessionalContribution
+                    ? "1px solid #93c5fd"
+                    : "1px solid #eee",
                   borderRadius: "14px",
-                  backgroundColor: "white",
+                  backgroundColor: isProfessionalContribution
+                    ? "#f8fbff"
+                    : "white",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                 }}
               >
@@ -4776,8 +4810,15 @@ const handleToggleEventsInfo = () => {
                       {item.comment}
                     </div>
 
-                    <div style={{ marginTop: "8px", color: "#777", fontSize: "13px" }}>
-                      Rating: {"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        color: "#777",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Rating: {"★".repeat(item.rating)}
+                      {"☆".repeat(5 - item.rating)}
                     </div>
 
                     {[
@@ -4807,7 +4848,13 @@ const handleToggleEventsInfo = () => {
                       </div>
                     )}
 
-                    <div style={{ marginTop: "6px", color: "#777", fontSize: "13px" }}>
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        color: "#777",
+                        fontSize: "13px",
+                      }}
+                    >
                       Shared by {item.user || "Unknown user"} •{" "}
                       {new Date(item.created_at).toLocaleDateString("en-US", {
                         month: "short",
@@ -4816,26 +4863,197 @@ const handleToggleEventsInfo = () => {
                       })}
                     </div>
 
-
                     <div style={{ marginTop: "12px" }}>
-                        <Link
-                          href={`/experiences/${item.id}`}
-                          style={{
-                            display: "inline-block",
-                            padding: "8px 12px",
-                            borderRadius: "10px",
-                            border: "1px solid #ddd",
-                            backgroundColor: "#f9f9f9",
-                            color: "#111",
-                            textDecoration: "none",
-                            fontSize: "13px",
-                          }}
-                        >
-                          Read experience
-                        </Link>
+                      <Link
+                        href={`/experiences/${item.id}`}
+                        style={{
+                          display: "inline-block",
+                          padding: "8px 12px",
+                          borderRadius: "10px",
+                          border: "1px solid #ddd",
+                          backgroundColor: "#f9f9f9",
+                          color: "#111",
+                          textDecoration: "none",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Read experience
+                      </Link>
+                    </div>
+                  </>
+                ) : isProfessionalContribution ? (
+                  <>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <strong
+                        style={{
+                          fontSize: "15px",
+                          color: "#111827",
+                        }}
+                      >
+                        {item.professional_name}
+                      </strong>
+
+                      <span
+                        style={{
+                          padding: "3px 8px",
+                          borderRadius: "999px",
+                          backgroundColor: "#dbeafe",
+                          color: "#1d4ed8",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {String(item.professional_type || "professional")
+                          .split("_")
+                          .map(
+                            (part: string) =>
+                              part.charAt(0).toUpperCase() + part.slice(1)
+                          )
+                          .join(" ")}
+                      </span>
                     </div>
 
+                    {item.title && (
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "16px",
+                          lineHeight: "1.5",
+                          marginBottom: "6px",
+                        }}
+                      >
+                        {item.title}
+                      </div>
+                    )}
 
+                    <div
+                      style={{
+                        fontWeight: "400",
+                        lineHeight: "1.6",
+                        color: "#333",
+                      }}
+                    >
+                      {item.text}
+                    </div>
+
+                    {item.business_disclosure && (
+                      <div
+                        style={{
+                          marginTop: "12px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          border: "1px solid #fde68a",
+                          backgroundColor: "#fffbeb",
+                          color: "#78350f",
+                          fontSize: "13px",
+                          lineHeight: "1.5",
+                        }}
+                      >
+                        <strong>Commercial disclosure:</strong>{" "}
+                        {item.business_disclosure.business_name}
+                        {" · "}
+                        {String(
+                          item.business_disclosure.relationship_type || ""
+                        )
+                          .split("_")
+                          .map(
+                            (part: string) =>
+                              part.charAt(0).toUpperCase() + part.slice(1)
+                          )
+                          .join(" ")}
+                        {item.business_disclosure.disclosure_text
+                          ? ` · ${item.business_disclosure.disclosure_text}`
+                          : ""}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        marginTop: "12px",
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(130px, 1fr))",
+                        gap: "8px",
+                      }}
+                    >
+                      {[
+                        ["Knowledge", item.knowledge_average],
+                        ["Reliability", item.reliability_average],
+                        ["Usefulness", item.usefulness_average],
+                        ["Transparency", item.transparency_average],
+                      ].map(([ratingLabel, value]) => (
+                        <div
+                          key={ratingLabel}
+                          style={{
+                            padding: "8px 10px",
+                            border: "1px solid #dbeafe",
+                            borderRadius: "10px",
+                            backgroundColor: "white",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <div style={{ color: "#64748b" }}>{ratingLabel}</div>
+
+                          <div
+                            style={{
+                              marginTop: "2px",
+                              fontWeight: 600,
+                              color: "#111827",
+                            }}
+                          >
+                            {value !== null && value !== undefined
+                              ? Number(value).toFixed(1)
+                              : "—"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        color: "#64748b",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {item.evaluations_count === 1
+                        ? "1 contextual evaluation"
+                        : `${item.evaluations_count || 0} contextual evaluations`}
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: "14px",
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <Link
+                        href={`/professional/${item.public_code}`}
+                        style={{
+                          display: "inline-block",
+                          padding: "8px 12px",
+                          borderRadius: "10px",
+                          border: "1px solid #93c5fd",
+                          backgroundColor: "#eff6ff",
+                          color: "#1d4ed8",
+                          textDecoration: "none",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        View professional
+                      </Link>
+                    </div>
                   </>
                 ) : (
                   <>
@@ -4854,8 +5072,15 @@ const handleToggleEventsInfo = () => {
                       {item.text}
                     </div>
 
-                    <div style={{ marginTop: "8px", color: "#777", fontSize: "13px" }}>
-                      Shared by {item.display_name || item.username || item.user}
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        color: "#777",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Shared by{" "}
+                      {item.display_name || item.username || item.user}
                     </div>
 
                     <div style={{ marginTop: "12px" }}>

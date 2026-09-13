@@ -43,6 +43,8 @@ from .models import (
     ProfessionalPresence,
     ProfessionalPresenceLink,
     ProfessionalBusinessRelationship,
+    ProfessionalContribution,
+    ProfessionalEvaluation,
     FeedState,
     SeenUpdate,
     ContentReport,
@@ -54,6 +56,7 @@ from .serializers import (
     ProfessionalPresenceSerializer,
     ProfessionalPresencePublicSerializer,
     ProfessionalBusinessRelationshipSerializer,
+    ProfessionalEvaluationSerializer,
     PlaceLocationSuggestionSerializer,
     BusinessClaimRequestSerializer,
     ExperienceSerializer,
@@ -768,6 +771,59 @@ class ProfessionalBusinessRelationshipDetailView(APIView):
                 )
             },
             status=200,
+        )
+
+class ProfessionalEvaluationListCreateView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        evaluations = (
+            ProfessionalEvaluation.objects
+            .filter(
+                evaluated_by=request.user,
+            )
+            .select_related(
+                "contribution",
+                "contribution__professional_presence",
+                "contribution__place",
+                "qualifying_experience",
+            )
+            .order_by("-created_at")
+        )
+
+        serializer = ProfessionalEvaluationSerializer(
+            evaluations,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = ProfessionalEvaluationSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=400,
+            )
+
+        evaluation = serializer.save(
+            evaluated_by=request.user,
+        )
+
+        response_serializer = ProfessionalEvaluationSerializer(
+            evaluation,
+            context={"request": request},
+        )
+
+        return Response(
+            response_serializer.data,
+            status=201,
         )
 
 class UserRegisterView(generics.CreateAPIView):

@@ -36,6 +36,7 @@ from .views import (
     ProfessionalPresenceLinkDetailView,
     ProfessionalBusinessRelationshipListCreateView,
     ProfessionalBusinessRelationshipDetailView,
+    ProfessionalEvaluationListCreateView,
     ExperienceReplyListCreateView,
     UpdateListView,
     UpdateDetailView,
@@ -184,10 +185,14 @@ urlpatterns = [
         "professional-presence/business-relationships/",
         ProfessionalBusinessRelationshipListCreateView.as_view(),
     ),
-        path(
-            "professional-presence/business-relationships/<int:relationship_id>/",
-            ProfessionalBusinessRelationshipDetailView.as_view(),
-        ),
+    path(
+        "professional-presence/business-relationships/<int:relationship_id>/",
+        ProfessionalBusinessRelationshipDetailView.as_view(),
+    ),
+    path(
+        "professional-evaluations/",
+        ProfessionalEvaluationListCreateView.as_view(),
+    ),
     path("updates/", UpdateListView.as_view()),
     path("updates/<int:pk>/", UpdateDetailView.as_view()),
     path("connections/", ConnectionsListView.as_view()),

@@ -14,6 +14,8 @@ from .models import (
     ProfessionalPresence,
     BusinessPresence,
     ProfessionalBusinessRelationship,
+    ProfessionalContribution,
+    ProfessionalEvaluation,
     Update,
     ContentReport,
     TripPlan,
@@ -948,6 +950,150 @@ class ProfessionalBusinessRelationshipSerializer(
                     "is_current": (
                         "A relationship with an end date "
                         "cannot be current."
+                    )
+                }
+            )
+
+        return attrs
+
+class ProfessionalEvaluationSerializer(serializers.ModelSerializer):
+    evaluated_by_username = serializers.CharField(
+        source="evaluated_by.username",
+        read_only=True,
+    )
+
+    contribution_title = serializers.CharField(
+        source="contribution.title",
+        read_only=True,
+    )
+
+    professional_name = serializers.CharField(
+        source="contribution.professional_presence.professional_name",
+        read_only=True,
+    )
+
+    place_name = serializers.CharField(
+        source="contribution.place.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ProfessionalEvaluation
+        fields = [
+            "id",
+            "contribution",
+            "contribution_title",
+            "professional_name",
+            "place_name",
+            "evaluated_by",
+            "evaluated_by_username",
+            "qualifying_experience",
+            "knowledge_rating",
+            "reliability_rating",
+            "usefulness_rating",
+            "transparency_rating",
+            "comment",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "evaluated_by",
+            "evaluated_by_username",
+            "contribution_title",
+            "professional_name",
+            "place_name",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError(
+                "Authentication is required to evaluate a professional contribution."
+            )
+
+        evaluator = request.user
+
+        contribution = attrs.get(
+            "contribution",
+            getattr(self.instance, "contribution", None),
+        )
+
+        qualifying_experience = attrs.get(
+            "qualifying_experience",
+            getattr(self.instance, "qualifying_experience", None),
+        )
+
+        if not contribution:
+            raise serializers.ValidationError(
+                {
+                    "contribution": (
+                        "A professional contribution is required."
+                    )
+                }
+            )
+
+        if (
+            contribution.professional_presence.user_id
+            == evaluator.id
+        ):
+            raise serializers.ValidationError(
+                {
+                    "contribution": (
+                        "A professional cannot evaluate "
+                        "their own contribution."
+                    )
+                }
+            )
+
+        if not qualifying_experience:
+            raise serializers.ValidationError(
+                {
+                    "qualifying_experience": (
+                        "A qualifying experience is required "
+                        "to evaluate this contribution."
+                    )
+                }
+            )
+
+        if qualifying_experience.user_id != evaluator.id:
+            raise serializers.ValidationError(
+                {
+                    "qualifying_experience": (
+                        "The qualifying experience must belong "
+                        "to the evaluator."
+                    )
+                }
+            )
+
+        if qualifying_experience.place_id != contribution.place_id:
+            raise serializers.ValidationError(
+                {
+                    "qualifying_experience": (
+                        "The qualifying experience must refer "
+                        "to the same place as the contribution."
+                    )
+                }
+            )
+
+        duplicate = ProfessionalEvaluation.objects.filter(
+            contribution=contribution,
+            evaluated_by=evaluator,
+        )
+
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+
+        if duplicate.exists():
+            raise serializers.ValidationError(
+                {
+                    "contribution": (
+                        "You have already evaluated "
+                        "this professional contribution."
                     )
                 }
             )

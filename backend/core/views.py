@@ -42,6 +42,7 @@ from .models import (
     Profile,
     ProfessionalPresence,
     ProfessionalPresenceLink,
+    ProfessionalBusinessRelationship,
     FeedState,
     SeenUpdate,
     ContentReport,
@@ -52,6 +53,7 @@ from .serializers import (
     PlaceSerializer,
     ProfessionalPresenceSerializer,
     ProfessionalPresencePublicSerializer,
+    ProfessionalBusinessRelationshipSerializer,
     PlaceLocationSuggestionSerializer,
     BusinessClaimRequestSerializer,
     ExperienceSerializer,
@@ -495,6 +497,276 @@ class ProfessionalPresenceLinkDetailView(APIView):
 
         return Response(
             {"detail": "Professional link removed."},
+            status=200,
+        )
+
+class ProfessionalBusinessRelationshipListCreateView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        relationships = (
+            ProfessionalBusinessRelationship.objects
+            .filter(
+                professional_presence=presence,
+            )
+            .select_related(
+                "business_presence",
+                "business_presence__place",
+            )
+            .order_by("-created_at")
+        )
+
+        serializer = ProfessionalBusinessRelationshipSerializer(
+            relationships,
+            many=True,
+        )
+
+        return Response(serializer.data)
+
+    def post(self, request):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        if presence.status != "active":
+            return Response(
+                {
+                    "detail": (
+                        "Suspended professional presences "
+                        "cannot declare business relationships."
+                    )
+                },
+                status=403,
+            )
+
+        serializer = ProfessionalBusinessRelationshipSerializer(
+            data=request.data,
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=400,
+            )
+
+        business_presence = serializer.validated_data[
+            "business_presence"
+        ]
+
+        relationship_type = serializer.validated_data.get(
+            "relationship_type",
+            "independent",
+        )
+
+        is_current = serializer.validated_data.get(
+            "is_current",
+            True,
+        )
+
+        if (
+            is_current
+            and ProfessionalBusinessRelationship.objects.filter(
+                professional_presence=presence,
+                business_presence=business_presence,
+                relationship_type=relationship_type,
+                is_current=True,
+            ).exists()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This current professional relationship "
+                        "has already been declared."
+                    )
+                },
+                status=400,
+            )
+
+        relationship = serializer.save(
+            professional_presence=presence,
+        )
+
+        response_serializer = (
+            ProfessionalBusinessRelationshipSerializer(
+                relationship,
+            )
+        )
+
+        return Response(
+            response_serializer.data,
+            status=201,
+        )
+
+class ProfessionalBusinessRelationshipDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_relationship(self, request, relationship_id):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return None, None, Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        try:
+            relationship = (
+                ProfessionalBusinessRelationship.objects
+                .select_related(
+                    "business_presence",
+                    "business_presence__place",
+                )
+                .get(
+                    id=relationship_id,
+                    professional_presence=presence,
+                )
+            )
+        except ProfessionalBusinessRelationship.DoesNotExist:
+            return presence, None, Response(
+                {
+                    "detail": (
+                        "Professional business relationship not found."
+                    )
+                },
+                status=404,
+            )
+
+        return presence, relationship, None
+
+    def patch(self, request, relationship_id):
+        presence, relationship, error_response = self.get_relationship(
+            request,
+            relationship_id,
+        )
+
+        if error_response:
+            return error_response
+
+        if presence.status != "active":
+            return Response(
+                {
+                    "detail": (
+                        "Suspended professional presences "
+                        "cannot manage business relationships."
+                    )
+                },
+                status=403,
+            )
+
+        serializer = ProfessionalBusinessRelationshipSerializer(
+            relationship,
+            data=request.data,
+            partial=True,
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=400,
+            )
+
+        business_presence = serializer.validated_data.get(
+            "business_presence",
+            relationship.business_presence,
+        )
+
+        relationship_type = serializer.validated_data.get(
+            "relationship_type",
+            relationship.relationship_type,
+        )
+
+        is_current = serializer.validated_data.get(
+            "is_current",
+            relationship.is_current,
+        )
+
+        if (
+            is_current
+            and ProfessionalBusinessRelationship.objects.filter(
+                professional_presence=presence,
+                business_presence=business_presence,
+                relationship_type=relationship_type,
+                is_current=True,
+            )
+            .exclude(id=relationship.id)
+            .exists()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This current professional relationship "
+                        "has already been declared."
+                    )
+                },
+                status=400,
+            )
+
+        relationship = serializer.save()
+
+        response_serializer = (
+            ProfessionalBusinessRelationshipSerializer(
+                relationship,
+            )
+        )
+
+        return Response(
+            response_serializer.data,
+        )
+
+    def delete(self, request, relationship_id):
+        presence, relationship, error_response = self.get_relationship(
+            request,
+            relationship_id,
+        )
+
+        if error_response:
+            return error_response
+
+        if presence.status != "active":
+            return Response(
+                {
+                    "detail": (
+                        "Suspended professional presences "
+                        "cannot manage business relationships."
+                    )
+                },
+                status=403,
+            )
+
+        relationship.delete()
+
+        return Response(
+            {
+                "detail": (
+                    "Professional business relationship removed."
+                )
+            },
             status=200,
         )
 

@@ -12,6 +12,8 @@ from .models import (
     Friendship,
     Profile,
     ProfessionalPresence,
+    BusinessPresence,
+    ProfessionalBusinessRelationship,
     Update,
     ContentReport,
     TripPlan,
@@ -851,6 +853,78 @@ class ProfessionalPresencePublicSerializer(serializers.ModelSerializer):
             }
             for link in obj.official_links.all()
         ]
+
+class ProfessionalBusinessRelationshipSerializer(
+    serializers.ModelSerializer
+):
+    business_name = serializers.CharField(
+        source="business_presence.official_name",
+        read_only=True,
+    )
+
+    place_name = serializers.CharField(
+        source="business_presence.place.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ProfessionalBusinessRelationship
+        fields = [
+            "id",
+            "business_presence",
+            "business_name",
+            "place_name",
+            "relationship_type",
+            "disclosure_text",
+            "started_at",
+            "ended_at",
+            "is_current",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "business_name",
+            "place_name",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        started_at = attrs.get(
+            "started_at",
+            getattr(self.instance, "started_at", None),
+        )
+        ended_at = attrs.get(
+            "ended_at",
+            getattr(self.instance, "ended_at", None),
+        )
+        is_current = attrs.get(
+            "is_current",
+            getattr(self.instance, "is_current", True),
+        )
+
+        if started_at and ended_at and ended_at < started_at:
+            raise serializers.ValidationError(
+                {
+                    "ended_at": (
+                        "End date cannot be before start date."
+                    )
+                }
+            )
+
+        if ended_at and is_current:
+            raise serializers.ValidationError(
+                {
+                    "is_current": (
+                        "A relationship with an end date "
+                        "cannot be current."
+                    )
+                }
+            )
+
+        return attrs
 
 class ContentReportSerializer(serializers.ModelSerializer):
     reported_by_username = serializers.CharField(

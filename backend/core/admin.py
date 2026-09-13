@@ -15,6 +15,7 @@ from .models import BusinessPresenceManager
 from .models import ProfessionalPresence
 from .models import ProfessionalPresenceLink
 from .models import ProfessionalBusinessRelationship
+from .models import ProfessionalEvaluation
 from .models import ProfessionalContribution
 
 from .official_source_services import (
@@ -141,6 +142,38 @@ class ProfessionalContributionAdmin(admin.ModelAdmin):
         "place__name",
         "business_relationship__business_presence__official_name",
         "business_relationship__business_presence__place__name",
+    )
+
+    ordering = (
+        "-created_at",
+    )
+
+@admin.register(ProfessionalEvaluation)
+class ProfessionalEvaluationAdmin(admin.ModelAdmin):
+    list_display = (
+        "contribution",
+        "evaluated_by",
+        "knowledge_rating",
+        "reliability_rating",
+        "usefulness_rating",
+        "transparency_rating",
+        "created_at",
+    )
+
+    list_filter = (
+        "knowledge_rating",
+        "reliability_rating",
+        "usefulness_rating",
+        "transparency_rating",
+        "created_at",
+    )
+
+    search_fields = (
+        "contribution__title",
+        "contribution__professional_presence__professional_name",
+        "contribution__place__name",
+        "evaluated_by__username",
+        "comment",
     )
 
     ordering = (

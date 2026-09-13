@@ -6,6 +6,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 import random
 import secrets
 import string
@@ -745,6 +746,142 @@ class ProfessionalContribution(models.Model):
             f"{self.professional_presence} — "
             f"{self.place} — "
             f"{self.title}"
+        )
+
+# ===================== Professional Evaluation =====================
+
+class ProfessionalEvaluation(models.Model):
+    contribution = models.ForeignKey(
+        ProfessionalContribution,
+        on_delete=models.CASCADE,
+        related_name="evaluations",
+    )
+
+    evaluated_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="professional_evaluations",
+    )
+
+    qualifying_experience = models.ForeignKey(
+        "Experience",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="professional_evaluations",
+    )
+
+    knowledge_rating = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(5),
+        ]
+    )
+
+    reliability_rating = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(5),
+        ]
+    )
+
+    usefulness_rating = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(5),
+        ]
+    )
+
+    transparency_rating = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(5),
+        ]
+    )
+
+    comment = models.TextField(
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "contribution",
+                    "evaluated_by",
+                ],
+                name="unique_professional_evaluation_per_user",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.contribution_id
+            and self.evaluated_by_id
+            and self.contribution.professional_presence.user_id
+            == self.evaluated_by_id
+        ):
+            raise ValidationError(
+                {
+                    "evaluated_by": (
+                        "A professional cannot evaluate "
+                        "their own contribution."
+                    )
+                }
+            )
+
+        if not self.qualifying_experience_id:
+            if self._state.adding:
+                raise ValidationError(
+                    {
+                        "qualifying_experience": (
+                            "A qualifying experience is required "
+                            "to evaluate this contribution."
+                        )
+                    }
+                )
+            return
+
+        experience = self.qualifying_experience
+
+        if experience.user_id != self.evaluated_by_id:
+            raise ValidationError(
+                {
+                    "qualifying_experience": (
+                        "The qualifying experience must belong "
+                        "to the evaluator."
+                    )
+                }
+            )
+
+        if (
+            self.contribution_id
+            and experience.place_id != self.contribution.place_id
+        ):
+            raise ValidationError(
+                {
+                    "qualifying_experience": (
+                        "The qualifying experience must refer "
+                        "to the same place as the contribution."
+                    )
+                }
+            )
+
+    def __str__(self):
+        return (
+            f"{self.evaluated_by} — "
+            f"{self.contribution}"
         )
 
 # ===================== Business Claim Request =====================

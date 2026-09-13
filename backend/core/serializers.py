@@ -830,6 +830,8 @@ class ProfessionalPresencePublicSerializer(serializers.ModelSerializer):
 
     official_links = serializers.SerializerMethodField()
 
+    business_relationships = serializers.SerializerMethodField()
+
     class Meta:
         model = ProfessionalPresence
         fields = [
@@ -839,6 +841,7 @@ class ProfessionalPresencePublicSerializer(serializers.ModelSerializer):
             "professional_type",
             "bio",
             "official_links",
+            "business_relationships",
         ]
 
         read_only_fields = fields
@@ -852,6 +855,31 @@ class ProfessionalPresencePublicSerializer(serializers.ModelSerializer):
                 "url": link.url,
             }
             for link in obj.official_links.all()
+        ]
+
+    def get_business_relationships(self, obj):
+        relationships = obj.business_relationships.filter(
+            is_current=True,
+        ).select_related(
+            "business_presence",
+            "business_presence__place",
+        )
+
+        return [
+            {
+                "id": relationship.id,
+                "business_presence": relationship.business_presence_id,
+                "business_name": (
+                    relationship.business_presence.official_name
+                    or relationship.business_presence.place.name
+                ),
+                "place_name": relationship.business_presence.place.name,
+                "relationship_type": relationship.relationship_type,
+                "disclosure_text": relationship.disclosure_text,
+                "started_at": relationship.started_at,
+                "declared_by": "professional",
+            }
+            for relationship in relationships
         ]
 
 class ProfessionalBusinessRelationshipSerializer(

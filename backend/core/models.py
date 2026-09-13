@@ -563,6 +563,85 @@ class BusinessPresenceLink(models.Model):
             f"{self.label or self.get_link_type_display()}"
         )
 
+# ===================== Professional Business Relationship =====================
+
+class ProfessionalBusinessRelationship(models.Model):
+    RELATIONSHIP_TYPE_CHOICES = [
+        ("independent", "Independent"),
+        ("invited", "Invited"),
+        ("sponsored", "Sponsored"),
+        ("commercial_partnership", "Commercial partnership"),
+        ("ambassador", "Ambassador"),
+        ("employee", "Employee"),
+        ("owner", "Owner"),
+        ("other", "Other"),
+    ]
+
+    professional_presence = models.ForeignKey(
+        ProfessionalPresence,
+        on_delete=models.CASCADE,
+        related_name="business_relationships",
+    )
+
+    business_presence = models.ForeignKey(
+        BusinessPresence,
+        on_delete=models.CASCADE,
+        related_name="professional_relationships",
+    )
+
+    relationship_type = models.CharField(
+        max_length=40,
+        choices=RELATIONSHIP_TYPE_CHOICES,
+        default="independent",
+    )
+
+    disclosure_text = models.TextField(
+        blank=True,
+    )
+
+    started_at = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    ended_at = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    is_current = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "professional_presence",
+                    "business_presence",
+                    "relationship_type",
+                ],
+                condition=Q(is_current=True),
+                name="unique_current_professional_business_relationship",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.professional_presence} — "
+            f"{self.business_presence} "
+            f"({self.get_relationship_type_display()})"
+        )
+
 # ===================== Business Claim Request =====================
 
 class BusinessClaimRequest(models.Model):

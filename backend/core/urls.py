@@ -35,6 +35,7 @@ from .views import (
     ProfessionalEvaluationSummaryView,
     ProfessionalEvaluationAnalyticsView,
     ProfessionalContributionPublicListView,
+    PlaceProfessionalContributionPublicListView,
     ProfessionalPresenceLinkCreateView,
     ProfessionalPresenceLinkDetailView,
     ProfessionalBusinessRelationshipListCreateView,
@@ -167,6 +168,10 @@ urlpatterns = [
     path("places/<int:place_id>/photos/", PlacePhotosView.as_view()),
     path("places/<int:place_id>/experiences/", PlaceExperiencesListView.as_view()),
 
+    path(
+        "places/<int:place_id>/professional-contributions/",
+        PlaceProfessionalContributionPublicListView.as_view(),
+    ),
 
     path("register/", UserRegisterView.as_view()),
     path("recover-password/", RecoverPasswordView.as_view()),

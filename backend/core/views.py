@@ -546,6 +546,53 @@ class ProfessionalContributionPublicListView(APIView):
 
         return Response(serializer.data)
 
+class PlaceProfessionalContributionPublicListView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, place_id):
+        contributions = (
+            ProfessionalContribution.objects
+            .filter(
+                place_id=place_id,
+                professional_presence__status="active",
+            )
+            .select_related(
+                "professional_presence",
+                "professional_presence__user",
+                "professional_presence__user__profile",
+                "place",
+                "business_relationship",
+                "business_relationship__business_presence",
+                "business_relationship__business_presence__place",
+            )
+            .annotate(
+                evaluations_count=Count(
+                    "evaluations",
+                    distinct=True,
+                ),
+                knowledge_average=Avg(
+                    "evaluations__knowledge_rating",
+                ),
+                reliability_average=Avg(
+                    "evaluations__reliability_rating",
+                ),
+                usefulness_average=Avg(
+                    "evaluations__usefulness_rating",
+                ),
+                transparency_average=Avg(
+                    "evaluations__transparency_rating",
+                ),
+            )
+            .order_by("-created_at")
+        )
+
+        serializer = ProfessionalContributionPublicSerializer(
+            contributions,
+            many=True,
+        )
+
+        return Response(serializer.data)
+
 class ProfessionalPresenceLinkCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]

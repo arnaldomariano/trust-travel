@@ -892,6 +892,16 @@ class ProfessionalContributionPublicSerializer(
         read_only=True,
     )
 
+    public_code = serializers.CharField(
+        source="professional_presence.user.profile.public_code",
+        read_only=True,
+    )
+
+    professional_type = serializers.CharField(
+        source="professional_presence.professional_type",
+        read_only=True,
+    )
+
     place_name = serializers.CharField(
         source="place.name",
         read_only=True,
@@ -924,6 +934,8 @@ class ProfessionalContributionPublicSerializer(
         fields = [
             "id",
             "professional_name",
+            "public_code",
+            "professional_type",
             "place",
             "place_name",
             "contribution_type",

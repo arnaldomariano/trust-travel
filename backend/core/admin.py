@@ -15,6 +15,7 @@ from .models import BusinessPresenceManager
 from .models import ProfessionalPresence
 from .models import ProfessionalPresenceLink
 from .models import ProfessionalBusinessRelationship
+from .models import ProfessionalContribution
 
 from .official_source_services import (
     OfficialSourcePublicationError,
@@ -110,6 +111,36 @@ class ProfessionalBusinessRelationshipAdmin(admin.ModelAdmin):
         "business_presence__official_name",
         "business_presence__place__name",
         "disclosure_text",
+    )
+
+    ordering = (
+        "-created_at",
+    )
+
+@admin.register(ProfessionalContribution)
+class ProfessionalContributionAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "professional_presence",
+        "place",
+        "contribution_type",
+        "business_relationship",
+        "created_at",
+    )
+
+    list_filter = (
+        "contribution_type",
+        "created_at",
+    )
+
+    search_fields = (
+        "title",
+        "text",
+        "professional_presence__professional_name",
+        "professional_presence__user__username",
+        "place__name",
+        "business_relationship__business_presence__official_name",
+        "business_relationship__business_presence__place__name",
     )
 
     ordering = (

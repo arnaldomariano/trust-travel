@@ -5,6 +5,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 import random
 import secrets
 import string
@@ -636,10 +637,114 @@ class ProfessionalBusinessRelationship(models.Model):
         ]
 
     def __str__(self):
+        relationship_status = (
+            "Current"
+            if self.is_current
+            else "Historical"
+        )
+
         return (
             f"{self.professional_presence} — "
             f"{self.business_presence} "
-            f"({self.get_relationship_type_display()})"
+            f"({self.get_relationship_type_display()} · "
+            f"{relationship_status})"
+        )
+
+# ===================== Professional Contribution =====================
+
+class ProfessionalContribution(models.Model):
+    CONTRIBUTION_TYPE_CHOICES = [
+        ("analysis", "Analysis"),
+        ("recommendation", "Recommendation"),
+        ("review", "Review"),
+        ("guide", "Guide"),
+        ("report", "Report"),
+        ("tip", "Tip"),
+        ("other", "Other"),
+    ]
+
+    professional_presence = models.ForeignKey(
+        ProfessionalPresence,
+        on_delete=models.CASCADE,
+        related_name="contributions",
+    )
+
+    place = models.ForeignKey(
+        Place,
+        on_delete=models.CASCADE,
+        related_name="professional_contributions",
+    )
+
+    business_relationship = models.ForeignKey(
+        ProfessionalBusinessRelationship,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contributions",
+    )
+
+    contribution_type = models.CharField(
+        max_length=30,
+        choices=CONTRIBUTION_TYPE_CHOICES,
+        default="other",
+    )
+
+    title = models.CharField(
+        max_length=180,
+    )
+
+    text = models.TextField()
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        super().clean()
+
+        if not self.business_relationship_id:
+            return
+
+        relationship = self.business_relationship
+
+        if (
+            relationship.professional_presence_id
+            != self.professional_presence_id
+        ):
+            raise ValidationError(
+                {
+                    "business_relationship": (
+                        "The business relationship must belong "
+                        "to the same professional presence."
+                    )
+                }
+            )
+
+        if (
+            relationship.business_presence.place_id
+            != self.place_id
+        ):
+            raise ValidationError(
+                {
+                    "business_relationship": (
+                        "The business relationship must refer "
+                        "to the same place as the contribution."
+                    )
+                }
+            )
+
+    def __str__(self):
+        return (
+            f"{self.professional_presence} — "
+            f"{self.place} — "
+            f"{self.title}"
         )
 
 # ===================== Business Claim Request =====================

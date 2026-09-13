@@ -37,6 +37,7 @@ from .views import (
     ProfessionalBusinessRelationshipListCreateView,
     ProfessionalBusinessRelationshipDetailView,
     ProfessionalEvaluationListCreateView,
+    ProfessionalEvaluationDetailView,
     ExperienceReplyListCreateView,
     UpdateListView,
     UpdateDetailView,
@@ -192,6 +193,10 @@ urlpatterns = [
     path(
         "professional-evaluations/",
         ProfessionalEvaluationListCreateView.as_view(),
+    ),
+    path(
+        "professional-evaluations/<int:evaluation_id>/",
+        ProfessionalEvaluationDetailView.as_view(),
     ),
     path("updates/", UpdateListView.as_view()),
     path("updates/<int:pk>/", UpdateDetailView.as_view()),

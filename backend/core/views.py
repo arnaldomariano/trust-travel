@@ -826,6 +826,107 @@ class ProfessionalEvaluationListCreateView(APIView):
             status=201,
         )
 
+class ProfessionalEvaluationDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_evaluation(self, request, evaluation_id):
+        try:
+            evaluation = (
+                ProfessionalEvaluation.objects
+                .select_related(
+                    "contribution",
+                    "contribution__professional_presence",
+                    "contribution__place",
+                    "qualifying_experience",
+                )
+                .get(
+                    id=evaluation_id,
+                    evaluated_by=request.user,
+                )
+            )
+        except ProfessionalEvaluation.DoesNotExist:
+            return None, Response(
+                {
+                    "detail": (
+                        "Professional evaluation not found."
+                    )
+                },
+                status=404,
+            )
+
+        return evaluation, None
+
+    def patch(self, request, evaluation_id):
+        evaluation, error_response = self.get_evaluation(
+            request,
+            evaluation_id,
+        )
+
+        if error_response:
+            return error_response
+
+        if (
+            "contribution" in request.data
+            and str(request.data["contribution"])
+            != str(evaluation.contribution_id)
+        ):
+            return Response(
+                {
+                    "contribution": [
+                        (
+                            "The contribution of an existing "
+                            "evaluation cannot be changed."
+                        )
+                    ]
+                },
+                status=400,
+            )
+
+        serializer = ProfessionalEvaluationSerializer(
+            evaluation,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=400,
+            )
+
+        evaluation = serializer.save()
+
+        response_serializer = ProfessionalEvaluationSerializer(
+            evaluation,
+            context={"request": request},
+        )
+
+        return Response(
+            response_serializer.data,
+        )
+
+    def delete(self, request, evaluation_id):
+        evaluation, error_response = self.get_evaluation(
+            request,
+            evaluation_id,
+        )
+
+        if error_response:
+            return error_response
+
+        evaluation.delete()
+
+        return Response(
+            {
+                "detail": (
+                    "Professional evaluation removed."
+                )
+            },
+            status=200,
+        )
+
 class UserRegisterView(generics.CreateAPIView):
     serializer_class = UserRegisterSerializer
 

@@ -1031,6 +1031,103 @@ class ProfessionalBusinessRelationshipSerializer(
 
         return attrs
 
+class ProfessionalContributionSerializer(serializers.ModelSerializer):
+    professional_name = serializers.CharField(
+        source="professional_presence.professional_name",
+        read_only=True,
+    )
+
+    place_name = serializers.CharField(
+        source="place.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ProfessionalContribution
+        fields = [
+            "id",
+            "professional_presence",
+            "professional_name",
+            "place",
+            "place_name",
+            "business_relationship",
+            "contribution_type",
+            "title",
+            "text",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "professional_presence",
+            "professional_name",
+            "place_name",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError(
+                "Authentication is required to manage professional contributions."
+            )
+
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            raise serializers.ValidationError(
+                {
+                    "professional_presence": (
+                        "Professional presence has not been created yet."
+                    )
+                }
+            )
+
+        place = attrs.get(
+            "place",
+            getattr(self.instance, "place", None),
+        )
+
+        business_relationship = attrs.get(
+            "business_relationship",
+            getattr(self.instance, "business_relationship", None),
+        )
+
+        if not business_relationship:
+            return attrs
+
+        if (
+            business_relationship.professional_presence_id
+            != presence.id
+        ):
+            raise serializers.ValidationError(
+                {
+                    "business_relationship": (
+                        "The business relationship must belong "
+                        "to your professional presence."
+                    )
+                }
+            )
+
+        if (
+            place
+            and business_relationship.business_presence.place_id
+            != place.id
+        ):
+            raise serializers.ValidationError(
+                {
+                    "business_relationship": (
+                        "The business relationship must refer "
+                        "to the same place as the contribution."
+                    )
+                }
+            )
+
+        return attrs
+
 class ProfessionalEvaluationSerializer(serializers.ModelSerializer):
     evaluated_by_username = serializers.CharField(
         source="evaluated_by.username",

@@ -56,6 +56,7 @@ from .serializers import (
     ProfessionalPresenceSerializer,
     ProfessionalPresencePublicSerializer,
     ProfessionalContributionPublicSerializer,
+    ProfessionalContributionSerializer,
     ProfessionalBusinessRelationshipSerializer,
     ProfessionalEvaluationSerializer,
     PlaceLocationSuggestionSerializer,
@@ -1025,6 +1026,214 @@ class ProfessionalBusinessRelationshipDetailView(APIView):
             {
                 "detail": (
                     "Professional business relationship removed."
+                )
+            },
+            status=200,
+        )
+
+class ProfessionalContributionListCreateView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        contributions = (
+            ProfessionalContribution.objects
+            .filter(
+                professional_presence=presence,
+            )
+            .select_related(
+                "professional_presence",
+                "place",
+                "business_relationship",
+                "business_relationship__business_presence",
+                "business_relationship__business_presence__place",
+            )
+            .order_by("-created_at")
+        )
+
+        serializer = ProfessionalContributionSerializer(
+            contributions,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(serializer.data)
+
+    def post(self, request):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        if presence.status != "active":
+            return Response(
+                {
+                    "detail": (
+                        "Suspended professional presences "
+                        "cannot create contributions."
+                    )
+                },
+                status=403,
+            )
+
+        serializer = ProfessionalContributionSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=400,
+            )
+
+        contribution = serializer.save(
+            professional_presence=presence,
+        )
+
+        response_serializer = ProfessionalContributionSerializer(
+            contribution,
+            context={"request": request},
+        )
+
+        return Response(
+            response_serializer.data,
+            status=201,
+        )
+
+class ProfessionalContributionDetailView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_contribution(self, request, contribution_id):
+        try:
+            presence = request.user.professional_presence
+        except ProfessionalPresence.DoesNotExist:
+            return None, None, Response(
+                {
+                    "detail": (
+                        "Professional presence has not been created yet."
+                    )
+                },
+                status=404,
+            )
+
+        try:
+            contribution = (
+                ProfessionalContribution.objects
+                .select_related(
+                    "professional_presence",
+                    "place",
+                    "business_relationship",
+                    "business_relationship__business_presence",
+                    "business_relationship__business_presence__place",
+                )
+                .get(
+                    id=contribution_id,
+                    professional_presence=presence,
+                )
+            )
+        except ProfessionalContribution.DoesNotExist:
+            return presence, None, Response(
+                {
+                    "detail": (
+                        "Professional contribution not found."
+                    )
+                },
+                status=404,
+            )
+
+        return presence, contribution, None
+
+    def patch(self, request, contribution_id):
+        presence, contribution, error_response = self.get_contribution(
+            request,
+            contribution_id,
+        )
+
+        if error_response:
+            return error_response
+
+        if presence.status != "active":
+            return Response(
+                {
+                    "detail": (
+                        "Suspended professional presences "
+                        "cannot manage contributions."
+                    )
+                },
+                status=403,
+            )
+
+        serializer = ProfessionalContributionSerializer(
+            contribution,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=400,
+            )
+
+        contribution = serializer.save()
+
+        response_serializer = ProfessionalContributionSerializer(
+            contribution,
+            context={"request": request},
+        )
+
+        return Response(
+            response_serializer.data,
+        )
+
+    def delete(self, request, contribution_id):
+        presence, contribution, error_response = self.get_contribution(
+            request,
+            contribution_id,
+        )
+
+        if error_response:
+            return error_response
+
+        if presence.status != "active":
+            return Response(
+                {
+                    "detail": (
+                        "Suspended professional presences "
+                        "cannot manage contributions."
+                    )
+                },
+                status=403,
+            )
+
+        contribution.delete()
+
+        return Response(
+            {
+                "detail": (
+                    "Professional contribution removed."
                 )
             },
             status=200,

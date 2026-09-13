@@ -289,6 +289,49 @@ class ProfessionalPresencePublicView(APIView):
 
         return Response(serializer.data)
 
+class ProfessionalEvaluationSummaryView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, public_code):
+        try:
+            presence = (
+                ProfessionalPresence.objects
+                .select_related(
+                    "user",
+                    "user__profile",
+                )
+                .get(
+                    user__profile__public_code=public_code,
+                    status="active",
+                )
+            )
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence not found."
+                    )
+                },
+                status=404,
+            )
+
+        summary = ProfessionalEvaluation.objects.filter(
+            contribution__professional_presence=presence,
+        ).aggregate(
+            evaluations_count=Count("id"),
+            knowledge_average=Avg("knowledge_rating"),
+            reliability_average=Avg("reliability_rating"),
+            usefulness_average=Avg("usefulness_rating"),
+            transparency_average=Avg("transparency_rating"),
+        )
+
+        return Response(
+            {
+                "professional_name": presence.professional_name,
+                **summary,
+            }
+        )
+
 class ProfessionalContributionPublicListView(APIView):
     permission_classes = [permissions.AllowAny]
 

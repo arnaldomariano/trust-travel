@@ -884,6 +884,81 @@ class ProfessionalPresencePublicSerializer(serializers.ModelSerializer):
             for relationship in relationships
         ]
 
+class ProfessionalContributionPublicSerializer(
+    serializers.ModelSerializer
+):
+    professional_name = serializers.CharField(
+        source="professional_presence.professional_name",
+        read_only=True,
+    )
+
+    place_name = serializers.CharField(
+        source="place.name",
+        read_only=True,
+    )
+
+    business_disclosure = serializers.SerializerMethodField()
+
+    evaluations_count = serializers.IntegerField(
+        read_only=True,
+    )
+
+    knowledge_average = serializers.FloatField(
+        read_only=True,
+    )
+
+    reliability_average = serializers.FloatField(
+        read_only=True,
+    )
+
+    usefulness_average = serializers.FloatField(
+        read_only=True,
+    )
+
+    transparency_average = serializers.FloatField(
+        read_only=True,
+    )
+
+    class Meta:
+        model = ProfessionalContribution
+        fields = [
+            "id",
+            "professional_name",
+            "place",
+            "place_name",
+            "contribution_type",
+            "title",
+            "text",
+            "business_disclosure",
+            "evaluations_count",
+            "knowledge_average",
+            "reliability_average",
+            "usefulness_average",
+            "transparency_average",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = fields
+
+    def get_business_disclosure(self, obj):
+        relationship = obj.business_relationship
+
+        if not relationship:
+            return None
+
+        return {
+            "relationship_type": relationship.relationship_type,
+            "disclosure_text": relationship.disclosure_text,
+            "started_at": relationship.started_at,
+            "ended_at": relationship.ended_at,
+            "is_current": relationship.is_current,
+            "business_name": (
+                relationship.business_presence.official_name
+                or relationship.business_presence.place.name
+            ),
+        }
+
 class ProfessionalBusinessRelationshipSerializer(
     serializers.ModelSerializer
 ):

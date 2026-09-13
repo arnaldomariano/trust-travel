@@ -32,6 +32,7 @@ from .views import (
     ProfileView,
     ProfessionalPresenceView,
     ProfessionalPresencePublicView,
+    ProfessionalContributionPublicListView,
     ProfessionalPresenceLinkCreateView,
     ProfessionalPresenceLinkDetailView,
     ProfessionalBusinessRelationshipListCreateView,
@@ -172,6 +173,10 @@ urlpatterns = [
     path(
         "professional-presences/<str:public_code>/",
         ProfessionalPresencePublicView.as_view(),
+    ),
+    path(
+        "professional-presences/<str:public_code>/contributions/",
+        ProfessionalContributionPublicListView.as_view(),
     ),
     path(
         "professional-presence/links/",

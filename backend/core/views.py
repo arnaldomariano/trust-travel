@@ -1,7 +1,7 @@
 
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models import Avg, Count, OuterRef, Q, Subquery
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 
@@ -55,6 +55,7 @@ from .serializers import (
     PlaceSerializer,
     ProfessionalPresenceSerializer,
     ProfessionalPresencePublicSerializer,
+    ProfessionalContributionPublicSerializer,
     ProfessionalBusinessRelationshipSerializer,
     ProfessionalEvaluationSerializer,
     PlaceLocationSuggestionSerializer,
@@ -284,6 +285,72 @@ class ProfessionalPresencePublicView(APIView):
 
         serializer = ProfessionalPresencePublicSerializer(
             presence,
+        )
+
+        return Response(serializer.data)
+
+class ProfessionalContributionPublicListView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, public_code):
+        try:
+            presence = (
+                ProfessionalPresence.objects
+                .select_related(
+                    "user",
+                    "user__profile",
+                )
+                .get(
+                    user__profile__public_code=public_code,
+                    status="active",
+                )
+            )
+        except ProfessionalPresence.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Professional presence not found."
+                    )
+                },
+                status=404,
+            )
+
+        contributions = (
+            ProfessionalContribution.objects
+            .filter(
+                professional_presence=presence,
+            )
+            .select_related(
+                "professional_presence",
+                "place",
+                "business_relationship",
+                "business_relationship__business_presence",
+                "business_relationship__business_presence__place",
+            )
+            .annotate(
+                evaluations_count=Count(
+                    "evaluations",
+                    distinct=True,
+                ),
+                knowledge_average=Avg(
+                    "evaluations__knowledge_rating",
+                ),
+                reliability_average=Avg(
+                    "evaluations__reliability_rating",
+                ),
+                usefulness_average=Avg(
+                    "evaluations__usefulness_rating",
+                ),
+                transparency_average=Avg(
+                    "evaluations__transparency_rating",
+                ),
+            )
+            .order_by("-created_at")
+        )
+
+        serializer = ProfessionalContributionPublicSerializer(
+            contributions,
+            many=True,
         )
 
         return Response(serializer.data)

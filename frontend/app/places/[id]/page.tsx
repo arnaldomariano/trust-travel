@@ -83,6 +83,25 @@ export default function PlacePage() {
   const [updates, setUpdates] = useState<any[]>([]);
   const [professionalContributions, setProfessionalContributions] =
     useState<any[]>([]);
+  const [professionalEvaluations, setProfessionalEvaluations] = useState<any[]>([]);
+  const [
+    professionalEvaluationFormContributionId,
+    setProfessionalEvaluationFormContributionId,
+  ] = useState<number | null>(null);
+  const [professionalKnowledgeRating, setProfessionalKnowledgeRating] =
+    useState(0);
+  const [professionalReliabilityRating, setProfessionalReliabilityRating] =
+    useState(0);
+  const [professionalUsefulnessRating, setProfessionalUsefulnessRating] =
+    useState(0);
+  const [professionalTransparencyRating, setProfessionalTransparencyRating] =
+    useState(0);
+  const [professionalEvaluationComment, setProfessionalEvaluationComment] =
+    useState("");
+  const [savingProfessionalEvaluation, setSavingProfessionalEvaluation] =
+    useState(false);
+  const [professionalEvaluationError, setProfessionalEvaluationError] =
+    useState("");
   const [filter, setFilter] = useState<"all" | "experience" | "update">("all");
 
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
@@ -157,6 +176,7 @@ export default function PlacePage() {
 
   const [ratingsSummary, setRatingsSummary] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUsername, setCurrentUsername] = useState("");
 
   const [showBusinessClaimForm, setShowBusinessClaimForm] = useState(false);
   const [businessClaimRole, setBusinessClaimRole] = useState("");
@@ -1032,29 +1052,61 @@ const activityFeedDescription =
     }
   };
 
-useEffect(() => {
-  const checkLogin = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/me/`, {
-        credentials: "include",
-      });
+  useEffect(() => {
+    const checkLogin = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/me/`, {
+          credentials: "include",
+        });
 
-      setIsLoggedIn(res.ok);
+        setIsLoggedIn(res.ok);
 
-      if (res.ok) {
-        loadTripPlans();
-      } else {
+        if (res.ok) {
+          const data = await res.json();
+
+          setCurrentUsername(data.username || "");
+          loadTripPlans();
+
+          try {
+            const evaluationsRes = await fetch(
+              `${API_URL}/api/professional-evaluations/`,
+              {
+                credentials: "include",
+              }
+            );
+
+            if (evaluationsRes.ok) {
+              const evaluationsData = await evaluationsRes.json();
+
+              setProfessionalEvaluations(
+                Array.isArray(evaluationsData) ? evaluationsData : []
+              );
+            } else {
+              setProfessionalEvaluations([]);
+            }
+          } catch (error) {
+            console.error(
+              "Professional evaluations fetch error:",
+              error
+            );
+            setProfessionalEvaluations([]);
+          }
+        } else {
+          setCurrentUsername("");
+          setTripPlans([]);
+          setProfessionalEvaluations([]);
+        }
+      } catch (error) {
+        console.error("Login check failed:", error);
+        setIsLoggedIn(false);
+        setCurrentUsername("");
         setTripPlans([]);
+        setProfessionalEvaluations([]);
       }
-    } catch (error) {
-      console.error("Login check failed:", error);
-      setIsLoggedIn(false);
-    }
-  };
+    };
 
-  checkLogin();
-}, []);
-
+    checkLogin();
+  }, []);
     useEffect(() => {
     if (!id) return;
 
@@ -1243,6 +1295,124 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       place?.place_type === "city"
         ? experiences.filter((e) => Number(e.place) === Number(place.id))
         : experiences;
+
+    const qualifyingExperience = visibleExperiences.find(
+      (experience) => experience.user === currentUsername
+    );
+
+    const saveProfessionalEvaluation = async (
+      contributionId: number,
+      existingEvaluation: any
+    ) => {
+      if (
+        professionalKnowledgeRating < 1 ||
+        professionalReliabilityRating < 1 ||
+        professionalUsefulnessRating < 1 ||
+        professionalTransparencyRating < 1
+      ) {
+        setProfessionalEvaluationError(
+          "Please rate all four evaluation dimensions."
+        );
+        return;
+      }
+
+      if (!existingEvaluation && !qualifyingExperience) {
+        setProfessionalEvaluationError(
+          "You need your own experience at this place before evaluating this contribution."
+        );
+        return;
+      }
+
+      setSavingProfessionalEvaluation(true);
+      setProfessionalEvaluationError("");
+
+      try {
+        const payload = {
+          contribution: contributionId,
+          qualifying_experience:
+            existingEvaluation?.qualifying_experience ||
+            qualifyingExperience?.id,
+          knowledge_rating: professionalKnowledgeRating,
+          reliability_rating: professionalReliabilityRating,
+          usefulness_rating: professionalUsefulnessRating,
+          transparency_rating: professionalTransparencyRating,
+          comment: professionalEvaluationComment.trim(),
+        };
+
+        const url = existingEvaluation
+          ? `${API_URL}/api/professional-evaluations/${existingEvaluation.id}/`
+          : `${API_URL}/api/professional-evaluations/`;
+
+        const res = await fetch(url, {
+          method: existingEvaluation ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          const message =
+            data?.detail ||
+            data?.non_field_errors?.[0] ||
+            data?.contribution?.[0] ||
+            "Unable to save this evaluation.";
+
+          setProfessionalEvaluationError(message);
+          return;
+        }
+
+        setProfessionalEvaluations((current) => {
+          if (existingEvaluation) {
+            return current.map((evaluation) =>
+              Number(evaluation.id) === Number(data.id)
+                ? data
+                : evaluation
+            );
+          }
+
+          return [data, ...current];
+        });
+
+        try {
+          const contributionsRes = await fetch(
+            `${API_URL}/api/places/${id}/professional-contributions/`
+          );
+
+          if (contributionsRes.ok) {
+            const contributionsData = await contributionsRes.json();
+
+            setProfessionalContributions(
+              Array.isArray(contributionsData)
+                ? contributionsData
+                : contributionsData?.results || []
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Professional contributions refresh error:",
+            error
+          );
+        }
+
+        setProfessionalEvaluationFormContributionId(null);
+        setProfessionalKnowledgeRating(0);
+        setProfessionalReliabilityRating(0);
+        setProfessionalUsefulnessRating(0);
+        setProfessionalTransparencyRating(0);
+        setProfessionalEvaluationComment("");
+      } catch (error) {
+        console.error("Professional evaluation save error:", error);
+        setProfessionalEvaluationError(
+          "Unable to save this evaluation."
+        );
+      } finally {
+        setSavingProfessionalEvaluation(false);
+      }
+    };
 
     const combinedFeed = [
       ...visibleExperiences.map((e) => ({ ...e, content_type: "experience" })),
@@ -4710,6 +4880,14 @@ const handleToggleEventsInfo = () => {
             const isProfessionalContribution =
               item.content_type === "professional_contribution";
 
+            const existingProfessionalEvaluation =
+              isProfessionalContribution
+                ? professionalEvaluations.find(
+                    (evaluation) =>
+                      Number(evaluation.contribution) === Number(item.id)
+                  )
+                : null;
+
             const label = isProfessionalContribution
               ? "Professional contribution"
               : isExperience
@@ -5035,6 +5213,7 @@ const handleToggleEventsInfo = () => {
                         display: "flex",
                         gap: "8px",
                         flexWrap: "wrap",
+                        alignItems: "center",
                       }}
                     >
                       <Link
@@ -5053,7 +5232,302 @@ const handleToggleEventsInfo = () => {
                       >
                         View professional
                       </Link>
+
+                      {isLoggedIn &&
+                      (existingProfessionalEvaluation ||
+                        qualifyingExperience) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfessionalEvaluationFormContributionId(
+                              Number(item.id)
+                            );
+                            setProfessionalEvaluationError("");
+
+                            if (existingProfessionalEvaluation) {
+                              setProfessionalKnowledgeRating(
+                                Number(
+                                  existingProfessionalEvaluation.knowledge_rating
+                                ) || 0
+                              );
+                              setProfessionalReliabilityRating(
+                                Number(
+                                  existingProfessionalEvaluation.reliability_rating
+                                ) || 0
+                              );
+                              setProfessionalUsefulnessRating(
+                                Number(
+                                  existingProfessionalEvaluation.usefulness_rating
+                                ) || 0
+                              );
+                              setProfessionalTransparencyRating(
+                                Number(
+                                  existingProfessionalEvaluation.transparency_rating
+                                ) || 0
+                              );
+                              setProfessionalEvaluationComment(
+                                existingProfessionalEvaluation.comment || ""
+                              );
+                            } else {
+                              setProfessionalKnowledgeRating(0);
+                              setProfessionalReliabilityRating(0);
+                              setProfessionalUsefulnessRating(0);
+                              setProfessionalTransparencyRating(0);
+                              setProfessionalEvaluationComment("");
+                            }
+                          }}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: "10px",
+                            border: "1px solid #d1d5db",
+                            backgroundColor: "white",
+                            color: "#111",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {existingProfessionalEvaluation
+                            ? "Edit evaluation"
+                            : "Evaluate this contribution"}
+                        </button>
+                      ) : !isLoggedIn ? (
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            color: "#777",
+                          }}
+                        >
+                          Log in to evaluate this contribution.
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            color: "#777",
+                          }}
+                        >
+                          Share your own experience at this place before
+                          evaluating this contribution.
+                        </span>
+                      )}
                     </div>
+
+                    {professionalEvaluationFormContributionId ===
+                      Number(item.id) && (
+                      <div
+                        style={{
+                          marginTop: "14px",
+                          padding: "14px",
+                          border: "1px solid #dbeafe",
+                          borderRadius: "12px",
+                          backgroundColor: "#f8fbff",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            marginBottom: "10px",
+                          }}
+                        >
+                          {existingProfessionalEvaluation
+                            ? "Edit your evaluation"
+                            : "Evaluate this professional contribution"}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(150px, 1fr))",
+                            gap: "10px",
+                          }}
+                        >
+                          <label
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>Knowledge</span>
+                            <select
+                              value={professionalKnowledgeRating}
+                              onChange={(event) =>
+                                setProfessionalKnowledgeRating(
+                                  Number(event.target.value)
+                                )
+                              }
+                            >
+                              <option value={0}>Select</option>
+                              <option value={1}>1</option>
+                              <option value={2}>2</option>
+                              <option value={3}>3</option>
+                              <option value={4}>4</option>
+                              <option value={5}>5</option>
+                            </select>
+                          </label>
+
+                          <label
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>Reliability</span>
+                            <select
+                              value={professionalReliabilityRating}
+                              onChange={(event) =>
+                                setProfessionalReliabilityRating(
+                                  Number(event.target.value)
+                                )
+                              }
+                            >
+                              <option value={0}>Select</option>
+                              <option value={1}>1</option>
+                              <option value={2}>2</option>
+                              <option value={3}>3</option>
+                              <option value={4}>4</option>
+                              <option value={5}>5</option>
+                            </select>
+                          </label>
+
+                          <label
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>Usefulness</span>
+                            <select
+                              value={professionalUsefulnessRating}
+                              onChange={(event) =>
+                                setProfessionalUsefulnessRating(
+                                  Number(event.target.value)
+                                )
+                              }
+                            >
+                              <option value={0}>Select</option>
+                              <option value={1}>1</option>
+                              <option value={2}>2</option>
+                              <option value={3}>3</option>
+                              <option value={4}>4</option>
+                              <option value={5}>5</option>
+                            </select>
+                          </label>
+
+                          <label
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>Transparency</span>
+                            <select
+                              value={professionalTransparencyRating}
+                              onChange={(event) =>
+                                setProfessionalTransparencyRating(
+                                  Number(event.target.value)
+                                )
+                              }
+                            >
+                              <option value={0}>Select</option>
+                              <option value={1}>1</option>
+                              <option value={2}>2</option>
+                              <option value={3}>3</option>
+                              <option value={4}>4</option>
+                              <option value={5}>5</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        <label
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "6px",
+                            marginTop: "12px",
+                            fontSize: "13px",
+                          }}
+                        >
+                          <span style={{ fontWeight: 600 }}>
+                            Comment (optional)
+                          </span>
+
+                          <textarea
+                            value={professionalEvaluationComment}
+                            onChange={(event) =>
+                              setProfessionalEvaluationComment(
+                                event.target.value
+                              )
+                            }
+                            rows={3}
+                            style={{
+                              padding: "10px",
+                              borderRadius: "8px",
+                              border: "1px solid #d1d5db",
+                              resize: "vertical",
+                              fontFamily: "inherit",
+                            }}
+                          />
+                        </label>
+
+                        {professionalEvaluationError && (
+                          <div
+                            style={{
+                              marginTop: "10px",
+                              color: "#b91c1c",
+                              fontSize: "13px",
+                            }}
+                          >
+                            {professionalEvaluationError}
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            marginTop: "12px",
+                            display: "flex",
+                            gap: "8px",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveProfessionalEvaluation(
+                                Number(item.id),
+                                existingProfessionalEvaluation
+                              )
+                            }
+                            disabled={savingProfessionalEvaluation}
+                          >
+                            {savingProfessionalEvaluation
+                              ? "Saving..."
+                              : existingProfessionalEvaluation
+                              ? "Update evaluation"
+                              : "Save evaluation"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProfessionalEvaluationFormContributionId(null);
+                              setProfessionalEvaluationError("");
+                            }}
+                            disabled={savingProfessionalEvaluation}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>

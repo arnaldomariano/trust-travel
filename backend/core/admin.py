@@ -25,6 +25,7 @@ from .official_source_services import (
 
 from .business_presence_services import (
     BusinessClaimApprovalError,
+    BusinessClaimRejectionError,
     BusinessPresenceManagerStatusError,
     BusinessPresenceManagerCreationError,
     BusinessPresenceStatusError,
@@ -32,6 +33,7 @@ from .business_presence_services import (
     approve_business_claim_request,
     deactivate_business_presence_manager,
     reactivate_business_presence_manager,
+    reject_business_claim_request,
     restore_business_presence,
     suspend_business_presence,
 )
@@ -411,7 +413,10 @@ class BusinessClaimRequestAdmin(admin.ModelAdmin):
         "reviewed_at",
     )
 
-    actions = ["approve_selected_claims"]
+    actions = [
+        "approve_selected_claims",
+        "reject_selected_claims",
+    ]
 
     @admin.action(description="Approve selected business claims")
     def approve_selected_claims(self, request, queryset):
@@ -435,6 +440,31 @@ class BusinessClaimRequestAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f"{approved_count} business claim(s) approved.",
+                level="success",
+            )
+
+    @admin.action(description="Reject selected business claims")
+    def reject_selected_claims(self, request, queryset):
+        rejected_count = 0
+
+        for claim in queryset:
+            try:
+                reject_business_claim_request(
+                    claim_id=claim.id,
+                    reviewed_by=request.user,
+                )
+                rejected_count += 1
+            except BusinessClaimRejectionError as exc:
+                self.message_user(
+                    request,
+                    f"{claim}: {exc}",
+                    level="error",
+                )
+
+        if rejected_count:
+            self.message_user(
+                request,
+                f"{rejected_count} business claim(s) rejected.",
                 level="success",
             )
 

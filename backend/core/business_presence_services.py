@@ -326,6 +326,48 @@ def approve_business_claim_request(claim_id, reviewed_by):
 
     return claim
 
+
+class BusinessClaimRejectionError(Exception):
+    pass
+
+
+@transaction.atomic
+def reject_business_claim_request(claim_id, reviewed_by):
+    try:
+        claim = (
+            BusinessClaimRequest.objects
+            .select_for_update()
+            .get(id=claim_id)
+        )
+    except BusinessClaimRequest.DoesNotExist as exc:
+        raise BusinessClaimRejectionError(
+            "Business claim request does not exist."
+        ) from exc
+
+    if reviewed_by is None or not getattr(reviewed_by, "pk", None):
+        raise BusinessClaimRejectionError(
+            "A valid reviewer is required before rejection."
+        )
+
+    if claim.status != "pending":
+        raise BusinessClaimRejectionError(
+            "Only pending business claim requests can be rejected."
+        )
+
+    claim.status = "rejected"
+    claim.reviewed_by = reviewed_by
+    claim.reviewed_at = timezone.now()
+    claim.save(
+        update_fields=[
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+        ]
+    )
+
+    return claim
+
+
 class BusinessClaimWithdrawalError(Exception):
     pass
 

@@ -58,7 +58,6 @@ from .views import (
     MyUpdatesView,
     MyExperiencesView,
     PlaceUpdatesListView,
-    CreateBasicPlaceView,
     MarkUpdateSeenView,
     PlacePhotosView,
     TopSavedExperiencesAnalyticsView,
@@ -108,7 +107,6 @@ urlpatterns = [
     ),
     path("places/", PlaceListView.as_view()),
     path("places/search/", PlaceSearchView.as_view()),
-    path("places/create-basic/", CreateBasicPlaceView.as_view()),
     path("places/<int:pk>/country-context/", CountryContextView.as_view()),
 
     path(

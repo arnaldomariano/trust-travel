@@ -3,7 +3,7 @@ from math import atan2, cos, radians, sin, sqrt
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 
-from ..models import Place
+from ..models import BusinessPresence, Place
 from ..place_utils import (
     get_matching_places_by_name_identity,
     get_place_name_identity_values,
@@ -906,6 +906,23 @@ def create_poi_place(
     return place, True
 
 
+def ensure_business_presence_for_poi(
+    place,
+    place_type,
+):
+    if place_type not in {"hotel", "restaurant"}:
+        return None
+
+    business_presence, _ = BusinessPresence.objects.get_or_create(
+        place=place,
+        defaults={
+            "official_name": place.name,
+        },
+    )
+
+    return business_presence
+
+
 def materialize_poi_place(
     poi_result,
     city_place,
@@ -926,16 +943,22 @@ def materialize_poi_place(
             city_place=city_place,
             country_code=country_code,
         )
+        created = False
+    else:
+        place, created = create_poi_place(
+            poi_result=poi_result,
+            city_place=city_place,
+            country_code=country_code,
+            place_type=place_type,
+            user=user,
+        )
 
-        return place, False
-
-    return create_poi_place(
-        poi_result=poi_result,
-        city_place=city_place,
-        country_code=country_code,
+    ensure_business_presence_for_poi(
+        place=place,
         place_type=place_type,
-        user=user,
     )
+
+    return place, created
 
 
 def materialize_city_place(

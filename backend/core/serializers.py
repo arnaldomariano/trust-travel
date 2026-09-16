@@ -418,6 +418,28 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "is_trusted",
         ]
 
+    def validate(self, attrs):
+        rating_fields = [
+            "rating",
+            "safety_rating",
+            "cost_rating",
+            "accessibility_rating",
+            "convenience_rating",
+        ]
+
+        errors = {}
+
+        for field_name in rating_fields:
+            value = attrs.get(field_name)
+
+            if value is not None and not 1 <= value <= 5:
+                errors[field_name] = "Rating must be between 1 and 5."
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return attrs
+
     def get_image_url(self, obj):
         request = self.context.get("request")
 

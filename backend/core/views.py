@@ -2703,21 +2703,11 @@ class PlaceRatingsSummaryView(APIView):
                 status=404,
             )
 
-        if place.place_type == "city":
-            city_name = place.city or place.name
-
-            experiences = Experience.objects.filter(
-                Q(place=place)
-                | Q(place__parent_place_id=place.id)
-                | Q(
-                    place__destination_id=place.destination_id,
-                    place__city__iexact=city_name,
-                )
-            ).exclude(
-                place__place_type="country"
-            ).distinct()
-        else:
-            experiences = Experience.objects.filter(place=place)
+        # Ratings belong only to the Place that was directly evaluated.
+        # Geographic hierarchy may aggregate experiences for discovery and
+        # context, but ratings from child places must not affect the rating
+        # summary of their parent city or region.
+        experiences = Experience.objects.filter(place=place)
 
         rated_experiences = experiences.exclude(rating__isnull=True)
 

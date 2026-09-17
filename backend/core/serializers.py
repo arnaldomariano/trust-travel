@@ -30,6 +30,7 @@ from .place_utils import (
     get_country_search_values,
     resolve_country_catalog_entry,
 )
+from .trust_services import get_trust_level
 
 class UpdateSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.username", read_only=True)
@@ -486,57 +487,11 @@ class ExperienceSerializer(serializers.ModelSerializer):
 
     def get_trust_level(self, obj):
         request = self.context.get("request")
+
         if not request or not request.user.is_authenticated:
             return 3
 
-        user = request.user
-        author = obj.user
-
-        if user == author:
-            return 1
-
-        # nível 1: conexão direta
-        direct = Friendship.objects.filter(
-            from_user=user,
-            to_user=author,
-            status="accepted"
-        ).exists() or Friendship.objects.filter(
-            from_user=author,
-            to_user=user,
-            status="accepted"
-        ).exists()
-
-        if direct:
-            return 1
-
-        # nível 2: amigo de amigo
-
-        # amigos diretos (ida)
-        friends_forward = Friendship.objects.filter(
-            from_user=user
-        ).values_list("to_user", flat=True)
-
-        # amigos diretos (volta)
-        friends_reverse = Friendship.objects.filter(
-            to_user=user
-        ).values_list("from_user", flat=True)
-
-        # união dos dois
-        all_friends = set(friends_forward) | set(friends_reverse)
-
-        # amigo de amigo (considerando ambos os sentidos)
-        friend_of_friend = Friendship.objects.filter(
-            from_user__in=all_friends,
-            to_user=author
-        ).exists() or Friendship.objects.filter(
-            from_user=author,
-            to_user__in=all_friends
-        ).exists()
-
-        if friend_of_friend:
-            return 2
-
-        return 3
+        return get_trust_level(request.user, obj.user)
 
 class ExperiencePhotoSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()

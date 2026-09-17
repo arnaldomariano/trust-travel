@@ -71,6 +71,7 @@ from .serializers import (
 )
 
 from .authentication import CookieJWTAuthentication
+from .trust_services import get_mutual_trusted_user_ids
 
 from .business_presence_services import (
     BusinessClaimWithdrawalError,
@@ -5926,21 +5927,7 @@ class UpdateListView(APIView):
     def get(self, request):
         user = request.user
 
-        forward_ids = set(
-            Friendship.objects.filter(
-                from_user=user,
-                status="accepted"
-            ).values_list("to_user", flat=True)
-        )
-
-        backward_ids = set(
-            Friendship.objects.filter(
-                to_user=user,
-                status="accepted"
-            ).values_list("from_user", flat=True)
-        )
-
-        friends = forward_ids & backward_ids
+        friends = get_mutual_trusted_user_ids(user)
 
         sent_requests = set(
             Friendship.objects.filter(
@@ -6190,21 +6177,7 @@ class ConnectionsListView(APIView):
             status="pending"
         ).select_related("to_user__profile")
 
-        forward_ids = set(
-            Friendship.objects.filter(
-                from_user=user,
-                status="accepted"
-            ).values_list("to_user", flat=True)
-        )
-
-        backward_ids = set(
-            Friendship.objects.filter(
-                to_user=user,
-                status="accepted"
-            ).values_list("from_user", flat=True)
-        )
-
-        friend_ids = forward_ids & backward_ids
+        friend_ids = get_mutual_trusted_user_ids(user)
         friends_qs = User.objects.filter(id__in=friend_ids).select_related("profile")
 
         def get_avatar_url(profile):

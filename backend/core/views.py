@@ -71,7 +71,10 @@ from .serializers import (
 )
 
 from .authentication import CookieJWTAuthentication
-from .trust_services import get_mutual_trusted_user_ids
+from .trust_services import (
+    can_comment_on_experience,
+    get_mutual_trusted_user_ids,
+)
 
 from .business_presence_services import (
     BusinessClaimWithdrawalError,
@@ -3166,30 +3169,12 @@ class ExperienceReplyListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         experience = Experience.objects.get(id=self.kwargs["experience_id"])
 
-        author = experience.user
         requester = self.request.user
 
-        if author is None:
-            raise PermissionDenied("This comment has no author.")
-
-        is_self = requester == author
-
-        forward = Friendship.objects.filter(
-            from_user=requester,
-            to_user=author,
-            status="accepted"
-        ).exists()
-
-        backward = Friendship.objects.filter(
-            from_user=author,
-            to_user=requester,
-            status="accepted"
-        ).exists()
-
-        in_network = forward and backward
-
-        if not (is_self or in_network):
-            raise PermissionDenied("You can only reply to trusted users.")
+        if not can_comment_on_experience(requester, experience):
+            raise PermissionDenied(
+                "You do not have permission to reply to this experience."
+            )
 
         serializer.save(user=requester, experience=experience)
 

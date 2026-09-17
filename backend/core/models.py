@@ -113,6 +113,11 @@ class Profile(models.Model):
     travel_interests = models.CharField(max_length=255, blank=True)
     show_profile_context = models.BooleanField(default=False)
 
+    # Experience discussion preferences.
+    # Direct trusted connections (level 1) can always comment.
+    # The user may optionally extend commenting permission to level 2.
+    allow_level_2_experience_comments = models.BooleanField(default=False)
+
     # Private account recovery.
     # The plain recovery code is shown only once after signup.
     # We store only the hash, never the plain code.

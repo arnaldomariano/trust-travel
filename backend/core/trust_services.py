@@ -56,3 +56,45 @@ def get_trust_level(user, other_user):
             return 2
 
     return 3
+
+
+def can_comment_on_experience(user, experience):
+    if (
+        user is None
+        or experience is None
+        or not getattr(user, "pk", None)
+        or not getattr(experience, "pk", None)
+        or not getattr(user, "is_authenticated", False)
+    ):
+        return False
+
+    author = experience.user
+
+    if author is None:
+        return False
+
+    if user.pk == author.pk:
+        return True
+
+    professional_presence = getattr(author, "professional_presence", None)
+
+    if (
+        professional_presence is not None
+        and professional_presence.status == "active"
+    ):
+        return True
+
+    trust_level = get_trust_level(user, author)
+
+    if trust_level == 1:
+        return True
+
+    if trust_level == 2:
+        profile = getattr(author, "profile", None)
+
+        return bool(
+            profile
+            and profile.allow_level_2_experience_comments
+        )
+
+    return False

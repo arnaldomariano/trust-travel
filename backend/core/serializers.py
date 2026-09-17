@@ -656,6 +656,9 @@ class ProfileSerializer(serializers.ModelSerializer):
             "travel_interests",
             "show_profile_context",
             "age_range",
+
+            # Experience discussion preferences
+            "allow_level_2_experience_comments",
         ]
 
         read_only_fields = [

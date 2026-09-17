@@ -9,7 +9,6 @@ from .models import (
     Experience,
     ExperiencePhoto,
     ExperienceReply,
-    Friendship,
     Profile,
     ProfessionalPresence,
     BusinessPresence,
@@ -624,10 +623,7 @@ class ExperienceReplySerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
 
-        return Friendship.objects.filter(
-            from_user=request.user,
-            to_user=obj.user
-        ).exists()
+        return get_trust_level(request.user, obj.user) == 1
 
     def get_reply_to_user(self, obj):
         if obj.experience and obj.experience.user:

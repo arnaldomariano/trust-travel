@@ -163,14 +163,20 @@ useEffect(() => {
 }, []);
 
   // =========================
-  // Group updates by user/public code
+  // Group feed items by identity
   // =========================
   const groupedByUser = updates.reduce((acc: any, item: any) => {
-    if (!acc[item.user]) acc[item.user] = [];
+    const feedIdentity =
+      item.type === "professional_contribution" &&
+      item.professional_presence_id
+        ? `professional:${item.professional_presence_id}`
+        : `user:${item.user}`;
 
-    acc[item.user].push(item);
+    if (!acc[feedIdentity]) acc[feedIdentity] = [];
 
-    acc[item.user].sort(
+    acc[feedIdentity].push(item);
+
+    acc[feedIdentity].sort(
       (a: any, b: any) =>
         new Date(b.created_at).getTime() -
         new Date(a.created_at).getTime()
@@ -260,6 +266,9 @@ useEffect(() => {
 // =========================
 const getActivityLabel = (type: string, item?: any) => {
   if (type === "experience") return "Experience";
+  if (type === "professional_contribution") {
+    return "Professional insight";
+  }
   if (type === "event") return "Event";
 
   if (type === "alert") {
@@ -278,6 +287,7 @@ const getActivityLabel = (type: string, item?: any) => {
 
 const getActivityIcon = (type: string) => {
   if (type === "experience") return "⭐";
+  if (type === "professional_contribution") return "🧭";
   if (type === "event") return "🎭";
   if (type === "alert") return "⚠️";
   if (type === "info") return "ℹ️";
@@ -289,6 +299,14 @@ const getActivityPreviewText = (item: any) => {
     return item.text || "Shared an experience";
   }
 
+  if (item.type === "professional_contribution") {
+    return (
+      item.title?.trim() ||
+      item.text ||
+      "Shared a professional insight"
+    );
+  }
+
   return (
     item.title?.trim() ||
     item.text ||
@@ -297,7 +315,10 @@ const getActivityPreviewText = (item: any) => {
 };
 
 const getActivityMetaText = (item: any) => {
-  if (item.type === "experience") {
+  if (
+    item.type === "experience" ||
+    item.type === "professional_contribution"
+  ) {
     return item.place;
   }
 
@@ -332,11 +353,18 @@ const getActivityMetaText = (item: any) => {
 
     // Trusted users can show username + public code.
     // Explore users remain identified only by public code.
-    const displayName = lastUpdate.is_friend
-      ? lastUpdate.display_name || lastUpdate.username
-      : user;
+    // Professional cards use their professional identity.
+    const publicCode =
+      lastUpdate.professional_public_code || lastUpdate.user;
 
-    const displayCode = user;
+    const displayName =
+      lastUpdate.type === "professional_contribution"
+        ? lastUpdate.professional_name || publicCode
+        : lastUpdate.is_friend
+          ? lastUpdate.display_name || lastUpdate.username
+          : publicCode;
+
+    const displayCode = publicCode;
 
     const nationalityCode = (
       lastUpdate.author_nationality_country_code || ""
@@ -481,6 +509,13 @@ const getActivityMetaText = (item: any) => {
                 onClick={(e) => {
                   e.stopPropagation();
 
+                  if (item.type === "professional_contribution") {
+                    router.push(
+                      `/professional/${item.professional_public_code}`
+                    );
+                    return;
+                  }
+
                   markUpdateAsSeen(item.id);
 
                   if (item.type === "experience" && item.experience_id) {
@@ -559,7 +594,11 @@ const getActivityMetaText = (item: any) => {
                   }}
                 >
                   <span style={{ color: "#111" }}>
-                    {item.type === "experience" ? "Read experience →" : "Read update →"}
+                    {item.type === "experience"
+                      ? "Read experience →"
+                      : item.type === "professional_contribution"
+                        ? "View professional profile →"
+                        : "Read update →"}
                   </span>
 
                   {item.place_id && item.has_map && (
@@ -593,8 +632,18 @@ const getActivityMetaText = (item: any) => {
             onClick={(e) => {
               e.stopPropagation();
 
-              if (lastUpdate?.user_id) {
-              router.push(`/user/${user}/activity`);
+              if (
+                lastUpdate.type === "professional_contribution" &&
+                lastUpdate.professional_public_code
+              ) {
+                router.push(
+                  `/professional/${lastUpdate.professional_public_code}`
+                );
+                return;
+              }
+
+              if (lastUpdate?.user_id && lastUpdate.user) {
+                router.push(`/user/${lastUpdate.user}/activity`);
               }
             }}
             style={{

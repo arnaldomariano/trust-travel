@@ -36,6 +36,7 @@ from .views import (
     ProfessionalEvaluationAnalyticsView,
     ProfessionalContributionPublicListView,
     PlaceProfessionalContributionPublicListView,
+    ProfessionalFeedMuteView,
     ProfessionalPresenceLinkCreateView,
     ProfessionalPresenceLinkDetailView,
     ProfessionalBusinessRelationshipListCreateView,
@@ -180,6 +181,10 @@ urlpatterns = [
     path(
         "professional-presences/<str:public_code>/",
         ProfessionalPresencePublicView.as_view(),
+    ),
+    path(
+        "professional-presences/<str:public_code>/feed-mute/",
+        ProfessionalFeedMuteView.as_view(),
     ),
     path(
         "professional-presences/<str:public_code>/evaluation-summary/",

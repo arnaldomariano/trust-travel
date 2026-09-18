@@ -219,6 +219,40 @@ class ProfessionalPresence(models.Model):
             f"{self.get_professional_type_display()}"
         )
 
+# ===================== Professional Feed Mute =====================
+
+class ProfessionalFeedMute(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="muted_professional_feeds",
+    )
+
+    professional_presence = models.ForeignKey(
+        ProfessionalPresence,
+        on_delete=models.CASCADE,
+        related_name="feed_mutes",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "professional_presence"],
+                name="unique_professional_feed_mute",
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user} muted "
+            f"{self.professional_presence}"
+        )
+
+
 class ProfessionalPresenceLink(models.Model):
     LINK_TYPE_CHOICES = [
         ("website", "Website"),

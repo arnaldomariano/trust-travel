@@ -41,6 +41,7 @@ from .models import (
     Update,
     Profile,
     ProfessionalPresence,
+    ProfessionalFeedMute,
     ProfessionalPresenceLink,
     ProfessionalBusinessRelationship,
     ProfessionalContribution,
@@ -293,6 +294,82 @@ class ProfessionalPresencePublicView(APIView):
         )
 
         return Response(serializer.data)
+
+class ProfessionalFeedMuteView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_presence(self, public_code):
+        try:
+            return ProfessionalPresence.objects.get(
+                user__profile__public_code=public_code,
+                status="active",
+            )
+        except ProfessionalPresence.DoesNotExist:
+            return None
+
+    def get(self, request, public_code):
+        presence = self.get_presence(public_code)
+
+        if not presence:
+            return Response(
+                {"detail": "Professional presence not found."},
+                status=404,
+            )
+
+        muted = ProfessionalFeedMute.objects.filter(
+            user=request.user,
+            professional_presence=presence,
+        ).exists()
+
+        return Response(
+            {
+                "muted": muted,
+            }
+        )
+
+    def post(self, request, public_code):
+        presence = self.get_presence(public_code)
+
+        if not presence:
+            return Response(
+                {"detail": "Professional presence not found."},
+                status=404,
+            )
+
+        _, created = ProfessionalFeedMute.objects.get_or_create(
+            user=request.user,
+            professional_presence=presence,
+        )
+
+        return Response(
+            {
+                "muted": True,
+                "created": created,
+            },
+            status=201 if created else 200,
+        )
+
+    def delete(self, request, public_code):
+        presence = self.get_presence(public_code)
+
+        if not presence:
+            return Response(
+                {"detail": "Professional presence not found."},
+                status=404,
+            )
+
+        ProfessionalFeedMute.objects.filter(
+            user=request.user,
+            professional_presence=presence,
+        ).delete()
+
+        return Response(
+            {
+                "muted": False,
+            }
+        )
+
 
 class ProfessionalEvaluationSummaryView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -560,6 +637,10 @@ class PlaceProfessionalContributionPublicListView(APIView):
                 place_id=place_id,
                 professional_presence__status="active",
             )
+        )
+
+        contributions = (
+            contributions
             .select_related(
                 "professional_presence",
                 "professional_presence__user",
@@ -5950,6 +6031,34 @@ class UpdateListView(APIView):
             SeenUpdate.objects.filter(user=user).values_list("update_id", flat=True)
         )
 
+        # Professional contributions remain visible on place/profile pages.
+        # This preference only removes them from the user's home feed.
+        muted_professional_presence_ids = (
+            ProfessionalFeedMute.objects
+            .filter(user=user)
+            .values_list(
+                "professional_presence_id",
+                flat=True,
+            )
+        )
+
+        professional_contributions = (
+            ProfessionalContribution.objects
+            .filter(
+                professional_presence__status="active",
+            )
+            .exclude(
+                professional_presence_id__in=muted_professional_presence_ids
+            )
+            .select_related(
+                "professional_presence",
+                "professional_presence__user",
+                "professional_presence__user__profile",
+                "place",
+            )
+            .order_by("-created_at")
+        )
+
         def serialize_updates(qs):
             result = []
 
@@ -5978,6 +6087,55 @@ class UpdateListView(APIView):
 
             return result
 
+        def serialize_professional_contributions(qs):
+            result = []
+
+            for contribution in qs:
+                presence = contribution.professional_presence
+                professional_user = presence.user
+                profile = getattr(professional_user, "profile", None)
+
+                public_code = (
+                    profile.public_code
+                    if profile and profile.public_code
+                    else professional_user.username
+                )
+
+                result.append({
+                    "id": f"professional-{contribution.id}",
+                    "professional_contribution_id": contribution.id,
+                    "professional_presence_id": presence.id,
+                    "type": "professional_contribution",
+                    "category": contribution.contribution_type,
+                    "title": contribution.title,
+                    "text": contribution.text,
+                    "place": contribution.place.name,
+                    "place_id": contribution.place.id,
+                    "has_map": (
+                        contribution.place.latitude is not None
+                        and contribution.place.longitude is not None
+                    ),
+                    "user": public_code,
+                    "username": professional_user.username,
+                    "display_name": presence.professional_name,
+                    "professional_name": presence.professional_name,
+                    "professional_type": presence.professional_type,
+                    "professional_public_code": public_code,
+                    "is_professional_contribution": True,
+                    "is_new": False,
+                    "is_friend": professional_user.id in friends,
+                    "request_sent": professional_user.id in sent_requests,
+                    "feed_priority": (
+                        1
+                        if professional_user.id in friends
+                        else 2
+                    ),
+                    "created_at": contribution.created_at,
+                    "updated_at": contribution.updated_at,
+                })
+
+            return result
+
         def serialize_requests(qs):
             result = []
 
@@ -5992,9 +6150,33 @@ class UpdateListView(APIView):
 
             return result
 
+        serialized_professional_contributions = (
+            serialize_professional_contributions(
+                professional_contributions
+            )
+        )
+
+        network_professional_contributions = [
+            item
+            for item in serialized_professional_contributions
+            if item["is_friend"]
+        ]
+
+        other_professional_contributions = [
+            item
+            for item in serialized_professional_contributions
+            if not item["is_friend"]
+        ]
+
         return Response({
-            "network": serialize_updates(network_updates),
-            "others": serialize_updates(other_updates),
+            "network": (
+                serialize_updates(network_updates)
+                + network_professional_contributions
+            ),
+            "others": (
+                serialize_updates(other_updates)
+                + other_professional_contributions
+            ),
             "requests": serialize_requests(requests_qs),
         })
 

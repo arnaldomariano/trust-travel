@@ -98,6 +98,9 @@ export default function ProfessionalPublicPage() {
     ProfessionalContribution[]
   >([]);
 
+  const [feedMuted, setFeedMuted] = useState(false);
+  const [feedMuteLoaded, setFeedMuteLoaded] = useState(false);
+  const [feedMuteSaving, setFeedMuteSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -107,6 +110,7 @@ export default function ProfessionalPublicPage() {
 
       setLoading(true);
       setError("");
+      setFeedMuteLoaded(false);
 
       try {
         const [
@@ -147,6 +151,28 @@ export default function ProfessionalPublicPage() {
         setProfile(profileData);
         setSummary(summaryData);
         setContributions(contributionsData);
+
+        try {
+          const feedMuteResponse = await fetch(
+            `${API_URL}/api/professional-presences/${publicCode}/feed-mute/`,
+            {
+              credentials: "include",
+            }
+          );
+
+          if (feedMuteResponse.ok) {
+            const feedMuteData = await feedMuteResponse.json();
+
+            setFeedMuted(Boolean(feedMuteData.muted));
+            setFeedMuteLoaded(true);
+          }
+        } catch (feedMuteError) {
+          console.error(
+            "Professional feed mute state load error:",
+            feedMuteError
+          );
+        }
+
       } catch (loadError) {
         console.error(
           "Professional profile load error:",
@@ -161,6 +187,43 @@ export default function ProfessionalPublicPage() {
 
     loadProfessionalPage();
   }, [publicCode]);
+
+  const handleFeedMuteToggle = async () => {
+    if (!publicCode || !feedMuteLoaded || feedMuteSaving) {
+      return;
+    }
+
+    setFeedMuteSaving(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/professional-presences/${publicCode}/feed-mute/`,
+        {
+          method: feedMuted ? "DELETE" : "POST",
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        console.error(
+          "Professional feed mute update failed:",
+          response.status
+        );
+        return;
+      }
+
+      const data = await response.json();
+
+      setFeedMuted(Boolean(data.muted));
+    } catch (feedMuteError) {
+      console.error(
+        "Professional feed mute update error:",
+        feedMuteError
+      );
+    } finally {
+      setFeedMuteSaving(false);
+    }
+  };
 
   return (
     <main
@@ -203,11 +266,50 @@ export default function ProfessionalPublicPage() {
         </p>
       ) : (
         <div>
-          <h1>{profile.professional_name}</h1>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "20px",
+            }}
+          >
+            <div>
+              <h1 style={{ marginTop: 0 }}>
+                {profile.professional_name}
+              </h1>
 
-          <p style={{ color: "#666" }}>
-            {formatProfessionalType(profile.professional_type)}
-          </p>
+              <p style={{ color: "#666" }}>
+                {formatProfessionalType(profile.professional_type)}
+              </p>
+            </div>
+
+            {feedMuteLoaded && (
+              <button
+                type="button"
+                onClick={handleFeedMuteToggle}
+                disabled={feedMuteSaving}
+                style={{
+                  padding: "9px 14px",
+                  border: "1px solid #d0d5dd",
+                  borderRadius: "10px",
+                  background: "#fff",
+                  color: "#344054",
+                  cursor: feedMuteSaving
+                    ? "default"
+                    : "pointer",
+                  opacity: feedMuteSaving ? 0.6 : 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {feedMuteSaving
+                  ? "Saving..."
+                  : feedMuted
+                    ? "Show in feed"
+                    : "Hide from feed"}
+              </button>
+            )}
+          </div>
 
           {profile.bio && (
             <p

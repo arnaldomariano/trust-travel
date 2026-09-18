@@ -43,6 +43,11 @@ export default function ProfilePage() {
   const [travelInterests, setTravelInterests] = useState("");
   const [showProfileContext, setShowProfileContext] = useState(false);
 
+  const [
+    allowLevel2ExperienceComments,
+    setAllowLevel2ExperienceComments,
+  ] = useState(false);
+
   const [ageRange, setAgeRange] = useState("prefer_not_to_say");
 
 
@@ -119,6 +124,9 @@ export default function ProfilePage() {
       setProfession(data.profession || "");
       setTravelInterests(data.travel_interests || "");
       setShowProfileContext(Boolean(data.show_profile_context));
+      setAllowLevel2ExperienceComments(
+        Boolean(data.allow_level_2_experience_comments)
+      );
 
       setAgeRange(data.age_range || "prefer_not_to_say");
 
@@ -212,6 +220,11 @@ export default function ProfilePage() {
       formData.append("travel_interests", travelInterests.trim());
       formData.append("show_profile_context", String(showProfileContext));
 
+      formData.append(
+        "allow_level_2_experience_comments",
+        String(allowLevel2ExperienceComments)
+      );
+
       formData.append("age_range", ageRange);
 
       if (avatarFile) {
@@ -253,6 +266,9 @@ export default function ProfilePage() {
       setProfession(data.profession || "");
       setTravelInterests(data.travel_interests || "");
       setShowProfileContext(Boolean(data.show_profile_context));
+      setAllowLevel2ExperienceComments(
+        Boolean(data.allow_level_2_experience_comments)
+      );
 
       setAgeRange(data.age_range || "prefer_not_to_say");
 
@@ -414,6 +430,39 @@ export default function ProfilePage() {
             If enabled, other travelers may see your public code with your country flag,
             for example {publicCode || "BR757zn50"} 🇧🇷. Your real identity remains
             protected.
+          </small>
+        </div>
+      </section>
+
+      <section style={card}>
+        <div>
+          <div style={eyebrow}>Experience discussions</div>
+
+          <h2 style={sectionTitle}>Who can reply to my experiences?</h2>
+
+          <p style={sectionText}>
+            Your direct trusted connections can always reply to your experiences.
+          </p>
+        </div>
+
+        <div style={field}>
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={allowLevel2ExperienceComments}
+              onChange={(e) =>
+                setAllowLevel2ExperienceComments(e.target.checked)
+              }
+            />
+
+            <span>
+              Also allow people in my extended trusted network to reply.
+            </span>
+          </label>
+
+          <small style={hint}>
+            This includes people connected through your trusted connections.
+            You can change this preference at any time.
           </small>
         </div>
       </section>

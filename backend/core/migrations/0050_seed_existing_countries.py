@@ -32,10 +32,18 @@ def seed_existing_countries(apps, schema_editor):
             name__iexact=canonical_name,
         )
 
-        if matching_places.count() != 1:
+        matching_places_count = matching_places.count()
+
+        # This migration links country Places that already existed when the
+        # Country model was introduced. On a fresh database there are no
+        # legacy country Places to migrate, so there is nothing to do.
+        if matching_places_count == 0:
+            continue
+
+        if matching_places_count > 1:
             raise RuntimeError(
-                f"Expected exactly one country Place for {canonical_name}, "
-                f"found {matching_places.count()}."
+                f"Expected at most one country Place for {canonical_name}, "
+                f"found {matching_places_count}."
             )
 
         place = matching_places.first()

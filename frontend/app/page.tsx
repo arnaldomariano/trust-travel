@@ -738,6 +738,25 @@ const getActivityMetaText = (item: any) => {
               </button>
             </div>
 
+            <button
+              type="button"
+              onClick={() => router.push("/gallery")}
+              style={landingGalleryLink}
+            >
+              <span style={{ fontWeight: 700 }}>
+                Explore the Trust Travel Gallery →
+              </span>
+              <span
+                style={{
+                  color: "#666",
+                  fontSize: "14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                See places through photos shared from real experiences.
+              </span>
+            </button>
+
             <div style={landingNote}>
               Your public code protects your identity outside your trusted network.
               You decide what profile context appears on your cards.
@@ -1247,6 +1266,22 @@ const landingSecondaryButton = {
   fontSize: "15px",
   fontWeight: 700,
   cursor: "pointer",
+};
+
+const landingGalleryLink = {
+  width: "100%",
+  display: "grid",
+  gap: "4px",
+  padding: "14px 0",
+  marginBottom: "22px",
+  border: "none",
+  borderTop: "1px solid #eee",
+  borderBottom: "1px solid #eee",
+  background: "transparent",
+  color: "#111",
+  textAlign: "left" as const,
+  cursor: "pointer",
+  fontSize: "15px",
 };
 
 const landingNote = {

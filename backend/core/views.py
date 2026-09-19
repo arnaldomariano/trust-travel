@@ -6738,6 +6738,105 @@ class MyUpdatesView(APIView):
             for update in updates
         ])
 
+class GalleryView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        experiences = (
+            Experience.objects
+            .filter(
+                gallery_photo_source__in=["main", "extra"],
+            )
+            .select_related(
+                "user",
+                "user__profile",
+                "place",
+                "place__destination",
+                "gallery_photo",
+            )
+            .order_by("-created_at")
+        )
+
+        photos = []
+
+        for experience in experiences:
+            image_url = None
+            caption = ""
+
+            if experience.gallery_photo_source == "main":
+                if not experience.image:
+                    continue
+
+                image_url = request.build_absolute_uri(experience.image.url)
+                caption = experience.image_caption or ""
+
+            elif experience.gallery_photo_source == "extra":
+                if not experience.gallery_photo or not experience.gallery_photo.image:
+                    continue
+
+                image_url = request.build_absolute_uri(
+                    experience.gallery_photo.image.url
+                )
+                caption = experience.gallery_photo.caption or ""
+
+            profile = getattr(experience.user, "profile", None)
+
+            if profile and profile.display_name.strip():
+                author_name = profile.display_name.strip()
+            elif profile and profile.public_code:
+                author_name = profile.public_code
+            else:
+                author_name = "Trust Travel member"
+
+            photos.append({
+                "experience_id": experience.id,
+                "photo_source": experience.gallery_photo_source,
+                "photo_id": (
+                    experience.gallery_photo_id
+                    if experience.gallery_photo_source == "extra"
+                    else None
+                ),
+                "image_url": image_url,
+                "caption": caption,
+                "experience_title": experience.title,
+                "place": {
+                    "id": experience.place.id,
+                    "name": experience.place.name,
+                    "place_type": experience.place.place_type,
+                },
+                "author": {
+                    "display_name": author_name,
+                },
+                "created_at": experience.created_at,
+            })
+
+        place_counts = {}
+
+        for photo in photos:
+            place = photo["place"]
+            place_id = place["id"]
+
+            if place_id not in place_counts:
+                place_counts[place_id] = {
+                    "id": place_id,
+                    "name": place["name"],
+                    "place_type": place["place_type"],
+                    "photo_count": 0,
+                }
+
+            place_counts[place_id]["photo_count"] += 1
+
+        places = sorted(
+            place_counts.values(),
+            key=lambda place: place["name"].casefold(),
+        )
+
+        return Response({
+            "places": places,
+            "photos": photos,
+        })
+
+
 class MyExperiencesView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]

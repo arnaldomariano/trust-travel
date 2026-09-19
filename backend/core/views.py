@@ -3117,8 +3117,26 @@ class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_update(self, serializer):
         remove_image = self.request.data.get("remove_image") == "true"
+        replacing_image = "image" in self.request.FILES
 
         experience = serializer.save()
+
+        # Gallery curation belongs to the specific photo the author chose.
+        # Removing or replacing that main photo must not transfer the Gallery
+        # selection automatically to another image.
+        if (
+            experience.gallery_photo_source == "main"
+            and (remove_image or replacing_image)
+        ):
+            experience.gallery_photo_source = ""
+            experience.gallery_photo = None
+            experience.save(
+                update_fields=[
+                    "gallery_photo_source",
+                    "gallery_photo",
+                    "updated_at",
+                ]
+            )
 
         if remove_image and experience.image:
             experience.image.delete(save=False)
@@ -3181,6 +3199,27 @@ class ExperiencePhotoDetailView(generics.RetrieveUpdateDestroyAPIView):
         return ExperiencePhoto.objects.filter(
             experience__user=self.request.user
         )
+
+    def perform_destroy(self, instance):
+        experience = instance.experience
+
+        # Deleting the extra photo chosen for the Gallery ends that curation.
+        # A future replacement must be selected explicitly by the author.
+        if (
+            experience.gallery_photo_source == "extra"
+            and experience.gallery_photo_id == instance.id
+        ):
+            experience.gallery_photo_source = ""
+            experience.gallery_photo = None
+            experience.save(
+                update_fields=[
+                    "gallery_photo_source",
+                    "gallery_photo",
+                    "updated_at",
+                ]
+            )
+
+        instance.delete()
 
 class PlaceExperiencesListView(generics.ListAPIView):
     serializer_class = ExperienceSerializer

@@ -404,6 +404,8 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "image_url",
             "image_display_mode",
             "image_caption",
+            "gallery_photo_source",
+            "gallery_photo",
             "rating",
             "comment",
             "safety_rating",
@@ -437,6 +439,70 @@ class ExperienceSerializer(serializers.ModelSerializer):
 
         if errors:
             raise serializers.ValidationError(errors)
+
+        gallery_photo_source = attrs.get(
+            "gallery_photo_source",
+            getattr(self.instance, "gallery_photo_source", ""),
+        )
+
+        gallery_photo = attrs.get(
+            "gallery_photo",
+            getattr(self.instance, "gallery_photo", None),
+        )
+
+        image = attrs.get(
+            "image",
+            getattr(self.instance, "image", None),
+        )
+
+        if gallery_photo_source == "main":
+            if not image:
+                raise serializers.ValidationError({
+                    "gallery_photo_source": (
+                        "The main photo can only be featured in the Gallery "
+                        "when this experience has a main photo."
+                    )
+                })
+
+            if gallery_photo is not None:
+                raise serializers.ValidationError({
+                    "gallery_photo": (
+                        "Do not select an extra photo when the main photo "
+                        "is featured in the Gallery."
+                    )
+                })
+
+        elif gallery_photo_source == "extra":
+            if gallery_photo is None:
+                raise serializers.ValidationError({
+                    "gallery_photo": (
+                        "Choose an extra photo to feature in the Gallery."
+                    )
+                })
+
+            if self.instance is None:
+                raise serializers.ValidationError({
+                    "gallery_photo": (
+                        "An extra Gallery photo can only be selected "
+                        "after the experience has been created."
+                    )
+                })
+
+            if gallery_photo.experience_id != self.instance.id:
+                raise serializers.ValidationError({
+                    "gallery_photo": (
+                        "The selected Gallery photo must belong to "
+                        "this experience."
+                    )
+                })
+
+        elif gallery_photo is not None:
+            raise serializers.ValidationError({
+                "gallery_photo": (
+                    "A Gallery photo cannot be selected without "
+                    "a Gallery photo source."
+                )
+            })
 
         return attrs
 

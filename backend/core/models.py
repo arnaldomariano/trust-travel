@@ -1385,6 +1385,26 @@ class Experience(models.Model):
         blank=True,
     )
 
+    # Optional author-curated photo for the Trust Travel Gallery.
+    # No photo is featured automatically: the author explicitly chooses
+    # either the main experience image or one of its extra photos.
+    gallery_photo_source = models.CharField(
+        max_length=10,
+        choices=[
+            ("main", "Main photo"),
+            ("extra", "Extra photo"),
+        ],
+        blank=True,
+    )
+
+    gallery_photo = models.ForeignKey(
+        "ExperiencePhoto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
     rating = models.IntegerField(null=True, blank=True)
     comment = models.TextField()
 

@@ -63,6 +63,7 @@ export default function HomePage() {
   const [openUser, setOpenUser] = useState<string | null>(null);
   const [openProfileContextUser, setOpenProfileContextUser] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [galleryHasNewPhotos, setGalleryHasNewPhotos] = useState(false);
 
 
   const [tripPlanActivity, setTripPlanActivity] = useState<{
@@ -137,6 +138,39 @@ export default function HomePage() {
     return () => {
       window.removeEventListener("connectionsUpdated", handler);
     };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setGalleryHasNewPhotos(false);
+      return;
+    }
+
+    const loadGalleryStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/gallery/`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          setGalleryHasNewPhotos(false);
+          return;
+        }
+
+        const data = await res.json();
+
+        setGalleryHasNewPhotos(
+          data.had_previous_visit === true &&
+            typeof data.new_photo_count === "number" &&
+            data.new_photo_count > 0
+        );
+      } catch (error) {
+        console.error("Gallery status fetch error:", error);
+        setGalleryHasNewPhotos(false);
+      }
+    };
+
+    loadGalleryStatus();
   }, [isLoggedIn]);
 
 useEffect(() => {
@@ -783,7 +817,7 @@ const getActivityMetaText = (item: any) => {
         >
           {/* Feed filters */}
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            {["all", "event", "alert", "experience", "info", "connections"].map(
+            {["all", "event", "alert", "experience", "info", "connections", "gallery"].map(
               (f) => {
                 const filterLabels: Record<string, string> = {
                   all: "All",
@@ -792,6 +826,7 @@ const getActivityMetaText = (item: any) => {
                   experience: "Experiences",
                   info: "Info",
                   connections: "Connections",
+                  gallery: "Gallery",
                 };
 
                 const label =
@@ -808,11 +843,39 @@ const getActivityMetaText = (item: any) => {
                         return;
                       }
 
+                      if (f === "gallery") {
+                        router.push("/gallery");
+                        return;
+                      }
+
                       setActiveFilter(f);
                     }}
                     style={filterButton(activeFilter === f)}
                   >
-                    {label}
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      {label}
+
+                      {f === "gallery" && galleryHasNewPhotos && (
+                        <span
+                          aria-label="New Gallery photos"
+                          title="New Gallery photos"
+                          style={{
+                            width: "7px",
+                            height: "7px",
+                            borderRadius: "999px",
+                            background: "#2563eb",
+                            display: "inline-block",
+                            flex: "0 0 auto",
+                          }}
+                        />
+                      )}
+                    </span>
                   </button>
                 );
               }

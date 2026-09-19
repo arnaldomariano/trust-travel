@@ -6770,6 +6770,8 @@ class MyExperiencesView(APIView):
                 "trip_context": experience.trip_context,
                 "trip_style": experience.trip_style,
                 "image_url": image_url,
+                "gallery_photo_source": experience.gallery_photo_source,
+                "gallery_photo": experience.gallery_photo_id,
                 "place": experience.place.name,
                 "place_id": experience.place.id,
                 "destination": experience.place.destination.name if experience.place.destination else "",

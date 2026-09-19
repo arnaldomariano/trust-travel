@@ -28,6 +28,8 @@ type MyExperience = {
   image_url?: string | null;
   image_display_mode?: "contain" | "cover";
   image_caption?: string;
+  gallery_photo_source?: "" | "main" | "extra";
+  gallery_photo?: number | null;
   place: string;
   place_id: number;
   destination: string;
@@ -232,6 +234,68 @@ const loadExtraPhotosForExperiences = async (experiencesList: MyExperience[]) =>
   }
 };
 
+// =========================
+// Curate Trust Travel Gallery photo
+// =========================
+const setExperienceGalleryPhoto = async (
+  experienceId: number,
+  source: "" | "main" | "extra",
+  photoId: number | null = null
+) => {
+  clearExperienceFeedback();
+
+  try {
+    const payload = {
+      gallery_photo_source: source,
+      gallery_photo: source === "extra" ? photoId : null,
+    };
+
+    const res = await fetch(`${API_URL}/api/experiences/${experienceId}/`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Failed to update Gallery selection:", data);
+      setExperienceError(
+        data.gallery_photo_source?.[0] ||
+        data.gallery_photo?.[0] ||
+        data.detail ||
+        "Could not update the Gallery selection."
+      );
+      return;
+    }
+
+    setExperiences((prev) =>
+      prev.map((experience) =>
+        experience.id === experienceId
+          ? {
+              ...experience,
+              gallery_photo_source: data.gallery_photo_source || "",
+              gallery_photo: data.gallery_photo ?? null,
+              updated_at: data.updated_at || experience.updated_at,
+            }
+          : experience
+      )
+    );
+
+    setExperienceMessage(
+      source
+        ? "Gallery photo selected."
+        : "Photo removed from the Gallery."
+    );
+  } catch (error) {
+    console.error("Gallery selection update failed:", error);
+    setExperienceError("Could not update the Gallery selection.");
+  }
+};
+
 const deleteExtraPhoto = async (photoId: number, experienceId: number) => {
   setRemovingExtraPhotoId(photoId);
   clearExtraPhotoFeedback();
@@ -255,6 +319,20 @@ const deleteExtraPhoto = async (photoId: number, experienceId: number) => {
         (photo) => photo.id !== photoId
       ),
     }));
+
+    setExperiences((prev) =>
+      prev.map((experience) =>
+        experience.id === experienceId &&
+        experience.gallery_photo_source === "extra" &&
+        experience.gallery_photo === photoId
+          ? {
+              ...experience,
+              gallery_photo_source: "",
+              gallery_photo: null,
+            }
+          : experience
+      )
+    );
 
     setPendingExtraPhotoDelete(null);
     setExtraPhotoSuccessMessage("Gallery photo removed.");
@@ -469,6 +547,8 @@ const saveEditedExperience = async (experienceId: number) => {
             image_url: data.image_url,
             image_display_mode: data.image_display_mode || editImageDisplayMode,
             image_caption: data.image_caption || editImageCaption.trim(),
+            gallery_photo_source: data.gallery_photo_source || "",
+            gallery_photo: data.gallery_photo ?? null,
             updated_at: data.updated_at,
           }
           : experience
@@ -1180,19 +1260,72 @@ const formatTripValue = (value: string) => {
                     </span>
 
                     {experience.image_url && (
-                      <img
-                        src={experience.image_url}
-                        alt={experience.title || "Shared experience"}
-                        style={{
-                          width: "100%",
-                          maxHeight: "260px",
-                          objectFit: experience.image_display_mode || "cover",
-                          borderRadius: "12px",
-                          marginTop: "10px",
-                          marginBottom: "14px",
-                          border: "1px solid #eee",
-                        }}
-                      />
+                      <div style={{ marginTop: "10px", marginBottom: "14px" }}>
+                        <img
+                          src={experience.image_url}
+                          alt={experience.title || "Shared experience"}
+                          style={{
+                            width: "100%",
+                            maxHeight: "260px",
+                            objectFit: experience.image_display_mode || "cover",
+                            borderRadius: "12px",
+                            border: "1px solid #eee",
+                            display: "block",
+                          }}
+                        />
+
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          {experience.gallery_photo_source === "main" ? (
+                            <>
+                              <span
+                                style={{
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  color: "#166534",
+                                }}
+                              >
+                                Featured in Trust Travel Gallery
+                              </span>
+
+                              <button
+                                type="button"
+                                style={{
+                                  ...secondaryButton,
+                                  padding: "6px 9px",
+                                  fontSize: "12px",
+                                }}
+                                onClick={() =>
+                                  setExperienceGalleryPhoto(experience.id, "")
+                                }
+                              >
+                                Remove from Gallery
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              style={{
+                                ...secondaryButton,
+                                padding: "6px 9px",
+                                fontSize: "12px",
+                              }}
+                              onClick={() =>
+                                setExperienceGalleryPhoto(experience.id, "main")
+                              }
+                            >
+                              Feature this photo in Gallery
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     )}
 
                     <p style={text}>{experience.comment}</p>
@@ -1372,6 +1505,62 @@ const formatTripValue = (value: string) => {
                                   alt={photo.caption || `Gallery photo ${index + 1}`}
                                   style={extraPhotoThumb}
                                 />
+
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  {experience.gallery_photo_source === "extra" &&
+                                  experience.gallery_photo === photo.id ? (
+                                    <>
+                                      <span
+                                        style={{
+                                          fontSize: "11px",
+                                          fontWeight: 600,
+                                          color: "#166534",
+                                        }}
+                                      >
+                                        Featured in Trust Travel Gallery
+                                      </span>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setExperienceGalleryPhoto(experience.id, "")
+                                        }
+                                        style={{
+                                          ...secondaryButton,
+                                          padding: "5px 8px",
+                                          fontSize: "11px",
+                                        }}
+                                      >
+                                        Remove from Gallery
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExperienceGalleryPhoto(
+                                          experience.id,
+                                          "extra",
+                                          photo.id
+                                        )
+                                      }
+                                      style={{
+                                        ...secondaryButton,
+                                        padding: "5px 8px",
+                                        fontSize: "11px",
+                                      }}
+                                    >
+                                      Feature this photo in Gallery
+                                    </button>
+                                  )}
+                                </div>
 
                                 <div style={{ fontSize: "12px", color: "#666" }}>
                                   Photo {index + 1}

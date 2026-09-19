@@ -1405,6 +1405,14 @@ class Experience(models.Model):
         related_name="+",
     )
 
+    # Records when the currently selected photo was featured in the Gallery.
+    # This is intentionally separate from the experience creation/update time:
+    # an older experience can become newly featured later.
+    gallery_featured_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     rating = models.IntegerField(null=True, blank=True)
     comment = models.TextField()
 
@@ -1887,6 +1895,20 @@ class SavedItem(models.Model):
 
     def __str__(self):
         return f"{self.user} saved experience {self.experience_id} in plan {self.trip_plan_id}"
+
+# ===================== Gallery Seen =====================
+class GallerySeen(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="gallery_seen",
+    )
+
+    last_seen_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"{self.user} saw the Gallery at {self.last_seen_at}"
+
 
 # ===================== Feed State =====================
 class FeedState(models.Model):

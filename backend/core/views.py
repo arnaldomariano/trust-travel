@@ -46,6 +46,7 @@ from .models import (
     ProfessionalBusinessRelationship,
     ProfessionalContribution,
     ProfessionalEvaluation,
+    GallerySeen,
     FeedState,
     SeenUpdate,
     ContentReport,
@@ -3119,7 +3120,29 @@ class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
         remove_image = self.request.data.get("remove_image") == "true"
         replacing_image = "image" in self.request.FILES
 
+        previous_experience = serializer.instance
+        previous_gallery_source = previous_experience.gallery_photo_source
+        previous_gallery_photo_id = previous_experience.gallery_photo_id
+
         experience = serializer.save()
+
+        gallery_selection_changed = (
+            experience.gallery_photo_source != previous_gallery_source
+            or experience.gallery_photo_id != previous_gallery_photo_id
+        )
+
+        if gallery_selection_changed:
+            experience.gallery_featured_at = (
+                timezone.now()
+                if experience.gallery_photo_source in ["main", "extra"]
+                else None
+            )
+            experience.save(
+                update_fields=[
+                    "gallery_featured_at",
+                    "updated_at",
+                ]
+            )
 
         # Gallery curation belongs to the specific photo the author chose.
         # Removing or replacing that main photo must not transfer the Gallery
@@ -3130,10 +3153,12 @@ class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
         ):
             experience.gallery_photo_source = ""
             experience.gallery_photo = None
+            experience.gallery_featured_at = None
             experience.save(
                 update_fields=[
                     "gallery_photo_source",
                     "gallery_photo",
+                    "gallery_featured_at",
                     "updated_at",
                 ]
             )
@@ -3211,10 +3236,12 @@ class ExperiencePhotoDetailView(generics.RetrieveUpdateDestroyAPIView):
         ):
             experience.gallery_photo_source = ""
             experience.gallery_photo = None
+            experience.gallery_featured_at = None
             experience.save(
                 update_fields=[
                     "gallery_photo_source",
                     "gallery_photo",
+                    "gallery_featured_at",
                     "updated_at",
                 ]
             )
@@ -6739,9 +6766,23 @@ class MyUpdatesView(APIView):
         ])
 
 class GalleryView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
+        is_authenticated = request.user.is_authenticated
+        previous_seen_at = None
+        had_previous_visit = False
+
+        if is_authenticated:
+            seen_record = GallerySeen.objects.filter(
+                user=request.user
+            ).first()
+
+            if seen_record:
+                previous_seen_at = seen_record.last_seen_at
+                had_previous_visit = True
+
         experiences = (
             Experience.objects
             .filter(
@@ -6788,6 +6829,12 @@ class GalleryView(APIView):
             else:
                 author_name = "Trust Travel member"
 
+            is_new = (
+                had_previous_visit
+                and experience.gallery_featured_at is not None
+                and experience.gallery_featured_at > previous_seen_at
+            )
+
             photos.append({
                 "experience_id": experience.id,
                 "photo_source": experience.gallery_photo_source,
@@ -6808,6 +6855,8 @@ class GalleryView(APIView):
                     "display_name": author_name,
                 },
                 "created_at": experience.created_at,
+                "gallery_featured_at": experience.gallery_featured_at,
+                "is_new": is_new,
             })
 
         place_counts = {}
@@ -6831,9 +6880,31 @@ class GalleryView(APIView):
             key=lambda place: place["name"].casefold(),
         )
 
+        new_photo_count = sum(
+            1 for photo in photos if photo["is_new"]
+        )
+
         return Response({
             "places": places,
             "photos": photos,
+            "new_photo_count": new_photo_count,
+            "had_previous_visit": had_previous_visit,
+        })
+
+
+class MarkGallerySeenView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        seen_record, _ = GallerySeen.objects.update_or_create(
+            user=request.user,
+            defaults={"last_seen_at": timezone.now()},
+        )
+
+        return Response({
+            "status": "ok",
+            "last_seen_at": seen_record.last_seen_at,
         })
 
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { API_URL } from "../lib/api";
+import { useAuth } from "../providers/AuthProvider";
 
 type GalleryPlace = {
   id: number;
@@ -27,20 +28,29 @@ type GalleryPhoto = {
     display_name: string;
   };
   created_at: string;
+  gallery_featured_at: string | null;
+  is_new: boolean;
 };
 
 type GalleryResponse = {
   places: GalleryPlace[];
   photos: GalleryPhoto[];
+  new_photo_count: number;
+  had_previous_visit: boolean;
 };
 
 export default function GalleryPage() {
+  const { isLoggedIn, loading: authLoading } = useAuth();
+
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [places, setPlaces] = useState<GalleryPlace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<GalleryPhoto | null>(null);
+  const [newPhotoCount, setNewPhotoCount] = useState(0);
+  const [hadPreviousVisit, setHadPreviousVisit] = useState(false);
+  const gallerySeenPostedRef = useRef(false);
 
   const visiblePhotos =
     selectedPlaceId === null
@@ -68,6 +78,12 @@ export default function GalleryPage() {
 
         setPhotos(Array.isArray(data.photos) ? data.photos : []);
         setPlaces(Array.isArray(data.places) ? data.places : []);
+        setNewPhotoCount(
+          typeof data.new_photo_count === "number"
+            ? data.new_photo_count
+            : 0
+        );
+        setHadPreviousVisit(data.had_previous_visit === true);
       } catch (loadError) {
         console.error("Gallery load failed:", loadError);
         setError("Could not load the Gallery.");
@@ -78,6 +94,42 @@ export default function GalleryPage() {
 
     loadGallery();
   }, []);
+
+  useEffect(() => {
+    if (
+      loading ||
+      error ||
+      authLoading ||
+      !isLoggedIn ||
+      gallerySeenPostedRef.current
+    ) {
+      return;
+    }
+
+    gallerySeenPostedRef.current = true;
+
+    const markGallerySeen = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/gallery/seen/`, {
+          method: "POST",
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error(
+            "Failed to mark Gallery as seen:",
+            res.status,
+            text
+          );
+        }
+      } catch (seenError) {
+        console.error("Gallery seen update failed:", seenError);
+      }
+    };
+
+    markGallerySeen();
+  }, [loading, error, authLoading, isLoggedIn]);
 
   return (
     <div
@@ -109,6 +161,27 @@ export default function GalleryPage() {
           Places through the eyes of people who experienced them.
         </p>
       </section>
+
+      {!loading &&
+        !error &&
+        hadPreviousVisit &&
+        newPhotoCount > 0 && (
+          <div
+            style={{
+              marginBottom: "18px",
+              padding: "10px 12px",
+              borderRadius: "12px",
+              background: "#f5f7ff",
+              color: "#3f4b6e",
+              fontSize: "14px",
+              fontWeight: 600,
+            }}
+          >
+            {newPhotoCount === 1
+              ? "1 new photo since your last visit."
+              : `${newPhotoCount} new photos since your last visit.`}
+          </div>
+        )}
 
       {loading && (
         <div style={{ color: "#666" }}>
@@ -224,6 +297,7 @@ export default function GalleryPage() {
                   border: 0,
                   padding: 0,
                   cursor: "pointer",
+                  position: "relative",
                 }}
               >
                 <img
@@ -236,6 +310,25 @@ export default function GalleryPage() {
                     objectFit: "cover",
                   }}
                 />
+
+                {photo.is_new && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "10px",
+                      right: "10px",
+                      padding: "5px 8px",
+                      borderRadius: "999px",
+                      background: "rgba(17, 17, 17, 0.88)",
+                      color: "#fff",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      lineHeight: 1,
+                    }}
+                  >
+                    New
+                  </span>
+                )}
               </button>
             ))}
           </div>

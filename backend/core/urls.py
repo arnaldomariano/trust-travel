@@ -59,6 +59,7 @@ from .views import (
     MyUpdatesView,
     MyExperiencesView,
     GalleryView,
+    MarkGallerySeenView,
     PlaceUpdatesListView,
     MarkUpdateSeenView,
     PlacePhotosView,
@@ -331,6 +332,7 @@ urlpatterns = [
     path("my-updates/", MyUpdatesView.as_view(), name="my-updates"),
     path("my-experiences/", MyExperiencesView.as_view(), name="my-experiences"),
     path("gallery/", GalleryView.as_view(), name="gallery"),
+    path("gallery/seen/", MarkGallerySeenView.as_view(), name="gallery-seen"),
     path(
         "analytics/top-saved-experiences/",
         TopSavedExperiencesAnalyticsView.as_view(),

@@ -3,13 +3,112 @@ from math import atan2, cos, radians, sin, sqrt
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 
-from ..models import BusinessPresence, Place
+from ..models import BusinessPresence, Destination, Place
 from ..place_utils import (
     get_matching_places_by_name_identity,
+    get_or_create_country,
     get_place_name_identity_values,
     normalize_place_text,
 )
 
+
+
+def materialize_country_place(
+    country_entry,
+    user,
+):
+    canonical_name = str(
+        country_entry.get("canonical_name") or ""
+    ).strip()
+
+    country_code = str(
+        country_entry.get("code") or ""
+    ).strip().upper()
+
+    aliases = country_entry.get("aliases") or []
+
+    if not canonical_name or len(country_code) != 2:
+        raise ValueError("A valid country catalog entry is required.")
+
+    with transaction.atomic():
+        resolved_country = get_or_create_country(
+            value=canonical_name,
+            code=country_code,
+            aliases=aliases,
+        )
+
+        if not resolved_country:
+            raise ValueError(
+                "Could not resolve the selected country."
+            )
+
+        existing_place = (
+            Place.objects
+            .select_for_update()
+            .filter(
+                place_type="country",
+                country_ref=resolved_country,
+            )
+            .first()
+        )
+
+        if existing_place:
+            update_fields = []
+
+            if existing_place.name != canonical_name:
+                existing_place.name = canonical_name
+                update_fields.append("name")
+
+            if existing_place.canonical_name != canonical_name:
+                existing_place.canonical_name = canonical_name
+                update_fields.append("canonical_name")
+
+            if existing_place.aliases != resolved_country.aliases:
+                existing_place.aliases = list(
+                    resolved_country.aliases or []
+                )
+                update_fields.append("aliases")
+
+            if existing_place.country_code != country_code:
+                existing_place.country_code = country_code
+                update_fields.append("country_code")
+
+            if update_fields:
+                existing_place.save(
+                    update_fields=update_fields
+                )
+
+            return existing_place, False
+
+        destination, _ = Destination.objects.get_or_create(
+            name=canonical_name,
+            country=canonical_name,
+        )
+
+        try:
+            place = Place.objects.create(
+                destination=destination,
+                country_ref=resolved_country,
+                name=canonical_name,
+                canonical_name=canonical_name,
+                aliases=list(resolved_country.aliases or []),
+                country_code=country_code,
+                place_type="country",
+                city="",
+                created_by=user,
+            )
+        except IntegrityError:
+            place = Place.objects.filter(
+                place_type="country",
+                country_ref=resolved_country,
+            ).first()
+
+            if place:
+                return place, False
+
+            raise
+
+        return place, True
 
 def get_poi_name_match_rank(
     poi_result,

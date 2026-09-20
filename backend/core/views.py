@@ -116,6 +116,7 @@ from .geography.services import (
     annotate_existing_city_places,
     annotate_existing_poi_places,
     materialize_city_place,
+    materialize_country_place,
     materialize_poi_place,
     merge_registry_and_provider_poi_results,
     poi_matches_city_context,
@@ -1644,6 +1645,55 @@ class CountryCatalogView(APIView):
                 "results": results,
             }
         )
+
+class GeographyCountryMaterializeView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        country_code = (
+            request.data.get("country_code") or ""
+        ).strip().upper()
+
+        country = resolve_country_catalog_entry(
+            code=country_code,
+        )
+
+        if not country:
+            return Response(
+                {
+                    "detail": (
+                        "A valid two-letter country code is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            place, created = materialize_country_place(
+                country_entry=country,
+                user=request.user,
+            )
+        except ValueError as error:
+            return Response(
+                {"detail": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = PlaceSerializer(
+            place,
+            context={"request": request},
+        )
+
+        return Response(
+            serializer.data,
+            status=(
+                status.HTTP_201_CREATED
+                if created
+                else status.HTTP_200_OK
+            ),
+        )
+
 
 class GeographyCitySearchView(APIView):
     authentication_classes = []

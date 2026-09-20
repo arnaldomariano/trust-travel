@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     DestinationListView,
     CountryCatalogView,
+    GeographyCountryMaterializeView,
     GeographyCitySearchView,
     GeographyCityMaterializeView,
     GeographyPOISearchView,
@@ -93,6 +94,10 @@ from .views import (
 urlpatterns = [
     path("destinations/", DestinationListView.as_view()),
     path("countries/", CountryCatalogView.as_view()),
+    path(
+        "geography/countries/materialize/",
+        GeographyCountryMaterializeView.as_view(),
+    ),
     path(
         "geography/cities/search/",
         GeographyCitySearchView.as_view(),

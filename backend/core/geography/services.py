@@ -157,7 +157,14 @@ def rank_poi_search_results(
     results,
     query,
 ):
-    ranked_results = list(results)
+    ranked_results = [
+        result
+        for result in results
+        if get_poi_name_match_rank(
+            result,
+            query,
+        )
+    ]
 
     original_positions = {
         id(result): position

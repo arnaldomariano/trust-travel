@@ -1858,36 +1858,26 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           return;
       }
 
-      const countryName =
-        place.destination_country ||
-        destination?.country ||
-        destination?.name ||
-        "";
-
-      if (!countryName) {
-          setCreateSpecificPlaceError("Could not identify the country for this city or region.");
-          setCreatedSpecificPlace(null);
-          return;
-      }
-
-        setCreatingSpecificPlace(true);
-        setCreatedSpecificPlace(null);
-        setCreateSpecificPlaceError("");
+      setCreatingSpecificPlace(true);
+      setCreatedSpecificPlace(null);
+      setCreateSpecificPlaceError("");
 
       try {
-        const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name,
-            city: place.name,
-            country: countryName,
-            place_type: newSpecificPlaceType,
-          }),
-        });
+        const res = await fetch(
+          `${API_URL}/api/geography/pois/create-manual/`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name,
+              place_type: newSpecificPlaceType,
+              city_place_id: place.id,
+            }),
+          }
+        );
 
         const data = await res.json();
 
@@ -1904,7 +1894,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         setCreatedSpecificPlace(placeResult);
         setNewSpecificPlaceName("");
-        setNewSpecificPlaceType("nature");
+        setNewSpecificPlaceType(specificPlaceType);
         setShowCreateSpecificPlaceForm(false);
       } catch (error) {
           console.error("Create specific place failed:", error);
@@ -4074,14 +4064,15 @@ const handleToggleEventsInfo = () => {
                 <select
                   value={specificPlaceType}
                   onChange={(e) => {
-                    setSpecificPlaceType(
-                      e.target.value as
-                        | "nature"
-                        | "restaurant"
-                        | "hotel"
-                        | "attraction"
-                        | "other"
-                    );
+                    const nextPlaceType = e.target.value as
+                      | "nature"
+                      | "restaurant"
+                      | "hotel"
+                      | "attraction"
+                      | "other";
+
+                    setSpecificPlaceType(nextPlaceType);
+                    setNewSpecificPlaceType(nextPlaceType);
                     setExternalSpecificPlaceResults([]);
                     setSpecificPlaceHasSearched(false);
                     setSpecificPlaceSearchError("");
@@ -4364,9 +4355,13 @@ const handleToggleEventsInfo = () => {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      setShowCreateSpecificPlaceForm((prev) => !prev)
-                    }
+                    onClick={() => {
+                      if (!showCreateSpecificPlaceForm) {
+                        setNewSpecificPlaceType(specificPlaceType);
+                      }
+
+                      setShowCreateSpecificPlaceForm((prev) => !prev);
+                    }}
                     style={{
                       ...secondaryButton,
                       fontSize: "13px",

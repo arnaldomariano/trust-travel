@@ -2197,6 +2197,127 @@ class GeographyPOIMaterializeView(APIView):
             ),
         )
 
+class GeographyPOIManualCreateView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        name = str(
+            request.data.get("name") or ""
+        ).strip()
+
+        place_type = str(
+            request.data.get("place_type") or ""
+        ).strip()
+
+        city_place_id = str(
+            request.data.get("city_place_id") or ""
+        ).strip()
+
+        if not name:
+            return Response(
+                {
+                    "detail": (
+                        "A specific place name is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        valid_place_types = {
+            "hotel",
+            "restaurant",
+            "attraction",
+            "nature",
+            "other",
+        }
+
+        if place_type not in valid_place_types:
+            return Response(
+                {
+                    "detail": (
+                        "A valid specific place type is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not city_place_id.isdigit():
+            return Response(
+                {
+                    "detail": (
+                        "A valid city_place_id is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        city_place = (
+            Place.objects
+            .select_related(
+                "country_ref",
+                "destination",
+            )
+            .filter(
+                id=int(city_place_id),
+                place_type="city",
+            )
+            .first()
+        )
+
+        if not city_place:
+            return Response(
+                {
+                    "detail": (
+                        "The requested city or locality was not found."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        country_code = (
+            city_place.country_ref.code
+            if city_place.country_ref
+            else city_place.country_code
+        )
+
+        country_code = str(
+            country_code or ""
+        ).strip().upper()
+
+        poi_result = {
+            "name": name,
+            "canonical_name": name,
+            "aliases": [],
+            "latitude": None,
+            "longitude": None,
+            "external_source": "",
+            "external_id": "",
+        }
+
+        place, created = materialize_poi_place(
+            poi_result=poi_result,
+            city_place=city_place,
+            country_code=country_code,
+            place_type=place_type,
+            user=request.user,
+        )
+
+        serializer = PlaceSerializer(
+            place,
+            context={"request": request},
+        )
+
+        return Response(
+            serializer.data,
+            status=(
+                status.HTTP_201_CREATED
+                if created
+                else status.HTTP_200_OK
+            ),
+        )
+
+
 class PlaceListView(generics.ListAPIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]

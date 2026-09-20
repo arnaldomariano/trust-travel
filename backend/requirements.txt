@@ -1,0 +1,7 @@
+Django==6.0.3
+django-cors-headers==4.9.0
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.5.1
+Pillow==12.2.0
+pycountry==26.2.16
+python-dotenv==1.2.3

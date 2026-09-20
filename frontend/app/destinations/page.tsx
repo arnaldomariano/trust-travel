@@ -1069,21 +1069,19 @@ const selectCreateFlowCountryFromCatalog = async (
       return;
     }
 
-    const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: country.canonical_name,
-        canonical_name: country.canonical_name,
-        place_type: "country",
-        city: "",
-        country: country.canonical_name,
-        country_code: country.code,
-      }),
-    });
+    const res = await fetch(
+      `${API_URL}/api/geography/countries/materialize/`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          country_code: country.code,
+        }),
+      }
+    );
 
     const data = await res.json();
 

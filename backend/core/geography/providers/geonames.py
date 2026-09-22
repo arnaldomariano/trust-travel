@@ -23,7 +23,48 @@ def get_geonames_username():
     return username
 
 
-def normalize_city_result(item):
+GEOGRAPHIC_FEATURE_TYPES = {
+    ("T", "ISL"): "island",
+    ("T", "ISLS"): "archipelago",
+    ("T", "MT"): "mountain",
+    ("T", "VAL"): "valley",
+    ("T", "DSRT"): "desert",
+    ("H", "STM"): "river",
+    ("H", "LK"): "lake",
+    ("L", "RGN"): "region",
+}
+
+
+TRAVEL_GEOGRAPHIC_TYPES = {
+    "settlement",
+    "administrative_area",
+    "island",
+    "archipelago",
+    "region",
+    "river",
+    "lake",
+    "mountain",
+    "valley",
+    "desert",
+}
+
+
+def classify_geographic_feature(feature_class, feature_code):
+    feature_class = str(feature_class or "").strip().upper()
+    feature_code = str(feature_code or "").strip().upper()
+
+    if feature_class == "P":
+        return "settlement"
+
+    if feature_class == "A" and feature_code.startswith("ADM"):
+        return "administrative_area"
+
+    return GEOGRAPHIC_FEATURE_TYPES.get(
+        (feature_class, feature_code)
+    )
+
+
+def normalize_geographic_result(item):
     canonical_name = (
         item.get("toponymName")
         or item.get("asciiName")
@@ -65,15 +106,25 @@ def normalize_city_result(item):
         "canonical_name": canonical_name,
         "aliases": aliases,
         "country_code": (item.get("countryCode") or "").strip().upper(),
-        "place_type": "city",
         "latitude": item.get("lat"),
         "longitude": item.get("lng"),
+        "feature_class": (item.get("fcl") or "").strip(),
         "feature_code": (item.get("fcode") or "").strip(),
+        "geographic_type": classify_geographic_feature(
+            item.get("fcl"),
+            item.get("fcode"),
+        ),
         "population": item.get("population") or 0,
         "admin_name": (item.get("adminName1") or "").strip(),
         "external_source": "geonames",
         "external_id": str(item.get("geonameId") or "").strip(),
     }
+
+
+def normalize_city_result(item):
+    normalized = normalize_geographic_result(item)
+    normalized["place_type"] = "city"
+    return normalized
 
 
 def normalize_search_text(value):
@@ -166,6 +217,58 @@ def get_city(external_id):
 
     return normalized
 
+
+def get_geographic_place(external_id):
+    external_id = str(external_id or "").strip()
+
+    if not external_id:
+        raise ValueError(
+            "GeoNames external ID is required."
+        )
+
+    username = get_geonames_username()
+
+    params = {
+        "geonameId": external_id,
+        "style": "FULL",
+        "username": username,
+    }
+
+    url = (
+        "https://secure.geonames.org/getJSON?"
+        + urlencode(params)
+    )
+
+    try:
+        with urlopen(url, timeout=5) as response:
+            payload = json.load(response)
+    except (HTTPError, URLError, TimeoutError) as error:
+        raise GeoNamesRequestError(
+            "GeoNames geographic place lookup failed."
+        ) from error
+
+    status = payload.get("status")
+
+    if status:
+        raise GeoNamesRequestError(
+            status.get("message")
+            or "GeoNames returned an error."
+        )
+
+    normalized = normalize_geographic_result(payload)
+
+    if (
+        not normalized["external_id"]
+        or not normalized["name"]
+        or normalized["geographic_type"]
+        not in TRAVEL_GEOGRAPHIC_TYPES
+    ):
+        raise GeoNamesRequestError(
+            "GeoNames result is not a supported geographic place."
+        )
+
+    return normalized
+
 def search_cities(query, country_code, max_rows=8):
     query = str(query or "").strip()
     country_code = str(country_code or "").strip().upper()
@@ -224,6 +327,159 @@ def search_cities(query, country_code, max_rows=8):
 
     results.sort(
         key=lambda result: city_result_rank(
+            result,
+            query,
+        ),
+        reverse=True,
+    )
+
+    return results
+
+
+def geographic_result_matches_query(result, query):
+    normalized_query = normalize_search_text(query)
+
+    if not normalized_query:
+        return False
+
+    identity_values = [
+        result.get("name"),
+        result.get("canonical_name"),
+        *(result.get("aliases") or []),
+    ]
+
+    normalized_values = [
+        normalize_search_text(value)
+        for value in identity_values
+        if str(value or "").strip()
+    ]
+
+    if normalized_query in normalized_values:
+        return True
+
+    if any(
+        value.startswith(normalized_query)
+        for value in normalized_values
+    ):
+        return True
+
+    if any(
+        normalized_query in value
+        for value in normalized_values
+    ):
+        return True
+
+    return any(
+        word.startswith(normalized_query)
+        for value in normalized_values
+        for word in value.split()
+    )
+
+
+def geographic_result_rank(result, query):
+    normalized_query = normalize_search_text(query)
+
+    identity_values = [
+        result.get("name"),
+        result.get("canonical_name"),
+        *(result.get("aliases") or []),
+    ]
+
+    normalized_values = [
+        normalize_search_text(value)
+        for value in identity_values
+        if str(value or "").strip()
+    ]
+
+    exact_match = any(
+        value == normalized_query
+        for value in normalized_values
+    )
+
+    starts_with_query = any(
+        value.startswith(normalized_query)
+        for value in normalized_values
+    )
+
+    population = result.get("population") or 0
+
+    return (
+        1 if exact_match else 0,
+        1 if starts_with_query else 0,
+        population,
+    )
+
+
+def search_geographic_places(
+    query,
+    country_code="",
+    max_rows=20,
+):
+    query = str(query or "").strip()
+    country_code = str(
+        country_code or ""
+    ).strip().upper()
+
+    if len(query) < 2:
+        return []
+
+    if country_code and len(country_code) != 2:
+        raise ValueError(
+            "Country code must be a valid two-letter code."
+        )
+
+    username = get_geonames_username()
+
+    params = {
+        "q": query,
+        "maxRows": max_rows,
+        "style": "FULL",
+        "username": username,
+    }
+
+    if country_code:
+        params["country"] = country_code
+
+    url = (
+        "https://secure.geonames.org/searchJSON?"
+        + urlencode(params)
+    )
+
+    try:
+        with urlopen(url, timeout=5) as response:
+            payload = json.load(response)
+    except (HTTPError, URLError, TimeoutError) as error:
+        raise GeoNamesRequestError(
+            "GeoNames geographic search failed."
+        ) from error
+
+    status = payload.get("status")
+
+    if status:
+        raise GeoNamesRequestError(
+            status.get("message")
+            or "GeoNames returned an error."
+        )
+
+    results = []
+
+    for item in payload.get("geonames", []):
+        normalized = normalize_geographic_result(item)
+
+        if (
+            normalized["external_id"]
+            and normalized["name"]
+            and normalized["geographic_type"]
+            in TRAVEL_GEOGRAPHIC_TYPES
+            and geographic_result_matches_query(
+                normalized,
+                query,
+            )
+        ):
+            results.append(normalized)
+
+    results.sort(
+        key=lambda result: geographic_result_rank(
             result,
             query,
         ),

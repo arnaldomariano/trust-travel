@@ -19,6 +19,7 @@ type GeographyCityResult = {
   aliases: string[];
   country_code: string;
   place_type: "city";
+  geographic_type: string;
   latitude: string | null;
   longitude: string | null;
   feature_code: string;
@@ -28,6 +29,23 @@ type GeographyCityResult = {
   external_id: string;
   existing_place_id: number | null;
 };
+
+function getGeographicTypeLabel(geographicType: string) {
+  const labels: Record<string, string> = {
+    settlement: "City / Settlement",
+    administrative_area: "Administrative area",
+    region: "Region",
+    island: "Island",
+    archipelago: "Archipelago",
+    river: "River",
+    lake: "Lake",
+    mountain: "Mountain",
+    valley: "Valley",
+    desert: "Desert",
+  };
+
+  return labels[geographicType] || "Geographic place";
+}
 
 type TripPlanDestination = {
   place_name: string;
@@ -699,6 +717,11 @@ export default function PlacePage() {
 
   const placeTypeLabel = getPlaceTypeLabel(place?.place_type);
 
+  const geographicPlaceLabel =
+    place?.place_type === "city"
+      ? getGeographicTypeLabel(place?.geographic_type || "")
+      : placeTypeLabel;
+
   const parentLocationLabel =
     place?.place_type === "country"
       ? ""
@@ -722,7 +745,7 @@ const placeIntroText =
     place?.place_type === "country"
       ? `This is the country-level hub for ${place?.name || "this country"}. Use it for broad country experiences, country-wide travel context, alerts, events and useful information that are not tied to one specific city or place.`
       : place?.place_type === "city"
-      ? `This is the city/region hub for ${place?.name || "this city or region"}. Use it for experiences and updates about the city or region as a whole, or to find and add specific places inside it.`
+      ? `This is the ${geographicPlaceLabel.toLowerCase()} hub for ${place?.name || "this geographic place"}. Use it for experiences and updates about this ${geographicPlaceLabel.toLowerCase()} as a whole, or to find and add specific places inside it.`
       : parentPlaceLabel
       ? `This is the specific-place hub for ${place?.name || "this place"}, inside ${parentPlaceLabel}. Use it for reviews, ratings, events, alerts and practical information about this exact location.`
       : `This is the specific-place hub for ${place?.name || "this place"}. Use it for reviews, ratings, events, alerts and practical information about this exact location, whether it is a restaurant, hotel, attraction, nature spot or local place.`;
@@ -735,7 +758,7 @@ const placeIntroText =
       ]
     : place?.place_type === "city"
     ? [
-        "Share experiences about the city or region as a whole.",
+        `Share experiences about this ${geographicPlaceLabel.toLowerCase()} as a whole.`,
         "Move down to a restaurant, hotel, attraction, beach or nature spot for exact-place reviews.",
         "Post local events, alerts or useful information.",
       ]
@@ -749,7 +772,7 @@ const placeIntroText =
     place?.place_type === "country"
       ? place?.destination_country || place?.name || ""
       : [
-          placeTypeLabel,
+          geographicPlaceLabel,
           place?.city && place.city !== place?.name ? place.city : null,
           parentLocationLabel,
         ]
@@ -881,14 +904,14 @@ const hierarchyLevelLabel =
   place?.place_type === "country"
     ? "Country hub"
     : place?.place_type === "city"
-    ? "City / Region hub"
+    ? `${geographicPlaceLabel} hub`
     : "Specific place hub";
 
 const hierarchyLevelDescription =
   place?.place_type === "country"
     ? "You are viewing the broad country layer. Use this level for general country context. Cities, islands, regions and exact places are organized below it."
     : place?.place_type === "city"
-    ? "You are viewing a city or region layer. Use this level for local context. Restaurants, hotels, attractions, nature spots and other exact places are organized below it."
+    ? `You are viewing a ${geographicPlaceLabel.toLowerCase()} layer. Use this level for local context. Restaurants, hotels, attractions, nature spots and other exact places are organized below it.`
     : "You are viewing an exact-place layer. Ratings, experiences, events, alerts and practical information should refer to this specific place.";
 
 const placeHierarchyItems =
@@ -944,7 +967,7 @@ const placeHierarchyItems =
     : place?.place_type === "country"
     ? `Country-level activity in ${place?.name || "this country"}`
     : place?.place_type === "city"
-    ? `City / region activity in ${place?.name || "this city or region"}`
+    ? `${geographicPlaceLabel} activity in ${place?.name || "this geographic place"}`
     : `Activity about ${place?.name || "this place"}`;
 
 const activityFeedDescription =
@@ -953,7 +976,7 @@ const activityFeedDescription =
     : place?.place_type === "country"
     ? "This feed shows broad country-level experiences and updates. For local reviews, move down to a city, island, region or exact place."
     : place?.place_type === "city"
-    ? "This feed shows only experiences and updates shared directly about this city or region. For exact-place reviews, open one of the specific places above."
+    ? `This feed shows only experiences and updates shared directly about this ${geographicPlaceLabel.toLowerCase()}. For exact-place reviews, open one of the specific places above.`
     : "This feed shows experiences, reviews, events, alerts and useful information about this exact place.";
 
   const rating5 = experiences.filter((e) => e.rating === 5).length;
@@ -2029,7 +2052,7 @@ const handleToggleEventsInfo = () => {
           }}
         >
           <div style={{ fontSize: "13px", color: "#777", marginBottom: "8px" }}>
-            {placeTypeLabel} overview
+            {geographicPlaceLabel} overview
           </div>
 
           <h1 style={{ margin: 0, fontSize: "28px" }}>
@@ -3195,7 +3218,7 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.4,
                   }}
                 >
-                  Includes experiences from this city/region and from specific places inside it.
+                  Includes experiences from this {geographicPlaceLabel.toLowerCase()} and from specific places inside it.
                 </div>
               )}
             </div>
@@ -3714,7 +3737,9 @@ const handleToggleEventsInfo = () => {
                         marginBottom: "6px",
                       }}
                     >
-                      City / Region
+                      {getGeographicTypeLabel(
+                        cityResult.geographic_type
+                      )}
                       {cityResult.admin_name
                         ? ` · ${cityResult.admin_name}`
                         : ""}
@@ -3915,7 +3940,7 @@ const handleToggleEventsInfo = () => {
             }}
           >
             <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
-              City / region structure
+              {geographicPlaceLabel} structure
             </div>
 
             <h2 style={{ marginTop: 0, marginBottom: "8px", fontSize: "22px" }}>
@@ -3934,7 +3959,7 @@ const handleToggleEventsInfo = () => {
                   }}
                 >
                   Restaurants, hotels, attractions, beaches, nature spots and other exact
-                  places can be added under this city or region.
+                  places can be added under this {geographicPlaceLabel.toLowerCase()}.
                 </p>
 
                                 {childSpecificPlaces.length > 0 && (

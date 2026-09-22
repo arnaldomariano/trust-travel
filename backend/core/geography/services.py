@@ -3,7 +3,12 @@ from math import atan2, cos, radians, sin, sqrt
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 
-from ..models import BusinessPresence, Destination, Place
+from ..models import (
+    BusinessPresence,
+    Destination,
+    Place,
+    PlaceExternalIdentity,
+)
 from ..place_utils import (
     get_matching_places_by_name_identity,
     get_or_create_country,
@@ -310,6 +315,7 @@ def search_registry_poi_places(
     possible_places = (
         Place.objects
         .select_related("country_ref")
+        .prefetch_related("external_identities")
         .filter(
             parent_place=city_place,
             place_type=place_type,
@@ -368,31 +374,52 @@ def search_registry_poi_places(
         )
     )
 
-    return [
-        {
-            "name": place.name,
-            "canonical_name": place.canonical_name,
-            "aliases": place.aliases,
-            "country_code": (
-                place.country_ref.code
-                if place.country_ref
-                else place.country_code
+    results = []
+
+    for _, place in matched_places:
+        foursquare_identity = next(
+            (
+                identity
+                for identity in place.external_identities.all()
+                if identity.external_source == "foursquare"
             ),
-            "latitude": place.latitude,
-            "longitude": place.longitude,
-            "address": "",
-            "locality": city_place.name,
-            "region": "",
-            "postcode": "",
-            "categories": [],
-            "chains": [],
-            "distance": None,
-            "external_source": place.external_source,
-            "external_id": place.external_id,
-            "existing_place_id": place.id,
-        }
-        for _, place in matched_places
-    ]
+            None,
+        )
+
+        results.append(
+            {
+                "name": place.name,
+                "canonical_name": place.canonical_name,
+                "aliases": place.aliases,
+                "country_code": (
+                    place.country_ref.code
+                    if place.country_ref
+                    else place.country_code
+                ),
+                "latitude": place.latitude,
+                "longitude": place.longitude,
+                "address": "",
+                "locality": city_place.name,
+                "region": "",
+                "postcode": "",
+                "categories": [],
+                "chains": [],
+                "distance": None,
+                "external_source": (
+                    foursquare_identity.external_source
+                    if foursquare_identity
+                    else ""
+                ),
+                "external_id": (
+                    foursquare_identity.external_id
+                    if foursquare_identity
+                    else ""
+                ),
+                "existing_place_id": place.id,
+            }
+        )
+
+    return results
 
 
 def merge_registry_and_provider_poi_results(
@@ -480,8 +507,11 @@ def annotate_existing_city_places(results, country_code):
     }
 
     existing_places_by_external_identity = {
-        (place.external_source, place.external_id): place.id
-        for place in Place.objects.filter(
+        (
+            identity.external_source,
+            identity.external_id,
+        ): identity.place_id
+        for identity in PlaceExternalIdentity.objects.filter(
             external_source__in=external_sources,
             external_id__in=external_ids,
         )
@@ -490,6 +520,9 @@ def annotate_existing_city_places(results, country_code):
     country_places = list(
         Place.objects.filter(
             place_type="city",
+        )
+        .exclude(
+            external_identities__external_source="geonames",
         )
         .filter(
             Q(country_ref__code=country_code)
@@ -553,6 +586,167 @@ def annotate_existing_city_places(results, country_code):
     return results
 
 
+
+def geographic_result_exactly_matches_query(
+    result,
+    query,
+):
+    normalized_query = normalize_place_text(query)
+
+    if not normalized_query:
+        return False
+
+    result_values = get_place_name_identity_values(
+        result.get("name"),
+        result.get("canonical_name"),
+        result.get("aliases"),
+    )
+
+    return normalized_query in result_values
+
+
+def annotate_existing_geographic_places(
+    results,
+    query,
+):
+    external_identities = {
+        (
+            str(result.get("external_source") or "").strip(),
+            str(result.get("external_id") or "").strip(),
+        )
+        for result in results
+        if (
+            str(result.get("external_source") or "").strip()
+            and str(result.get("external_id") or "").strip()
+        )
+    }
+
+    external_sources = {
+        external_source
+        for external_source, _ in external_identities
+    }
+
+    external_ids = {
+        external_id
+        for _, external_id in external_identities
+    }
+
+    existing_places_by_external_identity = {
+        (
+            identity.external_source,
+            identity.external_id,
+        ): identity.place_id
+        for identity in PlaceExternalIdentity.objects.filter(
+            external_source__in=external_sources,
+            external_id__in=external_ids,
+        )
+    }
+
+    country_codes = {
+        str(result.get("country_code") or "").strip().upper()
+        for result in results
+        if len(
+            str(result.get("country_code") or "").strip()
+        ) == 2
+    }
+
+    geographic_places = list(
+        Place.objects.filter(
+            place_type="city",
+        )
+        .exclude(
+            external_identities__external_source="geonames",
+        )
+        .filter(
+            Q(country_ref__code__in=country_codes)
+            | Q(country_code__in=country_codes)
+        )
+        .distinct()
+    )
+
+    places_by_country_and_identity = {}
+
+    for place in geographic_places:
+        place_country_code = (
+            place.country_ref.code
+            if place.country_ref
+            else place.country_code
+        )
+
+        place_country_code = str(
+            place_country_code or ""
+        ).strip().upper()
+
+        if not place_country_code:
+            continue
+
+        place_values = get_place_name_identity_values(
+            place.name,
+            place.canonical_name,
+            place.aliases,
+        )
+
+        for value in place_values:
+            places_by_country_and_identity.setdefault(
+                (place_country_code, value),
+                set(),
+            ).add(place.id)
+
+    for result in results:
+        external_match_id = (
+            existing_places_by_external_identity.get(
+                (
+                    str(
+                        result.get("external_source") or ""
+                    ).strip(),
+                    str(
+                        result.get("external_id") or ""
+                    ).strip(),
+                )
+            )
+        )
+
+        if external_match_id is not None:
+            result["existing_place_id"] = external_match_id
+            continue
+
+        result_country_code = str(
+            result.get("country_code") or ""
+        ).strip().upper()
+
+        if not geographic_result_exactly_matches_query(
+            result,
+            query,
+        ):
+            result["existing_place_id"] = None
+            continue
+
+        result_values = get_place_name_identity_values(
+            result.get("name"),
+            result.get("canonical_name"),
+            result.get("aliases"),
+        )
+
+        candidate_place_ids = set()
+
+        for value in result_values:
+            candidate_place_ids.update(
+                places_by_country_and_identity.get(
+                    (result_country_code, value),
+                    set(),
+                )
+            )
+
+        if len(candidate_place_ids) == 1:
+            result["existing_place_id"] = next(
+                iter(candidate_place_ids)
+            )
+        else:
+            result["existing_place_id"] = None
+
+    return results
+
+
 def annotate_existing_poi_places(
     results,
     city_place,
@@ -581,8 +775,11 @@ def annotate_existing_poi_places(
     }
 
     existing_places_by_external_identity = {
-        (place.external_source, place.external_id): place.id
-        for place in Place.objects.filter(
+        (
+            identity.external_source,
+            identity.external_id,
+        ): identity.place_id
+        for identity in PlaceExternalIdentity.objects.filter(
             external_source__in=external_sources,
             external_id__in=external_ids,
         )
@@ -664,13 +861,18 @@ def find_existing_poi_place(
     ).strip()
 
     if external_source and external_id:
-        existing_place = Place.objects.filter(
-            external_source=external_source,
-            external_id=external_id,
-        ).first()
+        external_identity = (
+            PlaceExternalIdentity.objects
+            .select_related("place")
+            .filter(
+                external_source=external_source,
+                external_id=external_id,
+            )
+            .first()
+        )
 
-        if existing_place:
-            return existing_place
+        if external_identity:
+            return external_identity.place
 
     possible_places = Place.objects.filter(
         parent_place=city_place,
@@ -704,18 +906,26 @@ def find_existing_city_place(
     ).strip()
 
     if external_source and external_id:
-        existing_place = Place.objects.filter(
-            place_type="city",
-            external_source=external_source,
-            external_id=external_id,
-        ).first()
+        external_identity = (
+            PlaceExternalIdentity.objects
+            .select_related("place")
+            .filter(
+                external_source=external_source,
+                external_id=external_id,
+                place__place_type="city",
+            )
+            .first()
+        )
 
-        if existing_place:
-            return existing_place
+        if external_identity:
+            return external_identity.place
 
     possible_places = (
         Place.objects.filter(
             place_type="city",
+        )
+        .exclude(
+            external_identities__external_source="geonames",
         )
         .filter(
             Q(country_ref=resolved_country)
@@ -781,18 +991,15 @@ def enrich_existing_city_place(
             city_result["canonical_name"]
         )
         locked_place.aliases = merged_aliases
+        locked_place.geographic_type = (
+            city_result.get("geographic_type") or ""
+        ).strip()
         locked_place.latitude = (
             city_result.get("latitude") or None
         )
         locked_place.longitude = (
             city_result.get("longitude") or None
         )
-        locked_place.external_source = (
-            city_result.get("external_source") or ""
-        ).strip()
-        locked_place.external_id = str(
-            city_result.get("external_id") or ""
-        ).strip()
 
         if not locked_place.city:
             locked_place.city = locked_place.name
@@ -806,23 +1013,56 @@ def enrich_existing_city_place(
                         "parent_place",
                         "canonical_name",
                         "aliases",
+                        "geographic_type",
                         "latitude",
                         "longitude",
-                        "external_source",
-                        "external_id",
                         "city",
                     ]
                 )
         except IntegrityError:
-            winner = Place.objects.filter(
-                external_source=locked_place.external_source,
-                external_id=locked_place.external_id,
-            ).first()
+            external_source = (
+                city_result.get("external_source") or ""
+            ).strip()
 
-            if winner:
-                return winner
+            external_id = str(
+                city_result.get("external_id") or ""
+            ).strip()
+
+            if external_source and external_id:
+                winner_identity = (
+                    PlaceExternalIdentity.objects
+                    .select_related("place")
+                    .filter(
+                        external_source=external_source,
+                        external_id=external_id,
+                    )
+                    .first()
+                )
+
+                if winner_identity:
+                    return winner_identity.place
 
             raise
+
+        external_source = (
+            city_result.get("external_source") or ""
+        ).strip()
+
+        external_id = str(
+            city_result.get("external_id") or ""
+        ).strip()
+
+        if external_source and external_id:
+            PlaceExternalIdentity.objects.get_or_create(
+                external_source=external_source,
+                external_id=external_id,
+                defaults={
+                    "place": locked_place,
+                    "geographic_type": (
+                        city_result.get("geographic_type") or ""
+                    ).strip(),
+                },
+            )
 
         return locked_place
 
@@ -876,12 +1116,6 @@ def enrich_existing_poi_place(
         locked_place.longitude = (
             poi_result.get("longitude") or None
         )
-        locked_place.external_source = (
-            poi_result.get("external_source") or ""
-        ).strip()
-        locked_place.external_id = str(
-            poi_result.get("external_id") or ""
-        ).strip()
         locked_place.city = city_place.name
 
         try:
@@ -895,21 +1129,51 @@ def enrich_existing_poi_place(
                         "aliases",
                         "latitude",
                         "longitude",
-                        "external_source",
-                        "external_id",
                         "city",
                     ]
                 )
         except IntegrityError:
-            winner = Place.objects.filter(
-                external_source=locked_place.external_source,
-                external_id=locked_place.external_id,
-            ).first()
+            external_source = (
+                poi_result.get("external_source") or ""
+            ).strip()
 
-            if winner:
-                return winner
+            external_id = str(
+                poi_result.get("external_id") or ""
+            ).strip()
+
+            if external_source and external_id:
+                winner_identity = (
+                    PlaceExternalIdentity.objects
+                    .select_related("place")
+                    .filter(
+                        external_source=external_source,
+                        external_id=external_id,
+                    )
+                    .first()
+                )
+
+                if winner_identity:
+                    return winner_identity.place
 
             raise
+
+        external_source = (
+            poi_result.get("external_source") or ""
+        ).strip()
+
+        external_id = str(
+            poi_result.get("external_id") or ""
+        ).strip()
+
+        if external_source and external_id:
+            PlaceExternalIdentity.objects.get_or_create(
+                external_source=external_source,
+                external_id=external_id,
+                defaults={
+                    "place": locked_place,
+                    "geographic_type": "",
+                },
+            )
 
         return locked_place
 
@@ -934,29 +1198,55 @@ def create_city_place(
                 aliases=city_result.get("aliases") or [],
                 country_code=country_code,
                 place_type="city",
+                geographic_type=(
+                    city_result.get("geographic_type") or ""
+                ).strip(),
                 city=city_result["canonical_name"],
                 latitude=city_result.get("latitude") or None,
                 longitude=city_result.get("longitude") or None,
-                external_source=(
-                    city_result.get("external_source") or ""
-                ).strip(),
-                external_id=str(
-                    city_result.get("external_id") or ""
-                ).strip(),
                 created_by=user,
             )
-    except IntegrityError:
-        winner = Place.objects.filter(
-            external_source=(
-                city_result.get("external_source") or ""
-            ).strip(),
-            external_id=str(
-                city_result.get("external_id") or ""
-            ).strip(),
-        ).first()
 
-        if winner:
-            return winner, False
+            external_source = (
+                city_result.get("external_source") or ""
+            ).strip()
+
+            external_id = str(
+                city_result.get("external_id") or ""
+            ).strip()
+
+            if external_source and external_id:
+                PlaceExternalIdentity.objects.create(
+                    place=place,
+                    external_source=external_source,
+                    external_id=external_id,
+                    geographic_type=(
+                        city_result.get("geographic_type") or ""
+                    ).strip(),
+                )
+
+    except IntegrityError:
+        external_source = (
+            city_result.get("external_source") or ""
+        ).strip()
+
+        external_id = str(
+            city_result.get("external_id") or ""
+        ).strip()
+
+        if external_source and external_id:
+            winner_identity = (
+                PlaceExternalIdentity.objects
+                .select_related("place")
+                .filter(
+                    external_source=external_source,
+                    external_id=external_id,
+                )
+                .first()
+            )
+
+            if winner_identity:
+                return winner_identity.place, False
 
         raise
 
@@ -986,26 +1276,47 @@ def create_poi_place(
                 city=city_place.name,
                 latitude=poi_result.get("latitude") or None,
                 longitude=poi_result.get("longitude") or None,
-                external_source=(
-                    poi_result.get("external_source") or ""
-                ).strip(),
-                external_id=str(
-                    poi_result.get("external_id") or ""
-                ).strip(),
                 created_by=user,
             )
-    except IntegrityError:
-        winner = Place.objects.filter(
-            external_source=(
-                poi_result.get("external_source") or ""
-            ).strip(),
-            external_id=str(
-                poi_result.get("external_id") or ""
-            ).strip(),
-        ).first()
 
-        if winner:
-            return winner, False
+            external_source = (
+                poi_result.get("external_source") or ""
+            ).strip()
+
+            external_id = str(
+                poi_result.get("external_id") or ""
+            ).strip()
+
+            if external_source and external_id:
+                PlaceExternalIdentity.objects.create(
+                    place=place,
+                    external_source=external_source,
+                    external_id=external_id,
+                    geographic_type="",
+                )
+
+    except IntegrityError:
+        external_source = (
+            poi_result.get("external_source") or ""
+        ).strip()
+
+        external_id = str(
+            poi_result.get("external_id") or ""
+        ).strip()
+
+        if external_source and external_id:
+            winner_identity = (
+                PlaceExternalIdentity.objects
+                .select_related("place")
+                .filter(
+                    external_source=external_source,
+                    external_id=external_id,
+                )
+                .first()
+            )
+
+            if winner_identity:
+                return winner_identity.place, False
 
         raise
 

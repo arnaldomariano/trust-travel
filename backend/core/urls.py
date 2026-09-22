@@ -4,6 +4,7 @@ from .views import (
     DestinationListView,
     CountryCatalogView,
     GeographyCountryMaterializeView,
+    GeographyPlaceSearchView,
     GeographyCitySearchView,
     GeographyCityMaterializeView,
     GeographyPOISearchView,
@@ -97,6 +98,10 @@ urlpatterns = [
     path(
         "geography/countries/materialize/",
         GeographyCountryMaterializeView.as_view(),
+    ),
+    path(
+        "geography/places/search/",
+        GeographyPlaceSearchView.as_view(),
     ),
     path(
         "geography/cities/search/",

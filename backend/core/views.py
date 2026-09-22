@@ -100,8 +100,8 @@ from .place_utils import (
 from .geography.providers.geonames import (
     GeoNamesConfigurationError,
     GeoNamesRequestError,
-    get_city,
-    search_cities,
+    get_geographic_place,
+    search_geographic_places,
 )
 
 from .geography.providers.foursquare import (
@@ -114,6 +114,7 @@ from .geography.providers.foursquare import (
 
 from .geography.services import (
     annotate_existing_city_places,
+    annotate_existing_geographic_places,
     annotate_existing_poi_places,
     materialize_city_place,
     materialize_country_place,
@@ -1695,6 +1696,61 @@ class GeographyCountryMaterializeView(APIView):
         )
 
 
+class GeographyPlaceSearchView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        query = (request.query_params.get("q") or "").strip()
+
+        if len(query) < 2:
+            return Response(
+                {
+                    "detail": (
+                        "Search query must contain at least 2 characters."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            results = search_geographic_places(
+                query=query,
+            )
+
+            results = annotate_existing_geographic_places(
+                results=results,
+                query=query,
+            )
+
+        except GeoNamesConfigurationError:
+            return Response(
+                {
+                    "detail": (
+                        "Geographic search is not configured."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        except GeoNamesRequestError:
+            return Response(
+                {
+                    "detail": (
+                        "Geographic search is temporarily unavailable."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(
+            {
+                "count": len(results),
+                "results": results,
+            }
+        )
+
+
 class GeographyCitySearchView(APIView):
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
@@ -1728,7 +1784,7 @@ class GeographyCitySearchView(APIView):
             )
 
         try:
-            results = search_cities(
+            results = search_geographic_places(
                 query=query,
                 country_code=country["code"],
             )
@@ -1803,7 +1859,7 @@ class GeographyCityMaterializeView(APIView):
             )
 
         try:
-            city_result = get_city(external_id)
+            city_result = get_geographic_place(external_id)
         except GeoNamesConfigurationError:
             return Response(
                 {

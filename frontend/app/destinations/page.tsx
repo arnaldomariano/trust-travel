@@ -18,6 +18,7 @@ type GeographyCityResult = {
   aliases: string[];
   country_code: string;
   place_type: "city";
+  geographic_type: string;
   latitude: string | null;
   longitude: string | null;
   feature_code: string;
@@ -27,6 +28,23 @@ type GeographyCityResult = {
   external_id: string;
   existing_place_id: number | null;
 };
+
+function getGeographicTypeLabel(geographicType: string) {
+  const labels: Record<string, string> = {
+    settlement: "City / Settlement",
+    administrative_area: "Administrative area",
+    region: "Region",
+    island: "Island",
+    archipelago: "Archipelago",
+    river: "River",
+    lake: "Lake",
+    mountain: "Mountain",
+    valley: "Valley",
+    desert: "Desert",
+  };
+
+  return labels[geographicType] || "Geographic place";
+}
 
 function DestinationsPageContent() {
   const router = useRouter();
@@ -449,6 +467,49 @@ const filteredPlaces = places
 
     return (a.name || "").localeCompare(b.name || "");
   });
+
+const normalizedMainSearch = normalizeText(searchTerm);
+
+const mainSearchCountryCatalogMatches = normalizedMainSearch.length >= 2
+  ? countryCatalog
+      .filter((country) => {
+        const searchableNames = [
+          country.code,
+          country.canonical_name,
+          ...(country.aliases || []),
+        ].map((value) => normalizeText(value));
+
+        return searchableNames.some((value) => {
+          if (value === normalizedMainSearch) return true;
+
+          if (value.startsWith(normalizedMainSearch)) return true;
+
+          if (
+            normalizedMainSearch.length >= 4 &&
+            value.includes(normalizedMainSearch)
+          ) {
+            return true;
+          }
+
+          return false;
+        });
+      })
+      .filter((country) => {
+        return !places.some((place) => {
+          if (place.place_type !== "country") return false;
+
+          const placeCountryCode = (place.country_code || "")
+            .trim()
+            .toUpperCase();
+
+          return placeCountryCode === country.code.toUpperCase();
+        });
+      })
+      .sort((a, b) =>
+        a.canonical_name.localeCompare(b.canonical_name)
+      )
+      .slice(0, 6)
+  : [];
 
 const placesInsideSelectedCountry = selectedCountryPlace
   ? places
@@ -1769,13 +1830,72 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       </p>
     )
 
-      : filteredPlaces.length > 0 && !selectedCountryPlace && !selectedPlace ? (
+      : (filteredPlaces.length > 0 ||
+          mainSearchCountryCatalogMatches.length > 0) &&
+        !selectedCountryPlace &&
+        !selectedPlace ? (
       <section style={{ display: "grid", gap: "18px", maxWidth: "620px" }}>
 
         <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
           We found existing places related to your search. Check the type,
           city/region and country before selecting the correct result.
         </p>
+
+        {mainSearchCountryCatalogMatches.length > 0 && (
+          <div style={{ display: "grid", gap: "10px" }}>
+            <div style={{ fontWeight: 700, fontSize: "15px" }}>
+              Countries
+            </div>
+
+            {mainSearchCountryCatalogMatches.map((country) => (
+              <div
+                key={`catalog-country-${country.code}`}
+                style={{
+                  padding: "18px",
+                  border: "1px solid #d7f0df",
+                  borderRadius: "14px",
+                  background: "white",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    alignItems: "center",
+                  }}
+                >
+                  <strong>{country.canonical_name}</strong>
+
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#166534",
+                      background: "#f2fbf5",
+                      border: "1px solid #d7f0df",
+                      borderRadius: "999px",
+                      padding: "4px 8px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Country
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "8px",
+                    color: "#666",
+                    fontSize: "14px",
+                  }}
+                >
+                  Country · {country.code}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {filteredCountryPlaces.length > 0 && (
           <div style={{ display: "grid", gap: "10px" }}>
@@ -2227,7 +2347,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                                 fontSize: "13px",
                               }}
                             >
-                              City / Locality
+                              {getGeographicTypeLabel(
+                                  cityResult.geographic_type
+                                )}
                               {cityResult.admin_name
                                 ? ` · ${cityResult.admin_name}`
                                 : ""}

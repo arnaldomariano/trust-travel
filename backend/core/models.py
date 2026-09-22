@@ -399,6 +399,15 @@ class Place(models.Model):
         default="city",
     )
 
+    # Geographic identity is separate from the role a Place plays in
+    # Trust Travel. For example, an island or administrative area can
+    # still act as the intermediate geographic hub represented by
+    # place_type="city".
+    geographic_type = models.CharField(
+        max_length=30,
+        blank=True,
+    )
+
     city = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True)
     image_url = models.URLField(blank=True)
@@ -418,11 +427,6 @@ class Place(models.Model):
         blank=True,
     )
 
-    # Optional external reference.
-    # Future integrations may use OpenStreetMap, Google Places, Wikidata, etc.
-    external_source = models.CharField(max_length=50, blank=True)
-    external_id = models.CharField(max_length=255, blank=True)
-
     # User who first added this place to Trust Travel.
     # This keeps one global place, but preserves community/origin context for future filters.
     created_by = models.ForeignKey(
@@ -435,26 +439,54 @@ class Place(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return self.name
+
+
+# ===================== Place External Identity =====================
+class PlaceExternalIdentity(models.Model):
+    place = models.ForeignKey(
+        Place,
+        on_delete=models.CASCADE,
+        related_name="external_identities",
+    )
+
+    external_source = models.CharField(
+        max_length=50,
+    )
+
+    external_id = models.CharField(
+        max_length=255,
+    )
+
+    geographic_type = models.CharField(
+        max_length=30,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["destination", "name"],
-                name="unique_place_name_per_destination",
-            ),
-            models.UniqueConstraint(
-                fields=["external_source", "external_id"],
-                condition=(
-                        ~models.Q(external_source="")
-                        & ~models.Q(external_id="")
-                ),
-                name="unique_place_external_identity",
+                fields=[
+                    "external_source",
+                    "external_id",
+                ],
+                name="unique_place_external_identity_record",
             ),
         ]
 
     def __str__(self):
-        return self.name
+        return (
+            f"{self.place} — "
+            f"{self.external_source}:{self.external_id}"
+        )
 
-    # ===================== Place Location Suggestion =====================
+
+# ===================== Place Location Suggestion =====================
 
 class PlaceLocationSuggestion(models.Model):
         STATUS_CHOICES = [

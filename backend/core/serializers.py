@@ -123,13 +123,12 @@ class PlaceSerializer(serializers.ModelSerializer):
             "country_code",
             "search_aliases",
             "place_type",
+            "geographic_type",
             "city",
             "description",
             "image_url",
             "latitude",
             "longitude",
-            "external_source",
-            "external_id",
             "created_by",
             "created_by_username",
             "created_at",
@@ -149,8 +148,7 @@ class PlaceSerializer(serializers.ModelSerializer):
             "canonical_name",
             "aliases",
             "country_code",
-            "external_source",
-            "external_id",
+            "geographic_type",
             "search_aliases",
         ]
 
@@ -179,33 +177,6 @@ class PlaceSerializer(serializers.ModelSerializer):
                 if str(alias).strip()
             }
         )
-
-    def validate(self, attrs):
-        name = attrs.get("name")
-        destination = attrs.get("destination")
-
-        # On updates, if one field is not sent, use the existing value.
-        if self.instance:
-            name = name or self.instance.name
-            destination = destination or self.instance.destination
-
-        if name and destination:
-            existing_place = Place.objects.filter(
-                destination=destination,
-                name__iexact=name.strip(),
-            )
-
-            if self.instance:
-                existing_place = existing_place.exclude(pk=self.instance.pk)
-
-            if existing_place.exists():
-                raise serializers.ValidationError(
-                    {
-                        "name": "A place with this name already exists for this destination."
-                    }
-                )
-
-        return attrs
 
     def get_average_rating(self, obj):
         ratings = obj.experience_set.exclude(

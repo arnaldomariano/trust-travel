@@ -12,7 +12,7 @@ type CountryCatalogItem = {
   aliases: string[];
 };
 
-type GeographyCityResult = {
+type GeographyPlaceResult = {
   name: string;
   canonical_name: string;
   aliases: string[];
@@ -61,6 +61,16 @@ function DestinationsPageContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Generic external geographic results used by the main search.
+  // This is intentionally separate from the legacy guided creation flow.
+  const [mainGeographyResults, setMainGeographyResults] = useState<
+    GeographyPlaceResult[]
+  >([]);
+  const [mainGeographySearchLoading, setMainGeographySearchLoading] =
+    useState(false);
+  const [mainGeographySearchError, setMainGeographySearchError] = useState("");
+
+
   const [placeType, setPlaceType] = useState<
   "country" | "city" | "attraction" | "hotel" | "restaurant" | "nature" | "other"
   >("country");
@@ -76,7 +86,7 @@ function DestinationsPageContent() {
   const [createCitySearch, setCreateCitySearch] = useState("");
 
   const [geographyCityResults, setGeographyCityResults] = useState<
-    GeographyCityResult[]
+    GeographyPlaceResult[]
   >([]);
   const [geographyCitySearchLoading, setGeographyCitySearchLoading] =
     useState(false);
@@ -754,6 +764,51 @@ const placeTypeOptionsToShow = [
 ];
 
 
+const handleMainGeographySearch = async () => {
+  const query = searchTerm.trim();
+
+  if (query.length < 2) {
+    setMainGeographyResults([]);
+    setMainGeographySearchError("");
+    return;
+  }
+
+  setMainGeographySearchLoading(true);
+  setMainGeographySearchError("");
+
+  try {
+    const params = new URLSearchParams({
+      q: query,
+    });
+
+    const res = await fetch(
+      `${API_URL}/api/geography/places/search/?${params.toString()}`
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setMainGeographyResults([]);
+      setMainGeographySearchError(
+        data.detail || "Could not search geographic places."
+      );
+      return;
+    }
+
+    setMainGeographyResults(
+      Array.isArray(data.results) ? data.results : []
+    );
+  } catch (error) {
+    console.error("Main geographic search failed:", error);
+    setMainGeographyResults([]);
+    setMainGeographySearchError(
+      "Could not search geographic places."
+    );
+  } finally {
+    setMainGeographySearchLoading(false);
+  }
+};
+
 const openGuidedCreateFlow = () => {
   setCreateFlowOpen(true);
   setCreateFlowError("");
@@ -868,7 +923,7 @@ const selectCreateFlowCity = (cityPlace: any) => {
 };
 
 const selectGeographyCityForFlow = async (
-  cityResult: GeographyCityResult
+  cityResult: GeographyPlaceResult
 ) => {
   if (!createSelectedCountry) {
     setCreateFlowError("Please choose a country first.");
@@ -1332,6 +1387,60 @@ const createSpecificPlaceForFlow = async () => {
     };
 
   // =========================
+  // Materialize an external geographic place selected from main search
+  // =========================
+  const handleSelectMainGeographyResult = async (
+    result: GeographyPlaceResult
+  ) => {
+    if (result.existing_place_id) {
+      handleSelectExistingPlace({
+        id: result.existing_place_id,
+      });
+      return;
+    }
+
+    setMainGeographySearchLoading(true);
+    setMainGeographySearchError("");
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/geography/places/materialize/`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            external_id: result.external_id,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMainGeographySearchError(
+          data.detail || "Could not add this geographic place."
+        );
+        return;
+      }
+
+      handleSelectExistingPlace(data);
+    } catch (error) {
+      console.error(
+        "Main geographic place materialization failed:",
+        error
+      );
+      setMainGeographySearchError(
+        "Could not add this geographic place."
+      );
+    } finally {
+      setMainGeographySearchLoading(false);
+    }
+  };
+
+  // =========================
   // Select an existing place
   // =========================
   const handleSelectExistingPlace = (place: any) => {
@@ -1758,6 +1867,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               const value = e.target.value;
 
               setSearchTerm(value);
+              setMainGeographyResults([]);
+              setMainGeographySearchError("");
               setCreateFlowOpen(false);
               setCreateFlowError("");
               setCreateSelectedCountry(null);
@@ -1782,7 +1893,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 setTripStyle("prefer_not_to_say");
               }
             }}
-        placeholder="Search country, city, beach, hotel, restaurant or attraction..."
+        placeholder="Search country, city, island, river, beach, hotel, restaurant or attraction..."
         style={{
           width: "100%",
           maxWidth: "520px",
@@ -1790,9 +1901,140 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           border: "1px solid #ddd",
           borderRadius: "10px",
           fontSize: "14px",
-          marginBottom: "24px",
+          marginBottom: "10px",
         }}
       />
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          marginBottom: "24px",
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            void handleMainGeographySearch();
+          }}
+          disabled={
+            mainGeographySearchLoading ||
+            searchTerm.trim().length < 2
+          }
+          style={{
+            ...primaryButton,
+            opacity:
+              mainGeographySearchLoading ||
+              searchTerm.trim().length < 2
+                ? 0.5
+                : 1,
+            cursor:
+              mainGeographySearchLoading ||
+              searchTerm.trim().length < 2
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
+          {mainGeographySearchLoading ? "Searching..." : "Search"}
+        </button>
+
+        {mainGeographySearchError && (
+          <span style={{ color: "#a33", fontSize: "13px" }}>
+            {mainGeographySearchError}
+          </span>
+        )}
+      </div>
+
+      {!mainGeographySearchLoading &&
+        mainGeographyResults.length > 0 && (
+          <div
+            style={{
+              display: "grid",
+              gap: "10px",
+              maxWidth: "620px",
+              marginBottom: "24px",
+            }}
+          >
+            <div
+              style={{
+                color: "#666",
+                fontSize: "13px",
+                fontWeight: 600,
+              }}
+            >
+              Geographic matches
+            </div>
+
+            {mainGeographyResults.map((result) => {
+              const country =
+                countryCatalog.find(
+                  (item) =>
+                    item.code.toUpperCase() ===
+                    result.country_code.toUpperCase()
+                )?.canonical_name || result.country_code;
+
+              return (
+                <button
+                  key={`${result.external_source}-${result.external_id}`}
+                  type="button"
+                  onClick={() => {
+                    void handleSelectMainGeographyResult(result);
+                  }}
+                  disabled={mainGeographySearchLoading}
+                  style={{
+                    padding: "14px",
+                    border: "1px solid #ddd",
+                    borderRadius: "12px",
+                    background: "white",
+                    color: "#111",
+                    textAlign: "left",
+                    cursor: mainGeographySearchLoading
+                      ? "not-allowed"
+                      : "pointer",
+                    opacity: mainGeographySearchLoading ? 0.6 : 1,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      alignItems: "center",
+                    }}
+                  >
+                    <strong>{result.canonical_name}</strong>
+
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: "#555",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Open →
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "4px",
+                      color: "#666",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {getGeographicTypeLabel(result.geographic_type)}
+                    {result.admin_name
+                      ? ` · ${result.admin_name}`
+                      : ""}
+                    {country ? ` · ${country}` : ""}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
           {loading ? (
       <p style={{ color: "#666" }}>Loading places...</p>
@@ -2141,7 +2383,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           </button>
         </div>
       </section>
-            ) : !selectedCountryPlace && !selectedPlace ? (
+            ) : !selectedCountryPlace &&
+                !selectedPlace &&
+                mainGeographyResults.length === 0 ? (
       <section style={helperCard}>
         <strong>No exact place found for “{searchTerm.trim()}”.</strong>
 
@@ -2380,6 +2624,60 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
                 {createSelectedCountry && createSelectedCity && (
                   <div id="guided-create-specific-step">
+                    {isExperienceMode && (
+                      <div
+                        style={{
+                          marginBottom: "20px",
+                          padding: "16px",
+                          border: "1px solid #d7f0df",
+                          borderRadius: "14px",
+                          background: "#f7fcf8",
+                        }}
+                      >
+                        <strong>
+                          Did your experience happen around {createSelectedCity.name}?
+                        </strong>
+
+                        <p style={{ ...guidedCreateText, marginTop: "8px" }}>
+                          You can share your experience at this location now,
+                          or continue below if you want to identify a more specific place.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPlace(createSelectedCity);
+                            setShowShareForm(true);
+
+                            setTimeout(() => {
+                              document
+                                .getElementById("share-experience-form")
+                                ?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                            }, 0);
+                          }}
+                          style={primaryButton}
+                        >
+                          Share experience here
+                        </button>
+
+                        <p
+                          style={{
+                            margin: "10px 0 0 0",
+                            color: "#777",
+                            fontSize: "12px",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          A photo can help place your experience more precisely on the map.
+                          <br />
+                          Your photo&apos;s location is only used with your permission.
+                        </p>
+                      </div>
+                    )}
+
                     <div style={guidedCreateStepLabel}>Step 3</div>
 
                     <h3 style={guidedCreateTitle}>
@@ -2387,9 +2685,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                     </h3>
 
                     <p style={guidedCreateText}>
-                      Now choose what kind of specific place you want to add inside{" "}
+                      Continue only if you want to identify a more specific place inside{" "}
                       {createSelectedCity.name}. This keeps restaurants, hotels, attractions and
-                      nature spots separated from city-level experiences.
+                      nature spots separated from broader geographic experiences.
                     </p>
 
                     <select

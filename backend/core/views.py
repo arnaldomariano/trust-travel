@@ -1751,6 +1751,111 @@ class GeographyPlaceSearchView(APIView):
         )
 
 
+class GeographyPlaceMaterializeView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        external_id = str(
+            request.data.get("external_id") or ""
+        ).strip()
+
+        if not external_id:
+            return Response(
+                {
+                    "detail": (
+                        "GeoNames external ID is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            geographic_result = get_geographic_place(
+                external_id
+            )
+        except GeoNamesConfigurationError:
+            return Response(
+                {
+                    "detail": (
+                        "Geographic search is not configured."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except GeoNamesRequestError:
+            return Response(
+                {
+                    "detail": (
+                        "Geographic place lookup is temporarily unavailable."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except ValueError as error:
+            return Response(
+                {"detail": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        country_code = str(
+            geographic_result.get("country_code") or ""
+        ).strip().upper()
+
+        country = resolve_country_catalog_entry(
+            code=country_code,
+        )
+
+        if not country:
+            return Response(
+                {
+                    "detail": (
+                        "Could not resolve the country for this geographic place."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        country_place, _ = materialize_country_place(
+            country_entry=country,
+            user=request.user,
+        )
+
+        resolved_country = country_place.country_ref
+
+        if not resolved_country:
+            return Response(
+                {
+                    "detail": (
+                        "Could not resolve the country structure for this geographic place."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        place, created = materialize_city_place(
+            city_result=geographic_result,
+            resolved_country=resolved_country,
+            country_code=country["code"],
+            country_place=country_place,
+            user=request.user,
+        )
+
+        serializer = PlaceSerializer(
+            place,
+            context={"request": request},
+        )
+
+        return Response(
+            serializer.data,
+            status=(
+                status.HTTP_201_CREATED
+                if created
+                else status.HTTP_200_OK
+            ),
+        )
+
+
 class GeographyCitySearchView(APIView):
     authentication_classes = []
     permission_classes = [permissions.AllowAny]

@@ -1494,7 +1494,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
             // On a country hub, only show cities, islands and regions.
             // Specific places such as restaurants, hotels, attractions and beaches
-            // should be searched from inside the city/region hub.
+            // should be searched from inside the geographic place hub.
             return type === "city";
           })
           .sort((a: any, b: any) => {
@@ -1559,7 +1559,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         if (!res.ok) {
           setGeographyCitySearchError(
-            data.detail || "Could not search for cities or regions."
+            data.detail || "Could not search for geographic places."
           );
           return;
         }
@@ -1570,7 +1570,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       } catch (error) {
         console.error("Country geographic city search failed:", error);
         setGeographyCitySearchError(
-          "Could not search for cities or regions."
+          "Could not search for geographic places."
         );
       } finally {
         setGeographyCitySearchLoading(false);
@@ -1656,7 +1656,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
       }
 
       if (!suggestedParentPlaceId) {
-          setLocationSuggestionError("Please choose the suggested city, region or country.");
+          setLocationSuggestionError("Please choose the suggested geographic place or country.");
           setLocationSuggestionSubmitted(false);
           return;
       }
@@ -1714,7 +1714,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
       if (query.length < 2) {
           setSpecificPlaceSearchError(
-            "Type at least 2 characters to search inside this city or region."
+            "Type at least 2 characters to search inside this geographic place."
           );
           return;
       }
@@ -1750,11 +1750,11 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           if (
             externalRes.status === 400 &&
             externalErrorDetail ===
-              "This city or locality does not have geographic coordinates."
+              "This geographic place does not have geographic coordinates."
           ) {
             setExternalSpecificPlaceResults([]);
             setSpecificPlaceSearchError(
-              "Nearby place discovery is not available for this city or locality yet."
+              "Nearby place discovery is not available for this geographic place yet."
             );
             return;
           }
@@ -3015,7 +3015,7 @@ const handleToggleEventsInfo = () => {
                   lineHeight: 1.5,
                 }}
               >
-                If this place should be listed under another city, island or region,
+                If this place should be listed under another geographic place,
                 you can suggest a better location. Suggestions are reviewed before
                 changing the hierarchy.
               </p>
@@ -3824,7 +3824,7 @@ const handleToggleEventsInfo = () => {
                   marginBottom: "18px",
                 }}
               >
-                No matching geographic city or region was found for “{searchInsideCountry}”.
+                No matching geographic place was found for “{searchInsideCountry}”.
               </div>
 
             ) : searchInsideCountry.trim() ? (
@@ -3838,7 +3838,7 @@ const handleToggleEventsInfo = () => {
                   marginBottom: "18px",
                 }}
               >
-                Click Search to look for cities or regions inside {place.name}.
+                Click Search to look for geographic places inside {place.name}.
               </div>
 
             ) : (
@@ -3852,7 +3852,7 @@ const handleToggleEventsInfo = () => {
                   marginBottom: "18px",
                 }}
               >
-                Use the search above to find cities or regions inside{" "}
+                Use the search above to find geographic places inside{" "}
                 {place.name}.
               </div>
             )}
@@ -3869,8 +3869,8 @@ const handleToggleEventsInfo = () => {
                 >
                   {countryCityRegionPlaces.length}{" "}
                   {countryCityRegionPlaces.length === 1
-                    ? "city/region added."
-                    : "cities/regions added."}{" "}
+                    ? "geographic place added."
+                    : "geographic places added."}{" "}
                   Showing top {topCountryCityRegionPlaces.length} by traveler activity.
                 </p>
 
@@ -3882,7 +3882,7 @@ const handleToggleEventsInfo = () => {
                     marginBottom: "8px",
                   }}
                 >
-                  Top cities and regions
+                  Top geographic places
                 </div>
 
                 <div style={{ display: "grid", gap: "10px", maxWidth: "680px" }}>
@@ -4050,9 +4050,9 @@ const handleToggleEventsInfo = () => {
                     maxWidth: "680px",
                   }}
                 >
-                  Use this section to move from the city or region layer into specific places
+                  Use this section to move from the {geographicPlaceLabel.toLowerCase()} layer into specific places
                   inside {place.name}, such as beaches, hotels, restaurants, attractions or
-                  nature spots. Search first before creating a new place, so city-level
+                  nature spots. Search first before creating a new place, so {geographicPlaceLabel.toLowerCase()}-level
                   experiences stay separate from experiences about exact locations.
                 </p>
 
@@ -4427,14 +4427,14 @@ const handleToggleEventsInfo = () => {
                       lineHeight: 1.5,
                     }}
                   >
-                    You are already inside the city, island or region hub for {place.name}.
+                    You are already inside the {geographicPlaceLabel.toLowerCase()} hub for {place.name}.
                     Now add the exact place people would visit, review or save to a trip plan.
                   </p>
                 </div>
 
                 <div style={specificPlaceCreateGuideBox}>
                   <div>
-                    <strong>Current city/region:</strong> {place.name}
+                    <strong>Current {geographicPlaceLabel.toLowerCase()}:</strong> {place.name}
                   </div>
 
                   <div>

@@ -431,7 +431,7 @@ const getUnifiedSearchScore = (place: any) => {
     return 80;
   }
 
-  // Only city/region records should match by city name.
+  // Only geographic hub records should match by geographic place name.
   // Specific places should appear only when the user searches their own name,
   // alias or canonical name.
   if (
@@ -965,7 +965,7 @@ const selectGeographyCityForFlow = async (
 
     if (!res.ok) {
       setCreateFlowError(
-        data.detail || "Could not prepare this city or locality."
+        data.detail || "Could not prepare this geographic place."
       );
       return;
     }
@@ -988,7 +988,7 @@ const selectGeographyCityForFlow = async (
       error
     );
     setCreateFlowError(
-      "Something went wrong while preparing this city or locality."
+      "Something went wrong while preparing this geographic place."
     );
   } finally {
     setCreatingCreateFlowCity(false);
@@ -997,7 +997,7 @@ const selectGeographyCityForFlow = async (
 
 const handleSearchCreateFlowSpecificPlaces = async () => {
   if (!createSelectedCity) {
-    setCreateFlowError("Please choose a city or locality first.");
+    setCreateFlowError("Please choose a geographic place first.");
     return;
   }
 
@@ -1039,11 +1039,11 @@ const handleSearchCreateFlowSpecificPlaces = async () => {
       if (
         res.status === 400 &&
         errorDetail ===
-          "This city or locality does not have geographic coordinates."
+          "This geographic place does not have geographic coordinates."
       ) {
         setCreateSpecificPlaceSearchResults([]);
         setCreateFlowError(
-          "Nearby place discovery is not available for this city or locality yet."
+          "Nearby place discovery is not available for this geographic place yet."
         );
         return;
       }
@@ -1074,7 +1074,7 @@ const handleMaterializeCreateFlowSpecificPlace = async (
   specificPlaceResult: any
 ) => {
   if (!createSelectedCity) {
-    setCreateFlowError("Please choose a city or locality first.");
+    setCreateFlowError("Please choose a geographic place first.");
     return;
   }
 
@@ -1237,7 +1237,7 @@ const createSpecificPlaceForFlow = async () => {
   }
 
   if (!createSelectedCity) {
-    setCreateFlowError("Please choose or create a city or region first.");
+    setCreateFlowError("Please choose or create a geographic place first.");
     return;
   }
 
@@ -1300,7 +1300,7 @@ const createSpecificPlaceForFlow = async () => {
       }
 
       // In creation modes, keep the country as context so the user can decide
-      // whether to share/post about the country or choose a city/region.
+      // whether to share/post about the country or choose a place inside it.
       setSelectedCountryPlace(place);
       setSelectedPlace(null);
       setShowShareForm(false);
@@ -1357,7 +1357,7 @@ const createSpecificPlaceForFlow = async () => {
     };
 
     // =========================
-    // Open city/locality selection inside selected country
+    // Open geographic place selection inside selected country
     // =========================
     const openCreateCityInSelectedCountry = () => {
       if (!selectedCountryPlace) return;
@@ -1412,6 +1412,7 @@ const createSpecificPlaceForFlow = async () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            external_source: result.external_source,
             external_id: result.external_id,
           }),
         }
@@ -1852,8 +1853,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
         <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
           Search for the exact place first. If it does not exist yet, Trust Travel will
-          guide you through the correct hierarchy: country → city/region → specific
-          place. This helps avoid duplicates and keeps city/region experiences separate
+          guide you through the correct hierarchy: country → geographic place → specific
+          place. This helps avoid duplicates and keeps broader geographic experiences separate
           from reviews about restaurants, hotels, attractions and nature spots.
         </p>
 
@@ -2068,7 +2069,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         }}
       >
         Search first for the exact place. If you cannot find it, Trust Travel
-        will help you add it using the correct country, city or locality.
+        will help you add it using the correct country and geographic context.
       </p>
     )
 
@@ -2080,7 +2081,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
         <p style={{ color: "#666", margin: 0, lineHeight: 1.5 }}>
           We found existing places related to your search. Check the type,
-          city/region and country before selecting the correct result.
+          geographic type and country before selecting the correct result.
         </p>
 
         {mainSearchCountryCatalogMatches.length > 0 && (
@@ -2205,7 +2206,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         {filteredCityOrRegionPlaces.length > 0 && (
           <div style={{ display: "grid", gap: "10px" }}>
             <div style={{ fontWeight: 700, fontSize: "15px", marginTop: "4px" }}>
-              Cities / Regions
+              Geographic places
             </div>
 
             {filteredCityOrRegionPlaces.map((place) => (
@@ -2261,10 +2262,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
                 <div style={{ marginTop: "10px", fontSize: "14px" }}>
                   {isUpdateMode
-                    ? "Post alert, event or info about this city/region →"
+                    ? "Post alert, event or info about this geographic place →"
                     : isExperienceMode
-                    ? "Share experience about this city/region →"
-                    : "Choose actions for this city/region →"}
+                    ? "Share experience about this geographic place →"
+                    : "Choose actions for this geographic place →"}
                 </div>
               </button>
             ))}
@@ -2396,10 +2397,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             lineHeight: 1.5,
           }}
         >
-          We did not find this place in the current Trust Travel database. If this is a
-          restaurant, hotel, beach, attraction or nature spot, choose the country first,
-          then choose the matching city or locality. After that, you can add the specific
-          place in the final step.
+          We couldn't find a matching place in the available results. If you're
+          looking for a hotel, restaurant, attraction or another specific place,
+          you can continue by choosing its country and geographic context.
         </p>
 
         {similarPlaces.length > 0 && (
@@ -2437,7 +2437,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             onClick={openGuidedCreateFlow}
             style={primaryButton}
           >
-            Create a new place
+            Find or add a specific place
           </button>
         ) : (
           <div style={guidedCreateBox}>
@@ -2505,13 +2505,13 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 <div style={guidedCreateStepLabel}>Step 2</div>
 
                 <h3 style={guidedCreateTitle}>
-                  Choose the city or locality inside {createSelectedCountry.name}
+                  Choose the geographic place inside {createSelectedCountry.name}
                 </h3>
 
                 <p style={guidedCreateText}>
-                  Search for the city or locality where this place belongs, then choose the
-                  matching geographic result. Do not use this step for restaurants, hotels,
-                  beaches, alerts or event titles.
+                  Search for the city, region, island or other geographic place where this
+                  specific place belongs, then choose the matching geographic result. Do not
+                  use this step for restaurants, hotels, alerts or event titles.
                 </p>
 
                 <div
@@ -2530,7 +2530,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       setGeographyCitySearchError("");
                       setGeographyCityResults([]);
                     }}
-                    placeholder="City or locality, e.g. Recife, Rome, Antwerp"
+                    placeholder="City, region, island or locality, e.g. Recife, Sicily, Nias"
                     style={{
                       ...input,
                       flex: "1 1 260px",
@@ -3038,10 +3038,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
         <p style={{ color: "#555", lineHeight: 1.5 }}>
           {isExperienceMode
-            ? "Start with the country, then choose a city or region inside it. You can also share an experience about the country in general."
+            ? "Start with the country, then choose a geographic place inside it. You can also share an experience about the country in general."
             : isUpdateMode
-            ? "Start with the country, then choose a city or region inside it. You can also post an alert, event or useful information about the country in general."
-            : "Read country-level experiences, choose a city or region, or create another place inside this country."}
+            ? "Start with the country, then choose a geographic place inside it. You can also post an alert, event or useful information about the country in general."
+            : "Read country-level experiences, choose a geographic place, or create another place inside this country."}
         </p>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -3074,7 +3074,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             onClick={openCreateCityInSelectedCountry}
             style={secondaryButton}
           >
-            Choose another city/locality in {selectedCountryPlace.name}
+            Choose another geographic place in {selectedCountryPlace.name}
           </button>
 
           <button
@@ -3089,12 +3089,12 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         {placesInsideSelectedCountry.length > 0 && (
           <div style={{ marginTop: "20px", display: "grid", gap: "10px" }}>
             <div style={{ fontWeight: 700 }}>
-              Cities / regions already listed in {selectedCountryPlace.name}
+              Places already listed in {selectedCountryPlace.name}
             </div>
 
             <p style={{ margin: 0, color: "#555", fontSize: "14px", lineHeight: 1.5 }}>
               Keep the country experience general, or open the list below if you want to
-              share about a specific city or region.
+              share about a more specific place.
             </p>
 
             <button
@@ -3103,8 +3103,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               style={secondaryButton}
             >
               {showRelatedPlaces
-                ? "Hide cities / regions"
-                : `Show cities / regions in ${selectedCountryPlace.name} (${placesInsideSelectedCountry.length})`}
+                ? "Hide places"
+                : `Show places in ${selectedCountryPlace.name} (${placesInsideSelectedCountry.length})`}
             </button>
 
             {showRelatedPlaces && (
@@ -3112,7 +3112,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 <input
                   value={relatedPlaceSearch}
                   onChange={(e) => setRelatedPlaceSearch(e.target.value)}
-                  placeholder={`Search city or region in ${selectedCountryPlace.name}`}
+                  placeholder={`Search places in ${selectedCountryPlace.name}`}
                   style={input}
                 />
 
@@ -3125,13 +3125,13 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       lineHeight: 1.5,
                     }}
                   >
-                    Type at least 4 characters to search for a country, city/region or specific place.
+                    Type at least 4 characters to search for a country, geographic place or specific place.
                   </p>
                 )}
 
                 {!relatedPlaceSearch.trim() ? (
                   <div style={helperNote}>
-                    Start typing a city or region already listed in {selectedCountryPlace.name}.
+                    Start typing a place already listed in {selectedCountryPlace.name}.
                   </div>
                 ) : filteredPlacesInsideSelectedCountry.length > 0 ? (
                   filteredPlacesInsideSelectedCountry.map((place) => (
@@ -3162,7 +3162,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   ))
                 ) : (
                   <div style={helperNote}>
-                    No city or region found inside {selectedCountryPlace.name}. You can create a new one.
+                    No matching place found inside {selectedCountryPlace.name}. You can search for another geographic place.
                   </div>
                 )}
               </div>

@@ -153,6 +153,34 @@ const shouldShowExperienceContent =
 
   const isCityPage = place?.place_type === "city";
 
+const getGeographicPlaceLabel = (geographicType?: string) => {
+  const normalizedType = String(geographicType || "")
+    .trim()
+    .toLowerCase();
+
+  const labels: Record<string, string> = {
+    settlement: "City / Locality",
+    administrative_area: "Administrative area",
+    island: "Island",
+    archipelago: "Archipelago",
+    region: "Region",
+    river: "River",
+    lake: "Lake",
+    mountain: "Mountain",
+    valley: "Valley",
+    desert: "Desert",
+  };
+
+  return labels[normalizedType] || "Geographic place";
+};
+
+const geographicPlaceLabel = getGeographicPlaceLabel(
+  place?.geographic_type
+);
+
+const geographicPlaceLabelLower =
+  geographicPlaceLabel.toLowerCase();
+
 const isSpecificPlacePage =
   !!place &&
   place.place_type !== "country" &&
@@ -161,7 +189,7 @@ const isSpecificPlacePage =
 const getPlaceTypeLabel = (type?: string) => {
   const labels: Record<string, string> = {
     country: "Country",
-    city: "City / Region",
+    city: geographicPlaceLabel,
     attraction: "Tourist attraction",
     hotel: "Hotel",
     restaurant: "Restaurant / Café",
@@ -184,13 +212,13 @@ const placeContextLabel = [
 const emptyExperienceEyebrowText = isCountryPage
   ? "Country experience opportunity"
   : isCityPage
-  ? "City / region experience opportunity"
+  ? `${geographicPlaceLabel} experience opportunity`
   : "Specific place experience opportunity";
 
 const emptyExperienceTitleText = isCountryPage
   ? `No general experiences about ${place?.name || "this country"} yet.`
   : isCityPage
-  ? `No experiences in ${place?.name || "this city or region"} yet.`
+  ? `No experiences in ${place?.name || `this ${geographicPlaceLabelLower}`} yet.`
   : `No experiences about ${place?.name || "this place"} yet.`;
 
 const emptyExperienceBodyText = isCountryPage
@@ -198,9 +226,9 @@ const emptyExperienceBodyText = isCountryPage
       place?.name || "this country"
     }, you can share a general impression about culture, costs, safety, accessibility or overall travel feeling.`
   : isCityPage
-  ? `${place?.name || "This city or region"} is already listed${
+  ? `${place?.name || `This ${geographicPlaceLabelLower}`} is already listed${
       place?.destination_country ? ` inside ${place.destination_country}` : ""
-    }. You can be the first to share an experience here, or go back to the country page to explore broader country-level experiences and other cities or regions.`
+    }. You can be the first to share an experience here, or go back to the country page to explore broader country-level experiences and other geographic places.`
   : `${place?.name || "This place"} is listed as a ${placeTypeLabel}${
       placeContextLabel ? ` in ${placeContextLabel}` : ""
     }. You can be the first to share an experience about this specific place.`;
@@ -208,31 +236,31 @@ const emptyExperienceBodyText = isCountryPage
 const experienceScopeEyebrowText = isCountryPage
   ? "Country-level experience"
   : isCityPage
-  ? "City / region-level experience"
+  ? `${geographicPlaceLabel}-level experience`
   : "Specific-place experience";
 
 const experienceScopeTitleText = isCountryPage
   ? `You are viewing experiences about ${place?.name || "this country"}`
   : isCityPage
-  ? `You are viewing experiences in ${place?.name || "this city or region"}`
+  ? `You are viewing experiences in ${place?.name || `this ${geographicPlaceLabelLower}`}`
   : `You are viewing experiences about ${place?.name || "this place"}`;
 
 const experienceScopeBodyText = isCountryPage
   ? `Use this page for broad impressions about the country: culture, costs, safety, accessibility, convenience, general travel feeling or country-wide observations.`
   : isCityPage
-  ? `Use this page for experiences about the city or region as a whole: atmosphere, mobility, safety, events, general costs or overall local impressions.`
+  ? `Use this page for experiences about this ${geographicPlaceLabelLower} as a whole: atmosphere, mobility, safety, events, general costs or overall local impressions.`
   : `Use this page for experiences about this exact place: service, visit quality, food, stay, access, safety, price, comfort or practical details tied to this location.`;
 
 const experienceScopeWarningText = isCountryPage
   ? `If your experience is mainly about a city, hotel, restaurant, attraction or beach, search or create that more specific place first.`
   : isCityPage
-  ? `If your experience is mainly about a restaurant, hotel, attraction, beach or nature spot, use the specific-place page instead of the city page.`
+  ? `If your experience is mainly about a restaurant, hotel, attraction, beach or nature spot, use the specific-place page instead of this geographic place page.`
   : `This review will be attached to this exact place, not only to the city or country.`;
 
 const shareExperienceButtonText = isCountryPage
   ? "Share country-level experience"
   : isCityPage
-  ? "Share city/region-level experience"
+  ? `Share ${geographicPlaceLabelLower}-level experience`
   : "Share experience about this exact place";
 
 const sortedRelatedPlaces = [...relatedPlaces].sort((a, b) =>
@@ -1756,7 +1784,7 @@ const renderReportControls = (experience: any) => {
             {isCountryPage
               ? "Share the first country-level experience"
               : isCityPage
-              ? `Share the first city/region-level experience`
+              ? `Share the first ${geographicPlaceLabelLower}-level experience`
               : `Share the first experience about this exact place`}
           </button>
 
@@ -2434,7 +2462,7 @@ const renderReportControls = (experience: any) => {
                 >
                   <div style={{ fontWeight: "600" }}>
                       {isCityPage
-                        ? `Experiences from places in ${place?.name || "this city or region"}`
+                        ? `Experiences from places in ${place?.name || `this ${geographicPlaceLabelLower}`}`
                         : "Other experiences"}
                   </div>
 

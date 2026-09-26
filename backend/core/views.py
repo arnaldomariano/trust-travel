@@ -104,6 +104,13 @@ from .geography.providers.geonames import (
     search_geographic_places,
 )
 
+from .geography.providers.google_places import (
+    GooglePlacesConfigurationError,
+    GooglePlacesRequestError,
+    get_google_geographic_place,
+    search_google_geographic_places,
+)
+
 from .geography.providers.foursquare import (
     FoursquareConfigurationError,
     FoursquareRequestError,
@@ -1714,9 +1721,24 @@ class GeographyPlaceSearchView(APIView):
             )
 
         try:
-            results = search_geographic_places(
+            geonames_results = search_geographic_places(
                 query=query,
             )
+
+            try:
+                google_results = search_google_geographic_places(
+                    query=query,
+                )
+            except (
+                GooglePlacesConfigurationError,
+                GooglePlacesRequestError,
+            ):
+                google_results = []
+
+            results = [
+                *geonames_results,
+                *google_results,
+            ]
 
             results = annotate_existing_geographic_places(
                 results=results,
@@ -1756,25 +1778,51 @@ class GeographyPlaceMaterializeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        external_source = str(
+            request.data.get("external_source") or ""
+        ).strip()
+
         external_id = str(
             request.data.get("external_id") or ""
         ).strip()
+
+        if external_source not in {
+            "geonames",
+            "google_places",
+        }:
+            return Response(
+                {
+                    "detail": (
+                        "A supported geographic external source is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if not external_id:
             return Response(
                 {
                     "detail": (
-                        "GeoNames external ID is required."
+                        "Geographic external ID is required."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            geographic_result = get_geographic_place(
-                external_id
-            )
-        except GeoNamesConfigurationError:
+            if external_source == "geonames":
+                geographic_result = get_geographic_place(
+                    external_id
+                )
+            else:
+                geographic_result = get_google_geographic_place(
+                    external_id
+                )
+
+        except (
+            GeoNamesConfigurationError,
+            GooglePlacesConfigurationError,
+        ):
             return Response(
                 {
                     "detail": (
@@ -1783,7 +1831,11 @@ class GeographyPlaceMaterializeView(APIView):
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except GeoNamesRequestError:
+
+        except (
+            GeoNamesRequestError,
+            GooglePlacesRequestError,
+        ):
             return Response(
                 {
                     "detail": (
@@ -1792,6 +1844,7 @@ class GeographyPlaceMaterializeView(APIView):
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+
         except ValueError as error:
             return Response(
                 {"detail": str(error)},
@@ -1943,7 +1996,7 @@ class GeographyCityMaterializeView(APIView):
             return Response(
                 {
                     "detail": (
-                        "GeoNames external ID is required."
+                        "Geographic external ID is required."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -2143,7 +2196,7 @@ class GeographyPOISearchView(APIView):
             return Response(
                 {
                     "detail": (
-                        "This city or locality does not have "
+                        "This geographic place does not have "
                         "geographic coordinates."
                     )
                 },

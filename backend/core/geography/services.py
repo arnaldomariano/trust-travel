@@ -605,6 +605,290 @@ def geographic_result_exactly_matches_query(
     return normalized_query in result_values
 
 
+
+def resolve_discovery_geographic_context(
+    results,
+    query,
+    area_hint="",
+    geographic_type_hint="",
+):
+    candidates = [
+        result
+        for result in results
+        if geographic_result_exactly_matches_query(
+            result,
+            query,
+        )
+    ]
+
+    if not candidates:
+        return None
+
+    normalized_area_hint = normalize_place_text(
+        area_hint
+    )
+
+    if normalized_area_hint:
+        candidates = [
+            result
+            for result in candidates
+            if normalized_area_hint
+            in {
+                normalize_place_text(
+                    admin_value
+                )
+                for admin_entry in (
+                    result.get("admin_context") or []
+                )
+                for admin_value in (
+                    admin_entry.get("name"),
+                    admin_entry.get("code"),
+                )
+                if admin_value
+            }
+        ]
+
+    geographic_type_hint = str(
+        geographic_type_hint or ""
+    ).strip()
+
+    if geographic_type_hint:
+        candidates = [
+            result
+            for result in candidates
+            if result.get("geographic_type")
+            == geographic_type_hint
+        ]
+
+    if len(candidates) != 1:
+        return None
+
+    return candidates[0]
+
+
+
+def discovery_poi_matches_geographic_context(
+    poi_result,
+    geographic_context,
+    cross_border_distance_km=10,
+):
+    context_country_code = str(
+        geographic_context.get("country_code") or ""
+    ).strip().upper()
+
+    poi_country_code = str(
+        poi_result.get("country_code") or ""
+    ).strip().upper()
+
+    if (
+        not context_country_code
+        or not poi_country_code
+        or context_country_code == poi_country_code
+    ):
+        return True
+
+    context_latitude = geographic_context.get("latitude")
+    context_longitude = geographic_context.get("longitude")
+    poi_latitude = poi_result.get("latitude")
+    poi_longitude = poi_result.get("longitude")
+
+    if (
+        context_latitude is None
+        or context_longitude is None
+        or poi_latitude is None
+        or poi_longitude is None
+    ):
+        return False
+
+    distance_km = calculate_distance_km(
+        context_latitude,
+        context_longitude,
+        poi_latitude,
+        poi_longitude,
+    )
+
+    return distance_km <= cross_border_distance_km
+
+
+def get_discovery_poi_name_match_rank(
+    poi_result,
+    query,
+):
+    normalized_query = normalize_place_text(query)
+
+    if not normalized_query:
+        return 0
+
+    identity_values = get_place_name_identity_values(
+        poi_result.get("name"),
+        poi_result.get("canonical_name"),
+        poi_result.get("aliases"),
+    )
+
+    if normalized_query in identity_values:
+        return 4
+
+    if any(
+        normalized_query in identity_value
+        for identity_value in identity_values
+    ):
+        return 3
+
+    query_words = {
+        word
+        for word in normalized_query.split()
+        if len(word) >= 2
+    }
+
+    if not query_words:
+        return 0
+
+    identity_words = {
+        word
+        for identity_value in identity_values
+        for word in identity_value.split()
+        if len(word) >= 2
+    }
+
+    matched_words = query_words.intersection(
+        identity_words
+    )
+
+    if matched_words == query_words:
+        return 2
+
+    if matched_words:
+        return 1
+
+    return 0
+
+
+def get_discovery_poi_category_match_rank(
+    poi_result,
+    query,
+):
+    normalized_query = normalize_place_text(query)
+
+    if not normalized_query:
+        return 0
+
+    query_words = {
+        word
+        for word in normalized_query.split()
+        if len(word) >= 2
+    }
+
+    if not query_words:
+        return 0
+
+    category_words = set()
+
+    for category in poi_result.get("categories") or []:
+        normalized_category = normalize_place_text(
+            category.get("name")
+        )
+
+        category_words.update(
+            word
+            for word in normalized_category.split()
+            if len(word) >= 2
+        )
+
+    return len(
+        query_words.intersection(category_words)
+    )
+
+
+def rank_discovery_poi_results(
+    results,
+    query,
+):
+    original_positions = {
+        id(result): position
+        for position, result in enumerate(results)
+    }
+
+    def result_rank(result):
+        name_match_rank = (
+            get_discovery_poi_name_match_rank(
+                result,
+                query,
+            )
+        )
+
+        category_match_rank = (
+            get_discovery_poi_category_match_rank(
+                result,
+                query,
+            )
+        )
+
+        distance = result.get("distance")
+
+        try:
+            distance_rank = -float(distance)
+        except (TypeError, ValueError):
+            distance_rank = float("-inf")
+
+        return (
+            name_match_rank,
+            category_match_rank,
+            distance_rank,
+            -original_positions[id(result)],
+        )
+
+    ranked_results = list(results)
+
+    ranked_results.sort(
+        key=result_rank,
+        reverse=True,
+    )
+
+    return ranked_results
+
+
+def search_discovery_pois(
+    query,
+    geographic_context,
+    place_type=None,
+    radius=30000,
+    limit=10,
+):
+    from .providers.foursquare import search_pois
+
+    if not geographic_context:
+        return []
+
+    latitude = geographic_context.get("latitude")
+    longitude = geographic_context.get("longitude")
+
+    if latitude is None or longitude is None:
+        return []
+
+    results = search_pois(
+        query=query,
+        latitude=latitude,
+        longitude=longitude,
+        radius=radius,
+        limit=limit,
+        place_type=place_type,
+    )
+
+    results = [
+        result
+        for result in results
+        if discovery_poi_matches_geographic_context(
+            result,
+            geographic_context,
+        )
+    ]
+
+    return rank_discovery_poi_results(
+        results,
+        query,
+    )
+
+
 def annotate_existing_geographic_places(
     results,
     query,

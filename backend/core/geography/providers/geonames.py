@@ -116,6 +116,22 @@ def normalize_geographic_result(item):
         ),
         "population": item.get("population") or 0,
         "admin_name": (item.get("adminName1") or "").strip(),
+        "admin_context": [
+            {
+                "level": level,
+                "name": str(
+                    item.get(f"adminName{level}") or ""
+                ).strip(),
+                "code": str(
+                    item.get(f"adminCode{level}") or ""
+                ).strip(),
+            }
+            for level in range(1, 6)
+            if (
+                str(item.get(f"adminName{level}") or "").strip()
+                or str(item.get(f"adminCode{level}") or "").strip()
+            )
+        ],
         "external_source": "geonames",
         "external_id": str(item.get("geonameId") or "").strip(),
     }

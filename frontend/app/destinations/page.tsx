@@ -646,6 +646,19 @@ const getPlaceTypeLabel = (type?: string) => {
   return labels[type || ""] || "Place";
 };
 
+const getPlaceDisplayTypeLabel = (place: any) => {
+  if (!place) return "Place";
+
+  // place_type defines the structural role of a geographic hub, while
+  // geographic_type describes what that place actually is to the traveler.
+  // Keep the legacy City / Region label when older records have no type yet.
+  if (place.place_type === "city" && place.geographic_type) {
+    return getGeographicTypeLabel(place.geographic_type);
+  }
+
+  return getPlaceTypeLabel(place.place_type);
+};
+
 const getPlaceLocationText = (place: any) => {
   if (!place) return "Place";
 
@@ -2246,7 +2259,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {getPlaceTypeLabel(place.place_type)}
+                    {getPlaceDisplayTypeLabel(place)}
                   </span>
                 </div>
 

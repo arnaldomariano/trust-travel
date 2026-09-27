@@ -123,6 +123,7 @@ from .geography.services import (
     annotate_existing_city_places,
     annotate_existing_geographic_places,
     annotate_existing_poi_places,
+    deduplicate_geographic_results_by_existing_place,
     materialize_city_place,
     materialize_country_place,
     materialize_poi_place,
@@ -1743,6 +1744,12 @@ class GeographyPlaceSearchView(APIView):
             results = annotate_existing_geographic_places(
                 results=results,
                 query=query,
+            )
+
+            # Hide duplicate provider records only after they have been
+            # reconciled to the same internal Trust Travel Place.
+            results = deduplicate_geographic_results_by_existing_place(
+                results
             )
 
         except GeoNamesConfigurationError:

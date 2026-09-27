@@ -305,3 +305,163 @@ class CountryMaterializationAPITests(TestCase):
             place.created_by_id,
             self.user.id,
         )
+
+
+class GeographicPlaceReconciliationTests(TestCase):
+    def setUp(self):
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        self.country = get_or_create_country(value="Italy")
+
+        self.destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        self.country_place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            name="Italy",
+            canonical_name="Italy",
+            aliases=[],
+            country_code="IT",
+            place_type="country",
+        )
+
+        self.lake = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Lago di Como",
+            canonical_name="Lago di Como",
+            aliases=["Lake Como", "Lago Como"],
+            country_code="IT",
+            place_type="city",
+            geographic_type="lake",
+            city="Lago di Como",
+            latitude="46.007930",
+            longitude="9.260790",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=self.lake,
+            external_source="geonames",
+            external_id="3178228",
+            geographic_type="lake",
+        )
+
+    def test_cross_provider_result_matches_existing_geographic_place(self):
+        from .geography.services import find_existing_city_place
+
+        google_result = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+            "latitude": 46.016049,
+            "longitude": 9.257168,
+        }
+
+        matched_place = find_existing_city_place(
+            city_result=google_result,
+            resolved_country=self.country,
+            country_code="IT",
+        )
+
+        self.assertIsNotNone(matched_place)
+        self.assertEqual(
+            matched_place.pk,
+            self.lake.pk,
+        )
+
+    def test_cross_provider_result_does_not_match_different_geographic_type(self):
+        from .geography.services import find_existing_city_place
+
+        different_type_result = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "settlement",
+            "external_source": "google_places",
+            "external_id": "google-settlement-lake-como",
+            "latitude": 46.016049,
+            "longitude": 9.257168,
+        }
+
+        matched_place = find_existing_city_place(
+            city_result=different_type_result,
+            resolved_country=self.country,
+            country_code="IT",
+        )
+
+        self.assertIsNone(matched_place)
+
+    def test_deduplication_collapses_results_for_same_existing_place(self):
+        from .geography.services import (
+            deduplicate_geographic_results_by_existing_place,
+        )
+
+        results = [
+            {
+                "name": "Lago di Como",
+                "external_source": "geonames",
+                "external_id": "3178228",
+                "existing_place_id": self.lake.pk,
+            },
+            {
+                "name": "Lake Como",
+                "external_source": "google_places",
+                "external_id": "google-lake-como",
+                "existing_place_id": self.lake.pk,
+            },
+        ]
+
+        deduplicated_results = (
+            deduplicate_geographic_results_by_existing_place(
+                results
+            )
+        )
+
+        self.assertEqual(
+            len(deduplicated_results),
+            1,
+        )
+        self.assertEqual(
+            deduplicated_results[0]["existing_place_id"],
+            self.lake.pk,
+        )
+
+    def test_deduplication_keeps_unresolved_provider_results_separate(self):
+        from .geography.services import (
+            deduplicate_geographic_results_by_existing_place,
+        )
+
+        results = [
+            {
+                "name": "Springfield",
+                "external_source": "geonames",
+                "external_id": "geonames-springfield",
+                "existing_place_id": None,
+            },
+            {
+                "name": "Springfield",
+                "external_source": "google_places",
+                "external_id": "google-springfield",
+                "existing_place_id": None,
+            },
+        ]
+
+        deduplicated_results = (
+            deduplicate_geographic_results_by_existing_place(
+                results
+            )
+        )
+
+        self.assertEqual(
+            len(deduplicated_results),
+            2,
+        )

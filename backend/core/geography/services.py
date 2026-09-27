@@ -1031,6 +1031,36 @@ def annotate_existing_geographic_places(
     return results
 
 
+def deduplicate_geographic_results_by_existing_place(
+    results,
+):
+    # Different providers may return separate records for a geographic place
+    # that Trust Travel has already reconciled into one internal Place.
+    # Collapse only results with the same known Place ID; unresolved provider
+    # results remain separate so similarly named places are never merged here.
+    deduplicated_results = []
+    seen_existing_place_ids = set()
+
+    for result in results:
+        existing_place_id = result.get(
+            "existing_place_id"
+        )
+
+        if existing_place_id is None:
+            deduplicated_results.append(result)
+            continue
+
+        if existing_place_id in seen_existing_place_ids:
+            continue
+
+        seen_existing_place_ids.add(
+            existing_place_id
+        )
+        deduplicated_results.append(result)
+
+    return deduplicated_results
+
+
 def annotate_existing_poi_places(
     results,
     city_place,
@@ -1204,12 +1234,12 @@ def find_existing_city_place(
         if external_identity:
             return external_identity.place
 
+    # A geographic place may be known by more than one external provider.
+    # Keep already materialized provider records eligible here so an exact
+    # shared name or alias can reconcile them into the same Trust Travel Place.
     possible_places = (
         Place.objects.filter(
             place_type="city",
-        )
-        .exclude(
-            external_identities__external_source="geonames",
         )
         .filter(
             Q(country_ref=resolved_country)
@@ -1224,6 +1254,22 @@ def find_existing_city_place(
         canonical_name=city_result.get("canonical_name"),
         aliases=city_result.get("aliases"),
     )
+
+    result_geographic_type = str(
+        city_result.get("geographic_type") or ""
+    ).strip()
+
+    # When both records have a geographic type, require the types to agree.
+    # Empty types remain eligible for compatibility with legacy Place records.
+    matching_places = [
+        candidate
+        for candidate in matching_places
+        if (
+            not result_geographic_type
+            or not str(candidate.geographic_type or "").strip()
+            or candidate.geographic_type == result_geographic_type
+        )
+    ]
 
     if len(matching_places) == 1:
         return matching_places[0]

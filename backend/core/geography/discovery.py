@@ -34,6 +34,30 @@ def interpret_discovery_candidates(candidates):
     }
 
 
+def apply_discovery_country_refinement(
+    candidates,
+    country_code,
+):
+    """
+    Keep discovery candidates whose known country matches the selected
+    country refinement without inferring geographic identity.
+    """
+    normalized_country_code = str(
+        country_code or ""
+    ).strip().upper()
+
+    if not normalized_country_code:
+        return candidates
+
+    return [
+        candidate
+        for candidate in candidates
+        if str(
+            candidate.get("country_code") or ""
+        ).strip().upper() == normalized_country_code
+    ]
+
+
 def build_discovery_country_refinement_options(
     interpretation,
 ):
@@ -447,10 +471,13 @@ def search_global_discovery_places(query):
     )
 
 
-def search_interpreted_global_discovery_places(query):
+def search_interpreted_global_discovery_places(
+    query,
+    country_refinement=None,
+):
     """
-    Collect global discovery candidates and add query-dependent evidence
-    without making ranking, identity, or ambiguity decisions.
+    Collect global discovery candidates and add query-dependent interpretation
+    without making ranking or entity identity decisions.
     """
     candidates = search_global_discovery_places(
         query
@@ -474,6 +501,12 @@ def search_interpreted_global_discovery_places(query):
         "country_refinement_options"
     ] = build_discovery_country_refinement_options(
         interpretation
+    )
+    interpretation[
+        "refined_candidates"
+    ] = apply_discovery_country_refinement(
+        candidates,
+        country_refinement,
     )
 
     return interpretation

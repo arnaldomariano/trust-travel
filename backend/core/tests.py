@@ -3005,3 +3005,247 @@ class GeographicDiscoveryRefinementTests(TestCase):
             result["country_refinement_options"],
             [],
         )
+
+
+class GeographicDiscoveryRefinementApplicationTests(TestCase):
+    def test_country_refinement_keeps_matching_known_country_candidates(self):
+        from .geography.discovery import (
+            apply_discovery_country_refinement,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "country_code": "PT",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "country_code": "BR",
+        }
+
+        parque_candidate = {
+            "name": "Parque Estoril",
+            "country_code": "BR",
+        }
+
+        candidates = [
+            portugal_candidate,
+            brazil_candidate,
+            parque_candidate,
+        ]
+
+        self.assertEqual(
+            apply_discovery_country_refinement(
+                candidates,
+                "PT",
+            ),
+            [
+                portugal_candidate,
+            ],
+        )
+
+    def test_country_refinement_excludes_unknown_and_other_countries(self):
+        from .geography.discovery import (
+            apply_discovery_country_refinement,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "country_code": "PT",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "country_code": "BR",
+        }
+
+        unknown_country_candidate = {
+            "name": "Estoril",
+            "country_code": "",
+        }
+
+        candidates = [
+            portugal_candidate,
+            brazil_candidate,
+            unknown_country_candidate,
+        ]
+
+        self.assertEqual(
+            apply_discovery_country_refinement(
+                candidates,
+                " pt ",
+            ),
+            [
+                portugal_candidate,
+            ],
+        )
+
+    def test_empty_country_refinement_preserves_all_candidates(self):
+        from .geography.discovery import (
+            apply_discovery_country_refinement,
+        )
+
+        candidates = [
+            {
+                "name": "Estoril",
+                "country_code": "PT",
+            },
+            {
+                "name": "Estoril",
+                "country_code": "BR",
+            },
+            {
+                "name": "Estoril",
+                "country_code": "",
+            },
+        ]
+
+        for country_code in ("", None):
+            with self.subTest(country_code=country_code):
+                result = apply_discovery_country_refinement(
+                    candidates,
+                    country_code,
+                )
+
+                self.assertIs(
+                    result,
+                    candidates,
+                )
+
+    def test_country_refinement_does_not_modify_original_candidates(self):
+        from .geography.discovery import (
+            apply_discovery_country_refinement,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "country_code": "PT",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "country_code": "BR",
+        }
+
+        candidates = [
+            portugal_candidate,
+            brazil_candidate,
+        ]
+
+        result = apply_discovery_country_refinement(
+            candidates,
+            "PT",
+        )
+
+        self.assertEqual(
+            result,
+            [
+                portugal_candidate,
+            ],
+        )
+        self.assertEqual(
+            candidates,
+            [
+                portugal_candidate,
+                brazil_candidate,
+            ],
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_applies_country_refinement_without_replacing_candidates(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        candidates = [
+            portugal_candidate,
+            brazil_candidate,
+        ]
+
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Estoril",
+            country_refinement="PT",
+        )
+
+        self.assertIs(
+            result["candidates"],
+            candidates,
+        )
+        self.assertEqual(
+            result["refined_candidates"],
+            [
+                portugal_candidate,
+            ],
+        )
+        self.assertEqual(
+            result["country_refinement_options"],
+            [
+                {"country_code": "PT"},
+                {"country_code": "BR"},
+            ],
+        )
+        self.assertTrue(
+            result["meaningful_ambiguity"]
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_without_country_refinement_preserves_all_candidates(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        candidates = [
+            {
+                "name": "Estoril",
+                "canonical_name": "Estoril",
+                "aliases": [],
+                "country_code": "PT",
+                "geographic_type": "settlement",
+            },
+            {
+                "name": "Estoril",
+                "canonical_name": "Estoril",
+                "aliases": [],
+                "country_code": "BR",
+                "geographic_type": "settlement",
+            },
+        ]
+
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Estoril"
+        )
+
+        self.assertIs(
+            result["candidates"],
+            candidates,
+        )
+        self.assertIs(
+            result["refined_candidates"],
+            candidates,
+        )

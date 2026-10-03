@@ -34,6 +34,44 @@ def interpret_discovery_candidates(candidates):
     }
 
 
+def build_discovery_country_refinement_options(
+    interpretation,
+):
+    """
+    Build unique country refinement options from query-relevant country
+    alternatives without deciding how the UI should present them.
+    """
+    options = []
+    seen_country_codes = set()
+
+    for first_candidate, second_candidate in interpretation.get(
+        "query_relevant_country_alternative_pairs",
+        [],
+    ):
+        for candidate in (
+            first_candidate,
+            second_candidate,
+        ):
+            country_code = str(
+                candidate.get("country_code") or ""
+            ).strip().upper()
+
+            if (
+                not country_code
+                or country_code in seen_country_codes
+            ):
+                continue
+
+            seen_country_codes.add(country_code)
+            options.append(
+                {
+                    "country_code": country_code,
+                }
+            )
+
+    return options
+
+
 def discovery_has_meaningful_ambiguity(
     interpretation,
 ):
@@ -430,6 +468,11 @@ def search_interpreted_global_discovery_places(query):
     interpretation[
         "meaningful_ambiguity"
     ] = discovery_has_meaningful_ambiguity(
+        interpretation
+    )
+    interpretation[
+        "country_refinement_options"
+    ] = build_discovery_country_refinement_options(
         interpretation
     )
 

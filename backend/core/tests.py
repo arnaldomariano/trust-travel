@@ -2815,3 +2815,193 @@ class GeographicDiscoveryMeaningfulAmbiguityTests(TestCase):
         self.assertFalse(
             result["meaningful_ambiguity"]
         )
+
+
+class GeographicDiscoveryRefinementTests(TestCase):
+    def test_builds_country_refinement_options_from_relevant_alternatives(self):
+        from .geography.discovery import (
+            build_discovery_country_refinement_options,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        interpretation = {
+            "query_relevant_country_alternative_pairs": [
+                (
+                    portugal_candidate,
+                    brazil_candidate,
+                )
+            ],
+        }
+
+        self.assertEqual(
+            build_discovery_country_refinement_options(
+                interpretation
+            ),
+            [
+                {"country_code": "PT"},
+                {"country_code": "BR"},
+            ],
+        )
+
+    def test_country_refinement_options_are_unique_and_require_relevant_alternatives(self):
+        from .geography.discovery import (
+            build_discovery_country_refinement_options,
+        )
+
+        portugal_registry_candidate = {
+            "name": "Estoril",
+            "country_code": "PT",
+        }
+
+        portugal_provider_candidate = {
+            "name": "Estoril",
+            "country_code": "PT",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "country_code": "BR",
+        }
+
+        cases = [
+            (
+                "deduplicates repeated countries",
+                {
+                    "query_relevant_country_alternative_pairs": [
+                        (
+                            portugal_registry_candidate,
+                            brazil_candidate,
+                        ),
+                        (
+                            portugal_provider_candidate,
+                            brazil_candidate,
+                        ),
+                    ],
+                },
+                [
+                    {"country_code": "PT"},
+                    {"country_code": "BR"},
+                ],
+            ),
+            (
+                "returns no options without relevant alternatives",
+                {
+                    "query_relevant_country_alternative_pairs": [],
+                },
+                [],
+            ),
+        ]
+
+        for label, interpretation, expected in cases:
+            with self.subTest(label=label):
+                self.assertEqual(
+                    build_discovery_country_refinement_options(
+                        interpretation
+                    ),
+                    expected,
+                )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_includes_country_refinement_options(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        mock_search_global_discovery_places.return_value = [
+            portugal_candidate,
+            brazil_candidate,
+        ]
+
+        result = search_interpreted_global_discovery_places(
+            "Estoril"
+        )
+
+        self.assertTrue(
+            result["meaningful_ambiguity"]
+        )
+        self.assertEqual(
+            result["country_refinement_options"],
+            [
+                {"country_code": "PT"},
+                {"country_code": "BR"},
+            ],
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_has_no_country_refinement_for_correspondence(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "existing_place_id": 42,
+        }
+
+        google_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "lake-como-google",
+        }
+
+        mock_search_global_discovery_places.return_value = [
+            registry_candidate,
+            google_candidate,
+        ]
+
+        result = search_interpreted_global_discovery_places(
+            "Lake Como"
+        )
+
+        self.assertFalse(
+            result["meaningful_ambiguity"]
+        )
+        self.assertEqual(
+            result["country_refinement_options"],
+            [],
+        )

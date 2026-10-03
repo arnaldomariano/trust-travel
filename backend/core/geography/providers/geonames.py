@@ -426,24 +426,11 @@ def geographic_result_rank(result, query):
     )
 
 
-def search_geographic_places(
+def _request_geonames_search(
     query,
     country_code="",
     max_rows=20,
 ):
-    query = str(query or "").strip()
-    country_code = str(
-        country_code or ""
-    ).strip().upper()
-
-    if len(query) < 2:
-        return []
-
-    if country_code and len(country_code) != 2:
-        raise ValueError(
-            "Country code must be a valid two-letter code."
-        )
-
     username = get_geonames_username()
 
     params = {
@@ -466,7 +453,7 @@ def search_geographic_places(
             payload = json.load(response)
     except (HTTPError, URLError, TimeoutError) as error:
         raise GeoNamesRequestError(
-            "GeoNames geographic search failed."
+            "GeoNames search failed."
         ) from error
 
     status = payload.get("status")
@@ -477,9 +464,36 @@ def search_geographic_places(
             or "GeoNames returned an error."
         )
 
+    return payload.get("geonames", [])
+
+
+def search_geographic_places(
+    query,
+    country_code="",
+    max_rows=20,
+):
+    query = str(query or "").strip()
+    country_code = str(
+        country_code or ""
+    ).strip().upper()
+
+    if len(query) < 2:
+        return []
+
+    if country_code and len(country_code) != 2:
+        raise ValueError(
+            "Country code must be a valid two-letter code."
+        )
+
+    items = _request_geonames_search(
+        query=query,
+        country_code=country_code,
+        max_rows=max_rows,
+    )
+
     results = []
 
-    for item in payload.get("geonames", []):
+    for item in items:
         normalized = normalize_geographic_result(item)
 
         if (
@@ -487,6 +501,56 @@ def search_geographic_places(
             and normalized["name"]
             and normalized["geographic_type"]
             in TRAVEL_GEOGRAPHIC_TYPES
+            and geographic_result_matches_query(
+                normalized,
+                query,
+            )
+        ):
+            results.append(normalized)
+
+    results.sort(
+        key=lambda result: geographic_result_rank(
+            result,
+            query,
+        ),
+        reverse=True,
+    )
+
+    return results
+
+
+def search_geonames_discovery_places(
+    query,
+    country_code="",
+    max_rows=20,
+):
+    query = str(query or "").strip()
+    country_code = str(
+        country_code or ""
+    ).strip().upper()
+
+    if len(query) < 2:
+        return []
+
+    if country_code and len(country_code) != 2:
+        raise ValueError(
+            "Country code must be a valid two-letter code."
+        )
+
+    items = _request_geonames_search(
+        query=query,
+        country_code=country_code,
+        max_rows=max_rows,
+    )
+
+    results = []
+
+    for item in items:
+        normalized = normalize_geographic_result(item)
+
+        if (
+            normalized["external_id"]
+            and normalized["name"]
             and geographic_result_matches_query(
                 normalized,
                 query,

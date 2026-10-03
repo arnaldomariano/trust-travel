@@ -769,3 +769,122 @@ class GooglePlacesDiscoveryTests(TestCase):
             )
 
         self.assertEqual(results, [])
+
+
+class GeoNamesDiscoveryTests(TestCase):
+    def test_geonames_discovery_search_keeps_unclassified_result(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers.geonames import (
+            search_geonames_discovery_places,
+        )
+
+        response_payload = {
+            "geonames": [
+                {
+                    "geonameId": 3466295,
+                    "name": "Chapada Diamantina",
+                    "toponymName": "Chapada Diamantina",
+                    "countryCode": "BR",
+                    "lat": "-12.8802",
+                    "lng": "-41.3722",
+                    "fcl": "T",
+                    "fcode": "UPLD",
+                    "population": 0,
+                    "alternateNames": [],
+                },
+            ],
+        }
+
+        response = io.BytesIO(
+            json.dumps(response_payload).encode("utf-8")
+        )
+
+        with (
+            patch(
+                "core.geography.providers.geonames."
+                "get_geonames_username",
+                return_value="test-user",
+            ),
+            patch(
+                "core.geography.providers.geonames.urlopen",
+                return_value=response,
+            ),
+        ):
+            results = search_geonames_discovery_places(
+                "Chapada Diamantina"
+            )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0]["canonical_name"],
+            "Chapada Diamantina",
+        )
+        self.assertEqual(
+            results[0]["external_source"],
+            "geonames",
+        )
+        self.assertEqual(
+            results[0]["feature_class"],
+            "T",
+        )
+        self.assertEqual(
+            results[0]["feature_code"],
+            "UPLD",
+        )
+        self.assertEqual(
+            results[0]["country_code"],
+            "BR",
+        )
+        self.assertIsNone(
+            results[0]["geographic_type"]
+        )
+
+    def test_legacy_geonames_geographic_search_still_filters_unclassified_result(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers.geonames import (
+            search_geographic_places,
+        )
+
+        response_payload = {
+            "geonames": [
+                {
+                    "geonameId": 3466295,
+                    "name": "Chapada Diamantina",
+                    "toponymName": "Chapada Diamantina",
+                    "countryCode": "BR",
+                    "lat": "-12.8802",
+                    "lng": "-41.3722",
+                    "fcl": "T",
+                    "fcode": "UPLD",
+                    "population": 0,
+                    "alternateNames": [],
+                },
+            ],
+        }
+
+        response = io.BytesIO(
+            json.dumps(response_payload).encode("utf-8")
+        )
+
+        with (
+            patch(
+                "core.geography.providers.geonames."
+                "get_geonames_username",
+                return_value="test-user",
+            ),
+            patch(
+                "core.geography.providers.geonames.urlopen",
+                return_value=response,
+            ),
+        ):
+            results = search_geographic_places(
+                "Chapada Diamantina"
+            )
+
+        self.assertEqual(results, [])

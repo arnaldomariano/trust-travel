@@ -467,6 +467,185 @@ class GeographicPlaceReconciliationTests(TestCase):
         )
 
 
+class GeographicDiscoveryOrchestrationTests(TestCase):
+    def test_global_discovery_preserves_candidates_from_multiple_providers(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import search_global_discovery_places
+
+        geonames_result = {
+            "name": "Chapada Diamantina",
+            "canonical_name": "Chapada Diamantina",
+            "aliases": [],
+            "country_code": "BR",
+            "latitude": -12.5,
+            "longitude": -41.5,
+            "feature_class": "T",
+            "feature_code": "UPLD",
+            "geographic_type": None,
+            "external_source": "geonames",
+            "external_id": "3466307",
+        }
+
+        google_result = {
+            "name": "Chapada Diamantina",
+            "canonical_name": "Chapada Diamantina",
+            "aliases": [],
+            "country_code": "BR",
+            "latitude": -12.5,
+            "longitude": -41.5,
+            "provider_types": [
+                "natural_feature",
+                "establishment",
+            ],
+            "geographic_type": None,
+            "external_source": "google_places",
+            "external_id": "google-chapada-diamantina",
+        }
+
+        with (
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                return_value=[geonames_result],
+            ) as geonames_search,
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[google_result],
+            ) as google_search,
+        ):
+            results = search_global_discovery_places(
+                query="Chapada Diamantina",
+            )
+
+        geonames_search.assert_called_once_with(
+            query="Chapada Diamantina",
+        )
+        google_search.assert_called_once_with(
+            query="Chapada Diamantina",
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(
+            [result["external_source"] for result in results],
+            ["geonames", "google_places"],
+        )
+        self.assertIsNone(results[0]["geographic_type"])
+        self.assertIsNone(results[1]["geographic_type"])
+        self.assertEqual(
+            results[0]["feature_code"],
+            "UPLD",
+        )
+        self.assertEqual(
+            results[1]["provider_types"],
+            ["natural_feature", "establishment"],
+        )
+
+    def test_global_discovery_keeps_google_results_when_geonames_fails(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import search_global_discovery_places
+        from .geography.providers.geonames import GeoNamesRequestError
+
+        google_result = {
+            "name": "Chapada Diamantina",
+            "canonical_name": "Chapada Diamantina",
+            "aliases": [],
+            "country_code": "BR",
+            "latitude": -12.5,
+            "longitude": -41.5,
+            "provider_types": [
+                "natural_feature",
+                "establishment",
+            ],
+            "geographic_type": None,
+            "external_source": "google_places",
+            "external_id": "google-chapada-diamantina",
+        }
+
+        with (
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                side_effect=GeoNamesRequestError(
+                    "GeoNames search failed."
+                ),
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[google_result],
+            ),
+        ):
+            results = search_global_discovery_places(
+                query="Chapada Diamantina",
+            )
+
+        self.assertEqual(results, [google_result])
+
+    def test_global_discovery_keeps_geonames_results_when_google_fails(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import search_global_discovery_places
+        from .geography.providers.google_places import (
+            GooglePlacesRequestError,
+        )
+
+        geonames_result = {
+            "name": "Chapada Diamantina",
+            "canonical_name": "Chapada Diamantina",
+            "aliases": [],
+            "country_code": "BR",
+            "latitude": -12.5,
+            "longitude": -41.5,
+            "feature_class": "T",
+            "feature_code": "UPLD",
+            "geographic_type": None,
+            "external_source": "geonames",
+            "external_id": "3466307",
+        }
+
+        with (
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                return_value=[geonames_result],
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                side_effect=GooglePlacesRequestError(
+                    "Google Places search failed."
+                ),
+            ),
+        ):
+            results = search_global_discovery_places(
+                query="Chapada Diamantina",
+            )
+
+        self.assertEqual(results, [geonames_result])
+
+    def test_global_discovery_does_not_hide_geonames_configuration_error(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import search_global_discovery_places
+        from .geography.providers.geonames import (
+            GeoNamesConfigurationError,
+        )
+
+        with (
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                side_effect=GeoNamesConfigurationError(
+                    "GEONAMES_USERNAME is not configured."
+                ),
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[],
+            ),
+        ):
+            with self.assertRaises(GeoNamesConfigurationError):
+                search_global_discovery_places(
+                    query="Chapada Diamantina",
+                )
+
+
 class GooglePlacesDiscoveryTests(TestCase):
     def test_unclassified_google_result_is_preserved_for_discovery(self):
         from .geography.providers.google_places import (

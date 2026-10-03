@@ -15,6 +15,19 @@ from .providers.google_places import (
 )
 
 
+def interpret_discovery_candidates(candidates):
+    """
+    Preserve discovery candidates and describe pairwise correspondence
+    evidence without transforming or asserting identity between them.
+    """
+    return {
+        "candidates": candidates,
+        "correspondence_pairs": find_discovery_correspondence_pairs(
+            candidates
+        ),
+    }
+
+
 def find_discovery_correspondence_pairs(candidates):
     """
     Return each pair of discovery candidates with correspondence evidence

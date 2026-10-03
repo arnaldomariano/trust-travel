@@ -1981,3 +1981,121 @@ class GeographicDiscoveryCandidateEvidenceTests(TestCase):
                 ),
             ],
         )
+
+
+class GeographicDiscoveryInterpretationTests(TestCase):
+    def test_interpretation_preserves_discovery_candidates(self):
+        from .geography.discovery import (
+            interpret_discovery_candidates,
+        )
+
+        candidates = [
+            {
+                "name": "Lake Como",
+                "country_code": "IT",
+                "geographic_type": "lake",
+            },
+            {
+                "name": "Estoril",
+                "country_code": "PT",
+                "geographic_type": "settlement",
+            },
+        ]
+
+        interpretation = interpret_discovery_candidates(
+            candidates
+        )
+
+        self.assertIs(
+            interpretation["candidates"],
+            candidates,
+        )
+
+    def test_interpretation_includes_correspondence_pairs(self):
+        from .geography.discovery import (
+            interpret_discovery_candidates,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": ["Como Lake"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "existing_place_id": 121,
+        }
+
+        google_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+        }
+
+        unrelated_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        interpretation = interpret_discovery_candidates(
+            [
+                registry_candidate,
+                google_candidate,
+                unrelated_candidate,
+            ]
+        )
+
+        self.assertEqual(
+            interpretation["correspondence_pairs"],
+            [
+                (
+                    registry_candidate,
+                    google_candidate,
+                )
+            ],
+        )
+
+    def test_interpretation_preserves_candidates_when_no_correspondence_exists(self):
+        from .geography.discovery import (
+            interpret_discovery_candidates,
+        )
+
+        lake_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        estoril_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        candidates = [
+            lake_candidate,
+            estoril_candidate,
+        ]
+
+        interpretation = interpret_discovery_candidates(
+            candidates
+        )
+
+        self.assertIs(
+            interpretation["candidates"],
+            candidates,
+        )
+        self.assertEqual(
+            interpretation["correspondence_pairs"],
+            [],
+        )

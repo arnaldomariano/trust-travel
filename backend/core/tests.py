@@ -1496,3 +1496,244 @@ class GeographicDiscoveryIdentityOrchestrationTests(TestCase):
         self.assertIsNone(
             results[2]["existing_place_id"]
         )
+
+
+class GeographicDiscoveryCandidateEvidenceTests(TestCase):
+    def test_candidates_share_exact_name_identity(self):
+        from .geography.discovery import (
+            discovery_candidates_share_name_identity,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": ["Como Lake"],
+            "country_code": "IT",
+            "place_type": "city",
+            "geographic_type": "lake",
+            "existing_place_id": 121,
+        }
+
+        external_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+        }
+
+        self.assertTrue(
+            discovery_candidates_share_name_identity(
+                registry_candidate,
+                external_candidate,
+            )
+        )
+
+    def test_candidates_do_not_share_name_identity_by_partial_match(self):
+        from .geography.discovery import (
+            discovery_candidates_share_name_identity,
+        )
+
+        geographic_candidate = {
+            "name": "Serra da Capivara",
+            "canonical_name": "Serra da Capivara",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": None,
+            "external_source": "geonames",
+            "external_id": "geonames-serra-capivara",
+        }
+
+        park_candidate = {
+            "name": "Serra da Capivara National Park",
+            "canonical_name": "Serra da Capivara National Park",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": None,
+            "external_source": "google_places",
+            "external_id": "google-serra-capivara-park",
+        }
+
+        self.assertFalse(
+            discovery_candidates_share_name_identity(
+                geographic_candidate,
+                park_candidate,
+            )
+        )
+
+    def test_candidates_with_different_known_countries_are_incompatible(self):
+        from .geography.discovery import (
+            discovery_candidates_have_compatible_countries,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "country_code": "PT",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "country_code": "BR",
+        }
+
+        self.assertFalse(
+            discovery_candidates_have_compatible_countries(
+                portugal_candidate,
+                brazil_candidate,
+            )
+        )
+
+    def test_candidates_with_missing_country_are_not_incompatible(self):
+        from .geography.discovery import (
+            discovery_candidates_have_compatible_countries,
+        )
+
+        known_country_candidate = {
+            "name": "Lake Como",
+            "country_code": "IT",
+        }
+
+        unknown_country_candidate = {
+            "name": "Lake Como",
+            "country_code": "",
+        }
+
+        self.assertTrue(
+            discovery_candidates_have_compatible_countries(
+                known_country_candidate,
+                unknown_country_candidate,
+            )
+        )
+
+    def test_candidates_with_different_known_geographic_types_are_incompatible(self):
+        from .geography.discovery import (
+            discovery_candidates_have_compatible_geographic_types,
+        )
+
+        lake_candidate = {
+            "name": "Example Place",
+            "geographic_type": "lake",
+        }
+
+        mountain_candidate = {
+            "name": "Example Place",
+            "geographic_type": "mountain",
+        }
+
+        self.assertFalse(
+            discovery_candidates_have_compatible_geographic_types(
+                lake_candidate,
+                mountain_candidate,
+            )
+        )
+
+    def test_candidates_with_missing_geographic_type_are_not_incompatible(self):
+        from .geography.discovery import (
+            discovery_candidates_have_compatible_geographic_types,
+        )
+
+        classified_candidate = {
+            "name": "Example Place",
+            "geographic_type": "lake",
+        }
+
+        unclassified_candidate = {
+            "name": "Example Place",
+            "geographic_type": None,
+        }
+
+        self.assertTrue(
+            discovery_candidates_have_compatible_geographic_types(
+                classified_candidate,
+                unclassified_candidate,
+            )
+        )
+
+    def test_candidates_have_correspondence_evidence_when_exact_name_and_context_are_compatible(self):
+        from .geography.discovery import (
+            discovery_candidates_have_correspondence_evidence,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": ["Como Lake"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "existing_place_id": 121,
+        }
+
+        google_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+        }
+
+        self.assertTrue(
+            discovery_candidates_have_correspondence_evidence(
+                registry_candidate,
+                google_candidate,
+            )
+        )
+
+    def test_candidates_do_not_have_correspondence_evidence_when_countries_conflict(self):
+        from .geography.discovery import (
+            discovery_candidates_have_correspondence_evidence,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        self.assertFalse(
+            discovery_candidates_have_correspondence_evidence(
+                portugal_candidate,
+                brazil_candidate,
+            )
+        )
+
+    def test_candidates_do_not_have_correspondence_evidence_when_geographic_types_conflict(self):
+        from .geography.discovery import (
+            discovery_candidates_have_correspondence_evidence,
+        )
+
+        lake_candidate = {
+            "name": "Example Place",
+            "canonical_name": "Example Place",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        mountain_candidate = {
+            "name": "Example Place",
+            "canonical_name": "Example Place",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "mountain",
+        }
+
+        self.assertFalse(
+            discovery_candidates_have_correspondence_evidence(
+                lake_candidate,
+                mountain_candidate,
+            )
+        )

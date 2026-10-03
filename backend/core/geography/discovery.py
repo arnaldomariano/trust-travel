@@ -1,3 +1,8 @@
+from .registry import (
+    normalize_registry_discovery_result,
+    search_registry_places,
+)
+
 from .providers.geonames import (
     GeoNamesRequestError,
     search_geonames_discovery_places,
@@ -13,6 +18,14 @@ def search_global_discovery_places(query):
     Collect global discovery candidates without forcing them into the
     Trust Travel geographic ontology.
     """
+    registry_places = search_registry_places(
+        query=query,
+    )
+    registry_results = [
+        normalize_registry_discovery_result(place)
+        for place in registry_places
+    ]
+
     try:
         geonames_results = search_geonames_discovery_places(
             query=query,
@@ -32,6 +45,7 @@ def search_global_discovery_places(query):
         google_results = []
 
     return [
+        *registry_results,
         *geonames_results,
         *google_results,
     ]

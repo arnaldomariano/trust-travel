@@ -9,6 +9,29 @@ from ..place_utils import (
 )
 
 
+def normalize_registry_discovery_result(place):
+    """
+    Normalize a materialized Trust Travel Place for discovery without
+    representing the registry itself as an external provider.
+    """
+    return {
+        "name": place.name,
+        "canonical_name": place.canonical_name,
+        "aliases": list(place.aliases or []),
+        "country_code": place.country_code or "",
+        "latitude": place.latitude,
+        "longitude": place.longitude,
+        "feature_class": "",
+        "feature_code": "",
+        "geographic_type": place.geographic_type or "",
+        "population": 0,
+        "admin_name": "",
+        "admin_context": [],
+        "place_type": place.place_type,
+        "existing_place_id": place.id,
+    }
+
+
 def search_registry_places(
     query,
     country="",

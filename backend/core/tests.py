@@ -2151,6 +2151,55 @@ class GeographicDiscoveryInterpretedSearchTests(TestCase):
         )
 
     @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_deduplicates_known_places_for_presentation(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        registry_candidate = {
+            "name": "Lago Titicaca",
+            "canonical_name": "Lago Titicaca",
+            "aliases": [],
+            "country_code": "BO",
+            "geographic_type": "lake",
+            "existing_place_id": 106,
+        }
+
+        provider_candidate = {
+            "name": "Lago Titicaca",
+            "canonical_name": "Lago Titicaca",
+            "aliases": [],
+            "country_code": "BO",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3927364",
+            "existing_place_id": 106,
+        }
+
+        candidates = [
+            registry_candidate,
+            provider_candidate,
+        ]
+
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Titicaca"
+        )
+
+        self.assertIs(
+            result["candidates"],
+            candidates,
+        )
+        self.assertEqual(
+            result["refined_candidates"],
+            [registry_candidate],
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
     def test_interpreted_search_returns_real_correspondence_evidence(
         self,
         mock_search_global_discovery_places,
@@ -3245,7 +3294,7 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
             result["candidates"],
             candidates,
         )
-        self.assertIs(
+        self.assertEqual(
             result["refined_candidates"],
             candidates,
         )

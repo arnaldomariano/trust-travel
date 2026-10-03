@@ -7,6 +7,9 @@ from .registry import (
     normalize_registry_discovery_result,
     search_registry_places,
 )
+from .services import (
+    deduplicate_geographic_results_by_existing_place,
+)
 
 from .providers.geonames import (
     GeoNamesRequestError,
@@ -502,11 +505,14 @@ def search_interpreted_global_discovery_places(
     ] = build_discovery_country_refinement_options(
         interpretation
     )
-    interpretation[
-        "refined_candidates"
-    ] = apply_discovery_country_refinement(
+    refined_candidates = apply_discovery_country_refinement(
         candidates,
         country_refinement,
+    )
+    interpretation[
+        "refined_candidates"
+    ] = deduplicate_geographic_results_by_existing_place(
+        refined_candidates
     )
 
     return interpretation

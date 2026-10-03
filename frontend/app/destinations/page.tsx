@@ -12,6 +12,10 @@ type CountryCatalogItem = {
   aliases: string[];
 };
 
+type CountryRefinementOption = {
+  country_code: string;
+};
+
 type GeographyPlaceResult = {
   name: string;
   canonical_name: string;
@@ -24,8 +28,8 @@ type GeographyPlaceResult = {
   feature_code: string;
   population: number;
   admin_name: string;
-  external_source: string;
-  external_id: string;
+  external_source?: string;
+  external_id?: string;
   existing_place_id: number | null;
 };
 
@@ -69,7 +73,18 @@ function DestinationsPageContent() {
   const [mainGeographySearchLoading, setMainGeographySearchLoading] =
     useState(false);
   const [mainGeographySearchError, setMainGeographySearchError] = useState("");
-
+  const [
+    mainGeographyMeaningfulAmbiguity,
+    setMainGeographyMeaningfulAmbiguity,
+  ] = useState(false);
+  const [
+    mainGeographyCountryRefinementOptions,
+    setMainGeographyCountryRefinementOptions,
+  ] = useState<CountryRefinementOption[]>([]);
+  const [
+    mainGeographyCountryRefinement,
+    setMainGeographyCountryRefinement,
+  ] = useState<string | null>(null);
 
   const [placeType, setPlaceType] = useState<
   "country" | "city" | "attraction" | "hotel" | "restaurant" | "nature" | "other"
@@ -776,6 +791,13 @@ const placeTypeOptionsToShow = [
   ...specificPlaceTypeOptions,
 ];
 
+const visibleMainGeographyResults = mainGeographyCountryRefinement
+  ? mainGeographyResults.filter(
+      (result) =>
+        result.country_code.toUpperCase() ===
+        mainGeographyCountryRefinement
+    )
+  : mainGeographyResults;
 
 const handleMainGeographySearch = async () => {
   const query = searchTerm.trim();
@@ -783,11 +805,15 @@ const handleMainGeographySearch = async () => {
   if (query.length < 2) {
     setMainGeographyResults([]);
     setMainGeographySearchError("");
+    setMainGeographyMeaningfulAmbiguity(false);
+    setMainGeographyCountryRefinementOptions([]);
+    setMainGeographyCountryRefinement(null);
     return;
   }
 
   setMainGeographySearchLoading(true);
   setMainGeographySearchError("");
+  setMainGeographyCountryRefinement(null);
 
   try {
     const params = new URLSearchParams({
@@ -802,6 +828,8 @@ const handleMainGeographySearch = async () => {
 
     if (!res.ok) {
       setMainGeographyResults([]);
+      setMainGeographyMeaningfulAmbiguity(false);
+      setMainGeographyCountryRefinementOptions([]);
       setMainGeographySearchError(
         data.detail || "Could not search geographic places."
       );
@@ -811,9 +839,20 @@ const handleMainGeographySearch = async () => {
     setMainGeographyResults(
       Array.isArray(data.results) ? data.results : []
     );
+    setMainGeographyMeaningfulAmbiguity(
+      data.meaningful_ambiguity === true
+    );
+    setMainGeographyCountryRefinementOptions(
+      Array.isArray(data.country_refinement_options)
+        ? data.country_refinement_options
+        : []
+    );
   } catch (error) {
     console.error("Main geographic search failed:", error);
     setMainGeographyResults([]);
+    setMainGeographyMeaningfulAmbiguity(false);
+    setMainGeographyCountryRefinementOptions([]);
+    setMainGeographyCountryRefinement(null);
     setMainGeographySearchError(
       "Could not search geographic places."
     );
@@ -1412,6 +1451,13 @@ const createSpecificPlaceForFlow = async () => {
       return;
     }
 
+    if (!result.external_source || !result.external_id) {
+      setMainGeographySearchError(
+        "This geographic place cannot be opened right now."
+      );
+      return;
+    }
+
     setMainGeographySearchLoading(true);
     setMainGeographySearchError("");
 
@@ -1971,6 +2017,86 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               marginBottom: "24px",
             }}
           >
+            {mainGeographyMeaningfulAmbiguity &&
+              mainGeographyCountryRefinementOptions.length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                    marginBottom: "4px",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "#666",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Which country do you mean?
+                  </span>
+
+                  {mainGeographyCountryRefinementOptions.map((option) => {
+                    const countryName =
+                      countryCatalog.find(
+                        (item) =>
+                          item.code.toUpperCase() ===
+                          option.country_code.toUpperCase()
+                      )?.canonical_name || option.country_code;
+
+                    const isSelected =
+                      mainGeographyCountryRefinement ===
+                      option.country_code.toUpperCase();
+
+                    return (
+                      <button
+                        key={option.country_code}
+                        type="button"
+                        onClick={() => {
+                          setMainGeographyCountryRefinement(
+                            option.country_code.toUpperCase()
+                          );
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          border: "1px solid #ccc",
+                          borderRadius: "999px",
+                          background: isSelected ? "#eee" : "white",
+                          color: "#222",
+                          cursor: "pointer",
+                          fontSize: "13px",
+                        }}
+                      >
+                        {countryName}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMainGeographyCountryRefinement(null);
+                    }}
+                    style={{
+                      padding: "6px 10px",
+                      border: "1px solid #ccc",
+                      borderRadius: "999px",
+                      background:
+                        mainGeographyCountryRefinement === null
+                          ? "#eee"
+                          : "white",
+                      color: "#222",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Show all
+                  </button>
+                </div>
+              )}
+
             <div
               style={{
                 color: "#666",
@@ -1981,7 +2107,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               Geographic matches
             </div>
 
-            {mainGeographyResults.map((result) => {
+            {visibleMainGeographyResults.map((result) => {
               const country =
                 countryCatalog.find(
                   (item) =>
@@ -1991,7 +2117,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
               return (
                 <button
-                  key={`${result.external_source}-${result.external_id}`}
+                  key={
+                    result.existing_place_id
+                      ? `place-${result.existing_place_id}`
+                      : `${result.external_source}-${result.external_id}`
+                  }
                   type="button"
                   onClick={() => {
                     void handleSelectMainGeographyResult(result);

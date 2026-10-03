@@ -15,6 +15,50 @@ from .providers.google_places import (
 )
 
 
+def find_discovery_correspondence_pairs(candidates):
+    """
+    Return each pair of discovery candidates with correspondence evidence
+    exactly once without grouping or modifying the candidates.
+    """
+    pairs = []
+
+    for index, candidate in enumerate(candidates):
+        for other_candidate in candidates[index + 1:]:
+            if discovery_candidates_have_correspondence_evidence(
+                candidate,
+                other_candidate,
+            ):
+                pairs.append(
+                    (
+                        candidate,
+                        other_candidate,
+                    )
+                )
+
+    return pairs
+
+
+def find_discovery_candidate_correspondences(
+    candidate,
+    candidates,
+):
+    """
+    Return other discovery candidates with correspondence evidence while
+    preserving each candidate as an independent result.
+    """
+    return [
+        other_candidate
+        for other_candidate in candidates
+        if (
+            other_candidate is not candidate
+            and discovery_candidates_have_correspondence_evidence(
+                candidate,
+                other_candidate,
+            )
+        )
+    ]
+
+
 def discovery_candidates_have_correspondence_evidence(
     first_candidate,
     second_candidate,

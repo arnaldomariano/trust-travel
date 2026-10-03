@@ -1737,3 +1737,247 @@ class GeographicDiscoveryCandidateEvidenceTests(TestCase):
                 mountain_candidate,
             )
         )
+
+    def test_find_corresponding_candidates_returns_only_other_candidates_with_evidence(self):
+        from .geography.discovery import (
+            find_discovery_candidate_correspondences,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": ["Como Lake"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "existing_place_id": 121,
+        }
+
+        google_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+        }
+
+        unrelated_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+            "external_source": "geonames",
+            "external_id": "geonames-estoril",
+        }
+
+        results = find_discovery_candidate_correspondences(
+            registry_candidate,
+            [
+                registry_candidate,
+                google_candidate,
+                unrelated_candidate,
+            ],
+        )
+
+        self.assertEqual(
+            results,
+            [google_candidate],
+        )
+
+    def test_find_corresponding_candidates_keeps_distinct_equal_candidate_objects(self):
+        from .geography.discovery import (
+            find_discovery_candidate_correspondences,
+        )
+
+        first_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        second_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        self.assertIsNot(
+            first_candidate,
+            second_candidate,
+        )
+        self.assertEqual(
+            first_candidate,
+            second_candidate,
+        )
+
+        results = find_discovery_candidate_correspondences(
+            first_candidate,
+            [
+                first_candidate,
+                second_candidate,
+            ],
+        )
+
+        self.assertEqual(
+            len(results),
+            1,
+        )
+        self.assertIs(
+            results[0],
+            second_candidate,
+        )
+
+    def test_correspondence_evidence_is_not_assumed_to_be_transitive(self):
+        from .geography.discovery import (
+            discovery_candidates_have_correspondence_evidence,
+        )
+
+        first_candidate = {
+            "name": "Lake Alpha",
+            "canonical_name": "Lake Alpha",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        bridge_candidate = {
+            "name": "Lake Alpha",
+            "canonical_name": "Lake Alpha",
+            "aliases": ["Lake Beta"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        third_candidate = {
+            "name": "Lake Beta",
+            "canonical_name": "Lake Beta",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        self.assertTrue(
+            discovery_candidates_have_correspondence_evidence(
+                first_candidate,
+                bridge_candidate,
+            )
+        )
+        self.assertTrue(
+            discovery_candidates_have_correspondence_evidence(
+                bridge_candidate,
+                third_candidate,
+            )
+        )
+        self.assertFalse(
+            discovery_candidates_have_correspondence_evidence(
+                first_candidate,
+                third_candidate,
+            )
+        )
+
+    def test_find_discovery_correspondence_pairs_returns_each_pair_once(self):
+        from .geography.discovery import (
+            find_discovery_correspondence_pairs,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "existing_place_id": 121,
+        }
+
+        google_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+        }
+
+        unrelated_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        pairs = find_discovery_correspondence_pairs(
+            [
+                registry_candidate,
+                google_candidate,
+                unrelated_candidate,
+            ]
+        )
+
+        self.assertEqual(
+            pairs,
+            [
+                (
+                    registry_candidate,
+                    google_candidate,
+                )
+            ],
+        )
+
+    def test_correspondence_pairs_do_not_create_transitive_pair(self):
+        from .geography.discovery import (
+            find_discovery_correspondence_pairs,
+        )
+
+        first_candidate = {
+            "name": "Lake Alpha",
+            "canonical_name": "Lake Alpha",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        bridge_candidate = {
+            "name": "Lake Alpha",
+            "canonical_name": "Lake Alpha",
+            "aliases": ["Lake Beta"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        third_candidate = {
+            "name": "Lake Beta",
+            "canonical_name": "Lake Beta",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        pairs = find_discovery_correspondence_pairs(
+            [
+                first_candidate,
+                bridge_candidate,
+                third_candidate,
+            ]
+        )
+
+        self.assertEqual(
+            pairs,
+            [
+                (
+                    first_candidate,
+                    bridge_candidate,
+                ),
+                (
+                    bridge_candidate,
+                    third_candidate,
+                ),
+            ],
+        )

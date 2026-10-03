@@ -57,13 +57,16 @@ def classify_google_geographic_place(types):
     return None
 
 
-def normalize_google_geographic_result(item):
-    geographic_type = classify_google_geographic_place(
-        item.get("types")
-    )
+def normalize_google_discovery_result(item):
+    provider_types = [
+        str(place_type or "").strip()
+        for place_type in (item.get("types") or [])
+        if str(place_type or "").strip()
+    ]
 
-    if not geographic_type:
-        return None
+    geographic_type = classify_google_geographic_place(
+        provider_types
+    )
 
     display_name = item.get("displayName") or {}
 
@@ -76,7 +79,6 @@ def normalize_google_geographic_result(item):
     ).strip()
 
     location = item.get("location") or {}
-
     address_components = item.get("addressComponents") or []
 
     country_code = ""
@@ -108,7 +110,20 @@ def normalize_google_geographic_result(item):
         "admin_context": [],
         "external_source": "google_places",
         "external_id": place_id,
+        "provider_types": provider_types,
     }
+
+
+def normalize_google_geographic_result(item):
+    result = normalize_google_discovery_result(item)
+
+    if not result or not result.get("geographic_type"):
+        return None
+
+    result.pop("provider_types", None)
+
+    return result
+
 
 def get_google_geographic_place(external_id):
     external_id = str(external_id or "").strip()
@@ -153,15 +168,11 @@ def get_google_geographic_place(external_id):
 
     return normalized
 
-def search_google_geographic_places(
+
+def _request_google_places_text_search(
     query,
     max_results=10,
 ):
-    query = str(query or "").strip()
-
-    if len(query) < 2:
-        return []
-
     api_key = get_google_places_api_key()
 
     payload = json.dumps(
@@ -193,13 +204,57 @@ def search_google_geographic_places(
             response_payload = json.load(response)
     except (HTTPError, URLError, TimeoutError) as error:
         raise GooglePlacesRequestError(
-            "Google Places geographic search failed."
+            "Google Places text search failed."
         ) from error
+
+    return response_payload.get("places", [])
+
+
+def search_google_geographic_places(
+    query,
+    max_results=10,
+):
+    query = str(query or "").strip()
+
+    if len(query) < 2:
+        return []
+
+    items = _request_google_places_text_search(
+        query=query,
+        max_results=max_results,
+    )
 
     results = []
 
-    for item in response_payload.get("places", []):
+    for item in items:
         normalized = normalize_google_geographic_result(
+            item
+        )
+
+        if normalized:
+            results.append(normalized)
+
+    return results
+
+
+def search_google_discovery_places(
+    query,
+    max_results=10,
+):
+    query = str(query or "").strip()
+
+    if len(query) < 2:
+        return []
+
+    items = _request_google_places_text_search(
+        query=query,
+        max_results=max_results,
+    )
+
+    results = []
+
+    for item in items:
+        normalized = normalize_google_discovery_result(
             item
         )
 

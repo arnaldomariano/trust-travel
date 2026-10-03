@@ -465,3 +465,307 @@ class GeographicPlaceReconciliationTests(TestCase):
             len(deduplicated_results),
             2,
         )
+
+
+class GooglePlacesDiscoveryTests(TestCase):
+    def test_unclassified_google_result_is_preserved_for_discovery(self):
+        from .geography.providers.google_places import (
+            normalize_google_discovery_result,
+        )
+
+        item = {
+            "id": "google-chapada-diamantina",
+            "displayName": {
+                "text": "Chapada Diamantina",
+            },
+            "types": [
+                "natural_feature",
+                "establishment",
+            ],
+            "location": {
+                "latitude": -12.8801668,
+                "longitude": -41.3721853,
+            },
+            "addressComponents": [
+                {
+                    "shortText": "BR",
+                    "types": ["country"],
+                },
+            ],
+        }
+
+        result = normalize_google_discovery_result(item)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            result["canonical_name"],
+            "Chapada Diamantina",
+        )
+        self.assertEqual(
+            result["external_source"],
+            "google_places",
+        )
+        self.assertEqual(
+            result["external_id"],
+            "google-chapada-diamantina",
+        )
+        self.assertEqual(
+            result["country_code"],
+            "BR",
+        )
+        self.assertEqual(
+            result["provider_types"],
+            [
+                "natural_feature",
+                "establishment",
+            ],
+        )
+        self.assertIsNone(result["geographic_type"])
+
+    def test_google_provider_types_are_preserved_for_unclassified_place(self):
+        from .geography.providers.google_places import (
+            normalize_google_discovery_result,
+        )
+
+        item = {
+            "id": "google-serra-da-capivara-national-park",
+            "displayName": {
+                "text": "Serra da Capivara National Park",
+            },
+            "types": [
+                "national_park",
+                "tourist_attraction",
+                "park",
+                "point_of_interest",
+                "establishment",
+            ],
+            "location": {
+                "latitude": -9.0096408,
+                "longitude": -42.6931918,
+            },
+            "addressComponents": [
+                {
+                    "shortText": "BR",
+                    "types": ["country"],
+                },
+            ],
+        }
+
+        result = normalize_google_discovery_result(item)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            result["provider_types"],
+            [
+                "national_park",
+                "tourist_attraction",
+                "park",
+                "point_of_interest",
+                "establishment",
+            ],
+        )
+        self.assertIsNone(result["geographic_type"])
+
+    def test_known_google_type_keeps_geographic_interpretation(self):
+        from .geography.providers.google_places import (
+            normalize_google_discovery_result,
+        )
+
+        item = {
+            "id": "google-lake-como",
+            "displayName": {
+                "text": "Lake Como",
+            },
+            "types": [
+                "lake",
+                "natural_feature",
+                "establishment",
+            ],
+            "location": {
+                "latitude": 46.016049,
+                "longitude": 9.257168,
+            },
+            "addressComponents": [
+                {
+                    "shortText": "IT",
+                    "types": ["country"],
+                },
+            ],
+        }
+
+        result = normalize_google_discovery_result(item)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            result["provider_types"],
+            [
+                "lake",
+                "natural_feature",
+                "establishment",
+            ],
+        )
+        self.assertEqual(
+            result["geographic_type"],
+            "lake",
+        )
+        self.assertEqual(
+            result["country_code"],
+            "IT",
+        )
+
+    def test_legacy_geographic_normalizer_still_rejects_unclassified_result(self):
+        from .geography.providers.google_places import (
+            normalize_google_discovery_result,
+            normalize_google_geographic_result,
+        )
+
+        item = {
+            "id": "google-chapada-diamantina",
+            "displayName": {
+                "text": "Chapada Diamantina",
+            },
+            "types": [
+                "natural_feature",
+                "establishment",
+            ],
+            "location": {
+                "latitude": -12.8801668,
+                "longitude": -41.3721853,
+            },
+            "addressComponents": [
+                {
+                    "shortText": "BR",
+                    "types": ["country"],
+                },
+            ],
+        }
+
+        discovery_result = normalize_google_discovery_result(item)
+        geographic_result = normalize_google_geographic_result(item)
+
+        self.assertIsNotNone(discovery_result)
+        self.assertIsNone(geographic_result)
+
+    def test_google_discovery_search_keeps_unclassified_result(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers.google_places import (
+            search_google_discovery_places,
+        )
+
+        response_payload = {
+            "places": [
+                {
+                    "id": "google-chapada-diamantina",
+                    "displayName": {
+                        "text": "Chapada Diamantina",
+                    },
+                    "types": [
+                        "natural_feature",
+                        "establishment",
+                    ],
+                    "location": {
+                        "latitude": -12.8801668,
+                        "longitude": -41.3721853,
+                    },
+                    "addressComponents": [
+                        {
+                            "shortText": "BR",
+                            "types": ["country"],
+                        },
+                    ],
+                },
+            ],
+        }
+
+        response = io.BytesIO(
+            json.dumps(response_payload).encode("utf-8")
+        )
+
+        with (
+            patch(
+                "core.geography.providers.google_places."
+                "get_google_places_api_key",
+                return_value="test-api-key",
+            ),
+            patch(
+                "core.geography.providers.google_places.urlopen",
+                return_value=response,
+            ),
+        ):
+            results = search_google_discovery_places(
+                "Chapada Diamantina"
+            )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0]["canonical_name"],
+            "Chapada Diamantina",
+        )
+        self.assertEqual(
+            results[0]["provider_types"],
+            [
+                "natural_feature",
+                "establishment",
+            ],
+        )
+        self.assertIsNone(
+            results[0]["geographic_type"]
+        )
+
+    def test_legacy_google_geographic_search_still_filters_unclassified_result(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers.google_places import (
+            search_google_geographic_places,
+        )
+
+        response_payload = {
+            "places": [
+                {
+                    "id": "google-chapada-diamantina",
+                    "displayName": {
+                        "text": "Chapada Diamantina",
+                    },
+                    "types": [
+                        "natural_feature",
+                        "establishment",
+                    ],
+                    "location": {
+                        "latitude": -12.8801668,
+                        "longitude": -41.3721853,
+                    },
+                    "addressComponents": [
+                        {
+                            "shortText": "BR",
+                            "types": ["country"],
+                        },
+                    ],
+                },
+            ],
+        }
+
+        response = io.BytesIO(
+            json.dumps(response_payload).encode("utf-8")
+        )
+
+        with (
+            patch(
+                "core.geography.providers.google_places."
+                "get_google_places_api_key",
+                return_value="test-api-key",
+            ),
+            patch(
+                "core.geography.providers.google_places.urlopen",
+                return_value=response,
+            ),
+        ):
+            results = search_google_geographic_places(
+                "Chapada Diamantina"
+            )
+
+        self.assertEqual(results, [])

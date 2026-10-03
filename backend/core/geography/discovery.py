@@ -260,3 +260,17 @@ def search_global_discovery_places(query):
     return annotate_known_external_identities(
         results
     )
+
+
+def search_interpreted_global_discovery_places(query):
+    """
+    Collect global discovery candidates and pass them through the
+    interpretation layer without adding further discovery decisions.
+    """
+    candidates = search_global_discovery_places(
+        query
+    )
+
+    return interpret_discovery_candidates(
+        candidates
+    )

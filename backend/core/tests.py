@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import TestCase
 
 from .models import Country
@@ -2098,4 +2100,105 @@ class GeographicDiscoveryInterpretationTests(TestCase):
         self.assertEqual(
             interpretation["correspondence_pairs"],
             [],
+        )
+
+
+class GeographicDiscoveryInterpretedSearchTests(TestCase):
+    @patch("core.geography.discovery.interpret_discovery_candidates")
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_composes_collection_and_interpretation(
+        self,
+        mock_search_global_discovery_places,
+        mock_interpret_discovery_candidates,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        candidates = [
+            {
+                "name": "Lake Como",
+                "country_code": "IT",
+                "geographic_type": "lake",
+            },
+            {
+                "name": "Estoril",
+                "country_code": "PT",
+                "geographic_type": "settlement",
+            },
+        ]
+        interpretation = {
+            "candidates": candidates,
+            "correspondence_pairs": [],
+        }
+
+        mock_search_global_discovery_places.return_value = candidates
+        mock_interpret_discovery_candidates.return_value = interpretation
+
+        result = search_interpreted_global_discovery_places(
+            "Lake Como"
+        )
+
+        mock_search_global_discovery_places.assert_called_once_with(
+            "Lake Como"
+        )
+        mock_interpret_discovery_candidates.assert_called_once_with(
+            candidates
+        )
+        self.assertIs(
+            result,
+            interpretation,
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_returns_real_correspondence_evidence(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "existing_place_id": 121,
+        }
+
+        provider_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+        }
+
+        candidates = [
+            registry_candidate,
+            provider_candidate,
+        ]
+
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Lake Como"
+        )
+
+        self.assertIs(
+            result["candidates"],
+            candidates,
+        )
+        self.assertEqual(
+            result["correspondence_pairs"],
+            [
+                (
+                    registry_candidate,
+                    provider_candidate,
+                )
+            ],
         )

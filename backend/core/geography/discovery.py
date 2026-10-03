@@ -25,7 +25,33 @@ def interpret_discovery_candidates(candidates):
         "correspondence_pairs": find_discovery_correspondence_pairs(
             candidates
         ),
+        "country_alternative_pairs": find_discovery_country_alternative_pairs(
+            candidates
+        ),
     }
+
+
+def find_discovery_country_alternative_pairs(candidates):
+    """
+    Return each pair with country alternative evidence exactly once
+    without grouping or modifying the candidates.
+    """
+    pairs = []
+
+    for index, candidate in enumerate(candidates):
+        for other_candidate in candidates[index + 1:]:
+            if discovery_candidates_have_country_alternative_evidence(
+                candidate,
+                other_candidate,
+            ):
+                pairs.append(
+                    (
+                        candidate,
+                        other_candidate,
+                    )
+                )
+
+    return pairs
 
 
 def find_discovery_correspondence_pairs(candidates):
@@ -115,6 +141,33 @@ def discovery_candidates_have_compatible_geographic_types(
         return True
 
     return first_geographic_type == second_geographic_type
+
+
+def discovery_candidates_have_country_alternative_evidence(
+    first_candidate,
+    second_candidate,
+):
+    """
+    Return whether shared name identity points to candidates in different
+    known countries without treating either candidate as the intended one.
+    """
+    if not discovery_candidates_share_name_identity(
+        first_candidate,
+        second_candidate,
+    ):
+        return False
+
+    first_country_code = str(
+        first_candidate.get("country_code") or ""
+    ).strip().upper()
+    second_country_code = str(
+        second_candidate.get("country_code") or ""
+    ).strip().upper()
+
+    if not first_country_code or not second_country_code:
+        return False
+
+    return first_country_code != second_country_code
 
 
 def discovery_candidates_have_compatible_countries(

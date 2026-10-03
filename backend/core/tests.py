@@ -2202,3 +2202,179 @@ class GeographicDiscoveryInterpretedSearchTests(TestCase):
                 )
             ],
         )
+
+
+class GeographicDiscoveryAlternativeEvidenceTests(TestCase):
+    def test_same_name_in_different_known_countries_is_alternative_evidence(self):
+        from .geography.discovery import (
+            discovery_candidates_have_country_alternative_evidence,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        self.assertTrue(
+            discovery_candidates_have_country_alternative_evidence(
+                portugal_candidate,
+                brazil_candidate,
+            )
+        )
+
+    def test_country_alternative_evidence_requires_shared_name_and_known_country_conflict(self):
+        from .geography.discovery import (
+            discovery_candidates_have_country_alternative_evidence,
+        )
+
+        base_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        cases = [
+            (
+                "same country",
+                {
+                    "name": "Estoril",
+                    "canonical_name": "Estoril",
+                    "aliases": [],
+                    "country_code": "PT",
+                    "geographic_type": "settlement",
+                },
+            ),
+            (
+                "missing country",
+                {
+                    "name": "Estoril",
+                    "canonical_name": "Estoril",
+                    "aliases": [],
+                    "country_code": "",
+                    "geographic_type": "settlement",
+                },
+            ),
+            (
+                "different name",
+                {
+                    "name": "Santos",
+                    "canonical_name": "Santos",
+                    "aliases": [],
+                    "country_code": "BR",
+                    "geographic_type": "settlement",
+                },
+            ),
+        ]
+
+        for label, other_candidate in cases:
+            with self.subTest(label=label):
+                self.assertFalse(
+                    discovery_candidates_have_country_alternative_evidence(
+                        base_candidate,
+                        other_candidate,
+                    )
+                )
+
+    def test_interpretation_includes_country_alternative_pairs(self):
+        from .geography.discovery import (
+            interpret_discovery_candidates,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        unrelated_candidate = {
+            "name": "Santos",
+            "canonical_name": "Santos",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        interpretation = interpret_discovery_candidates(
+            [
+                portugal_candidate,
+                brazil_candidate,
+                unrelated_candidate,
+            ]
+        )
+
+        self.assertEqual(
+            interpretation["country_alternative_pairs"],
+            [
+                (
+                    portugal_candidate,
+                    brazil_candidate,
+                )
+            ],
+        )
+
+    def test_country_alternative_pair_is_not_also_correspondence_pair(self):
+        from .geography.discovery import (
+            interpret_discovery_candidates,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        candidates = [
+            portugal_candidate,
+            brazil_candidate,
+        ]
+
+        interpretation = interpret_discovery_candidates(
+            candidates
+        )
+
+        self.assertEqual(
+            interpretation["country_alternative_pairs"],
+            [
+                (
+                    portugal_candidate,
+                    brazil_candidate,
+                )
+            ],
+        )
+        self.assertEqual(
+            interpretation["correspondence_pairs"],
+            [],
+        )

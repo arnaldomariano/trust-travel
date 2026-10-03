@@ -1286,3 +1286,213 @@ class GeoNamesDiscoveryTests(TestCase):
             )
 
         self.assertEqual(results, [])
+
+
+class GeographicDiscoveryIdentityTests(TestCase):
+    def test_discovery_candidate_matches_known_external_identity(self):
+        from .geography.discovery import annotate_known_external_identities
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        country = get_or_create_country(value="Italy")
+
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Lago di Como",
+            canonical_name="Lake Como",
+            country_code="IT",
+            place_type="city",
+            geographic_type="lake",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=place,
+            external_source="geonames",
+            external_id="3178228",
+            geographic_type="lake",
+        )
+
+        results = [
+            {
+                "name": "Lago di Como",
+                "country_code": "IT",
+                "geographic_type": "lake",
+                "external_source": "geonames",
+                "external_id": "3178228",
+            }
+        ]
+
+        annotated_results = annotate_known_external_identities(
+            results
+        )
+
+        self.assertEqual(
+            annotated_results[0]["existing_place_id"],
+            place.id,
+        )
+
+    def test_discovery_candidate_does_not_match_by_name_alone(self):
+        from .geography.discovery import annotate_known_external_identities
+        from .models import Destination, Place
+
+        country = get_or_create_country(value="Italy")
+
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Lago di Como",
+            canonical_name="Lake Como",
+            aliases=["Como Lake"],
+            country_code="IT",
+            place_type="city",
+            geographic_type="lake",
+        )
+
+        results = [
+            {
+                "name": "Lago di Como",
+                "canonical_name": "Lake Como",
+                "aliases": ["Como Lake"],
+                "country_code": "IT",
+                "geographic_type": "lake",
+                "external_source": "geonames",
+                "external_id": "3178228",
+            }
+        ]
+
+        annotated_results = annotate_known_external_identities(
+            results
+        )
+
+        self.assertIsNone(
+            annotated_results[0]["existing_place_id"]
+        )
+
+    def test_discovery_identity_annotation_preserves_registry_identity(self):
+        from .geography.discovery import annotate_known_external_identities
+
+        results = [
+            {
+                "name": "Lago di Como",
+                "country_code": "IT",
+                "place_type": "city",
+                "geographic_type": "lake",
+                "existing_place_id": 121,
+            },
+            {
+                "name": "Lake Como",
+                "country_code": "IT",
+                "geographic_type": "lake",
+                "external_source": "google_places",
+                "external_id": "unknown-google-place",
+            },
+        ]
+
+        annotated_results = annotate_known_external_identities(
+            results
+        )
+
+        self.assertEqual(
+            annotated_results[0]["existing_place_id"],
+            121,
+        )
+
+
+class GeographicDiscoveryIdentityOrchestrationTests(TestCase):
+    def test_global_discovery_annotates_only_known_external_identities(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import search_global_discovery_places
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        country = get_or_create_country(value="Italy")
+
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Lago di Como",
+            canonical_name="Lake Como",
+            country_code="IT",
+            place_type="city",
+            geographic_type="lake",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=place,
+            external_source="geonames",
+            external_id="3178228",
+            geographic_type="lake",
+        )
+
+        registry_result = {
+            "name": "Lago di Como",
+            "country_code": "IT",
+            "place_type": "city",
+            "geographic_type": "lake",
+            "existing_place_id": place.id,
+        }
+
+        geonames_result = {
+            "name": "Lago di Como",
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+
+        google_result = {
+            "name": "Lake Como",
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "unknown-google-place",
+        }
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[place],
+            ),
+            patch(
+                "core.geography.discovery.normalize_registry_discovery_result",
+                return_value=registry_result,
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                return_value=[geonames_result],
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[google_result],
+            ),
+        ):
+            results = search_global_discovery_places(
+                query="Lake Como",
+            )
+
+        self.assertEqual(
+            results[0]["existing_place_id"],
+            place.id,
+        )
+        self.assertEqual(
+            results[1]["existing_place_id"],
+            place.id,
+        )
+        self.assertIsNone(
+            results[2]["existing_place_id"]
+        )

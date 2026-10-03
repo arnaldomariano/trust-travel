@@ -98,6 +98,9 @@ from .place_utils import (
 )
 
 from .geography.registry import search_registry_places
+from .geography.discovery import (
+    search_interpreted_global_discovery_places,
+)
 
 from .geography.providers.geonames import (
     GeoNamesConfigurationError,
@@ -123,9 +126,7 @@ from .geography.providers.foursquare import (
 
 from .geography.services import (
     annotate_existing_city_places,
-    annotate_existing_geographic_places,
     annotate_existing_poi_places,
-    deduplicate_geographic_results_by_existing_place,
     materialize_city_place,
     materialize_country_place,
     materialize_poi_place,
@@ -1712,6 +1713,9 @@ class GeographyPlaceSearchView(APIView):
 
     def get(self, request):
         query = (request.query_params.get("q") or "").strip()
+        country_code = (
+            request.query_params.get("country_code") or ""
+        ).strip().upper()
 
         if len(query) < 2:
             return Response(
@@ -1724,35 +1728,11 @@ class GeographyPlaceSearchView(APIView):
             )
 
         try:
-            geonames_results = search_geographic_places(
-                query=query,
+            interpretation = search_interpreted_global_discovery_places(
+                query,
+                country_refinement=country_code or None,
             )
-
-            try:
-                google_results = search_google_geographic_places(
-                    query=query,
-                )
-            except (
-                GooglePlacesConfigurationError,
-                GooglePlacesRequestError,
-            ):
-                google_results = []
-
-            results = [
-                *geonames_results,
-                *google_results,
-            ]
-
-            results = annotate_existing_geographic_places(
-                results=results,
-                query=query,
-            )
-
-            # Hide duplicate provider records only after they have been
-            # reconciled to the same internal Trust Travel Place.
-            results = deduplicate_geographic_results_by_existing_place(
-                results
-            )
+            results = interpretation["refined_candidates"]
 
         except GeoNamesConfigurationError:
             return Response(
@@ -1778,6 +1758,12 @@ class GeographyPlaceSearchView(APIView):
             {
                 "count": len(results),
                 "results": results,
+                "meaningful_ambiguity": interpretation[
+                    "meaningful_ambiguity"
+                ],
+                "country_refinement_options": interpretation[
+                    "country_refinement_options"
+                ],
             }
         )
 

@@ -3249,3 +3249,208 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
             result["refined_candidates"],
             candidates,
         )
+
+
+class GeographyPlaceSearchViewTests(TestCase):
+    @patch(
+        "core.views.search_interpreted_global_discovery_places"
+    )
+    def test_search_returns_current_public_results_contract(
+        self,
+        mock_search_interpreted_global_discovery_places,
+    ):
+        geonames_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "latitude": 38.7057,
+            "longitude": -9.3977,
+            "feature_class": "P",
+            "feature_code": "PPL",
+            "geographic_type": "settlement",
+            "population": 0,
+            "admin_name": "Lisbon",
+            "admin_context": [],
+            "external_source": "geonames",
+            "external_id": "2268434",
+        }
+
+        mock_search_interpreted_global_discovery_places.return_value = {
+            "candidates": [geonames_candidate],
+            "refined_candidates": [geonames_candidate],
+            "meaningful_ambiguity": False,
+            "country_refinement_options": [],
+        }
+
+        response = self.client.get(
+            "/api/geography/places/search/",
+            {"q": "Estoril"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertEqual(
+            data["results"][0]["canonical_name"],
+            "Estoril",
+        )
+        self.assertEqual(
+            data["results"][0]["country_code"],
+            "PT",
+        )
+        self.assertEqual(
+            data["results"][0]["external_source"],
+            "geonames",
+        )
+        self.assertEqual(
+            data["results"][0]["external_id"],
+            "2268434",
+        )
+
+    @patch(
+        "core.views.search_interpreted_global_discovery_places"
+    )
+    def test_search_uses_interpreted_discovery_refined_candidates(
+        self,
+        mock_search_interpreted_global_discovery_places,
+    ):
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+            "existing_place_id": None,
+            "external_source": "geonames",
+            "external_id": "2268434",
+        }
+
+        mock_search_interpreted_global_discovery_places.return_value = {
+            "candidates": [portugal_candidate],
+            "refined_candidates": [portugal_candidate],
+            "meaningful_ambiguity": False,
+            "country_refinement_options": [],
+        }
+
+        response = self.client.get(
+            "/api/geography/places/search/",
+            {"q": "Estoril"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+
+        self.assertEqual(
+            data["results"],
+            [portugal_candidate],
+        )
+        self.assertEqual(data["count"], 1)
+
+        mock_search_interpreted_global_discovery_places.assert_called_once_with(
+            "Estoril",
+            country_refinement=None,
+        )
+
+    @patch(
+        "core.views.search_interpreted_global_discovery_places"
+    )
+    def test_search_passes_country_code_as_explicit_refinement(
+        self,
+        mock_search_interpreted_global_discovery_places,
+    ):
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+            "existing_place_id": None,
+            "external_source": "geonames",
+            "external_id": "2268434",
+        }
+
+        mock_search_interpreted_global_discovery_places.return_value = {
+            "candidates": [portugal_candidate],
+            "refined_candidates": [portugal_candidate],
+            "meaningful_ambiguity": True,
+            "country_refinement_options": [
+                {"country_code": "PT"},
+                {"country_code": "BR"},
+            ],
+        }
+
+        response = self.client.get(
+            "/api/geography/places/search/",
+            {
+                "q": "Estoril",
+                "country_code": " pt ",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        mock_search_interpreted_global_discovery_places.assert_called_once_with(
+            "Estoril",
+            country_refinement="PT",
+        )
+
+    @patch(
+        "core.views.search_interpreted_global_discovery_places"
+    )
+    def test_search_exposes_discovery_refinement_metadata(
+        self,
+        mock_search_interpreted_global_discovery_places,
+    ):
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        mock_search_interpreted_global_discovery_places.return_value = {
+            "candidates": [
+                portugal_candidate,
+                brazil_candidate,
+            ],
+            "refined_candidates": [
+                portugal_candidate,
+                brazil_candidate,
+            ],
+            "meaningful_ambiguity": True,
+            "country_refinement_options": [
+                {"country_code": "PT"},
+                {"country_code": "BR"},
+            ],
+        }
+
+        response = self.client.get(
+            "/api/geography/places/search/",
+            {"q": "Estoril"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+
+        self.assertTrue(data["meaningful_ambiguity"])
+        self.assertEqual(
+            data["country_refinement_options"],
+            [
+                {"country_code": "PT"},
+                {"country_code": "BR"},
+            ],
+        )

@@ -2593,3 +2593,225 @@ class GeographicDiscoveryQueryEvidenceTests(TestCase):
                 )
             ],
         )
+
+
+class GeographicDiscoveryMeaningfulAmbiguityTests(TestCase):
+    def test_query_relevant_country_alternatives_are_meaningfully_ambiguous(self):
+        from .geography.discovery import (
+            discovery_has_meaningful_ambiguity,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        interpretation = {
+            "candidates": [
+                portugal_candidate,
+                brazil_candidate,
+            ],
+            "correspondence_pairs": [],
+            "country_alternative_pairs": [
+                (
+                    portugal_candidate,
+                    brazil_candidate,
+                )
+            ],
+            "query_relevant_country_alternative_pairs": [
+                (
+                    portugal_candidate,
+                    brazil_candidate,
+                )
+            ],
+        }
+
+        self.assertTrue(
+            discovery_has_meaningful_ambiguity(
+                interpretation
+            )
+        )
+
+    def test_corresponding_candidates_are_not_meaningfully_ambiguous(self):
+        from .geography.discovery import (
+            discovery_has_meaningful_ambiguity,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "existing_place_id": 42,
+        }
+
+        google_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "lake-como-google",
+        }
+
+        interpretation = {
+            "candidates": [
+                registry_candidate,
+                google_candidate,
+            ],
+            "correspondence_pairs": [
+                (
+                    registry_candidate,
+                    google_candidate,
+                )
+            ],
+            "country_alternative_pairs": [],
+            "query_relevant_country_alternative_pairs": [],
+        }
+
+        self.assertFalse(
+            discovery_has_meaningful_ambiguity(
+                interpretation
+            )
+        )
+
+    def test_multiple_independent_candidates_are_not_meaningfully_ambiguous(self):
+        from .geography.discovery import (
+            discovery_has_meaningful_ambiguity,
+        )
+
+        candidates = [
+            {
+                "name": "Sahara",
+                "country_code": "DZ",
+                "geographic_type": "desert",
+            },
+            {
+                "name": "Sahara Hotel",
+                "country_code": "MA",
+                "geographic_type": "hotel",
+            },
+            {
+                "name": "Sahara Restaurant",
+                "country_code": "TN",
+                "geographic_type": "restaurant",
+            },
+        ]
+
+        interpretation = {
+            "candidates": candidates,
+            "correspondence_pairs": [],
+            "country_alternative_pairs": [],
+            "query_relevant_country_alternative_pairs": [],
+        }
+
+        self.assertFalse(
+            discovery_has_meaningful_ambiguity(
+                interpretation
+            )
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_reports_meaningful_ambiguity(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        mock_search_global_discovery_places.return_value = [
+            portugal_candidate,
+            brazil_candidate,
+        ]
+
+        result = search_interpreted_global_discovery_places(
+            "Estoril"
+        )
+
+        self.assertTrue(
+            result["meaningful_ambiguity"]
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_does_not_report_correspondence_as_ambiguity(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "existing_place_id": 42,
+        }
+
+        google_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "lake-como-google",
+        }
+
+        mock_search_global_discovery_places.return_value = [
+            registry_candidate,
+            google_candidate,
+        ]
+
+        result = search_interpreted_global_discovery_places(
+            "Lake Como"
+        )
+
+        self.assertEqual(
+            result["correspondence_pairs"],
+            [
+                (
+                    registry_candidate,
+                    google_candidate,
+                )
+            ],
+        )
+        self.assertEqual(
+            result["query_relevant_country_alternative_pairs"],
+            [],
+        )
+        self.assertFalse(
+            result["meaningful_ambiguity"]
+        )

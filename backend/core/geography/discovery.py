@@ -34,6 +34,21 @@ def interpret_discovery_candidates(candidates):
     }
 
 
+def discovery_has_meaningful_ambiguity(
+    interpretation,
+):
+    """
+    Return whether the current discovery interpretation contains evidence
+    of meaningful ambiguity without deciding how the UI should resolve it.
+    """
+    return bool(
+        interpretation.get(
+            "query_relevant_country_alternative_pairs",
+            []
+        )
+    )
+
+
 def find_query_relevant_country_alternative_pairs(
     candidates,
     query,
@@ -411,6 +426,11 @@ def search_interpreted_global_discovery_places(query):
     ] = find_query_relevant_country_alternative_pairs(
         candidates,
         query,
+    )
+    interpretation[
+        "meaningful_ambiguity"
+    ] = discovery_has_meaningful_ambiguity(
+        interpretation
     )
 
     return interpretation

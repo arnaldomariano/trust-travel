@@ -121,6 +121,82 @@ class PlaceSearchIdentityTests(TestCase):
         )
 
 
+class GeographicRegistrySearchTests(TestCase):
+    def test_registry_search_finds_materialized_place_by_alias(self):
+        from .geography.registry import search_registry_places
+        from .models import Destination, Place
+
+        country = get_or_create_country(value="Brazil")
+
+        destination = Destination.objects.create(
+            name="Brazil",
+            country="Brazil",
+        )
+
+        place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Brazil",
+            canonical_name="Brazil",
+            aliases=["Brasil"],
+            country_code="BR",
+            place_type="country",
+        )
+
+        results = search_registry_places(
+            query="Brasil",
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].pk, place.pk)
+
+    def test_registry_search_filters_by_country_alias(self):
+        from .geography.registry import search_registry_places
+        from .models import Destination, Place
+
+        brazil = get_or_create_country(value="Brazil")
+        portugal = get_or_create_country(value="Portugal")
+
+        brazil_destination = Destination.objects.create(
+            name="Brazil",
+            country="Brazil",
+        )
+        portugal_destination = Destination.objects.create(
+            name="Portugal",
+            country="Portugal",
+        )
+
+        brazil_place = Place.objects.create(
+            destination=brazil_destination,
+            country_ref=brazil,
+            name="Estoril",
+            canonical_name="Estoril",
+            aliases=[],
+            country_code="BR",
+            place_type="city",
+            city="Estoril",
+        )
+
+        Place.objects.create(
+            destination=portugal_destination,
+            country_ref=portugal,
+            name="Estoril",
+            canonical_name="Estoril",
+            aliases=[],
+            country_code="PT",
+            place_type="city",
+            city="Estoril",
+        )
+
+        results = search_registry_places(
+            query="Estoril",
+            country="Brasil",
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].pk, brazil_place.pk)
+
+
 class CountryMaterializationTests(TestCase):
     def test_materialize_country_place_creates_canonical_structure_once(self):
         from .geography.services import materialize_country_place

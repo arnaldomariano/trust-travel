@@ -97,6 +97,8 @@ from .place_utils import (
     resolve_country_catalog_entry,
 )
 
+from .geography.registry import search_registry_places
+
 from .geography.providers.geonames import (
     GeoNamesConfigurationError,
     GeoNamesRequestError,
@@ -3265,76 +3267,11 @@ class PlaceSearchView(APIView):
                 }
             )
 
-        search_context = get_place_search_identity_context(query)
-
-        resolved_filter_country = resolve_country(value=country)
-        country_values = get_country_search_values(country)
-
-        places_queryset = Place.objects.select_related(
-            "destination",
-            "country_ref",
-        ).all()
-
-        def matches_search(place):
-            return place_matches_search_identity(
-                place,
-                search_context,
-            )
-
-        def matches_country(place):
-            if resolved_filter_country:
-                return place.country_ref_id == resolved_filter_country.id
-
-            if not country_values:
-                return True
-
-            destination = place.destination
-
-            values = [
-                destination.name if destination else "",
-                destination.country if destination else "",
-                destination.city if destination else "",
-            ]
-
-            if place.place_type == "country":
-                values.extend(
-                    [
-                        place.name,
-                        place.canonical_name,
-                        *(place.aliases or []),
-                    ]
-                )
-
-            normalized_values = {
-                normalize_place_text(value)
-                for value in values
-                if value
-            }
-
-            normalized_values.discard("")
-
-            return bool(country_values.intersection(normalized_values))
-
-        places = [
-            place
-            for place in places_queryset
-            if matches_search(place) and matches_country(place)
-        ]
-
-        def get_search_rank(place):
-            return get_place_search_rank(
-                place,
-                search_context,
-            )
-
-        places = sorted(
-            places,
-            key=lambda place: (
-                get_search_rank(place),
-                place.place_type or "",
-                place.name or "",
-            ),
-        )[:20]
+        places = search_registry_places(
+            query=query,
+            country=country,
+            limit=20,
+        )
 
         results = []
 

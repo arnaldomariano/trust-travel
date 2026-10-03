@@ -2378,3 +2378,218 @@ class GeographicDiscoveryAlternativeEvidenceTests(TestCase):
             interpretation["correspondence_pairs"],
             [],
         )
+
+
+class GeographicDiscoveryQueryEvidenceTests(TestCase):
+    def test_candidate_exact_query_match_uses_name_canonical_name_and_aliases(self):
+        from .geography.discovery import (
+            discovery_candidate_exactly_matches_query,
+        )
+
+        candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lake Como",
+            "aliases": [
+                "Como Lake",
+            ],
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        cases = [
+            ("Lago di Como", True),
+            ("lake como", True),
+            ("COMO LAKE", True),
+            ("Lake Como National Park", False),
+            ("Como", False),
+            ("", False),
+        ]
+
+        for query, expected in cases:
+            with self.subTest(query=query):
+                self.assertEqual(
+                    discovery_candidate_exactly_matches_query(
+                        candidate,
+                        query,
+                    ),
+                    expected,
+                )
+
+    def test_country_alternative_is_query_relevant_only_when_both_candidates_exactly_match(self):
+        from .geography.discovery import (
+            discovery_country_alternative_is_query_relevant,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        parque_candidate = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "park",
+        }
+
+        self.assertTrue(
+            discovery_country_alternative_is_query_relevant(
+                portugal_candidate,
+                brazil_candidate,
+                "Estoril",
+            )
+        )
+
+        self.assertFalse(
+            discovery_country_alternative_is_query_relevant(
+                portugal_candidate,
+                parque_candidate,
+                "Estoril",
+            )
+        )
+
+    def test_country_alternative_query_relevance_accepts_exact_alias_matches(self):
+        from .geography.discovery import (
+            discovery_country_alternative_is_query_relevant,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": ["Estoril Coast"],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril do Sul",
+            "canonical_name": "Estoril do Sul",
+            "aliases": ["Estoril Coast"],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        self.assertTrue(
+            discovery_country_alternative_is_query_relevant(
+                portugal_candidate,
+                brazil_candidate,
+                "estoril coast",
+            )
+        )
+
+    def test_finds_only_query_relevant_country_alternative_pairs(self):
+        from .geography.discovery import (
+            find_query_relevant_country_alternative_pairs,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        unrelated_candidate = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "park",
+        }
+
+        self.assertEqual(
+            find_query_relevant_country_alternative_pairs(
+                [
+                    portugal_candidate,
+                    brazil_candidate,
+                    unrelated_candidate,
+                ],
+                "Estoril",
+            ),
+            [
+                (
+                    portugal_candidate,
+                    brazil_candidate,
+                )
+            ],
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_includes_query_relevant_country_alternatives(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        portugal_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+        }
+
+        brazil_candidate = {
+            "name": "Estoril",
+            "canonical_name": "Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+        }
+
+        candidates = [
+            portugal_candidate,
+            brazil_candidate,
+        ]
+
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Estoril"
+        )
+
+        self.assertIs(
+            result["candidates"],
+            candidates,
+        )
+        self.assertEqual(
+            result["country_alternative_pairs"],
+            [
+                (
+                    portugal_candidate,
+                    brazil_candidate,
+                )
+            ],
+        )
+        self.assertEqual(
+            result["query_relevant_country_alternative_pairs"],
+            [
+                (
+                    portugal_candidate,
+                    brazil_candidate,
+                )
+            ],
+        )

@@ -1,5 +1,8 @@
 from ..models import PlaceExternalIdentity
-from ..place_utils import get_place_name_identity_values
+from ..place_utils import (
+    get_place_name_identity_values,
+    normalize_place_text,
+)
 from .registry import (
     normalize_registry_discovery_result,
     search_registry_places,
@@ -29,6 +32,33 @@ def interpret_discovery_candidates(candidates):
             candidates
         ),
     }
+
+
+def find_query_relevant_country_alternative_pairs(
+    candidates,
+    query,
+):
+    """
+    Return each country alternative pair that directly matches the query
+    exactly once without grouping or modifying the candidates.
+    """
+    pairs = []
+
+    for index, candidate in enumerate(candidates):
+        for other_candidate in candidates[index + 1:]:
+            if discovery_country_alternative_is_query_relevant(
+                candidate,
+                other_candidate,
+                query,
+            ):
+                pairs.append(
+                    (
+                        candidate,
+                        other_candidate,
+                    )
+                )
+
+    return pairs
 
 
 def find_discovery_country_alternative_pairs(candidates):
@@ -191,6 +221,55 @@ def discovery_candidates_have_compatible_countries(
     return first_country_code == second_country_code
 
 
+def discovery_country_alternative_is_query_relevant(
+    first_candidate,
+    second_candidate,
+    query,
+):
+    """
+    Return whether a country alternative pair is directly relevant to the
+    query because both candidates exactly match the searched identity.
+    """
+    if not discovery_candidates_have_country_alternative_evidence(
+        first_candidate,
+        second_candidate,
+    ):
+        return False
+
+    return (
+        discovery_candidate_exactly_matches_query(
+            first_candidate,
+            query,
+        )
+        and discovery_candidate_exactly_matches_query(
+            second_candidate,
+            query,
+        )
+    )
+
+
+def discovery_candidate_exactly_matches_query(
+    candidate,
+    query,
+):
+    """
+    Return whether the query exactly matches a normalized candidate name,
+    canonical name, or alias without asserting entity identity.
+    """
+    normalized_query = normalize_place_text(query)
+
+    if not normalized_query:
+        return False
+
+    candidate_values = get_place_name_identity_values(
+        candidate.get("name"),
+        candidate.get("canonical_name"),
+        candidate.get("aliases"),
+    )
+
+    return normalized_query in candidate_values
+
+
 def discovery_candidates_share_name_identity(
     first_candidate,
     second_candidate,
@@ -317,13 +396,21 @@ def search_global_discovery_places(query):
 
 def search_interpreted_global_discovery_places(query):
     """
-    Collect global discovery candidates and pass them through the
-    interpretation layer without adding further discovery decisions.
+    Collect global discovery candidates and add query-dependent evidence
+    without making ranking, identity, or ambiguity decisions.
     """
     candidates = search_global_discovery_places(
         query
     )
-
-    return interpret_discovery_candidates(
+    interpretation = interpret_discovery_candidates(
         candidates
     )
+
+    interpretation[
+        "query_relevant_country_alternative_pairs"
+    ] = find_query_relevant_country_alternative_pairs(
+        candidates,
+        query,
+    )
+
+    return interpretation

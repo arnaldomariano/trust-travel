@@ -13,10 +13,12 @@ from .services import (
 
 from .providers.geonames import (
     GeoNamesRequestError,
+    geographic_result_can_materialize as geonames_result_can_materialize,
     search_geonames_discovery_places,
 )
 from .providers.google_places import (
     GooglePlacesRequestError,
+    geographic_result_can_materialize as google_result_can_materialize,
     search_google_discovery_places,
 )
 
@@ -474,6 +476,34 @@ def search_global_discovery_places(query):
     )
 
 
+def annotate_discovery_presentation_actionability(candidates):
+    """
+    Add presentation actionability without mutating discovery evidence.
+    """
+    presented_candidates = []
+
+    for candidate in candidates:
+        presented_candidate = dict(candidate)
+
+        if candidate.get("existing_place_id"):
+            can_open = True
+        elif candidate.get("external_source") == "geonames":
+            can_open = geonames_result_can_materialize(
+                candidate
+            )
+        elif candidate.get("external_source") == "google_places":
+            can_open = google_result_can_materialize(
+                candidate
+            )
+        else:
+            can_open = False
+
+        presented_candidate["can_open"] = can_open
+        presented_candidates.append(presented_candidate)
+
+    return presented_candidates
+
+
 def search_interpreted_global_discovery_places(
     query,
     country_refinement=None,
@@ -509,10 +539,15 @@ def search_interpreted_global_discovery_places(
         candidates,
         country_refinement,
     )
+    presented_candidates = (
+        deduplicate_geographic_results_by_existing_place(
+            refined_candidates
+        )
+    )
     interpretation[
         "refined_candidates"
-    ] = deduplicate_geographic_results_by_existing_place(
-        refined_candidates
+    ] = annotate_discovery_presentation_actionability(
+        presented_candidates
     )
 
     return interpretation

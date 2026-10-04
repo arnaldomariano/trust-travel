@@ -922,6 +922,109 @@ class GooglePlacesDiscoveryTests(TestCase):
         )
         self.assertIsNone(result["geographic_type"])
 
+    def test_google_discovery_normalizer_preserves_location_evidence(self):
+        from .geography.providers.google_places import (
+            normalize_google_discovery_result,
+        )
+
+        item = {
+            "id": "google-parque-natural-estoril",
+            "displayName": {
+                "text": "Parque Natural Estoril",
+            },
+            "primaryType": "city_park",
+            "types": [
+                "city_park",
+                "zoo",
+                "park",
+                "point_of_interest",
+                "establishment",
+            ],
+            "formattedAddress": (
+                "R. Portugal, 1100 - Estoril, "
+                "São Bernardo do Campo - SP, "
+                "09832-400, Brazil"
+            ),
+            "location": {
+                "latitude": -23.7706338,
+                "longitude": -46.5195035,
+            },
+            "addressComponents": [
+                {
+                    "longText": "Estoril",
+                    "shortText": "Estoril",
+                    "types": [
+                        "sublocality_level_1",
+                        "sublocality",
+                        "political",
+                    ],
+                },
+                {
+                    "longText": "São Bernardo do Campo",
+                    "shortText": "São Bernardo do Campo",
+                    "types": [
+                        "administrative_area_level_2",
+                        "political",
+                    ],
+                },
+                {
+                    "longText": "São Paulo",
+                    "shortText": "SP",
+                    "types": [
+                        "administrative_area_level_1",
+                        "political",
+                    ],
+                },
+                {
+                    "longText": "Brazil",
+                    "shortText": "BR",
+                    "types": [
+                        "country",
+                        "political",
+                    ],
+                },
+            ],
+        }
+
+        result = normalize_google_discovery_result(item)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["primary_type"], "city_park")
+        self.assertEqual(
+            result["formatted_address"],
+            (
+                "R. Portugal, 1100 - Estoril, "
+                "São Bernardo do Campo - SP, "
+                "09832-400, Brazil"
+            ),
+        )
+        self.assertEqual(
+            result["location_context"],
+            [
+                {
+                    "type": "sublocality_level_1",
+                    "name": "Estoril",
+                    "short_name": "Estoril",
+                },
+                {
+                    "type": "administrative_area_level_2",
+                    "name": "São Bernardo do Campo",
+                    "short_name": "São Bernardo do Campo",
+                },
+                {
+                    "type": "administrative_area_level_1",
+                    "name": "São Paulo",
+                    "short_name": "SP",
+                },
+                {
+                    "type": "country",
+                    "name": "Brazil",
+                    "short_name": "BR",
+                },
+            ],
+        )
+        self.assertEqual(result["country_code"], "BR")
+
     def test_google_provider_types_are_preserved_for_unclassified_place(self):
         from .geography.providers.google_places import (
             normalize_google_discovery_result,
@@ -1115,6 +1218,103 @@ class GooglePlacesDiscoveryTests(TestCase):
             results[0]["geographic_type"]
         )
 
+    def test_google_place_details_requests_resolution_evidence(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers.google_places import (
+            get_google_geographic_place,
+        )
+
+        response = io.BytesIO(
+            json.dumps(
+                {
+                    "id": "google-lake-como",
+                    "displayName": {
+                        "text": "Lake Como",
+                    },
+                    "types": [
+                        "lake",
+                        "natural_feature",
+                    ],
+                    "location": {
+                        "latitude": 46.016049,
+                        "longitude": 9.257168,
+                    },
+                    "addressComponents": [
+                        {
+                            "shortText": "IT",
+                            "types": ["country"],
+                        },
+                    ],
+                }
+            ).encode("utf-8")
+        )
+
+        with (
+            patch(
+                "core.geography.providers.google_places."
+                "get_google_places_api_key",
+                return_value="test-api-key",
+            ),
+            patch(
+                "core.geography.providers.google_places.urlopen",
+                return_value=response,
+            ) as mocked_urlopen,
+        ):
+            get_google_geographic_place("google-lake-como")
+
+        request = mocked_urlopen.call_args.args[0]
+        field_mask = request.get_header("X-goog-fieldmask")
+
+        self.assertIn(
+            "primaryType",
+            field_mask,
+        )
+        self.assertIn(
+            "formattedAddress",
+            field_mask,
+        )
+
+    def test_google_discovery_search_requests_resolution_evidence(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers.google_places import (
+            search_google_discovery_places,
+        )
+
+        response = io.BytesIO(
+            json.dumps({"places": []}).encode("utf-8")
+        )
+
+        with (
+            patch(
+                "core.geography.providers.google_places."
+                "get_google_places_api_key",
+                return_value="test-api-key",
+            ),
+            patch(
+                "core.geography.providers.google_places.urlopen",
+                return_value=response,
+            ) as mocked_urlopen,
+        ):
+            search_google_discovery_places("Parque Estoril")
+
+        request = mocked_urlopen.call_args.args[0]
+        field_mask = request.get_header("X-goog-fieldmask")
+
+        self.assertIn(
+            "places.primaryType",
+            field_mask,
+        )
+        self.assertIn(
+            "places.formattedAddress",
+            field_mask,
+        )
+
     def test_legacy_google_geographic_search_still_filters_unclassified_result(self):
         import io
         import json
@@ -1172,6 +1372,112 @@ class GooglePlacesDiscoveryTests(TestCase):
 
 
 class GeoNamesDiscoveryTests(TestCase):
+    def test_geonames_normalizer_preserves_structured_admin_identity(self):
+        from .geography.providers.geonames import (
+            normalize_geographic_result,
+        )
+
+        result = normalize_geographic_result(
+            {
+                "geonameId": 13015945,
+                "name": "Parque Estoril",
+                "toponymName": "Parque Estoril",
+                "countryCode": "BR",
+                "lat": "-22.44488",
+                "lng": "-43.45969",
+                "fcl": "L",
+                "fcode": "PRK",
+                "population": 0,
+                "alternateNames": [],
+                "adminName1": "Rio de Janeiro",
+                "adminCode1": "21",
+                "adminId1": "3451189",
+                "adminCodes1": {
+                    "ISO3166_2": "RJ",
+                },
+                "adminName2": "Miguel Pereira",
+                "adminCode2": "3302908",
+                "adminId2": "6322037",
+            }
+        )
+
+        self.assertEqual(
+            result["admin_context"],
+            [
+                {
+                    "level": 1,
+                    "name": "Rio de Janeiro",
+                    "code": "21",
+                    "external_id": "3451189",
+                    "iso_code": "RJ",
+                },
+                {
+                    "level": 2,
+                    "name": "Miguel Pereira",
+                    "code": "3302908",
+                    "external_id": "6322037",
+                    "iso_code": "",
+                },
+            ],
+        )
+
+    def test_geonames_park_feature_is_classified_as_park(self):
+        from .geography.providers.geonames import (
+            classify_geographic_feature,
+        )
+
+        self.assertEqual(
+            classify_geographic_feature("L", "PRK"),
+            "park",
+        )
+
+    def test_legacy_geographic_search_does_not_treat_park_as_hub(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers.geonames import (
+            search_geographic_places,
+        )
+
+        response_payload = {
+            "geonames": [
+                {
+                    "geonameId": 13015945,
+                    "name": "Parque Estoril",
+                    "toponymName": "Parque Estoril",
+                    "countryCode": "BR",
+                    "lat": "-22.44488",
+                    "lng": "-43.45969",
+                    "fcl": "L",
+                    "fcode": "PRK",
+                    "population": 0,
+                    "alternateNames": [],
+                },
+            ],
+        }
+
+        response = io.BytesIO(
+            json.dumps(response_payload).encode("utf-8")
+        )
+
+        with (
+            patch(
+                "core.geography.providers.geonames."
+                "get_geonames_username",
+                return_value="test-user",
+            ),
+            patch(
+                "core.geography.providers.geonames.urlopen",
+                return_value=response,
+            ),
+        ):
+            results = search_geographic_places(
+                "Parque Estoril"
+            )
+
+        self.assertEqual(results, [])
+
     def test_geonames_discovery_search_keeps_unclassified_result(self):
         import io
         import json
@@ -2196,7 +2502,176 @@ class GeographicDiscoveryInterpretedSearchTests(TestCase):
         )
         self.assertEqual(
             result["refined_candidates"],
-            [registry_candidate],
+            [
+                {
+                    **registry_candidate,
+                    "can_open": True,
+                },
+            ],
+        )
+        self.assertIsNot(
+            result["refined_candidates"][0],
+            registry_candidate,
+        )
+        self.assertNotIn(
+            "can_open",
+            registry_candidate,
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_marks_unsupported_external_result_as_not_openable(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        park_candidate = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "park",
+            "external_source": "geonames",
+            "external_id": "13015945",
+            "existing_place_id": None,
+        }
+
+        candidates = [park_candidate]
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Parque Estoril"
+        )
+
+        self.assertNotIn(
+            "can_open",
+            result["candidates"][0],
+        )
+        self.assertFalse(
+            result["refined_candidates"][0]["can_open"]
+        )
+        self.assertIsNot(
+            result["refined_candidates"][0],
+            park_candidate,
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_marks_supported_geonames_result_as_openable(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        lake_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178229",
+            "existing_place_id": None,
+        }
+
+        candidates = [lake_candidate]
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Lake Como"
+        )
+
+        self.assertNotIn(
+            "can_open",
+            result["candidates"][0],
+        )
+        self.assertTrue(
+            result["refined_candidates"][0]["can_open"]
+        )
+        self.assertIsNot(
+            result["refined_candidates"][0],
+            lake_candidate,
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_marks_supported_google_result_as_openable(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        lake_candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+            "provider_types": ["lake"],
+            "existing_place_id": None,
+        }
+
+        candidates = [lake_candidate]
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Lake Como"
+        )
+
+        self.assertNotIn(
+            "can_open",
+            result["candidates"][0],
+        )
+        self.assertFalse(
+            "can_open" in lake_candidate
+        )
+        self.assertTrue(
+            result["refined_candidates"][0]["can_open"]
+        )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_marks_existing_place_as_openable_before_provider_policy(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        existing_park_candidate = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "park",
+            "external_source": "geonames",
+            "external_id": "13015945",
+            "existing_place_id": 999,
+        }
+
+        candidates = [existing_park_candidate]
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Parque Estoril"
+        )
+
+        self.assertNotIn(
+            "can_open",
+            result["candidates"][0],
+        )
+        self.assertTrue(
+            result["refined_candidates"][0]["can_open"]
+        )
+        self.assertEqual(
+            result["refined_candidates"][0]["existing_place_id"],
+            999,
         )
 
     @patch("core.geography.discovery.search_global_discovery_places")
@@ -3244,8 +3719,19 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
         self.assertEqual(
             result["refined_candidates"],
             [
-                portugal_candidate,
+                {
+                    **portugal_candidate,
+                    "can_open": False,
+                },
             ],
+        )
+        self.assertIsNot(
+            result["refined_candidates"][0],
+            portugal_candidate,
+        )
+        self.assertNotIn(
+            "can_open",
+            portugal_candidate,
         )
         self.assertEqual(
             result["country_refinement_options"],
@@ -3296,8 +3782,27 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
         )
         self.assertEqual(
             result["refined_candidates"],
-            candidates,
+            [
+                {
+                    **candidates[0],
+                    "can_open": False,
+                },
+                {
+                    **candidates[1],
+                    "can_open": False,
+                },
+            ],
         )
+        self.assertIsNot(
+            result["refined_candidates"][0],
+            candidates[0],
+        )
+        self.assertIsNot(
+            result["refined_candidates"][1],
+            candidates[1],
+        )
+        self.assertNotIn("can_open", candidates[0])
+        self.assertNotIn("can_open", candidates[1])
 
 
 class GeographyPlaceSearchViewTests(TestCase):
@@ -3325,9 +3830,14 @@ class GeographyPlaceSearchViewTests(TestCase):
             "external_id": "2268434",
         }
 
+        presented_geonames_candidate = {
+            **geonames_candidate,
+            "can_open": True,
+        }
+
         mock_search_interpreted_global_discovery_places.return_value = {
             "candidates": [geonames_candidate],
-            "refined_candidates": [geonames_candidate],
+            "refined_candidates": [presented_geonames_candidate],
             "meaningful_ambiguity": False,
             "country_refinement_options": [],
         }
@@ -3358,6 +3868,9 @@ class GeographyPlaceSearchViewTests(TestCase):
         self.assertEqual(
             data["results"][0]["external_id"],
             "2268434",
+        )
+        self.assertTrue(
+            data["results"][0]["can_open"]
         )
 
     @patch(

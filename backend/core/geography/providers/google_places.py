@@ -82,15 +82,50 @@ def normalize_google_discovery_result(item):
     address_components = item.get("addressComponents") or []
 
     country_code = ""
+    location_context = []
+
+    context_types = (
+        "sublocality_level_1",
+        "sublocality_level_2",
+        "sublocality_level_3",
+        "sublocality_level_4",
+        "sublocality_level_5",
+        "locality",
+        "administrative_area_level_3",
+        "administrative_area_level_2",
+        "administrative_area_level_1",
+        "country",
+    )
 
     for component in address_components:
         component_types = component.get("types") or []
+
+        context_type = next(
+            (
+                place_type
+                for place_type in context_types
+                if place_type in component_types
+            ),
+            None,
+        )
+
+        if context_type:
+            location_context.append(
+                {
+                    "type": context_type,
+                    "name": str(
+                        component.get("longText") or ""
+                    ).strip(),
+                    "short_name": str(
+                        component.get("shortText") or ""
+                    ).strip(),
+                }
+            )
 
         if "country" in component_types:
             country_code = str(
                 component.get("shortText") or ""
             ).strip().upper()
-            break
 
     if not canonical_name or not place_id:
         return None
@@ -111,7 +146,27 @@ def normalize_google_discovery_result(item):
         "external_source": "google_places",
         "external_id": place_id,
         "provider_types": provider_types,
+        "primary_type": str(
+            item.get("primaryType") or ""
+        ).strip(),
+        "formatted_address": str(
+            item.get("formattedAddress") or ""
+        ).strip(),
+        "location_context": location_context,
     }
+
+
+def geographic_result_can_materialize(result):
+    """
+    Return whether a normalized Google discovery result can use the current
+    Trust Travel geographic hub materialization flow.
+    """
+    provider_types = result.get("provider_types") or []
+
+    return (
+        classify_google_geographic_place(provider_types)
+        is not None
+    )
 
 
 def normalize_google_geographic_result(item):
@@ -143,6 +198,8 @@ def get_google_geographic_place(external_id):
                 "id,"
                 "displayName,"
                 "types,"
+                "primaryType,"
+                "formattedAddress,"
                 "location,"
                 "addressComponents"
             ),
@@ -192,6 +249,8 @@ def _request_google_places_text_search(
                 "places.id,"
                 "places.displayName,"
                 "places.types,"
+                "places.primaryType,"
+                "places.formattedAddress,"
                 "places.location,"
                 "places.addressComponents"
             ),

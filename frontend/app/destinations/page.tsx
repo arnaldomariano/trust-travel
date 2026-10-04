@@ -31,6 +31,7 @@ type GeographyPlaceResult = {
   external_source?: string;
   external_id?: string;
   existing_place_id: number | null;
+  can_open: boolean;
 };
 
 function getGeographicTypeLabel(geographicType: string) {
@@ -85,7 +86,6 @@ function DestinationsPageContent() {
     mainGeographyCountryRefinement,
     setMainGeographyCountryRefinement,
   ] = useState<string | null>(null);
-
   const [placeType, setPlaceType] = useState<
   "country" | "city" | "attraction" | "hotel" | "restaurant" | "nature" | "other"
   >("country");
@@ -808,6 +808,7 @@ const handleMainGeographySearch = async () => {
     setMainGeographyMeaningfulAmbiguity(false);
     setMainGeographyCountryRefinementOptions([]);
     setMainGeographyCountryRefinement(null);
+
     return;
   }
 
@@ -1444,6 +1445,10 @@ const createSpecificPlaceForFlow = async () => {
   const handleSelectMainGeographyResult = async (
     result: GeographyPlaceResult
   ) => {
+    if (!result.can_open) {
+      return;
+    }
+
     if (result.existing_place_id) {
       handleSelectExistingPlace({
         id: result.existing_place_id,
@@ -2018,165 +2023,221 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             }}
           >
             {mainGeographyMeaningfulAmbiguity &&
-              mainGeographyCountryRefinementOptions.length > 0 && (
+            mainGeographyCountryRefinementOptions.length > 0 &&
+            mainGeographyCountryRefinement === null ? (
+              <>
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    flexWrap: "wrap",
-                    marginBottom: "4px",
+                    color: "#666",
+                    fontSize: "13px",
+                    fontWeight: 600,
                   }}
                 >
-                  <span
-                    style={{
-                      color: "#666",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Which country do you mean?
-                  </span>
+                  Which country do you mean?
+                </div>
 
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "8px",
+                  }}
+                >
                   {mainGeographyCountryRefinementOptions.map((option) => {
+                    const countryCode =
+                      option.country_code.toUpperCase();
+
                     const countryName =
                       countryCatalog.find(
                         (item) =>
-                          item.code.toUpperCase() ===
-                          option.country_code.toUpperCase()
+                          item.code.toUpperCase() === countryCode
                       )?.canonical_name || option.country_code;
-
-                    const isSelected =
-                      mainGeographyCountryRefinement ===
-                      option.country_code.toUpperCase();
 
                     return (
                       <button
                         key={option.country_code}
                         type="button"
                         onClick={() => {
-                          setMainGeographyCountryRefinement(
-                            option.country_code.toUpperCase()
-                          );
+                          setMainGeographyCountryRefinement(countryCode);
                         }}
                         style={{
-                          padding: "6px 10px",
-                          border: "1px solid #ccc",
-                          borderRadius: "999px",
-                          background: isSelected ? "#eee" : "white",
-                          color: "#222",
+                          padding: "12px 14px",
+                          border: "1px solid #ddd",
+                          borderRadius: "12px",
+                          background: "white",
+                          color: "#111",
                           cursor: "pointer",
-                          fontSize: "13px",
+                          textAlign: "left",
+                          fontWeight: 600,
                         }}
                       >
-                        {countryName}
+                        {countryName} →
                       </button>
                     );
                   })}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMainGeographyCountryRefinement(null);
-                    }}
-                    style={{
-                      padding: "6px 10px",
-                      border: "1px solid #ccc",
-                      borderRadius: "999px",
-                      background:
-                        mainGeographyCountryRefinement === null
-                          ? "#eee"
-                          : "white",
-                      color: "#222",
-                      cursor: "pointer",
-                      fontSize: "13px",
-                    }}
-                  >
-                    Show all
-                  </button>
                 </div>
-              )}
-
-            <div
-              style={{
-                color: "#666",
-                fontSize: "13px",
-                fontWeight: 600,
-              }}
-            >
-              Geographic matches
-            </div>
-
-            {visibleMainGeographyResults.map((result) => {
-              const country =
-                countryCatalog.find(
-                  (item) =>
-                    item.code.toUpperCase() ===
-                    result.country_code.toUpperCase()
-                )?.canonical_name || result.country_code;
-
-              return (
-                <button
-                  key={
-                    result.existing_place_id
-                      ? `place-${result.existing_place_id}`
-                      : `${result.external_source}-${result.external_id}`
-                  }
-                  type="button"
-                  onClick={() => {
-                    void handleSelectMainGeographyResult(result);
-                  }}
-                  disabled={mainGeographySearchLoading}
-                  style={{
-                    padding: "14px",
-                    border: "1px solid #ddd",
-                    borderRadius: "12px",
-                    background: "white",
-                    color: "#111",
-                    textAlign: "left",
-                    cursor: mainGeographySearchLoading
-                      ? "not-allowed"
-                      : "pointer",
-                    opacity: mainGeographySearchLoading ? 0.6 : 1,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "12px",
-                      alignItems: "center",
-                    }}
-                  >
-                    <strong>{result.canonical_name}</strong>
-
-                    <span
+              </>
+            ) : (
+              <>
+                {mainGeographyMeaningfulAmbiguity &&
+                  mainGeographyCountryRefinement && (
+                    <div
                       style={{
-                        fontSize: "13px",
-                        color: "#555",
-                        whiteSpace: "nowrap",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        flexWrap: "wrap",
                       }}
                     >
-                      Open →
-                    </span>
-                  </div>
+                      <div
+                        style={{
+                          color: "#666",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Results in{" "}
+                        {countryCatalog.find(
+                          (item) =>
+                            item.code.toUpperCase() ===
+                            mainGeographyCountryRefinement
+                        )?.canonical_name ||
+                          mainGeographyCountryRefinement}
+                      </div>
 
-                  <div
-                    style={{
-                      marginTop: "4px",
-                      color: "#666",
-                      fontSize: "13px",
-                    }}
-                  >
-                    {getGeographicTypeLabel(result.geographic_type)}
-                    {result.admin_name
-                      ? ` · ${result.admin_name}`
-                      : ""}
-                    {country ? ` · ${country}` : ""}
-                  </div>
-                </button>
-              );
-            })}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMainGeographyCountryRefinement(null);
+                        }}
+                        style={{
+                          padding: 0,
+                          border: 0,
+                          background: "transparent",
+                          color: "#555",
+                          cursor: "pointer",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        ← Change country
+                      </button>
+                    </div>
+                  )}
+
+                <div
+                  style={{
+                    color: "#666",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Geographic matches
+                </div>
+
+                {visibleMainGeographyResults.map((result) => {
+                  const country =
+                    countryCatalog.find(
+                      (item) =>
+                        item.code.toUpperCase() ===
+                        result.country_code.toUpperCase()
+                    )?.canonical_name || result.country_code;
+
+                  const resultKey = result.existing_place_id
+                    ? `place-${result.existing_place_id}`
+                    : `${result.external_source}-${result.external_id}`;
+
+                  if (!result.can_open) {
+                    return (
+                      <div
+                        key={resultKey}
+                        style={{
+                          padding: "14px",
+                          border: "1px solid #ddd",
+                          borderRadius: "12px",
+                          background: "white",
+                          color: "#111",
+                        }}
+                      >
+                        <strong>{result.canonical_name}</strong>
+
+                        <div
+                          style={{
+                            marginTop: "4px",
+                            color: "#666",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {getGeographicTypeLabel(result.geographic_type)}
+                          {result.admin_name
+                            ? ` · ${result.admin_name}`
+                            : ""}
+                          {country ? ` · ${country}` : ""}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={resultKey}
+                      type="button"
+                      onClick={() => {
+                        void handleSelectMainGeographyResult(result);
+                      }}
+                      disabled={mainGeographySearchLoading}
+                      style={{
+                        padding: "14px",
+                        border: "1px solid #ddd",
+                        borderRadius: "12px",
+                        background: "white",
+                        color: "#111",
+                        textAlign: "left",
+                        cursor: mainGeographySearchLoading
+                          ? "not-allowed"
+                          : "pointer",
+                        opacity: mainGeographySearchLoading ? 0.6 : 1,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          alignItems: "center",
+                        }}
+                      >
+                        <strong>{result.canonical_name}</strong>
+
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            color: "#555",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Open →
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          color: "#666",
+                          fontSize: "13px",
+                        }}
+                      >
+                        {getGeographicTypeLabel(result.geographic_type)}
+                        {result.admin_name
+                          ? ` · ${result.admin_name}`
+                          : ""}
+                        {country ? ` · ${country}` : ""}
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
 

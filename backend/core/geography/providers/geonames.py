@@ -32,6 +32,7 @@ GEOGRAPHIC_FEATURE_TYPES = {
     ("H", "STM"): "river",
     ("H", "LK"): "lake",
     ("L", "RGN"): "region",
+    ("L", "PRK"): "park",
 }
 
 
@@ -125,6 +126,16 @@ def normalize_geographic_result(item):
                 "code": str(
                     item.get(f"adminCode{level}") or ""
                 ).strip(),
+                "external_id": str(
+                    item.get(f"adminId{level}") or ""
+                ).strip(),
+                "iso_code": str(
+                    (
+                        item.get(f"adminCodes{level}")
+                        or {}
+                    ).get("ISO3166_2")
+                    or ""
+                ).strip(),
             }
             for level in range(1, 6)
             if (
@@ -135,6 +146,17 @@ def normalize_geographic_result(item):
         "external_source": "geonames",
         "external_id": str(item.get("geonameId") or "").strip(),
     }
+
+
+def geographic_result_can_materialize(result):
+    """
+    Return whether a normalized GeoNames result can use the current
+    Trust Travel geographic hub materialization flow.
+    """
+    return (
+        result.get("geographic_type")
+        in TRAVEL_GEOGRAPHIC_TYPES
+    )
 
 
 def normalize_city_result(item):

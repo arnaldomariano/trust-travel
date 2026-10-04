@@ -1023,6 +1023,25 @@ class GooglePlacesDiscoveryTests(TestCase):
                 },
             ],
         )
+        self.assertEqual(
+            result["admin_context"],
+            [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                    "code": "",
+                    "external_id": "",
+                    "iso_code": "",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                    "code": "",
+                    "external_id": "",
+                    "iso_code": "",
+                },
+            ],
+        )
         self.assertEqual(result["country_code"], "BR")
 
     def test_google_provider_types_are_preserved_for_unclassified_place(self):
@@ -2519,6 +2538,128 @@ class GeographicDiscoveryInterpretedSearchTests(TestCase):
         )
 
     @patch("core.geography.discovery.search_global_discovery_places")
+    def test_interpreted_search_builds_suggestion_hypothesis_from_exact_anchor(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        anchor = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+            "existing_place_id": None,
+        }
+        suggestion_candidate = {
+            "name": "Parque Natural Estoril",
+            "canonical_name": "Parque Natural Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "",
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+            "external_source": "google_places",
+            "external_id": "google-parque-natural-estoril",
+            "existing_place_id": None,
+        }
+
+        candidates = [
+            anchor,
+            suggestion_candidate,
+        ]
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Parque Estoril"
+        )
+
+        self.assertEqual(
+            len(result["suggestion_hypotheses"]),
+            1,
+        )
+        hypothesis = result["suggestion_hypotheses"][0]
+
+        self.assertIs(
+            hypothesis["anchor"],
+            anchor,
+        )
+        self.assertIs(
+            hypothesis["candidate"],
+            suggestion_candidate,
+        )
+        self.assertIs(
+            result["candidates"],
+            candidates,
+        )
+
+
+    def test_suggestion_hypothesis_rejects_known_country_conflict(self):
+        from .geography.discovery import (
+            find_discovery_suggestion_hypotheses,
+        )
+
+        anchor = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+        other_country_candidate = {
+            "name": "Parque Natural Estoril",
+            "canonical_name": "Parque Natural Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+
+        hypotheses = find_discovery_suggestion_hypotheses(
+            [
+                anchor,
+                other_country_candidate,
+            ],
+            "Parque Estoril",
+        )
+
+        self.assertEqual(
+            hypotheses,
+            [],
+        )
+
+
+    @patch("core.geography.discovery.search_global_discovery_places")
     def test_interpreted_search_marks_unsupported_external_result_as_not_openable(
         self,
         mock_search_global_discovery_places,
@@ -3745,6 +3886,89 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
         )
 
     @patch("core.geography.discovery.search_global_discovery_places")
+    def test_country_refinement_runs_before_suggestion_resolution(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        brazil_anchor = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "settlement",
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+        brazil_suggestion = {
+            "name": "Parque Natural Estoril",
+            "canonical_name": "Parque Natural Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "",
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+        portugal_anchor = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "PT",
+            "geographic_type": "settlement",
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Lisboa",
+                },
+            ],
+        }
+
+        candidates = [
+            brazil_anchor,
+            brazil_suggestion,
+            portugal_anchor,
+        ]
+        mock_search_global_discovery_places.return_value = candidates
+
+        result = search_interpreted_global_discovery_places(
+            "Parque Estoril",
+            country_refinement="PT",
+        )
+
+        self.assertEqual(
+            result["suggestion_hypotheses"],
+            [],
+        )
+        self.assertEqual(
+            len(result["refined_candidates"]),
+            1,
+        )
+        self.assertEqual(
+            result["refined_candidates"][0]["country_code"],
+            "PT",
+        )
+
+
+    @patch("core.geography.discovery.search_global_discovery_places")
     def test_interpreted_search_without_country_refinement_preserves_all_candidates(
         self,
         mock_search_global_discovery_places,
@@ -3803,6 +4027,248 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
         )
         self.assertNotIn("can_open", candidates[0])
         self.assertNotIn("can_open", candidates[1])
+
+
+class GeographicResolutionTests(TestCase):
+    def test_suggestion_query_expansion_requires_additional_identity_token(self):
+        from .geography.resolution import (
+            discovery_candidate_expands_query_identity,
+        )
+
+        exact_candidate = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+        }
+        expanded_candidate = {
+            "name": "Parque Natural Estoril",
+            "canonical_name": "Parque Natural Estoril",
+            "aliases": [],
+        }
+        partial_candidate = {
+            "name": "Estoril Residence Hotel",
+            "canonical_name": "Estoril Residence Hotel",
+            "aliases": [],
+        }
+
+        self.assertFalse(
+            discovery_candidate_expands_query_identity(
+                exact_candidate,
+                "Parque Estoril",
+            )
+        )
+        self.assertTrue(
+            discovery_candidate_expands_query_identity(
+                expanded_candidate,
+                "Parque Estoril",
+            )
+        )
+        self.assertFalse(
+            discovery_candidate_expands_query_identity(
+                partial_candidate,
+                "Parque Estoril",
+            )
+        )
+
+
+    def test_admin_context_conflict_compares_shared_levels_by_name(self):
+        from .geography.resolution import (
+            discovery_candidates_have_admin_context_conflict,
+        )
+
+        geonames_candidate = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Rio de Janeiro",
+                },
+                {
+                    "level": 2,
+                    "name": "Miguel Pereira",
+                },
+            ],
+        }
+        google_candidate = {
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+
+        self.assertTrue(
+            discovery_candidates_have_admin_context_conflict(
+                geonames_candidate,
+                google_candidate,
+            )
+        )
+
+
+    def test_suggestion_for_anchor_requires_expansion_and_consistent_shared_context(self):
+        from .geography.resolution import (
+            discovery_candidate_is_suggestion_for_anchor,
+        )
+
+        anchor = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+        suggestion_candidate = {
+            "name": "Parque Natural Estoril",
+            "canonical_name": "Parque Natural Estoril",
+            "aliases": [],
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+        conflicting_candidate = {
+            "name": "Parque Natural Estoril",
+            "canonical_name": "Parque Natural Estoril",
+            "aliases": [],
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "Campinas",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+        unknown_context_candidate = {
+            "name": "Parque Natural Estoril",
+            "canonical_name": "Parque Natural Estoril",
+            "aliases": [],
+            "admin_context": [],
+        }
+
+        self.assertTrue(
+            discovery_candidate_is_suggestion_for_anchor(
+                suggestion_candidate,
+                anchor,
+                "Parque Estoril",
+            )
+        )
+        self.assertFalse(
+            discovery_candidate_is_suggestion_for_anchor(
+                conflicting_candidate,
+                anchor,
+                "Parque Estoril",
+            )
+        )
+        self.assertFalse(
+            discovery_candidate_is_suggestion_for_anchor(
+                unknown_context_candidate,
+                anchor,
+                "Parque Estoril",
+            )
+        )
+
+
+    def test_admin_context_shared_evidence_requires_matching_shared_level(self):
+        from .geography.resolution import (
+            discovery_candidates_share_admin_context_evidence,
+        )
+
+        first_candidate = {
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+        matching_candidate = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Sao Paulo",
+                },
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+            ],
+        }
+        unknown_candidate = {
+            "admin_context": [
+                {
+                    "level": 3,
+                    "name": "Estoril",
+                },
+            ],
+        }
+
+        self.assertTrue(
+            discovery_candidates_share_admin_context_evidence(
+                first_candidate,
+                matching_candidate,
+            )
+        )
+        self.assertFalse(
+            discovery_candidates_share_admin_context_evidence(
+                first_candidate,
+                unknown_candidate,
+            )
+        )
+
+
+    def test_admin_context_missing_shared_level_does_not_establish_conflict(self):
+        from .geography.resolution import (
+            discovery_candidates_have_admin_context_conflict,
+        )
+
+        first_candidate = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+            ],
+        }
+        second_candidate = {
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "São Bernardo do Campo",
+                },
+            ],
+        }
+
+        self.assertFalse(
+            discovery_candidates_have_admin_context_conflict(
+                first_candidate,
+                second_candidate,
+            )
+        )
 
 
 class GeographyPlaceSearchViewTests(TestCase):

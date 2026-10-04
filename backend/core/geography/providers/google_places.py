@@ -83,6 +83,7 @@ def normalize_google_discovery_result(item):
 
     country_code = ""
     location_context = []
+    admin_context = []
 
     context_types = (
         "sublocality_level_1",
@@ -96,6 +97,12 @@ def normalize_google_discovery_result(item):
         "administrative_area_level_1",
         "country",
     )
+
+    administrative_levels = {
+        "administrative_area_level_1": 1,
+        "administrative_area_level_2": 2,
+        "administrative_area_level_3": 3,
+    }
 
     for component in address_components:
         component_types = component.get("types") or []
@@ -122,6 +129,30 @@ def normalize_google_discovery_result(item):
                 }
             )
 
+        administrative_type = next(
+            (
+                place_type
+                for place_type in administrative_levels
+                if place_type in component_types
+            ),
+            None,
+        )
+
+        if administrative_type:
+            admin_context.append(
+                {
+                    "level": administrative_levels[
+                        administrative_type
+                    ],
+                    "name": str(
+                        component.get("longText") or ""
+                    ).strip(),
+                    "code": "",
+                    "external_id": "",
+                    "iso_code": "",
+                }
+            )
+
         if "country" in component_types:
             country_code = str(
                 component.get("shortText") or ""
@@ -142,7 +173,7 @@ def normalize_google_discovery_result(item):
         "geographic_type": geographic_type,
         "population": 0,
         "admin_name": "",
-        "admin_context": [],
+        "admin_context": admin_context,
         "external_source": "google_places",
         "external_id": place_id,
         "provider_types": provider_types,

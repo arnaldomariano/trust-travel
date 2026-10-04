@@ -10,6 +10,9 @@ from .registry import (
 from .services import (
     deduplicate_geographic_results_by_existing_place,
 )
+from .resolution import (
+    discovery_candidate_is_suggestion_for_anchor,
+)
 
 from .providers.geonames import (
     GeoNamesRequestError,
@@ -504,6 +507,54 @@ def annotate_discovery_presentation_actionability(candidates):
     return presented_candidates
 
 
+def find_discovery_suggestion_hypotheses(
+    candidates,
+    query,
+):
+    """
+    Return plausible query-refinement relations between discovery candidates.
+
+    Exact-query anchors and country compatibility remain discovery concerns.
+    Resolution evaluates whether another candidate is a plausible refinement
+    of that already validated anchor.
+    """
+    anchors = [
+        candidate
+        for candidate in candidates
+        if discovery_candidate_exactly_matches_query(
+            candidate,
+            query,
+        )
+    ]
+
+    hypotheses = []
+
+    for anchor in anchors:
+        for candidate in candidates:
+            if candidate is anchor:
+                continue
+
+            if not discovery_candidates_have_compatible_countries(
+                anchor,
+                candidate,
+            ):
+                continue
+
+            if discovery_candidate_is_suggestion_for_anchor(
+                candidate,
+                anchor,
+                query,
+            ):
+                hypotheses.append(
+                    {
+                        "anchor": anchor,
+                        "candidate": candidate,
+                    }
+                )
+
+    return hypotheses
+
+
 def search_interpreted_global_discovery_places(
     query,
     country_refinement=None,
@@ -538,6 +589,12 @@ def search_interpreted_global_discovery_places(
     refined_candidates = apply_discovery_country_refinement(
         candidates,
         country_refinement,
+    )
+    interpretation[
+        "suggestion_hypotheses"
+    ] = find_discovery_suggestion_hypotheses(
+        refined_candidates,
+        query,
     )
     presented_candidates = (
         deduplicate_geographic_results_by_existing_place(

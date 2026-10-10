@@ -422,6 +422,531 @@ class CountryMaterializationAPITests(TestCase):
         )
 
 
+
+class GeographicPlaceMaterializationAPITests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        self.user = User.objects.create_user(
+            username="geographic-place-materialization-user",
+            password="test-password",
+        )
+        self.access_token = str(
+            AccessToken.for_user(self.user)
+        )
+        self.url = "/api/geography/places/materialize/"
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_google_geographic_place")
+    def test_preserve_returns_resolution_required_without_internal_evidence(
+        self,
+        mock_get_google_geographic_place,
+        mock_materialize_city_place,
+    ):
+        from .models import Destination, Place
+
+        country = get_or_create_country(value="United States")
+        destination = Destination.objects.create(
+            name="United States",
+            country="United States",
+        )
+        reference_place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        mock_get_google_geographic_place.return_value = {
+            "name": "Springfield",
+            "canonical_name": "Springfield",
+            "aliases": [],
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+            "country_code": "US",
+            "geographic_type": "settlement",
+        }
+        mock_materialize_city_place.return_value = {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "evaluations": [
+                {
+                    "place": reference_place,
+                    "identity_relation": "unresolved",
+                    "reconciliation_action": "preserve",
+                }
+            ],
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "google_places",
+                "external_id": "springfield-massachusetts",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+
+        data = response.json()
+
+        self.assertEqual(
+            data["code"],
+            "geographic_resolution_required",
+        )
+        self.assertEqual(
+            data["detail"],
+            "This geographic place needs confirmation before it can be added.",
+        )
+        self.assertEqual(
+            data["references"],
+            [
+                {
+                    "id": reference_place.id,
+                    "name": "Springfield",
+                    "country_code": "US",
+                    "country_name": "United States",
+                    "geographic_type": "settlement",
+                }
+            ],
+        )
+        self.assertNotIn("evaluations", data)
+        self.assertNotIn("identity_relation", str(data))
+        self.assertNotIn("reconciliation_action", str(data))
+
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_google_geographic_place")
+    def test_reuse_returns_existing_place_with_200(
+        self,
+        mock_get_google_geographic_place,
+        mock_materialize_city_place,
+    ):
+        from .models import Destination, Place
+
+        country = get_or_create_country(value="Italy")
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+        place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Lake Como",
+            canonical_name="Lake Como",
+            country_code="IT",
+            place_type="city",
+            geographic_type="lake",
+        )
+
+        mock_get_google_geographic_place.return_value = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "external_source": "google_places",
+            "external_id": "lake-como-google",
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+        mock_materialize_city_place.return_value = {
+            "state": "reuse",
+            "place": place,
+            "created": False,
+            "evaluations": [],
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "google_places",
+                "external_id": "lake-como-google",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+        self.assertEqual(response.json()["id"], place.id)
+        self.assertEqual(response.json()["name"], "Lake Como")
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_google_geographic_place")
+    def test_created_returns_new_place_with_201(
+        self,
+        mock_get_google_geographic_place,
+        mock_materialize_city_place,
+    ):
+        from .models import Destination, Place
+
+        country = get_or_create_country(value="Italy")
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+        place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="New Geographic Place",
+            canonical_name="New Geographic Place",
+            country_code="IT",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        mock_get_google_geographic_place.return_value = {
+            "name": "New Geographic Place",
+            "canonical_name": "New Geographic Place",
+            "aliases": [],
+            "external_source": "google_places",
+            "external_id": "new-geographic-place",
+            "country_code": "IT",
+            "geographic_type": "settlement",
+        }
+        mock_materialize_city_place.return_value = {
+            "state": "created",
+            "place": place,
+            "created": True,
+            "evaluations": [],
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "google_places",
+                "external_id": "new-geographic-place",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+        self.assertEqual(response.json()["id"], place.id)
+        self.assertEqual(
+            response.json()["name"],
+            "New Geographic Place",
+        )
+
+
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_google_geographic_place")
+    def test_unknown_materialization_state_fails_closed(
+        self,
+        mock_get_google_geographic_place,
+        mock_materialize_city_place,
+    ):
+        mock_get_google_geographic_place.return_value = {
+            "name": "Future Geographic Place",
+            "canonical_name": "Future Geographic Place",
+            "aliases": [],
+            "external_source": "google_places",
+            "external_id": "future-geographic-place",
+            "country_code": "IT",
+            "geographic_type": "settlement",
+        }
+        mock_materialize_city_place.return_value = {
+            "state": "escalate",
+            "place": None,
+            "created": False,
+            "evaluations": [],
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unsupported geographic materialization state: escalate",
+        ):
+            self.client.post(
+                self.url,
+                data={
+                    "external_source": "google_places",
+                    "external_id": "future-geographic-place",
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+
+class GeographicCityMaterializationAPITests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+        from .models import Destination, Place
+
+        self.user = User.objects.create_user(
+            username="geographic-city-materialization-user",
+            password="test-password",
+        )
+        self.access_token = str(
+            AccessToken.for_user(self.user)
+        )
+        self.url = "/api/geography/cities/materialize/"
+
+        self.country = get_or_create_country(
+            value="United States"
+        )
+        self.destination = Destination.objects.create(
+            name="United States",
+            country="United States",
+        )
+        self.country_place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            name="United States",
+            canonical_name="United States",
+            country_code="US",
+            place_type="country",
+        )
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_geographic_place")
+    def test_preserve_returns_resolution_required_without_internal_evidence(
+        self,
+        mock_get_geographic_place,
+        mock_materialize_city_place,
+    ):
+        from .models import Place
+
+        reference_place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        mock_get_geographic_place.return_value = {
+            "name": "Springfield",
+            "canonical_name": "Springfield",
+            "aliases": [],
+            "external_source": "geonames",
+            "external_id": "springfield-massachusetts",
+            "country_code": "US",
+            "geographic_type": "settlement",
+        }
+        mock_materialize_city_place.return_value = {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "evaluations": [
+                {
+                    "place": reference_place,
+                    "identity_relation": "unresolved",
+                    "reconciliation_action": "preserve",
+                }
+            ],
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_id": "springfield-massachusetts",
+                "country_code": "US",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+
+        data = response.json()
+
+        self.assertEqual(
+            data["code"],
+            "geographic_resolution_required",
+        )
+        self.assertEqual(
+            data["references"],
+            [
+                {
+                    "id": reference_place.id,
+                    "name": "Springfield",
+                    "country_code": "US",
+                    "country_name": "United States",
+                    "geographic_type": "settlement",
+                }
+            ],
+        )
+        self.assertNotIn("evaluations", data)
+        self.assertNotIn("identity_relation", str(data))
+        self.assertNotIn("reconciliation_action", str(data))
+
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_geographic_place")
+    def test_reuse_returns_existing_place_with_200(
+        self,
+        mock_get_geographic_place,
+        mock_materialize_city_place,
+    ):
+        from .models import Place
+
+        place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        mock_get_geographic_place.return_value = {
+            "name": "Springfield",
+            "canonical_name": "Springfield",
+            "aliases": [],
+            "external_source": "geonames",
+            "external_id": "springfield-existing",
+            "country_code": "US",
+            "geographic_type": "settlement",
+        }
+        mock_materialize_city_place.return_value = {
+            "state": "reuse",
+            "place": place,
+            "created": False,
+            "evaluations": [],
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_id": "springfield-existing",
+                "country_code": "US",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+        self.assertEqual(response.json()["id"], place.id)
+        self.assertEqual(response.json()["name"], "Springfield")
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_geographic_place")
+    def test_created_returns_new_place_with_201(
+        self,
+        mock_get_geographic_place,
+        mock_materialize_city_place,
+    ):
+        from .models import Place
+
+        place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="New Geographic Place",
+            canonical_name="New Geographic Place",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        mock_get_geographic_place.return_value = {
+            "name": "New Geographic Place",
+            "canonical_name": "New Geographic Place",
+            "aliases": [],
+            "external_source": "geonames",
+            "external_id": "new-geographic-place",
+            "country_code": "US",
+            "geographic_type": "settlement",
+        }
+        mock_materialize_city_place.return_value = {
+            "state": "created",
+            "place": place,
+            "created": True,
+            "evaluations": [],
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_id": "new-geographic-place",
+                "country_code": "US",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+        self.assertEqual(response.json()["id"], place.id)
+        self.assertEqual(
+            response.json()["name"],
+            "New Geographic Place",
+        )
+
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_geographic_place")
+    def test_unknown_materialization_state_fails_closed(
+        self,
+        mock_get_geographic_place,
+        mock_materialize_city_place,
+    ):
+        mock_get_geographic_place.return_value = {
+            "name": "Future Geographic Place",
+            "canonical_name": "Future Geographic Place",
+            "aliases": [],
+            "external_source": "geonames",
+            "external_id": "future-geographic-place",
+            "country_code": "US",
+            "geographic_type": "settlement",
+        }
+        mock_materialize_city_place.return_value = {
+            "state": "escalate",
+            "place": None,
+            "created": False,
+            "evaluations": [],
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unsupported geographic materialization state: escalate",
+        ):
+            self.client.post(
+                self.url,
+                data={
+                    "external_id": "future-geographic-place",
+                    "country_code": "US",
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+
 class GeographicPlaceReconciliationTests(TestCase):
     def setUp(self):
         from .models import Destination, Place, PlaceExternalIdentity
@@ -465,8 +990,10 @@ class GeographicPlaceReconciliationTests(TestCase):
             geographic_type="lake",
         )
 
-    def test_cross_provider_result_matches_existing_geographic_place(self):
-        from .geography.services import find_existing_city_place
+    def test_candidate_reference_discovery_returns_plausible_existing_place(self):
+        from .geography.services import (
+            find_candidate_city_reference_places,
+        )
 
         google_result = {
             "name": "Lake Como",
@@ -480,20 +1007,871 @@ class GeographicPlaceReconciliationTests(TestCase):
             "longitude": 9.257168,
         }
 
-        matched_place = find_existing_city_place(
+        references = find_candidate_city_reference_places(
             city_result=google_result,
             resolved_country=self.country,
             country_code="IT",
         )
 
-        self.assertIsNotNone(matched_place)
         self.assertEqual(
-            matched_place.pk,
-            self.lake.pk,
+            [place.pk for place in references],
+            [self.lake.pk],
         )
 
-    def test_cross_provider_result_does_not_match_different_geographic_type(self):
-        from .geography.services import find_existing_city_place
+    @patch("core.geography.services.get_geographic_place")
+    def test_reference_evidence_reconstruction_fetches_known_geonames_identity(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.services import reconstruct_place_reference_evidence
+
+        provider_evidence = {
+            "name": "Lago di Como",
+            "canonical_name": "Lago di Como",
+            "aliases": ["Lake Como"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+            "latitude": 46.00793,
+            "longitude": 9.26079,
+            "admin_context": [
+                {"level": 1, "name": "Lombardy"},
+            ],
+        }
+        mock_get_geographic_place.return_value = provider_evidence
+
+        evidence = reconstruct_place_reference_evidence(self.lake)
+
+        mock_get_geographic_place.assert_called_once_with("3178228")
+        self.assertEqual(evidence, [provider_evidence])
+        self.assertIs(evidence[0], provider_evidence)
+
+    @patch("core.geography.services.get_geographic_place")
+    def test_reference_evidence_reconstruction_does_not_hide_provider_failure(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.providers.geonames import GeoNamesRequestError
+        from .geography.services import reconstruct_place_reference_evidence
+
+        mock_get_geographic_place.side_effect = GeoNamesRequestError(
+            "GeoNames geographic place lookup failed."
+        )
+
+        with self.assertRaises(GeoNamesRequestError):
+            reconstruct_place_reference_evidence(self.lake)
+
+    @patch("core.geography.services.get_geographic_place")
+    def test_reference_evidence_reconstruction_rejects_unsupported_identity_source(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.services import reconstruct_place_reference_evidence
+        from .models import PlaceExternalIdentity
+
+        PlaceExternalIdentity.objects.create(
+            place=self.lake,
+            external_source="foursquare",
+            external_id="fsq-lake-como",
+            geographic_type="lake",
+        )
+        mock_get_geographic_place.return_value = {
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unsupported reference evidence source: foursquare",
+        ):
+            reconstruct_place_reference_evidence(self.lake)
+
+    @patch("core.geography.services.get_google_geographic_place")
+    @patch("core.geography.services.get_geographic_place")
+    def test_reference_evidence_reconstruction_fetches_each_supported_identity(
+        self,
+        mock_get_geographic_place,
+        mock_get_google_geographic_place,
+    ):
+        from .geography.services import reconstruct_place_reference_evidence
+        from .models import PlaceExternalIdentity
+
+        PlaceExternalIdentity.objects.create(
+            place=self.lake,
+            external_source="google_places",
+            external_id="google-lake-como",
+            geographic_type="lake",
+        )
+
+        geonames_evidence = {
+            "name": "Lago di Como",
+            "external_source": "geonames",
+            "external_id": "3178228",
+            "geographic_type": "lake",
+        }
+        google_evidence = {
+            "name": "Lake Como",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+            "geographic_type": "lake",
+        }
+        mock_get_geographic_place.return_value = geonames_evidence
+        mock_get_google_geographic_place.return_value = google_evidence
+
+        evidence = reconstruct_place_reference_evidence(self.lake)
+
+        mock_get_geographic_place.assert_called_once_with("3178228")
+        mock_get_google_geographic_place.assert_called_once_with(
+            "google-lake-como"
+        )
+        self.assertEqual(len(evidence), 2)
+        self.assertIn(geonames_evidence, evidence)
+        self.assertIn(google_evidence, evidence)
+
+    @patch("core.geography.services.get_geographic_place")
+    def test_exact_provider_identity_resolves_reconstructed_reference_as_same(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.resolution import (
+            get_reference_evidence_identity_relation,
+        )
+        from .geography.services import (
+            find_candidate_city_reference_places,
+            reconstruct_place_reference_evidence,
+        )
+
+        candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+        provider_evidence = {
+            "name": "Lago di Como",
+            "canonical_name": "Lago di Como",
+            "aliases": ["Lake Como"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+        mock_get_geographic_place.return_value = provider_evidence
+
+        references = find_candidate_city_reference_places(
+            city_result=candidate,
+            resolved_country=self.country,
+            country_code="IT",
+        )
+        self.assertEqual(
+            [place.pk for place in references],
+            [self.lake.pk],
+        )
+
+        reference_evidence = reconstruct_place_reference_evidence(
+            references[0]
+        )
+        relation = get_reference_evidence_identity_relation(
+            candidate,
+            reference_evidence,
+        )
+
+        mock_get_geographic_place.assert_called_once_with("3178228")
+        self.assertEqual(relation, "same")
+
+    def test_candidate_reference_discovery_preserves_multiple_plausible_places(self):
+        from .geography.services import (
+            find_candidate_city_reference_places,
+        )
+        from .models import Destination, Place
+
+        country = get_or_create_country(value="United States")
+
+        destination = Destination.objects.create(
+            name="United States",
+            country="United States",
+        )
+
+        country_place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="United States",
+            canonical_name="United States",
+            aliases=["USA"],
+            country_code="US",
+            place_type="country",
+        )
+
+        springfield_illinois = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            parent_place=country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            aliases=[],
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+            city="Springfield",
+        )
+
+        springfield_massachusetts = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            parent_place=country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            aliases=[],
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+            city="Springfield",
+        )
+
+        incoming_result = {
+            "name": "Springfield",
+            "canonical_name": "Springfield",
+            "aliases": [],
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "external_source": "google_places",
+            "external_id": "google-springfield",
+        }
+
+        references = find_candidate_city_reference_places(
+            city_result=incoming_result,
+            resolved_country=country,
+            country_code="US",
+        )
+
+        self.assertEqual(
+            {place.pk for place in references},
+            {
+                springfield_illinois.pk,
+                springfield_massachusetts.pk,
+            },
+        )
+
+    @patch("core.geography.services.get_geographic_place")
+    def test_candidate_place_reference_evaluation_authorizes_exact_identity_reuse(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.services import (
+            evaluate_candidate_place_reference,
+        )
+
+        provider_evidence = {
+            "name": "Lago di Como",
+            "canonical_name": "Lago di Como",
+            "aliases": ["Lake Como"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+        mock_get_geographic_place.return_value = provider_evidence
+        candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+
+        result = evaluate_candidate_place_reference(
+            candidate,
+            self.lake,
+        )
+
+        mock_get_geographic_place.assert_called_once_with("3178228")
+        self.assertEqual(result["place"].pk, self.lake.pk)
+        self.assertEqual(result["identity_relation"], "same")
+        self.assertEqual(result["reconciliation_action"], "reuse")
+
+    @patch("core.geography.services.get_geographic_place")
+    def test_candidate_place_reference_evaluation_preserves_unresolved_place(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.services import (
+            evaluate_candidate_place_reference,
+        )
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        country = get_or_create_country(value="United States")
+        destination = Destination.objects.create(
+            name="United States",
+            country="United States",
+        )
+        country_place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="United States",
+            canonical_name="United States",
+            aliases=["USA"],
+            country_code="US",
+            place_type="country",
+        )
+        springfield = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            parent_place=country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            aliases=[],
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+            city="Springfield",
+        )
+        PlaceExternalIdentity.objects.create(
+            place=springfield,
+            external_source="geonames",
+            external_id="springfield-illinois",
+            geographic_type="settlement",
+        )
+        mock_get_geographic_place.return_value = {
+            "name": "Springfield",
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "external_source": "geonames",
+            "external_id": "springfield-illinois",
+            "admin_context": [
+                {"level": 1, "name": "Illinois"},
+            ],
+        }
+        candidate = {
+            "name": "Springfield",
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+            "admin_context": [
+                {"level": 1, "name": "Massachusetts"},
+            ],
+        }
+
+        result = evaluate_candidate_place_reference(
+            candidate,
+            springfield,
+        )
+
+        mock_get_geographic_place.assert_called_once_with(
+            "springfield-illinois"
+        )
+        self.assertIs(result["place"], springfield)
+        self.assertEqual(result["identity_relation"], "unresolved")
+        self.assertEqual(result["reconciliation_action"], "preserve")
+
+    @patch("core.geography.services.get_google_geographic_place")
+    @patch("core.geography.services.get_geographic_place")
+    def test_candidate_place_reference_collection_preserves_each_evaluation(
+        self,
+        mock_get_geographic_place,
+        mock_get_google_geographic_place,
+    ):
+        from .geography.services import evaluate_candidate_place_references
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        country = get_or_create_country(value="United States")
+        destination = Destination.objects.create(
+            name="United States",
+            country="United States",
+        )
+        country_place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="United States",
+            country_code="US",
+            place_type="country",
+        )
+        springfield_illinois = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            parent_place=country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+        springfield_massachusetts = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            parent_place=country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+        PlaceExternalIdentity.objects.create(
+            place=springfield_illinois,
+            external_source="geonames",
+            external_id="springfield-illinois",
+        )
+        PlaceExternalIdentity.objects.create(
+            place=springfield_massachusetts,
+            external_source="google_places",
+            external_id="springfield-massachusetts",
+        )
+
+        mock_get_geographic_place.return_value = {
+            "external_source": "geonames",
+            "external_id": "springfield-illinois",
+        }
+        mock_get_google_geographic_place.return_value = {
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+        }
+        candidate = {
+            "name": "Springfield",
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+        }
+
+        evaluations = evaluate_candidate_place_references(
+            candidate,
+            [springfield_illinois, springfield_massachusetts],
+        )
+
+        self.assertEqual(len(evaluations), 2)
+        by_place = {
+            evaluation["place"].pk: evaluation
+            for evaluation in evaluations
+        }
+        self.assertEqual(
+            by_place[springfield_illinois.pk]["identity_relation"],
+            "unresolved",
+        )
+        self.assertEqual(
+            by_place[springfield_illinois.pk]["reconciliation_action"],
+            "preserve",
+        )
+        self.assertEqual(
+            by_place[springfield_massachusetts.pk]["identity_relation"],
+            "same",
+        )
+        self.assertEqual(
+            by_place[springfield_massachusetts.pk]["reconciliation_action"],
+            "reuse",
+        )
+
+    @patch("core.geography.services.evaluate_candidate_place_references")
+    def test_unresolved_candidate_references_produce_preserve_state(
+        self,
+        mock_evaluate_references,
+    ):
+        from .geography.services import resolve_candidate_place_references
+
+        reference = object()
+        mock_evaluate_references.return_value = [
+            {
+                "place": reference,
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            }
+        ]
+
+        result = resolve_candidate_place_references(
+            candidate={"name": "Springfield"},
+            places=[reference],
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertEqual(
+            result["evaluations"],
+            mock_evaluate_references.return_value,
+        )
+
+    @patch("core.geography.services.evaluate_candidate_place_references")
+    def test_no_candidate_references_produce_no_reference_state(
+        self,
+        mock_evaluate_references,
+    ):
+        from .geography.services import resolve_candidate_place_references
+
+        mock_evaluate_references.return_value = []
+
+        result = resolve_candidate_place_references(
+            candidate={"name": "New Place"},
+            places=[],
+        )
+
+        self.assertEqual(result["state"], "no_reference")
+        self.assertEqual(result["evaluations"], [])
+
+    @patch("core.geography.services.find_candidate_city_reference_places")
+    def test_city_reference_gate_reuses_exact_persisted_identity_without_discovery(
+        self,
+        mock_find_references,
+    ):
+        from .geography.services import evaluate_city_reference_gate
+
+        candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lago di Como",
+            "aliases": ["Lake Como"],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+
+        result = evaluate_city_reference_gate(
+            city_result=candidate,
+            resolved_country=self.country,
+            country_code="IT",
+        )
+
+        self.assertEqual(result["state"], "reuse")
+        self.assertEqual(result["place"].pk, self.lake.pk)
+        self.assertEqual(result["evaluations"], [])
+        mock_find_references.assert_not_called()
+
+    @patch("core.geography.services.get_geographic_place")
+    def test_city_reference_gate_preserves_single_unresolved_reference(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.services import evaluate_city_reference_gate
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        country = get_or_create_country(value="United States")
+        destination = Destination.objects.create(
+            name="United States",
+            country="United States",
+        )
+        country_place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="United States",
+            canonical_name="United States",
+            aliases=["USA"],
+            country_code="US",
+            place_type="country",
+        )
+        springfield_illinois = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            parent_place=country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            aliases=[],
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+            city="Springfield",
+        )
+        PlaceExternalIdentity.objects.create(
+            place=springfield_illinois,
+            external_source="geonames",
+            external_id="springfield-illinois",
+            geographic_type="settlement",
+        )
+        mock_get_geographic_place.return_value = {
+            "name": "Springfield",
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "external_source": "geonames",
+            "external_id": "springfield-illinois",
+        }
+        candidate = {
+            "name": "Springfield",
+            "canonical_name": "Springfield",
+            "aliases": [],
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+        }
+
+        result = evaluate_city_reference_gate(
+            city_result=candidate,
+            resolved_country=country,
+            country_code="US",
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertEqual(len(result["evaluations"]), 1)
+        evaluation = result["evaluations"][0]
+        self.assertEqual(evaluation["place"].pk, springfield_illinois.pk)
+        self.assertEqual(evaluation["identity_relation"], "unresolved")
+        self.assertEqual(evaluation["reconciliation_action"], "preserve")
+        mock_get_geographic_place.assert_called_once_with(
+            "springfield-illinois"
+        )
+
+    @patch("core.geography.services.find_candidate_city_reference_places")
+    def test_city_reference_gate_reports_no_reference_when_discovery_finds_none(
+        self,
+        mock_find_references,
+    ):
+        from .geography.services import evaluate_city_reference_gate
+
+        mock_find_references.return_value = []
+        candidate = {
+            "name": "New Geographic Place",
+            "canonical_name": "New Geographic Place",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "new-google-place",
+        }
+
+        result = evaluate_city_reference_gate(
+            city_result=candidate,
+            resolved_country=self.country,
+            country_code="IT",
+        )
+
+        self.assertEqual(result["state"], "no_reference")
+        self.assertEqual(result["evaluations"], [])
+        mock_find_references.assert_called_once_with(
+            city_result=candidate,
+            resolved_country=self.country,
+            country_code="IT",
+        )
+
+    @patch("core.geography.services.create_city_place")
+    @patch("core.geography.services.enrich_existing_city_place")
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    def test_city_materialization_reuses_gate_authorized_place(
+        self,
+        mock_reference_gate,
+        mock_enrich,
+        mock_create,
+    ):
+        from .geography.services import materialize_city_place
+
+        mock_reference_gate.return_value = {
+            "state": "reuse",
+            "place": self.lake,
+            "evaluations": [],
+        }
+        mock_enrich.return_value = self.lake
+
+        city_result = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+
+        result = materialize_city_place(
+            city_result=city_result,
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "reuse")
+        self.assertEqual(result["place"].pk, self.lake.pk)
+        self.assertFalse(result["created"])
+        self.assertEqual(result["evaluations"], [])
+        mock_enrich.assert_called_once_with(
+            existing_place=self.lake,
+            city_result=city_result,
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+        )
+        mock_create.assert_not_called()
+
+    @patch("core.geography.services.create_city_place")
+    @patch("core.geography.services.enrich_existing_city_place")
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    def test_city_materialization_creates_after_no_reference(
+        self,
+        mock_reference_gate,
+        mock_enrich,
+        mock_create,
+    ):
+        from .geography.services import materialize_city_place
+
+        mock_reference_gate.return_value = {
+            "state": "no_reference",
+            "evaluations": [],
+        }
+        mock_create.return_value = (self.lake, True)
+
+        city_result = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+        }
+
+        result = materialize_city_place(
+            city_result=city_result,
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "created")
+        self.assertEqual(result["place"].pk, self.lake.pk)
+        self.assertTrue(result["created"])
+        self.assertEqual(result["evaluations"], [])
+        mock_create.assert_called_once_with(
+            city_result=city_result,
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+            user=None,
+        )
+        mock_enrich.assert_not_called()
+
+    @patch("core.geography.services.create_city_place")
+    @patch("core.geography.services.enrich_existing_city_place")
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    def test_city_materialization_reuses_identity_winner_after_creation_race(
+        self,
+        mock_reference_gate,
+        mock_enrich,
+        mock_create,
+    ):
+        from .geography.services import materialize_city_place
+
+        mock_reference_gate.return_value = {
+            "state": "no_reference",
+            "evaluations": [],
+        }
+        mock_create.return_value = (self.lake, False)
+
+        city_result = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "external_source": "google_places",
+            "external_id": "google-lake-como",
+        }
+
+        result = materialize_city_place(
+            city_result=city_result,
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "reuse")
+        self.assertEqual(result["place"].pk, self.lake.pk)
+        self.assertFalse(result["created"])
+        self.assertEqual(result["evaluations"], [])
+        mock_create.assert_called_once_with(
+            city_result=city_result,
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+            user=None,
+        )
+        mock_enrich.assert_not_called()
+
+    @patch("core.geography.services.create_city_place")
+    @patch("core.geography.services.enrich_existing_city_place")
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    def test_city_materialization_rejects_unknown_reference_state_without_mutation(
+        self,
+        mock_reference_gate,
+        mock_enrich,
+        mock_create,
+    ):
+        from .geography.services import materialize_city_place
+
+        mock_reference_gate.return_value = {
+            "state": "escalate",
+            "evaluations": [],
+        }
+
+        with self.assertRaises(ValueError):
+            materialize_city_place(
+                city_result={
+                    "name": "Lake Como",
+                    "canonical_name": "Lake Como",
+                    "aliases": [],
+                    "country_code": "IT",
+                    "geographic_type": "lake",
+                    "external_source": "google_places",
+                    "external_id": "google-lake-como",
+                },
+                resolved_country=self.country,
+                country_code="IT",
+                country_place=self.country_place,
+                user=None,
+            )
+
+        mock_enrich.assert_not_called()
+        mock_create.assert_not_called()
+
+    @patch("core.geography.services.create_city_place")
+    @patch("core.geography.services.enrich_existing_city_place")
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    def test_city_materialization_preserves_unresolved_reference_without_mutation(
+        self,
+        mock_reference_gate,
+        mock_enrich,
+        mock_create,
+    ):
+        from .geography.services import materialize_city_place
+
+        evaluations = [
+            {
+                "place": self.lake,
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            }
+        ]
+        mock_reference_gate.return_value = {
+            "state": "preserve",
+            "evaluations": evaluations,
+        }
+
+        result = materialize_city_place(
+            city_result={
+                "name": "Lake Como",
+                "canonical_name": "Lake Como",
+                "aliases": [],
+                "country_code": "IT",
+                "geographic_type": "lake",
+                "external_source": "google_places",
+                "external_id": "google-lake-como",
+            },
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertIsNone(result["place"])
+        self.assertFalse(result["created"])
+        self.assertEqual(result["evaluations"], evaluations)
+        mock_enrich.assert_not_called()
+        mock_create.assert_not_called()
+
+    def test_candidate_reference_discovery_excludes_different_geographic_type(self):
+        from .geography.services import (
+            find_candidate_city_reference_places,
+        )
 
         different_type_result = {
             "name": "Lake Como",
@@ -507,13 +1885,13 @@ class GeographicPlaceReconciliationTests(TestCase):
             "longitude": 9.257168,
         }
 
-        matched_place = find_existing_city_place(
+        references = find_candidate_city_reference_places(
             city_result=different_type_result,
             resolved_country=self.country,
             country_code="IT",
         )
 
-        self.assertIsNone(matched_place)
+        self.assertEqual(references, [])
 
     def test_deduplication_collapses_results_for_same_existing_place(self):
         from .geography.services import (
@@ -4030,6 +5408,704 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
 
 
 class GeographicResolutionTests(TestCase):
+    def test_known_reference_evidence_groups_candidates_by_existing_place_id(self):
+        from .geography.resolution import (
+            group_known_reference_evidence,
+        )
+
+        registry_candidate = {
+            "name": "Springfield",
+            "existing_place_id": 123,
+        }
+        provider_candidate = {
+            "name": "Springfield",
+            "external_source": "geonames",
+            "external_id": "springfield-illinois",
+            "existing_place_id": 123,
+        }
+
+        groups = group_known_reference_evidence(
+            [
+                registry_candidate,
+                provider_candidate,
+            ]
+        )
+
+        self.assertEqual(
+            groups,
+            {
+                123: [
+                    registry_candidate,
+                    provider_candidate,
+                ],
+            },
+        )
+
+    def test_unknown_candidate_does_not_join_known_reference_evidence_by_similarity(self):
+        from .geography.resolution import (
+            group_known_reference_evidence,
+        )
+
+        known_candidate = {
+            "name": "Springfield",
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "existing_place_id": 123,
+        }
+        unresolved_candidate = {
+            "name": "Springfield",
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+            "existing_place_id": None,
+        }
+
+        groups = group_known_reference_evidence(
+            [
+                known_candidate,
+                unresolved_candidate,
+            ]
+        )
+
+        self.assertEqual(
+            groups,
+            {
+                123: [
+                    known_candidate,
+                ],
+            },
+        )
+
+    def test_exact_external_identity_anywhere_in_reference_evidence_establishes_same_relation(self):
+        from .geography.resolution import (
+            get_reference_evidence_identity_relation,
+        )
+
+        registry_candidate = {
+            "name": "Springfield",
+            "existing_place_id": 123,
+        }
+        geonames_candidate = {
+            "name": "Springfield",
+            "external_source": "geonames",
+            "external_id": "4250542",
+            "existing_place_id": 123,
+        }
+        incoming_candidate = {
+            "name": "Springfield",
+            "external_source": "geonames",
+            "external_id": "4250542",
+            "existing_place_id": None,
+        }
+
+        relation = get_reference_evidence_identity_relation(
+            incoming_candidate,
+            [
+                registry_candidate,
+                geonames_candidate,
+            ],
+        )
+
+        self.assertEqual(
+            relation,
+            "same",
+        )
+
+    def test_gate_one_exact_identity_authorizes_reuse(self):
+        from .geography.resolution import evaluate_existing_reference_gate
+
+        candidate = {
+            "name": "Lake Como",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+        reference_evidence = [
+            {
+                "name": "Lago di Como",
+                "external_source": "geonames",
+                "external_id": "3178228",
+            }
+        ]
+
+        result = evaluate_existing_reference_gate(
+            candidate,
+            reference_evidence,
+        )
+
+        self.assertEqual(
+            result,
+            {
+                "identity_relation": "same",
+                "reconciliation_action": "reuse",
+            },
+        )
+
+    def test_gate_one_unresolved_identity_preserves_reference(self):
+        from .geography.resolution import evaluate_existing_reference_gate
+
+        candidate = {
+            "name": "Springfield",
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+        }
+        reference_evidence = [
+            {
+                "name": "Springfield",
+                "external_source": "geonames",
+                "external_id": "springfield-illinois",
+            }
+        ]
+
+        result = evaluate_existing_reference_gate(
+            candidate,
+            reference_evidence,
+        )
+
+        self.assertEqual(
+            result,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
+    def test_different_external_identities_across_reference_evidence_remain_unresolved(self):
+        from .geography.resolution import (
+            get_reference_evidence_identity_relation,
+        )
+
+        registry_candidate = {
+            "name": "Springfield",
+            "existing_place_id": 123,
+        }
+        geonames_candidate = {
+            "name": "Springfield",
+            "external_source": "geonames",
+            "external_id": "springfield-illinois",
+            "existing_place_id": 123,
+        }
+        incoming_candidate = {
+            "name": "Springfield",
+            "external_source": "geonames",
+            "external_id": "springfield-massachusetts",
+            "existing_place_id": None,
+        }
+
+        relation = get_reference_evidence_identity_relation(
+            incoming_candidate,
+            [
+                registry_candidate,
+                geonames_candidate,
+            ],
+        )
+
+        self.assertEqual(
+            relation,
+            "unresolved",
+        )
+
+    def test_candidate_admin_observations_preserve_each_reference_evidence_source(self):
+        from .geography.resolution import (
+            observe_candidate_admin_against_reference_evidence,
+        )
+
+        registry_candidate = {
+            "name": "Springfield",
+            "existing_place_id": 123,
+            "admin_context": [],
+        }
+        geonames_candidate = {
+            "name": "Springfield",
+            "external_source": "geonames",
+            "external_id": "springfield-illinois",
+            "existing_place_id": 123,
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Illinois",
+                },
+            ],
+        }
+        unresolved_candidate = {
+            "name": "Springfield",
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+            "existing_place_id": None,
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Massachusetts",
+                },
+            ],
+        }
+
+        observations = (
+            observe_candidate_admin_against_reference_evidence(
+                unresolved_candidate,
+                [
+                    registry_candidate,
+                    geonames_candidate,
+                ],
+            )
+        )
+
+        self.assertEqual(
+            observations,
+            [
+                {
+                    "reference": registry_candidate,
+                    "observation": {
+                        "compatible_levels": [],
+                        "divergent_levels": [],
+                    },
+                },
+                {
+                    "reference": geonames_candidate,
+                    "observation": {
+                        "compatible_levels": [],
+                        "divergent_levels": [1],
+                    },
+                },
+            ],
+        )
+
+    def test_settlement_classification_activates_localized_strategy(self):
+        from .geography.resolution import (
+            get_candidate_evaluation_strategies,
+        )
+
+        candidate = {
+            "geographic_type": "settlement",
+        }
+
+        strategies = get_candidate_evaluation_strategies(candidate)
+
+        self.assertEqual(
+            strategies,
+            {"localized"},
+        )
+
+    def test_google_natural_feature_activates_feature_and_area_strategies(self):
+        from .geography.resolution import (
+            get_candidate_evaluation_strategies,
+        )
+
+        candidate = {
+            "geographic_type": None,
+            "provider_types": [
+                "natural_feature",
+                "establishment",
+            ],
+        }
+
+        strategies = get_candidate_evaluation_strategies(candidate)
+
+        self.assertEqual(
+            strategies,
+            {"feature", "area"},
+        )
+
+    def test_classification_evidence_can_activate_multiple_strategies(self):
+        from .geography.resolution import (
+            get_candidate_evaluation_strategies,
+        )
+
+        candidate = {
+            "geographic_type": "settlement",
+            "provider_types": [
+                "natural_feature",
+            ],
+        }
+
+        strategies = get_candidate_evaluation_strategies(candidate)
+
+        self.assertEqual(
+            strategies,
+            {"localized", "feature", "area"},
+        )
+
+    def test_admin_evidence_is_unknown_without_comparable_levels(self):
+        from .geography.resolution import (
+            get_admin_context_evidence_observation,
+        )
+
+        candidate = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Massachusetts",
+                },
+            ],
+        }
+
+        reference = {
+            "admin_context": [],
+        }
+
+        observation = get_admin_context_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "compatible_levels": [],
+                "divergent_levels": [],
+            },
+        )
+
+    def test_admin_evidence_is_compatible_when_shared_level_matches(self):
+        from .geography.resolution import (
+            get_admin_context_evidence_observation,
+        )
+
+        candidate = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Massachusetts",
+                },
+            ],
+        }
+
+        reference = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "massachusetts",
+                },
+            ],
+        }
+
+        observation = get_admin_context_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "compatible_levels": [1],
+                "divergent_levels": [],
+            },
+        )
+
+    def test_admin_evidence_is_divergent_when_shared_level_differs(self):
+        from .geography.resolution import (
+            get_admin_context_evidence_observation,
+        )
+
+        candidate = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Massachusetts",
+                },
+            ],
+        }
+
+        reference = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Illinois",
+                },
+            ],
+        }
+
+        observation = get_admin_context_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "compatible_levels": [],
+                "divergent_levels": [1],
+            },
+        )
+
+    def test_admin_evidence_preserves_compatible_and_divergent_levels(self):
+        from .geography.resolution import (
+            get_admin_context_evidence_observation,
+        )
+
+        candidate = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "São Paulo",
+                },
+                {
+                    "level": 2,
+                    "name": "Municipality A",
+                },
+            ],
+        }
+
+        reference = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Sao Paulo",
+                },
+                {
+                    "level": 2,
+                    "name": "Municipality B",
+                },
+            ],
+        }
+
+        observation = get_admin_context_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "compatible_levels": [1],
+                "divergent_levels": [2],
+            },
+        )
+
+    def test_localized_reference_admin_evidence_preserves_informative_and_uninformative_sources(self):
+        from .geography.resolution import (
+            summarize_localized_reference_admin_evidence,
+        )
+
+        registry_candidate = {
+            "name": "Springfield",
+            "existing_place_id": 123,
+            "admin_context": [],
+        }
+        geonames_candidate = {
+            "name": "Springfield",
+            "external_source": "geonames",
+            "external_id": "springfield-illinois",
+            "existing_place_id": 123,
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Illinois",
+                },
+            ],
+        }
+        unresolved_candidate = {
+            "name": "Springfield",
+            "external_source": "google_places",
+            "external_id": "springfield-massachusetts",
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Massachusetts",
+                },
+            ],
+        }
+
+        summary = summarize_localized_reference_admin_evidence(
+            unresolved_candidate,
+            [
+                registry_candidate,
+                geonames_candidate,
+            ],
+        )
+
+        self.assertEqual(
+            summary,
+            {
+                "corroborating": [],
+                "discriminating": [
+                    {
+                        "reference": geonames_candidate,
+                        "levels": [1],
+                    },
+                ],
+                "uninformative": [
+                    registry_candidate,
+                ],
+            },
+        )
+
+    def test_localized_reference_admin_evidence_preserves_mixed_evidence_from_same_source(self):
+        from .geography.resolution import (
+            summarize_localized_reference_admin_evidence,
+        )
+
+        reference = {
+            "name": "Springfield",
+            "existing_place_id": 123,
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Massachusetts",
+                },
+                {
+                    "level": 2,
+                    "name": "Hampden",
+                },
+            ],
+        }
+        candidate = {
+            "name": "Springfield",
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Massachusetts",
+                },
+                {
+                    "level": 2,
+                    "name": "Springfield",
+                },
+            ],
+        }
+
+        summary = summarize_localized_reference_admin_evidence(
+            candidate,
+            [reference],
+        )
+
+        self.assertEqual(
+            summary,
+            {
+                "corroborating": [
+                    {
+                        "reference": reference,
+                        "levels": [1],
+                    },
+                ],
+                "discriminating": [
+                    {
+                        "reference": reference,
+                        "levels": [2],
+                    },
+                ],
+                "uninformative": [],
+            },
+        )
+
+    def test_localized_admin_interpretation_has_no_evidence_without_comparable_levels(self):
+        from .geography.resolution import (
+            interpret_localized_admin_evidence,
+        )
+
+        observation = {
+            "compatible_levels": [],
+            "divergent_levels": [],
+        }
+
+        interpretation = interpret_localized_admin_evidence(
+            observation
+        )
+
+        self.assertEqual(
+            interpretation,
+            {
+                "corroborating_levels": [],
+                "discriminating_levels": [],
+            },
+        )
+
+    def test_localized_admin_interpretation_treats_compatible_levels_as_corroborating(self):
+        from .geography.resolution import (
+            interpret_localized_admin_evidence,
+        )
+
+        observation = {
+            "compatible_levels": [1],
+            "divergent_levels": [],
+        }
+
+        interpretation = interpret_localized_admin_evidence(
+            observation
+        )
+
+        self.assertEqual(
+            interpretation,
+            {
+                "corroborating_levels": [1],
+                "discriminating_levels": [],
+            },
+        )
+
+    def test_localized_admin_interpretation_treats_divergent_levels_as_discriminating(self):
+        from .geography.resolution import (
+            interpret_localized_admin_evidence,
+        )
+
+        observation = {
+            "compatible_levels": [],
+            "divergent_levels": [1],
+        }
+
+        interpretation = interpret_localized_admin_evidence(
+            observation
+        )
+
+        self.assertEqual(
+            interpretation,
+            {
+                "corroborating_levels": [],
+                "discriminating_levels": [1],
+            },
+        )
+
+    def test_spatial_evidence_is_unknown_when_coordinates_are_incomplete(self):
+        from .geography.resolution import (
+            get_spatial_evidence_observation,
+        )
+
+        candidate = {
+            "latitude": 42.1,
+            "longitude": -72.59,
+        }
+
+        reference = {
+            "latitude": None,
+            "longitude": -89.64,
+        }
+
+        observation = get_spatial_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "distance_km": None,
+            },
+        )
+
+    def test_spatial_evidence_preserves_calculated_distance(self):
+        from .geography.resolution import (
+            get_spatial_evidence_observation,
+        )
+
+        candidate = {
+            "latitude": 42.1,
+            "longitude": -72.59,
+        }
+
+        reference = {
+            "latitude": 39.8,
+            "longitude": -89.64,
+        }
+
+        observation = get_spatial_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertAlmostEqual(
+            observation["distance_km"],
+            1452.027,
+            places=3,
+        )
+
     def test_suggestion_query_expansion_requires_additional_identity_token(self):
         from .geography.resolution import (
             discovery_candidate_expands_query_identity,

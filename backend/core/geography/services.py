@@ -9,6 +9,10 @@ from ..models import (
     Place,
     PlaceExternalIdentity,
 )
+from .providers.geonames import get_geographic_place
+from .providers.google_places import get_google_geographic_place
+from .resolution import evaluate_existing_reference_gate
+
 from ..place_utils import (
     get_matching_places_by_name_identity,
     get_or_create_country,
@@ -16,6 +20,127 @@ from ..place_utils import (
     normalize_place_text,
 )
 
+
+
+def reconstruct_place_reference_evidence(place):
+    """Fetch authoritative evidence for known external identities."""
+    evidence = []
+
+    for identity in place.external_identities.all():
+        if identity.external_source == "geonames":
+            evidence.append(
+                get_geographic_place(identity.external_id)
+            )
+        elif identity.external_source == "google_places":
+            evidence.append(
+                get_google_geographic_place(
+                    identity.external_id
+                )
+            )
+        else:
+            raise ValueError(
+                "Unsupported reference evidence source: "
+                f"{identity.external_source}"
+            )
+
+    return evidence
+
+
+def evaluate_candidate_place_reference(
+    candidate,
+    place,
+):
+    """Evaluate one plausible Place using authoritative reference evidence."""
+    reference_evidence = reconstruct_place_reference_evidence(
+        place
+    )
+    gate_result = evaluate_existing_reference_gate(
+        candidate,
+        reference_evidence,
+    )
+
+    return {
+        "place": place,
+        **gate_result,
+    }
+
+
+def evaluate_candidate_place_references(
+    candidate,
+    places,
+):
+    """Evaluate plausible Places independently without choosing a winner."""
+    return [
+        evaluate_candidate_place_reference(
+            candidate,
+            place,
+        )
+        for place in places
+    ]
+
+
+def resolve_candidate_place_references(
+    candidate,
+    places,
+):
+    """Preserve unresolved reference evaluations for later resolution."""
+    evaluations = evaluate_candidate_place_references(
+        candidate,
+        places,
+    )
+
+    return {
+        "state": (
+            "preserve"
+            if evaluations
+            else "no_reference"
+        ),
+        "evaluations": evaluations,
+    }
+
+
+def evaluate_city_reference_gate(
+    city_result,
+    resolved_country,
+    country_code,
+):
+    """Evaluate existing city references without materializing a Place."""
+    external_source = str(
+        city_result.get("external_source") or ""
+    ).strip()
+    external_id = str(
+        city_result.get("external_id") or ""
+    ).strip()
+
+    if external_source and external_id:
+        external_identity = (
+            PlaceExternalIdentity.objects
+            .select_related("place")
+            .filter(
+                external_source=external_source,
+                external_id=external_id,
+                place__place_type="city",
+            )
+            .first()
+        )
+
+        if external_identity:
+            return {
+                "state": "reuse",
+                "place": external_identity.place,
+                "evaluations": [],
+            }
+
+    candidate_references = find_candidate_city_reference_places(
+        city_result=city_result,
+        resolved_country=resolved_country,
+        country_code=country_code,
+    )
+
+    return resolve_candidate_place_references(
+        candidate=city_result,
+        places=candidate_references,
+    )
 
 
 def materialize_country_place(
@@ -1206,37 +1331,12 @@ def find_existing_poi_place(
     return None
 
 
-def find_existing_city_place(
+def find_candidate_city_reference_places(
     city_result,
     resolved_country,
     country_code,
 ):
-    external_source = (
-        city_result.get("external_source") or ""
-    ).strip()
-
-    external_id = str(
-        city_result.get("external_id") or ""
-    ).strip()
-
-    if external_source and external_id:
-        external_identity = (
-            PlaceExternalIdentity.objects
-            .select_related("place")
-            .filter(
-                external_source=external_source,
-                external_id=external_id,
-                place__place_type="city",
-            )
-            .first()
-        )
-
-        if external_identity:
-            return external_identity.place
-
-    # A geographic place may be known by more than one external provider.
-    # Keep already materialized provider records eligible here so an exact
-    # shared name or alias can reconcile them into the same Trust Travel Place.
+    """Return plausible existing Places without deciding reconciliation."""
     possible_places = (
         Place.objects.filter(
             place_type="city",
@@ -1259,9 +1359,7 @@ def find_existing_city_place(
         city_result.get("geographic_type") or ""
     ).strip()
 
-    # When both records have a geographic type, require the types to agree.
-    # Empty types remain eligible for compatibility with legacy Place records.
-    matching_places = [
+    return [
         candidate
         for candidate in matching_places
         if (
@@ -1270,11 +1368,6 @@ def find_existing_city_place(
             or candidate.geographic_type == result_geographic_type
         )
     ]
-
-    if len(matching_places) == 1:
-        return matching_places[0]
-
-    return None
 
 
 def enrich_existing_city_place(
@@ -1715,27 +1808,52 @@ def materialize_city_place(
     country_place,
     user,
 ):
-    existing_place = find_existing_city_place(
+    reference_result = evaluate_city_reference_gate(
         city_result=city_result,
         resolved_country=resolved_country,
         country_code=country_code,
     )
 
-    if existing_place:
+    if reference_result["state"] == "reuse":
         place = enrich_existing_city_place(
-            existing_place=existing_place,
+            existing_place=reference_result["place"],
             city_result=city_result,
             resolved_country=resolved_country,
             country_code=country_code,
             country_place=country_place,
         )
+        return {
+            "state": "reuse",
+            "place": place,
+            "created": False,
+            "evaluations": reference_result["evaluations"],
+        }
 
-        return place, False
+    if reference_result["state"] == "preserve":
+        return {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "evaluations": reference_result["evaluations"],
+        }
 
-    return create_city_place(
+    if reference_result["state"] != "no_reference":
+        raise ValueError(
+            "Unsupported city reference gate state: "
+            f"{reference_result['state']}"
+        )
+
+    place, created = create_city_place(
         city_result=city_result,
         resolved_country=resolved_country,
         country_code=country_code,
         country_place=country_place,
         user=user,
     )
+
+    return {
+        "state": "created" if created else "reuse",
+        "place": place,
+        "created": created,
+        "evaluations": reference_result["evaluations"],
+    }

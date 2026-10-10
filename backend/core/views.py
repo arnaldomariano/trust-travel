@@ -1768,6 +1768,45 @@ class GeographyPlaceSearchView(APIView):
         )
 
 
+
+def _build_geographic_resolution_required_response(
+    materialization_result,
+):
+    references = []
+
+    for evaluation in materialization_result.get("evaluations", []):
+        place = evaluation.get("place")
+
+        if not place:
+            continue
+
+        references.append(
+            {
+                "id": place.id,
+                "name": place.name,
+                "country_code": place.country_code,
+                "country_name": (
+                    place.country_ref.canonical_name
+                    if place.country_ref
+                    else ""
+                ),
+                "geographic_type": place.geographic_type,
+            }
+        )
+
+    return Response(
+        {
+            "code": "geographic_resolution_required",
+            "detail": (
+                "This geographic place needs confirmation "
+                "before it can be added."
+            ),
+            "references": references,
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 class GeographyPlaceMaterializeView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1881,13 +1920,30 @@ class GeographyPlaceMaterializeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        place, created = materialize_city_place(
+        materialization_result = materialize_city_place(
             city_result=geographic_result,
             resolved_country=resolved_country,
             country_code=country["code"],
             country_place=country_place,
             user=request.user,
         )
+
+        if materialization_result["state"] == "preserve":
+            return _build_geographic_resolution_required_response(
+                materialization_result
+            )
+
+        if materialization_result["state"] not in {
+            "reuse",
+            "created",
+        }:
+            raise ValueError(
+                "Unsupported geographic materialization state: "
+                f"{materialization_result['state']}"
+            )
+
+        place = materialization_result["place"]
+        created = materialization_result["created"]
 
         serializer = PlaceSerializer(
             place,
@@ -2070,13 +2126,30 @@ class GeographyCityMaterializeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        place, created = materialize_city_place(
+        materialization_result = materialize_city_place(
             city_result=city_result,
             resolved_country=resolved_country,
             country_code=country["code"],
             country_place=country_place,
             user=request.user,
         )
+
+        if materialization_result["state"] == "preserve":
+            return _build_geographic_resolution_required_response(
+                materialization_result
+            )
+
+        if materialization_result["state"] not in {
+            "reuse",
+            "created",
+        }:
+            raise ValueError(
+                "Unsupported geographic materialization state: "
+                f"{materialization_result['state']}"
+            )
+
+        place = materialization_result["place"]
+        created = materialization_result["created"]
 
         serializer = PlaceSerializer(
             place,
@@ -2091,6 +2164,7 @@ class GeographyCityMaterializeView(APIView):
                 else status.HTTP_200_OK
             ),
         )
+
 
 class GeographyPOISearchView(APIView):
     authentication_classes = []

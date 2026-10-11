@@ -214,6 +214,114 @@ def get_candidate_evaluation_strategies(candidate):
     return strategies
 
 
+def get_country_evidence_observation(
+    candidate,
+    reference,
+):
+    """
+    Describe explicit country evidence without deciding geographic identity.
+
+    Matching non-empty country codes are compatible and different non-empty
+    country codes are incompatible. Missing country evidence remains unknown.
+    """
+    candidate_country_code = str(
+        candidate.get("country_code") or ""
+    ).strip().upper()
+    reference_country_code = str(
+        reference.get("country_code") or ""
+    ).strip().upper()
+
+    if (
+        not candidate_country_code
+        or not reference_country_code
+    ):
+        compatibility = "unknown"
+    elif candidate_country_code == reference_country_code:
+        compatibility = "compatible"
+    else:
+        compatibility = "incompatible"
+
+    return {
+        "candidate_country_code": candidate_country_code,
+        "reference_country_code": reference_country_code,
+        "compatibility": compatibility,
+    }
+
+
+def get_nominal_evidence_observation(
+    candidate,
+    reference,
+):
+    """
+    Describe exact normalized name-identity evidence without deciding identity.
+
+    Names, canonical names, and aliases use the shared place identity
+    normalization. Partial overlap, token expansion, and fuzzy similarity do
+    not establish nominal compatibility.
+    """
+    candidate_values = get_place_name_identity_values(
+        candidate.get("name"),
+        candidate.get("canonical_name"),
+        candidate.get("aliases"),
+    )
+    reference_values = get_place_name_identity_values(
+        reference.get("name"),
+        reference.get("canonical_name"),
+        reference.get("aliases"),
+    )
+
+    matching_identity_values = sorted(
+        candidate_values & reference_values
+    )
+
+    return {
+        "matching_identity_values": matching_identity_values,
+        "compatibility": (
+            "compatible"
+            if matching_identity_values
+            else "unresolved"
+        ),
+    }
+
+
+def get_semantic_evidence_observation(
+    candidate,
+    reference,
+):
+    """
+    Describe explicit geographic-type evidence without deciding identity.
+
+    Matching non-empty types are compatible and different non-empty types are
+    incompatible. Missing classification remains unknown rather than being
+    inferred from names, provider metadata, or geographic context.
+    """
+    candidate_geographic_type = str(
+        candidate.get("geographic_type") or ""
+    ).strip().lower()
+    reference_geographic_type = str(
+        reference.get("geographic_type") or ""
+    ).strip().lower()
+
+    if (
+        not candidate_geographic_type
+        or not reference_geographic_type
+    ):
+        compatibility = "unknown"
+    elif (
+        candidate_geographic_type
+        == reference_geographic_type
+    ):
+        compatibility = "compatible"
+    else:
+        compatibility = "incompatible"
+
+    return {
+        "candidate_geographic_type": candidate_geographic_type,
+        "reference_geographic_type": reference_geographic_type,
+        "compatibility": compatibility,
+    }
+
+
 def get_admin_context_evidence_observation(
     candidate,
     reference,
@@ -492,4 +600,75 @@ def get_spatial_evidence_observation(
 
     return {
         "distance_km": earth_radius_km * angular_distance,
+    }
+
+
+def get_geographic_identity_evidence_observation(
+    candidate,
+    reference,
+):
+    """
+    Collect pairwise geographic identity evidence without deciding identity.
+
+    Each evidence dimension remains independently observable so later
+    evaluation strategies can interpret the combined evidence conservatively.
+    """
+    return {
+        "nominal": get_nominal_evidence_observation(
+            candidate,
+            reference,
+        ),
+        "semantic": get_semantic_evidence_observation(
+            candidate,
+            reference,
+        ),
+        "country": get_country_evidence_observation(
+            candidate,
+            reference,
+        ),
+        "admin": get_admin_context_evidence_observation(
+            candidate,
+            reference,
+        ),
+        "spatial": get_spatial_evidence_observation(
+            candidate,
+            reference,
+        ),
+    }
+
+
+def evaluate_geographic_identity_evidence(evidence):
+    """
+    Evaluate collected geographic identity evidence conservatively.
+
+    Missing, unresolved, or incompatible core evidence remains unresolved.
+    Explicit nominal, semantic, and country compatibility is necessary but is
+    not yet sufficient to establish cross-provider identity automatically.
+
+    Administrative and spatial evidence remain available for future
+    strategy-specific rules. Until such a positive rule is formalized, Gate 2
+    preserves the candidate rather than authorizing reuse.
+    """
+    nominal = evidence.get("nominal") or {}
+    semantic = evidence.get("semantic") or {}
+    country = evidence.get("country") or {}
+
+    core_compatibilities = (
+        nominal.get("compatibility"),
+        semantic.get("compatibility"),
+        country.get("compatibility"),
+    )
+
+    if not all(
+        compatibility == "compatible"
+        for compatibility in core_compatibilities
+    ):
+        return {
+            "identity_relation": "unresolved",
+            "reconciliation_action": "preserve",
+        }
+
+    return {
+        "identity_relation": "unresolved",
+        "reconciliation_action": "preserve",
     }

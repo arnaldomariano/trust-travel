@@ -5605,6 +5605,750 @@ class GeographicResolutionTests(TestCase):
             "unresolved",
         )
 
+    def test_gate_two_semantic_evidence_rejects_different_explicit_geographic_types(self):
+        from .geography.resolution import (
+            get_semantic_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Chapada Diamantina",
+            "country_code": "BR",
+            "geographic_type": "natural_feature",
+        }
+        reference = {
+            "name": "Chapada Diamantina National Park",
+            "country_code": "BR",
+            "geographic_type": "park",
+        }
+
+        observation = get_semantic_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "candidate_geographic_type": "natural_feature",
+                "reference_geographic_type": "park",
+                "compatibility": "incompatible",
+            },
+        )
+
+    def test_gate_two_semantic_evidence_is_unknown_when_classification_is_missing(self):
+        from .geography.resolution import (
+            get_semantic_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Breda",
+            "country_code": "NL",
+            "geographic_type": None,
+            "primary_type": "locality",
+            "provider_types": [
+                "locality",
+                "political",
+            ],
+        }
+        reference = {
+            "name": "Breda",
+            "country_code": "NL",
+            "geographic_type": "settlement",
+        }
+
+        observation = get_semantic_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "candidate_geographic_type": "",
+                "reference_geographic_type": "settlement",
+                "compatibility": "unknown",
+            },
+        )
+
+    def test_gate_two_semantic_evidence_accepts_matching_explicit_geographic_types(self):
+        from .geography.resolution import (
+            get_semantic_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Lake Como",
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+        reference = {
+            "name": "Lago di Como",
+            "country_code": "IT",
+            "geographic_type": "lake",
+        }
+
+        observation = get_semantic_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "candidate_geographic_type": "lake",
+                "reference_geographic_type": "lake",
+                "compatibility": "compatible",
+            },
+        )
+
+    def test_gate_two_nominal_evidence_does_not_treat_name_expansion_as_identity_match(self):
+        from .geography.resolution import (
+            get_nominal_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Chapada Diamantina",
+            "canonical_name": "Chapada Diamantina",
+            "aliases": [],
+        }
+        reference = {
+            "name": "Chapada Diamantina National Park",
+            "canonical_name": "Chapada Diamantina National Park",
+            "aliases": [
+                "Parque Nacional da Chapada Diamantina",
+            ],
+        }
+
+        observation = get_nominal_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "matching_identity_values": [],
+                "compatibility": "unresolved",
+            },
+        )
+
+    def test_gate_two_nominal_evidence_accepts_exact_normalized_alias_identity_match(self):
+        from .geography.resolution import (
+            get_nominal_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+        }
+        reference = {
+            "name": "Lago di Como",
+            "canonical_name": "Lago di Como",
+            "aliases": [
+                "Lake Como",
+                "Lago Como",
+            ],
+        }
+
+        observation = get_nominal_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "matching_identity_values": [
+                    "lake como",
+                ],
+                "compatibility": "compatible",
+            },
+        )
+
+    def test_gate_two_country_evidence_rejects_different_explicit_countries(self):
+        from .geography.resolution import (
+            get_country_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Lake Como",
+            "country_code": "IT",
+        }
+        reference = {
+            "name": "Lake Como",
+            "country_code": "US",
+        }
+
+        observation = get_country_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "candidate_country_code": "IT",
+                "reference_country_code": "US",
+                "compatibility": "incompatible",
+            },
+        )
+
+    def test_gate_two_country_evidence_accepts_matching_explicit_countries(self):
+        from .geography.resolution import (
+            get_country_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Lake Como",
+            "country_code": "it",
+        }
+        reference = {
+            "name": "Lago di Como",
+            "country_code": "IT",
+        }
+
+        observation = get_country_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "candidate_country_code": "IT",
+                "reference_country_code": "IT",
+                "compatibility": "compatible",
+            },
+        )
+
+    def test_gate_two_country_evidence_is_unknown_when_country_is_missing(self):
+        from .geography.resolution import (
+            get_country_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Lake Como",
+            "country_code": None,
+        }
+        reference = {
+            "name": "Lago di Como",
+            "country_code": "IT",
+        }
+
+        observation = get_country_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "candidate_country_code": "",
+                "reference_country_code": "IT",
+                "compatibility": "unknown",
+            },
+        )
+
+    def test_gate_two_collects_pairwise_identity_evidence_without_deciding_identity(self):
+        from .geography.resolution import (
+            get_geographic_identity_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Lake Como",
+            "canonical_name": "Lake Como",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "latitude": 46.0160486,
+            "longitude": 9.2571676,
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Lombardy",
+                },
+            ],
+        }
+        reference = {
+            "name": "Lago di Como",
+            "canonical_name": "Lago di Como",
+            "aliases": [
+                "Lake Como",
+            ],
+            "country_code": "IT",
+            "geographic_type": "lake",
+            "latitude": 46.00793,
+            "longitude": 9.26079,
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Lombardy",
+                },
+                {
+                    "level": 2,
+                    "name": "Province of Como",
+                },
+            ],
+        }
+
+        observation = get_geographic_identity_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation["nominal"],
+            {
+                "matching_identity_values": [
+                    "lake como",
+                ],
+                "compatibility": "compatible",
+            },
+        )
+        self.assertEqual(
+            observation["semantic"],
+            {
+                "candidate_geographic_type": "lake",
+                "reference_geographic_type": "lake",
+                "compatibility": "compatible",
+            },
+        )
+        self.assertEqual(
+            observation["country"],
+            {
+                "candidate_country_code": "IT",
+                "reference_country_code": "IT",
+                "compatibility": "compatible",
+            },
+        )
+        self.assertEqual(
+            observation["admin"],
+            {
+                "compatible_levels": [1],
+                "divergent_levels": [],
+            },
+        )
+        self.assertAlmostEqual(
+            observation["spatial"]["distance_km"],
+            0.945,
+            places=2,
+        )
+
+    def test_gate_two_collects_related_but_non_identical_geographic_evidence(self):
+        from .geography.resolution import (
+            get_geographic_identity_evidence_observation,
+        )
+
+        candidate = {
+            "name": "Chapada Diamantina",
+            "canonical_name": "Chapada Diamantina",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "natural_feature",
+            "latitude": -12.8801668,
+            "longitude": -41.3721853,
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Bahia",
+                },
+            ],
+        }
+        reference = {
+            "name": "Chapada Diamantina National Park",
+            "canonical_name": "Chapada Diamantina National Park",
+            "aliases": [
+                "Parque Nacional da Chapada Diamantina",
+            ],
+            "country_code": "BR",
+            "geographic_type": "park",
+            "latitude": -12.87992,
+            "longitude": -41.40095,
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Bahia",
+                },
+            ],
+        }
+
+        observation = get_geographic_identity_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation["nominal"]["compatibility"],
+            "unresolved",
+        )
+        self.assertEqual(
+            observation["semantic"]["compatibility"],
+            "incompatible",
+        )
+        self.assertEqual(
+            observation["country"]["compatibility"],
+            "compatible",
+        )
+        self.assertEqual(
+            observation["admin"],
+            {
+                "compatible_levels": [1],
+                "divergent_levels": [],
+            },
+        )
+        self.assertLess(
+            observation["spatial"]["distance_km"],
+            5,
+        )
+        self.assertNotIn(
+            "identity_relation",
+            observation,
+        )
+        self.assertNotIn(
+            "reconciliation_action",
+            observation,
+        )
+
+    def test_gate_two_preserves_when_explicit_semantic_evidence_is_incompatible(self):
+        from .geography.resolution import (
+            evaluate_geographic_identity_evidence,
+        )
+
+        evidence = {
+            "nominal": {
+                "matching_identity_values": [],
+                "compatibility": "unresolved",
+            },
+            "semantic": {
+                "candidate_geographic_type": "natural_feature",
+                "reference_geographic_type": "park",
+                "compatibility": "incompatible",
+            },
+            "country": {
+                "candidate_country_code": "BR",
+                "reference_country_code": "BR",
+                "compatibility": "compatible",
+            },
+            "admin": {
+                "compatible_levels": [1],
+                "divergent_levels": [],
+            },
+            "spatial": {
+                "distance_km": 3.12,
+            },
+        }
+
+        evaluation = evaluate_geographic_identity_evidence(
+            evidence
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
+    def test_gate_two_preserves_feature_without_positive_identity_strategy(self):
+        from .geography.resolution import (
+            evaluate_geographic_identity_evidence,
+        )
+
+        evidence = {
+            "nominal": {
+                "matching_identity_values": [
+                    "lake como",
+                ],
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "candidate_geographic_type": "lake",
+                "reference_geographic_type": "lake",
+                "compatibility": "compatible",
+            },
+            "country": {
+                "candidate_country_code": "IT",
+                "reference_country_code": "IT",
+                "compatibility": "compatible",
+            },
+            "admin": {
+                "compatible_levels": [1],
+                "divergent_levels": [],
+            },
+            "spatial": {
+                "distance_km": 0.945,
+            },
+        }
+
+        evaluation = evaluate_geographic_identity_evidence(
+            evidence
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
+    def test_gate_two_preserves_localized_identity_without_positive_admin_corroboration(self):
+        from .geography.resolution import (
+            evaluate_geographic_identity_evidence,
+        )
+
+        evidence = {
+            "nominal": {
+                "matching_identity_values": [
+                    "springfield",
+                ],
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "candidate_geographic_type": "settlement",
+                "reference_geographic_type": "settlement",
+                "compatibility": "compatible",
+            },
+            "country": {
+                "candidate_country_code": "US",
+                "reference_country_code": "US",
+                "compatibility": "compatible",
+            },
+            "admin": {
+                "compatible_levels": [],
+                "divergent_levels": [1, 2],
+            },
+            "spatial": {
+                "distance_km": 1452.0,
+            },
+        }
+
+        evaluation = evaluate_geographic_identity_evidence(
+            evidence
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
+    def test_gate_two_preserves_localized_identity_with_only_admin_corroboration(self):
+        from .geography.resolution import (
+            evaluate_geographic_identity_evidence,
+        )
+
+        evidence = {
+            "nominal": {
+                "matching_identity_values": [
+                    "springfield",
+                ],
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "candidate_geographic_type": "settlement",
+                "reference_geographic_type": "settlement",
+                "compatibility": "compatible",
+            },
+            "country": {
+                "candidate_country_code": "US",
+                "reference_country_code": "US",
+                "compatibility": "compatible",
+            },
+            "admin": {
+                "compatible_levels": [1],
+                "divergent_levels": [2],
+            },
+            "spatial": {
+                "distance_km": 0.158,
+            },
+        }
+
+        evaluation = evaluate_geographic_identity_evidence(
+            evidence
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
+    def test_gate_two_preserves_when_semantic_evidence_is_unknown(self):
+        from .geography.resolution import (
+            evaluate_geographic_identity_evidence,
+        )
+
+        evidence = {
+            "nominal": {
+                "matching_identity_values": [
+                    "breda",
+                ],
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "candidate_geographic_type": "",
+                "reference_geographic_type": "settlement",
+                "compatibility": "unknown",
+            },
+            "country": {
+                "candidate_country_code": "NL",
+                "reference_country_code": "NL",
+                "compatibility": "compatible",
+            },
+            "admin": {
+                "compatible_levels": [1],
+                "divergent_levels": [2],
+            },
+            "spatial": {
+                "distance_km": 1.71,
+            },
+        }
+
+        evaluation = evaluate_geographic_identity_evidence(
+            evidence
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
+    def test_gate_two_preserves_when_country_evidence_is_unknown(self):
+        from .geography.resolution import (
+            evaluate_geographic_identity_evidence,
+        )
+
+        evidence = {
+            "nominal": {
+                "matching_identity_values": [
+                    "lake como",
+                ],
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "candidate_geographic_type": "lake",
+                "reference_geographic_type": "lake",
+                "compatibility": "compatible",
+            },
+            "country": {
+                "candidate_country_code": "",
+                "reference_country_code": "IT",
+                "compatibility": "unknown",
+            },
+            "admin": {
+                "compatible_levels": [1],
+                "divergent_levels": [],
+            },
+            "spatial": {
+                "distance_km": 0.945,
+            },
+        }
+
+        evaluation = evaluate_geographic_identity_evidence(
+            evidence
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
+    def test_gate_two_preserves_when_country_evidence_is_incompatible(self):
+        from .geography.resolution import (
+            evaluate_geographic_identity_evidence,
+        )
+
+        evidence = {
+            "nominal": {
+                "matching_identity_values": [
+                    "springfield",
+                ],
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "candidate_geographic_type": "settlement",
+                "reference_geographic_type": "settlement",
+                "compatibility": "compatible",
+            },
+            "country": {
+                "candidate_country_code": "US",
+                "reference_country_code": "CA",
+                "compatibility": "incompatible",
+            },
+            "admin": {
+                "compatible_levels": [],
+                "divergent_levels": [],
+            },
+            "spatial": {
+                "distance_km": None,
+            },
+        }
+
+        evaluation = evaluate_geographic_identity_evidence(
+            evidence
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
+    def test_gate_two_preserves_without_exact_nominal_identity_match(self):
+        from .geography.resolution import (
+            evaluate_geographic_identity_evidence,
+        )
+
+        evidence = {
+            "nominal": {
+                "matching_identity_values": [],
+                "compatibility": "unresolved",
+            },
+            "semantic": {
+                "candidate_geographic_type": "lake",
+                "reference_geographic_type": "lake",
+                "compatibility": "compatible",
+            },
+            "country": {
+                "candidate_country_code": "IT",
+                "reference_country_code": "IT",
+                "compatibility": "compatible",
+            },
+            "admin": {
+                "compatible_levels": [1],
+                "divergent_levels": [],
+            },
+            "spatial": {
+                "distance_km": 0.5,
+            },
+        }
+
+        evaluation = evaluate_geographic_identity_evidence(
+            evidence
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
     def test_candidate_admin_observations_preserve_each_reference_evidence_source(self):
         from .geography.resolution import (
             observe_candidate_admin_against_reference_evidence,

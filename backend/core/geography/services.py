@@ -11,7 +11,11 @@ from ..models import (
 )
 from .providers.geonames import get_geographic_place
 from .providers.google_places import get_google_geographic_place
-from .resolution import evaluate_existing_reference_gate
+from .resolution import (
+    evaluate_existing_reference_gate,
+    evaluate_geographic_identity_evidence,
+    get_geographic_identity_evidence_observation,
+)
 
 from ..place_utils import (
     get_matching_places_by_name_identity,
@@ -59,9 +63,32 @@ def evaluate_candidate_place_reference(
         reference_evidence,
     )
 
+    geographic_evidence_evaluations = []
+
+    if gate_result["reconciliation_action"] != "reuse":
+        for reference in reference_evidence:
+            evidence = get_geographic_identity_evidence_observation(
+                candidate,
+                reference,
+            )
+            geographic_evidence_evaluations.append(
+                {
+                    "reference": reference,
+                    "evidence": evidence,
+                    "evaluation": (
+                        evaluate_geographic_identity_evidence(
+                            evidence
+                        )
+                    ),
+                }
+            )
+
     return {
         "place": place,
         **gate_result,
+        "geographic_evidence_evaluations": (
+            geographic_evidence_evaluations
+        ),
     }
 
 

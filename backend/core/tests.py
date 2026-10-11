@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from django.test import TestCase
 
@@ -1256,10 +1256,14 @@ class GeographicPlaceReconciliationTests(TestCase):
             },
         )
 
+    @patch(
+        "core.geography.services.get_geographic_identity_evidence_observation"
+    )
     @patch("core.geography.services.get_geographic_place")
     def test_candidate_place_reference_evaluation_authorizes_exact_identity_reuse(
         self,
         mock_get_geographic_place,
+        mock_get_geographic_identity_evidence_observation,
     ):
         from .geography.services import (
             evaluate_candidate_place_reference,
@@ -1291,9 +1295,14 @@ class GeographicPlaceReconciliationTests(TestCase):
         )
 
         mock_get_geographic_place.assert_called_once_with("3178228")
+        mock_get_geographic_identity_evidence_observation.assert_not_called()
         self.assertEqual(result["place"].pk, self.lake.pk)
         self.assertEqual(result["identity_relation"], "same")
         self.assertEqual(result["reconciliation_action"], "reuse")
+        self.assertEqual(
+            result["geographic_evidence_evaluations"],
+            [],
+        )
 
     @patch("core.geography.services.get_geographic_place")
     def test_candidate_place_reference_evaluation_preserves_unresolved_place(
@@ -1337,7 +1346,7 @@ class GeographicPlaceReconciliationTests(TestCase):
             external_id="springfield-illinois",
             geographic_type="settlement",
         )
-        mock_get_geographic_place.return_value = {
+        provider_evidence = {
             "name": "Springfield",
             "country_code": "US",
             "geographic_type": "settlement",
@@ -1347,6 +1356,7 @@ class GeographicPlaceReconciliationTests(TestCase):
                 {"level": 1, "name": "Illinois"},
             ],
         }
+        mock_get_geographic_place.return_value = provider_evidence
         candidate = {
             "name": "Springfield",
             "country_code": "US",
@@ -1369,6 +1379,43 @@ class GeographicPlaceReconciliationTests(TestCase):
         self.assertIs(result["place"], springfield)
         self.assertEqual(result["identity_relation"], "unresolved")
         self.assertEqual(result["reconciliation_action"], "preserve")
+        self.assertEqual(
+            result["geographic_evidence_evaluations"],
+            [
+                {
+                    "reference": provider_evidence,
+                    "evidence": {
+                        "nominal": {
+                            "matching_identity_values": [
+                                "springfield",
+                            ],
+                            "compatibility": "compatible",
+                        },
+                        "semantic": {
+                            "candidate_geographic_type": "settlement",
+                            "reference_geographic_type": "settlement",
+                            "compatibility": "compatible",
+                        },
+                        "country": {
+                            "candidate_country_code": "US",
+                            "reference_country_code": "US",
+                            "compatibility": "compatible",
+                        },
+                        "admin": {
+                            "compatible_levels": [],
+                            "divergent_levels": [1],
+                        },
+                        "spatial": {
+                            "distance_km": None,
+                        },
+                    },
+                    "evaluation": {
+                        "identity_relation": "unresolved",
+                        "reconciliation_action": "preserve",
+                    },
+                },
+            ],
+        )
 
     @patch("core.geography.services.get_google_geographic_place")
     @patch("core.geography.services.get_geographic_place")
@@ -1462,6 +1509,110 @@ class GeographicPlaceReconciliationTests(TestCase):
         self.assertEqual(
             by_place[springfield_massachusetts.pk]["reconciliation_action"],
             "reuse",
+        )
+
+    @patch(
+        "core.geography.services.evaluate_geographic_identity_evidence"
+    )
+    @patch(
+        "core.geography.services.get_geographic_identity_evidence_observation"
+    )
+    @patch("core.geography.services.get_google_geographic_place")
+    @patch("core.geography.services.get_geographic_place")
+    def test_candidate_place_reference_evaluates_each_provider_evidence_separately(
+        self,
+        mock_get_geographic_place,
+        mock_get_google_geographic_place,
+        mock_get_evidence_observation,
+        mock_evaluate_evidence,
+    ):
+        from .geography.services import evaluate_candidate_place_reference
+        from .models import PlaceExternalIdentity
+
+        PlaceExternalIdentity.objects.create(
+            place=self.lake,
+            external_source="google_places",
+            external_id="lake-como-google",
+            geographic_type="lake",
+        )
+
+        geonames_reference = {
+            "name": "Lago di Como",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+        google_reference = {
+            "name": "Lake Como",
+            "external_source": "google_places",
+            "external_id": "lake-como-google",
+        }
+        mock_get_geographic_place.return_value = geonames_reference
+        mock_get_google_geographic_place.return_value = google_reference
+
+        candidate = {
+            "name": "Lake Como",
+            "external_source": "future_provider",
+            "external_id": "lake-como-future",
+        }
+
+        geonames_evidence = {"source": "geonames-evidence"}
+        google_evidence = {"source": "google-evidence"}
+        mock_get_evidence_observation.side_effect = [
+            geonames_evidence,
+            google_evidence,
+        ]
+        mock_evaluate_evidence.side_effect = [
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        ]
+
+        result = evaluate_candidate_place_reference(
+            candidate,
+            self.lake,
+        )
+
+        self.assertEqual(result["identity_relation"], "unresolved")
+        self.assertEqual(result["reconciliation_action"], "preserve")
+        self.assertEqual(
+            result["geographic_evidence_evaluations"],
+            [
+                {
+                    "reference": geonames_reference,
+                    "evidence": geonames_evidence,
+                    "evaluation": {
+                        "identity_relation": "unresolved",
+                        "reconciliation_action": "preserve",
+                    },
+                },
+                {
+                    "reference": google_reference,
+                    "evidence": google_evidence,
+                    "evaluation": {
+                        "identity_relation": "unresolved",
+                        "reconciliation_action": "preserve",
+                    },
+                },
+            ],
+        )
+        self.assertEqual(
+            mock_get_evidence_observation.call_args_list,
+            [
+                call(candidate, geonames_reference),
+                call(candidate, google_reference),
+            ],
+        )
+        self.assertEqual(
+            mock_evaluate_evidence.call_args_list,
+            [
+                call(geonames_evidence),
+                call(google_evidence),
+            ],
         )
 
     @patch("core.geography.services.evaluate_candidate_place_references")

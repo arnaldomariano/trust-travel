@@ -322,6 +322,80 @@ def get_semantic_evidence_observation(
     }
 
 
+def get_resolvable_admin_references(evidence):
+    """Return explicit provider-scoped administrative references."""
+    external_source = str(
+        evidence.get("external_source") or ""
+    ).strip()
+
+    if not external_source:
+        return []
+
+    references = []
+
+    for entry in evidence.get("admin_context") or []:
+        level = entry.get("level")
+        external_id = str(
+            entry.get("external_id") or ""
+        ).strip()
+
+        if level is None or not external_id:
+            continue
+
+        references.append(
+            {
+                "level": level,
+                "external_source": external_source,
+                "external_id": external_id,
+            }
+        )
+
+    return references
+
+
+def observe_candidate_admin_against_reconstructed_references(
+    candidate,
+    reconstructed_references,
+):
+    """Observe candidate admin names against authoritative admin references."""
+    candidate_context = {
+        entry.get("level"): entry.get("name")
+        for entry in (candidate.get("admin_context") or [])
+        if (
+            entry.get("level") is not None
+            and normalize_place_text(entry.get("name"))
+        )
+    }
+
+    observations = []
+
+    for reconstructed in reconstructed_references:
+        level = reconstructed.get("level")
+
+        if level not in candidate_context:
+            continue
+
+        nominal = get_nominal_evidence_observation(
+            {
+                "name": candidate_context[level],
+            },
+            reconstructed.get("reference") or {},
+        )
+
+        observations.append(
+            {
+                "level": level,
+                "external_source": reconstructed.get(
+                    "external_source"
+                ),
+                "external_id": reconstructed.get("external_id"),
+                "nominal": nominal,
+            }
+        )
+
+    return observations
+
+
 def get_admin_context_evidence_observation(
     candidate,
     reference,

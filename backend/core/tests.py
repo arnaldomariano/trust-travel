@@ -1019,6 +1019,110 @@ class GeographicPlaceReconciliationTests(TestCase):
         )
 
     @patch("core.geography.services.get_geographic_place")
+    def test_admin_reference_reconstruction_fetches_resolvable_geonames_identity(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.services import (
+            reconstruct_admin_reference_evidence,
+        )
+
+        evidence = {
+            "external_source": "geonames",
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "Middlesex",
+                    "external_id": "4943909",
+                },
+            ],
+        }
+        admin_evidence = {
+            "name": "Middlesex County",
+            "canonical_name": "Middlesex County",
+            "external_source": "geonames",
+            "external_id": "4943909",
+            "geographic_type": "administrative_area",
+        }
+        mock_get_geographic_place.return_value = admin_evidence
+
+        reconstructed = reconstruct_admin_reference_evidence(
+            evidence
+        )
+
+        mock_get_geographic_place.assert_called_once_with(
+            "4943909"
+        )
+        self.assertEqual(
+            reconstructed,
+            [
+                {
+                    "level": 2,
+                    "external_source": "geonames",
+                    "external_id": "4943909",
+                    "reference": admin_evidence,
+                },
+            ],
+        )
+        self.assertIs(
+            reconstructed[0]["reference"],
+            admin_evidence,
+        )
+
+    @patch("core.geography.services.get_geographic_place")
+    def test_admin_reference_reconstruction_does_not_hide_provider_failure(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .geography.providers.geonames import (
+            GeoNamesRequestError,
+        )
+        from .geography.services import (
+            reconstruct_admin_reference_evidence,
+        )
+
+        evidence = {
+            "external_source": "geonames",
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "Middlesex",
+                    "external_id": "4943909",
+                },
+            ],
+        }
+        mock_get_geographic_place.side_effect = (
+            GeoNamesRequestError(
+                "GeoNames geographic place lookup failed."
+            )
+        )
+
+        with self.assertRaises(GeoNamesRequestError):
+            reconstruct_admin_reference_evidence(evidence)
+
+    def test_admin_reference_reconstruction_rejects_unsupported_source(self):
+        from .geography.services import (
+            reconstruct_admin_reference_evidence,
+        )
+
+        evidence = {
+            "external_source": "future_provider",
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Example Region",
+                    "external_id": "region-123",
+                },
+            ],
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unsupported admin reference evidence source: future_provider",
+        ):
+            reconstruct_admin_reference_evidence(evidence)
+
+    @patch("core.geography.services.get_geographic_place")
     def test_reference_evidence_reconstruction_fetches_known_geonames_identity(
         self,
         mock_get_geographic_place,
@@ -5616,6 +5720,214 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
 
 
 class GeographicResolutionTests(TestCase):
+    def test_resolvable_admin_references_preserve_provider_identity(self):
+        from .geography.resolution import (
+            get_resolvable_admin_references,
+        )
+
+        evidence = {
+            "external_source": "geonames",
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Rio de Janeiro",
+                    "external_id": "3451189",
+                },
+                {
+                    "level": 2,
+                    "name": "Miguel Pereira",
+                    "external_id": "6322037",
+                },
+                {
+                    "level": 3,
+                    "name": "Example",
+                    "external_id": "",
+                },
+            ],
+        }
+
+        self.assertEqual(
+            get_resolvable_admin_references(evidence),
+            [
+                {
+                    "level": 1,
+                    "external_source": "geonames",
+                    "external_id": "3451189",
+                },
+                {
+                    "level": 2,
+                    "external_source": "geonames",
+                    "external_id": "6322037",
+                },
+            ],
+        )
+
+    def test_resolvable_admin_references_require_provider_identity(self):
+        from .geography.resolution import (
+            get_resolvable_admin_references,
+        )
+
+        evidence = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Rio de Janeiro",
+                    "external_id": "3451189",
+                },
+            ],
+        }
+
+        self.assertEqual(
+            get_resolvable_admin_references(evidence),
+            [],
+        )
+
+    def test_reconstructed_admin_reference_can_corroborate_candidate_level(self):
+        from .geography.resolution import (
+            observe_candidate_admin_against_reconstructed_references,
+        )
+
+        candidate = {
+            "external_source": "google_places",
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "Middlesex County",
+                },
+            ],
+        }
+        reconstructed_references = [
+            {
+                "level": 2,
+                "external_source": "geonames",
+                "external_id": "4943909",
+                "reference": {
+                    "name": "Middlesex County",
+                    "canonical_name": "Middlesex County",
+                    "aliases": [],
+                    "external_source": "geonames",
+                    "external_id": "4943909",
+                    "geographic_type": "administrative_area",
+                },
+            },
+        ]
+
+        observations = (
+            observe_candidate_admin_against_reconstructed_references(
+                candidate,
+                reconstructed_references,
+            )
+        )
+
+        self.assertEqual(
+            observations,
+            [
+                {
+                    "level": 2,
+                    "external_source": "geonames",
+                    "external_id": "4943909",
+                    "nominal": {
+                        "matching_identity_values": [
+                            "middlesex county",
+                        ],
+                        "compatibility": "compatible",
+                    },
+                },
+            ],
+        )
+
+    def test_reconstructed_admin_reference_nominal_difference_remains_unresolved(self):
+        from .geography.resolution import (
+            observe_candidate_admin_against_reconstructed_references,
+        )
+
+        candidate = {
+            "external_source": "google_places",
+            "admin_context": [
+                {
+                    "level": 2,
+                    "name": "Breda",
+                },
+            ],
+        }
+        reconstructed_references = [
+            {
+                "level": 2,
+                "external_source": "geonames",
+                "external_id": "2758400",
+                "reference": {
+                    "name": "Gemeente Breda",
+                    "canonical_name": "Gemeente Breda",
+                    "aliases": [
+                        "Breda Municipality",
+                    ],
+                    "external_source": "geonames",
+                    "external_id": "2758400",
+                    "geographic_type": "administrative_area",
+                },
+            },
+        ]
+
+        observations = (
+            observe_candidate_admin_against_reconstructed_references(
+                candidate,
+                reconstructed_references,
+            )
+        )
+
+        self.assertEqual(
+            observations,
+            [
+                {
+                    "level": 2,
+                    "external_source": "geonames",
+                    "external_id": "2758400",
+                    "nominal": {
+                        "matching_identity_values": [],
+                        "compatibility": "unresolved",
+                    },
+                },
+            ],
+        )
+
+    def test_reconstructed_admin_reference_requires_matching_level(self):
+        from .geography.resolution import (
+            observe_candidate_admin_against_reconstructed_references,
+        )
+
+        candidate = {
+            "admin_context": [
+                {
+                    "level": 1,
+                    "name": "Santarém",
+                },
+            ],
+        }
+        reconstructed_references = [
+            {
+                "level": 2,
+                "external_source": "geonames",
+                "external_id": "8010609",
+                "reference": {
+                    "name": "Santarém",
+                    "canonical_name": "Santarém",
+                    "aliases": [],
+                    "external_source": "geonames",
+                    "external_id": "8010609",
+                    "geographic_type": "administrative_area",
+                },
+            },
+        ]
+
+        observations = (
+            observe_candidate_admin_against_reconstructed_references(
+                candidate,
+                reconstructed_references,
+            )
+        )
+
+        self.assertEqual(observations, [])
+
     def test_known_reference_evidence_groups_candidates_by_existing_place_id(self):
         from .geography.resolution import (
             group_known_reference_evidence,

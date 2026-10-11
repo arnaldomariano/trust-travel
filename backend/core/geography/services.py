@@ -15,6 +15,7 @@ from .resolution import (
     evaluate_existing_reference_gate,
     evaluate_geographic_identity_evidence,
     get_geographic_identity_evidence_observation,
+    get_resolvable_admin_references,
 )
 
 from ..place_utils import (
@@ -24,6 +25,33 @@ from ..place_utils import (
     normalize_place_text,
 )
 
+
+def reconstruct_admin_reference_evidence(evidence):
+    """Fetch authoritative evidence for resolvable admin references."""
+    reconstructed = []
+
+    for admin_reference in get_resolvable_admin_references(
+        evidence
+    ):
+        external_source = admin_reference["external_source"]
+        external_id = admin_reference["external_id"]
+
+        if external_source == "geonames":
+            reference = get_geographic_place(external_id)
+        else:
+            raise ValueError(
+                "Unsupported admin reference evidence source: "
+                f"{external_source}"
+            )
+
+        reconstructed.append(
+            {
+                **admin_reference,
+                "reference": reference,
+            }
+        )
+
+    return reconstructed
 
 
 def reconstruct_place_reference_evidence(place):

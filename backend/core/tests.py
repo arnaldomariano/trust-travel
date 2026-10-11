@@ -2664,6 +2664,63 @@ class GooglePlacesDiscoveryTests(TestCase):
             "IT",
         )
 
+    def test_google_locality_is_interpreted_as_settlement(self):
+        from .geography.providers.google_places import (
+            normalize_google_discovery_result,
+        )
+
+        item = {
+            "id": "google-cambridge-massachusetts",
+            "displayName": {
+                "text": "Cambridge",
+            },
+            "types": [
+                "locality",
+                "political",
+            ],
+            "location": {
+                "latitude": 42.3666036,
+                "longitude": -71.1056916,
+            },
+            "addressComponents": [
+                {
+                    "longText": "Massachusetts",
+                    "shortText": "MA",
+                    "types": [
+                        "administrative_area_level_1",
+                        "political",
+                    ],
+                },
+                {
+                    "longText": "United States",
+                    "shortText": "US",
+                    "types": [
+                        "country",
+                        "political",
+                    ],
+                },
+            ],
+        }
+
+        result = normalize_google_discovery_result(item)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            result["provider_types"],
+            [
+                "locality",
+                "political",
+            ],
+        )
+        self.assertEqual(
+            result["geographic_type"],
+            "settlement",
+        )
+        self.assertEqual(
+            result["country_code"],
+            "US",
+        )
+
     def test_legacy_geographic_normalizer_still_rejects_unclassified_result(self):
         from .geography.providers.google_places import (
             normalize_google_discovery_result,

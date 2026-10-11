@@ -25,6 +25,7 @@ GOOGLE_GEOGRAPHIC_TYPES = {
     "mountain_peak": "mountain",
     "island": "island",
     "lake": "lake",
+    "locality": "settlement",
 }
 
 

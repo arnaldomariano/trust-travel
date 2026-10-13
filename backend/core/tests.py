@@ -5846,7 +5846,7 @@ class GeographicResolutionTests(TestCase):
             "admin_context": [
                 {
                     "level": 2,
-                    "name": "Breda",
+                    "name": "Example District",
                 },
             ],
         }
@@ -5854,15 +5854,13 @@ class GeographicResolutionTests(TestCase):
             {
                 "level": 2,
                 "external_source": "geonames",
-                "external_id": "2758400",
+                "external_id": "example-admin-123",
                 "reference": {
-                    "name": "Gemeente Breda",
-                    "canonical_name": "Gemeente Breda",
-                    "aliases": [
-                        "Breda Municipality",
-                    ],
+                    "name": "Example Municipality",
+                    "canonical_name": "Example Municipality",
+                    "aliases": [],
                     "external_source": "geonames",
-                    "external_id": "2758400",
+                    "external_id": "example-admin-123",
                     "geographic_type": "administrative_area",
                 },
             },
@@ -5881,7 +5879,7 @@ class GeographicResolutionTests(TestCase):
                 {
                     "level": 2,
                     "external_source": "geonames",
-                    "external_id": "2758400",
+                    "external_id": "example-admin-123",
                     "nominal": {
                         "matching_identity_values": [],
                         "compatibility": "unresolved",

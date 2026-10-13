@@ -357,7 +357,13 @@ def observe_candidate_admin_against_reconstructed_references(
     candidate,
     reconstructed_references,
 ):
-    """Observe candidate admin names against authoritative admin references."""
+    """
+    Observe candidate admin names against authoritative admin references.
+
+    Matching numeric levels provide a comparison point, not guaranteed
+    cross-provider administrative equivalence. A nominal match is positive
+    evidence only and does not by itself establish entity identity.
+    """
     candidate_context = {
         entry.get("level"): entry.get("name")
         for entry in (candidate.get("admin_context") or [])
@@ -403,9 +409,10 @@ def get_admin_context_evidence_observation(
     """
     Describe comparable administrative evidence without interpreting identity.
 
-    Evidence is preserved by administrative level so evaluation strategies can
-    decide later whether agreement or divergence is meaningful for the entity.
-    Missing or non-overlapping levels produce no comparable evidence.
+    Evidence is compared at matching numeric levels, but equal level numbers
+    do not guarantee cross-provider administrative equivalence. Agreement and
+    divergence remain observations for later strategies to interpret. Missing
+    or non-overlapping levels produce no comparable evidence.
     """
     candidate_context = {
         entry.get("level"): normalize_place_text(

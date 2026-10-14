@@ -644,6 +644,28 @@ def get_geographic_identity_evidence_observation(
     }
 
 
+def geographic_identity_evidence_supports_strategy_resolution(
+    evidence,
+):
+    """
+    Return whether core evidence supports strategy-specific resolution.
+
+    Nominal, semantic, and country evidence must all be explicitly compatible.
+    Administrative and spatial evidence remain observations for the applicable
+    strategy to interpret and do not establish eligibility here.
+    """
+    core_compatibilities = (
+        (evidence.get("nominal") or {}).get("compatibility"),
+        (evidence.get("semantic") or {}).get("compatibility"),
+        (evidence.get("country") or {}).get("compatibility"),
+    )
+
+    return all(
+        compatibility == "compatible"
+        for compatibility in core_compatibilities
+    )
+
+
 def evaluate_geographic_identity_evidence(evidence):
     """
     Evaluate collected geographic identity evidence conservatively.
@@ -656,19 +678,8 @@ def evaluate_geographic_identity_evidence(evidence):
     strategy-specific rules. Until such a positive rule is formalized, Gate 2
     preserves the candidate rather than authorizing reuse.
     """
-    nominal = evidence.get("nominal") or {}
-    semantic = evidence.get("semantic") or {}
-    country = evidence.get("country") or {}
-
-    core_compatibilities = (
-        nominal.get("compatibility"),
-        semantic.get("compatibility"),
-        country.get("compatibility"),
-    )
-
-    if not all(
-        compatibility == "compatible"
-        for compatibility in core_compatibilities
+    if not geographic_identity_evidence_supports_strategy_resolution(
+        evidence
     ):
         return {
             "identity_relation": "unresolved",

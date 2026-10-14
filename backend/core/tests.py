@@ -6867,6 +6867,98 @@ class GeographicResolutionTests(TestCase):
             },
         )
 
+    def test_gate_two_core_compatibility_supports_strategy_resolution(self):
+        from .geography.resolution import (
+            geographic_identity_evidence_supports_strategy_resolution,
+        )
+
+        evidence = {
+            "nominal": {
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "compatibility": "compatible",
+            },
+            "country": {
+                "compatibility": "compatible",
+            },
+            "admin": {
+                "compatible_levels": [],
+                "divergent_levels": [1, 2],
+            },
+            "spatial": {
+                "distance_km": 1452.0,
+            },
+        }
+
+        self.assertTrue(
+            geographic_identity_evidence_supports_strategy_resolution(
+                evidence
+            )
+        )
+
+    def test_gate_two_unknown_core_evidence_blocks_strategy_resolution(self):
+        from .geography.resolution import (
+            geographic_identity_evidence_supports_strategy_resolution,
+        )
+
+        evidence = {
+            "nominal": {
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "compatibility": "unknown",
+            },
+            "country": {
+                "compatibility": "compatible",
+            },
+        }
+
+        self.assertFalse(
+            geographic_identity_evidence_supports_strategy_resolution(
+                evidence
+            )
+        )
+
+    def test_gate_two_unresolved_or_incompatible_core_evidence_blocks_strategy_resolution(self):
+        from .geography.resolution import (
+            geographic_identity_evidence_supports_strategy_resolution,
+        )
+
+        unresolved_nominal_evidence = {
+            "nominal": {
+                "compatibility": "unresolved",
+            },
+            "semantic": {
+                "compatibility": "compatible",
+            },
+            "country": {
+                "compatibility": "compatible",
+            },
+        }
+        incompatible_country_evidence = {
+            "nominal": {
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "compatibility": "compatible",
+            },
+            "country": {
+                "compatibility": "incompatible",
+            },
+        }
+
+        self.assertFalse(
+            geographic_identity_evidence_supports_strategy_resolution(
+                unresolved_nominal_evidence
+            )
+        )
+        self.assertFalse(
+            geographic_identity_evidence_supports_strategy_resolution(
+                incompatible_country_evidence
+            )
+        )
+
     def test_candidate_admin_observations_preserve_each_reference_evidence_source(self):
         from .geography.resolution import (
             observe_candidate_admin_against_reference_evidence,

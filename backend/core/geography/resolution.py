@@ -323,7 +323,13 @@ def get_semantic_evidence_observation(
 
 
 def get_resolvable_admin_references(evidence):
-    """Return explicit provider-scoped administrative references."""
+    """
+    Return administrative references resolvable within a provider namespace.
+
+    Only entries with both provider identity and an explicit external ID are
+    returned. An empty result means that no provider-scoped admin references
+    can be resolved from this evidence; it is not negative identity evidence.
+    """
     external_source = str(
         evidence.get("external_source") or ""
     ).strip()

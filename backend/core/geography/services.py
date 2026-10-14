@@ -27,7 +27,14 @@ from ..place_utils import (
 
 
 def reconstruct_admin_reference_evidence(evidence):
-    """Fetch authoritative evidence for resolvable admin references."""
+    """
+    Fetch authoritative evidence for resolvable admin references on demand.
+
+    Reconstruction may require additional provider requests, so callers should
+    acquire this evidence only when a resolution strategy can use it. Missing
+    resolvable references are uninformative and do not count as negative
+    identity evidence.
+    """
     reconstructed = []
 
     for admin_reference in get_resolvable_admin_references(

@@ -1517,6 +1517,256 @@ class GeographicPlaceReconciliationTests(TestCase):
                         "identity_relation": "unresolved",
                         "reconciliation_action": "preserve",
                     },
+                    "strategy_evaluations": [
+                        {
+                            "strategy": "localized",
+                            "evidence": {
+                                "spatial_extent": {
+                                    "relation": "unknown",
+                                },
+                                "reconstructed_admin": [],
+                            },
+                            "evaluation": {
+                                "identity_relation": "unresolved",
+                                "reconciliation_action": "preserve",
+                            },
+                        },
+                    ],
+                },
+            ],
+        )
+
+    @patch(
+        "core.geography.services.evaluate_localized_identity_strategy"
+    )
+    @patch(
+        "core.geography.services.get_localized_identity_evidence_observation"
+    )
+    @patch(
+        "core.geography.services.reconstruct_admin_reference_evidence"
+    )
+    @patch(
+        "core.geography.services.get_geographic_identity_evidence_observation"
+    )
+    @patch("core.geography.services.get_geographic_place")
+    def test_candidate_place_reference_skips_localized_evidence_when_gate_two_is_blocked(
+        self,
+        mock_get_geographic_place,
+        mock_get_evidence_observation,
+        mock_reconstruct_admin_evidence,
+        mock_get_localized_evidence,
+        mock_evaluate_localized_strategy,
+    ):
+        from .geography.services import (
+            evaluate_candidate_place_reference,
+        )
+
+        reference = {
+            "name": "Example Settlement",
+            "country_code": "IT",
+            "geographic_type": "settlement",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+        candidate = {
+            "name": "Example Settlement",
+            "country_code": "IT",
+            "geographic_type": "settlement",
+            "external_source": "google_places",
+            "external_id": "google-example-settlement",
+        }
+        blocked_evidence = {
+            "nominal": {"compatibility": "compatible"},
+            "semantic": {"compatibility": "unresolved"},
+            "country": {"compatibility": "compatible"},
+        }
+
+        mock_get_geographic_place.return_value = reference
+        mock_get_evidence_observation.return_value = blocked_evidence
+
+        result = evaluate_candidate_place_reference(
+            candidate,
+            self.lake,
+        )
+
+        mock_reconstruct_admin_evidence.assert_not_called()
+        mock_get_localized_evidence.assert_not_called()
+        mock_evaluate_localized_strategy.assert_not_called()
+        self.assertNotIn(
+            "strategy_evaluations",
+            result["geographic_evidence_evaluations"][0],
+        )
+
+    @patch(
+        "core.geography.services.evaluate_localized_identity_strategy"
+    )
+    @patch(
+        "core.geography.services.get_localized_identity_evidence_observation"
+    )
+    @patch(
+        "core.geography.services.observe_candidate_admin_against_reconstructed_references"
+    )
+    @patch(
+        "core.geography.services.reconstruct_admin_reference_evidence"
+    )
+    @patch(
+        "core.geography.services.evaluate_geographic_identity_evidence"
+    )
+    @patch(
+        "core.geography.services.get_geographic_identity_evidence_observation"
+    )
+    @patch("core.geography.services.get_geographic_place")
+    def test_candidate_place_reference_runs_eligible_localized_strategy(
+        self,
+        mock_get_geographic_place,
+        mock_get_evidence_observation,
+        mock_evaluate_evidence,
+        mock_reconstruct_admin_evidence,
+        mock_observe_reconstructed_admin,
+        mock_get_localized_evidence,
+        mock_evaluate_localized_strategy,
+    ):
+        from .geography.services import (
+            evaluate_candidate_place_reference,
+        )
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        country = get_or_create_country(value="United States")
+        destination = Destination.objects.create(
+            name="United States",
+            country="United States",
+        )
+        country_place = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="United States",
+            canonical_name="United States",
+            country_code="US",
+            place_type="country",
+        )
+        springfield = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            parent_place=country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+        PlaceExternalIdentity.objects.create(
+            place=springfield,
+            external_source="geonames",
+            external_id="springfield-illinois",
+            geographic_type="settlement",
+        )
+
+        reference = {
+            "name": "Springfield",
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "external_source": "geonames",
+            "external_id": "springfield-illinois",
+        }
+        candidate = {
+            "name": "Springfield",
+            "country_code": "US",
+            "geographic_type": "settlement",
+            "external_source": "google_places",
+            "external_id": "springfield-google",
+        }
+        gate_two_evidence = {
+            "nominal": {"compatibility": "compatible"},
+            "semantic": {"compatibility": "compatible"},
+            "country": {"compatibility": "compatible"},
+        }
+        gate_two_evaluation = {
+            "identity_relation": "unresolved",
+            "reconciliation_action": "preserve",
+        }
+        reconstructed_admin_evidence = [
+            {
+                "level": 1,
+                "external_source": "geonames",
+                "external_id": "us-il",
+                "reference": {
+                    "name": "Illinois",
+                },
+            },
+        ]
+        reconstructed_admin_observations = [
+            {
+                "level": 1,
+                "external_source": "geonames",
+                "external_id": "us-il",
+                "nominal": {
+                    "matching_identity_values": ["illinois"],
+                    "compatibility": "compatible",
+                },
+            },
+        ]
+        localized_evidence = {
+            "spatial_extent": {
+                "relation": "inside",
+            },
+            "reconstructed_admin": (
+                reconstructed_admin_observations
+            ),
+        }
+        localized_evaluation = {
+            "identity_relation": "unresolved",
+            "reconciliation_action": "preserve",
+        }
+
+        mock_get_geographic_place.return_value = reference
+        mock_get_evidence_observation.return_value = gate_two_evidence
+        mock_evaluate_evidence.return_value = gate_two_evaluation
+        mock_reconstruct_admin_evidence.return_value = (
+            reconstructed_admin_evidence
+        )
+        mock_observe_reconstructed_admin.return_value = (
+            reconstructed_admin_observations
+        )
+        mock_get_localized_evidence.return_value = localized_evidence
+        mock_evaluate_localized_strategy.return_value = localized_evaluation
+
+        result = evaluate_candidate_place_reference(
+            candidate,
+            springfield,
+        )
+
+        mock_reconstruct_admin_evidence.assert_called_once_with(
+            reference,
+        )
+        mock_observe_reconstructed_admin.assert_called_once_with(
+            candidate,
+            reconstructed_admin_evidence,
+        )
+        mock_get_localized_evidence.assert_called_once_with(
+            candidate,
+            reference,
+            reconstructed_admin_observations,
+        )
+        mock_evaluate_localized_strategy.assert_called_once_with(
+            candidate,
+            reference,
+            gate_two_evidence,
+            localized_evidence,
+        )
+        self.assertEqual(
+            result["geographic_evidence_evaluations"],
+            [
+                {
+                    "reference": reference,
+                    "evidence": gate_two_evidence,
+                    "evaluation": gate_two_evaluation,
+                    "strategy_evaluations": [
+                        {
+                            "strategy": "localized",
+                            "evidence": localized_evidence,
+                            "evaluation": localized_evaluation,
+                        },
+                    ],
                 },
             ],
         )
@@ -3128,6 +3378,81 @@ class GeoNamesDiscoveryTests(TestCase):
                     "iso_code": "",
                 },
             ],
+        )
+
+    def test_geonames_normalizer_preserves_spatial_extent(self):
+        from .geography.providers.geonames import (
+            normalize_geographic_result,
+        )
+
+        result = normalize_geographic_result(
+            {
+                "geonameId": 4250542,
+                "name": "Springfield",
+                "toponymName": "Springfield",
+                "countryCode": "US",
+                "lat": "39.80172",
+                "lng": "-89.64371",
+                "fcl": "P",
+                "fcode": "PPLA",
+                "alternateNames": [],
+                "bbox": {
+                    "east": -89.568389,
+                    "south": 39.653656,
+                    "north": 39.87417,
+                    "west": -89.773193,
+                    "accuracyLevel": 0,
+                },
+            }
+        )
+
+        self.assertEqual(
+            result["spatial_extent"],
+            {
+                "kind": "bounding_box",
+                "north": 39.87417,
+                "south": 39.653656,
+                "east": -89.568389,
+                "west": -89.773193,
+            },
+        )
+
+    def test_geonames_normalizer_uses_unknown_spatial_extent_when_bbox_is_unavailable(self):
+        from .geography.providers.geonames import (
+            normalize_geographic_result,
+        )
+
+        base_item = {
+            "geonameId": 4250542,
+            "name": "Springfield",
+            "toponymName": "Springfield",
+            "countryCode": "US",
+            "lat": "39.80172",
+            "lng": "-89.64371",
+            "fcl": "P",
+            "fcode": "PPLA",
+            "alternateNames": [],
+        }
+
+        without_bbox = normalize_geographic_result(
+            base_item
+        )
+        with_incomplete_bbox = normalize_geographic_result(
+            {
+                **base_item,
+                "bbox": {
+                    "north": 39.87417,
+                    "south": 39.653656,
+                    "east": -89.568389,
+                },
+            }
+        )
+
+        self.assertIsNone(
+            without_bbox["spatial_extent"]
+        )
+        self.assertIsNone(
+            with_incomplete_bbox["spatial_extent"]
         )
 
     def test_geonames_park_feature_is_classified_as_park(self):
@@ -6959,6 +7284,119 @@ class GeographicResolutionTests(TestCase):
             )
         )
 
+    def test_localized_strategy_requires_activation_and_gate_two_eligibility(self):
+        from .geography.resolution import (
+            localized_identity_strategy_can_evaluate,
+        )
+
+        eligible_evidence = {
+            "nominal": {
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "compatibility": "compatible",
+            },
+            "country": {
+                "compatibility": "compatible",
+            },
+        }
+        blocked_evidence = {
+            "nominal": {
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "compatibility": "unknown",
+            },
+            "country": {
+                "compatibility": "compatible",
+            },
+        }
+
+        localized_candidate = {
+            "geographic_type": "settlement",
+        }
+        non_localized_candidate = {
+            "geographic_type": "lake",
+        }
+
+        self.assertTrue(
+            localized_identity_strategy_can_evaluate(
+                localized_candidate,
+                eligible_evidence,
+            )
+        )
+        self.assertFalse(
+            localized_identity_strategy_can_evaluate(
+                non_localized_candidate,
+                eligible_evidence,
+            )
+        )
+        self.assertFalse(
+            localized_identity_strategy_can_evaluate(
+                localized_candidate,
+                blocked_evidence,
+            )
+        )
+
+    def test_localized_strategy_preserves_identity_without_positive_resolution_rule(self):
+        from .geography.resolution import (
+            evaluate_localized_identity_strategy,
+        )
+
+        candidate = {
+            "name": "Springfield",
+            "geographic_type": "settlement",
+            "country_code": "US",
+            "latitude": 42.1,
+            "longitude": -72.59,
+        }
+        reference = {
+            "name": "Springfield",
+            "geographic_type": "settlement",
+            "country_code": "US",
+            "latitude": 42.1003,
+            "longitude": -72.5896,
+        }
+        gate_two_evidence = {
+            "nominal": {
+                "compatibility": "compatible",
+            },
+            "semantic": {
+                "compatibility": "compatible",
+            },
+            "country": {
+                "compatibility": "compatible",
+            },
+            "admin": {
+                "compatible_levels": [1],
+                "divergent_levels": [],
+            },
+            "spatial": {
+                "distance_km": 0.048,
+            },
+        }
+
+        localized_evidence = {
+            "spatial_extent": {
+                "relation": "inside",
+            },
+        }
+
+        evaluation = evaluate_localized_identity_strategy(
+            candidate,
+            reference,
+            gate_two_evidence,
+            localized_evidence,
+        )
+
+        self.assertEqual(
+            evaluation,
+            {
+                "identity_relation": "unresolved",
+                "reconciliation_action": "preserve",
+            },
+        )
+
     def test_candidate_admin_observations_preserve_each_reference_evidence_source(self):
         from .geography.resolution import (
             observe_candidate_admin_against_reference_evidence,
@@ -7225,6 +7663,310 @@ class GeographicResolutionTests(TestCase):
                 "divergent_levels": [2],
             },
         )
+
+    def test_localized_identity_evidence_collects_spatial_extent_observation(self):
+        from .geography.resolution import (
+            get_localized_identity_evidence_observation,
+        )
+
+        candidate = {
+            "latitude": 42.3666036,
+            "longitude": -71.1056916,
+        }
+        reference = {
+            "spatial_extent": {
+                "kind": "bounding_box",
+                "north": 42.404167,
+                "south": 42.352397,
+                "east": -71.063984,
+                "west": -71.160332,
+            },
+        }
+
+        reconstructed_admin_observations = [
+            {
+                "level": 2,
+                "external_source": "geonames",
+                "external_id": "4943909",
+                "nominal": {
+                    "matching_identity_values": [
+                        "middlesex county",
+                    ],
+                    "compatibility": "compatible",
+                },
+            },
+        ]
+
+        evidence = get_localized_identity_evidence_observation(
+            candidate,
+            reference,
+            reconstructed_admin_observations,
+        )
+
+        self.assertEqual(
+            evidence,
+            {
+                "spatial_extent": {
+                    "relation": "inside",
+                },
+                "reconstructed_admin": (
+                    reconstructed_admin_observations
+                ),
+            },
+        )
+
+    def test_spatial_extent_observation_detects_point_inside_bounding_box(self):
+        from .geography.resolution import (
+            get_spatial_extent_evidence_observation,
+        )
+
+        candidate = {
+            "latitude": 42.3666036,
+            "longitude": -71.1056916,
+        }
+        reference = {
+            "spatial_extent": {
+                "kind": "bounding_box",
+                "north": 42.404167,
+                "south": 42.352397,
+                "east": -71.063984,
+                "west": -71.160332,
+            },
+        }
+
+        observation = get_spatial_extent_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "relation": "inside",
+            },
+        )
+
+    def test_spatial_extent_observation_handles_bounding_box_across_antimeridian(self):
+        from .geography.resolution import (
+            get_spatial_extent_evidence_observation,
+        )
+
+        reference = {
+            "spatial_extent": {
+                "kind": "bounding_box",
+                "north": 10.0,
+                "south": -10.0,
+                "east": -170.0,
+                "west": 170.0,
+            },
+        }
+
+        eastern_candidate = {
+            "latitude": 0.0,
+            "longitude": 175.0,
+        }
+        western_candidate = {
+            "latitude": 0.0,
+            "longitude": -175.0,
+        }
+
+        self.assertEqual(
+            get_spatial_extent_evidence_observation(
+                eastern_candidate,
+                reference,
+            ),
+            {
+                "relation": "inside",
+            },
+        )
+        self.assertEqual(
+            get_spatial_extent_evidence_observation(
+                western_candidate,
+                reference,
+            ),
+            {
+                "relation": "inside",
+            },
+        )
+
+    def test_spatial_extent_observation_detects_point_outside_bounding_box(self):
+        from .geography.resolution import (
+            get_spatial_extent_evidence_observation,
+        )
+
+        candidate = {
+            "latitude": 42.1,
+            "longitude": -72.59,
+        }
+        reference = {
+            "spatial_extent": {
+                "kind": "bounding_box",
+                "north": 39.87417,
+                "south": 39.653656,
+                "east": -89.568389,
+                "west": -89.773193,
+            },
+        }
+
+        observation = get_spatial_extent_evidence_observation(
+            candidate,
+            reference,
+        )
+
+        self.assertEqual(
+            observation,
+            {
+                "relation": "outside",
+            },
+        )
+
+    def test_spatial_extent_observation_is_unknown_without_supported_complete_evidence(self):
+        from .geography.resolution import (
+            get_spatial_extent_evidence_observation,
+        )
+
+        candidate_without_coordinates = {
+            "latitude": None,
+            "longitude": -71.1056916,
+        }
+        complete_candidate = {
+            "latitude": 42.3666036,
+            "longitude": -71.1056916,
+        }
+        unsupported_reference = {
+            "spatial_extent": {
+                "kind": "viewport",
+                "north": 42.404167,
+                "south": 42.352397,
+                "east": -71.063984,
+                "west": -71.160332,
+            },
+        }
+        incomplete_reference = {
+            "spatial_extent": {
+                "kind": "bounding_box",
+                "north": 42.404167,
+                "south": 42.352397,
+                "east": -71.063984,
+            },
+        }
+
+        self.assertEqual(
+            get_spatial_extent_evidence_observation(
+                candidate_without_coordinates,
+                {
+                    "spatial_extent": {
+                        "kind": "bounding_box",
+                        "north": 42.404167,
+                        "south": 42.352397,
+                        "east": -71.063984,
+                        "west": -71.160332,
+                    },
+                },
+            ),
+            {
+                "relation": "unknown",
+            },
+        )
+        self.assertEqual(
+            get_spatial_extent_evidence_observation(
+                complete_candidate,
+                unsupported_reference,
+            ),
+            {
+                "relation": "unknown",
+            },
+        )
+        self.assertEqual(
+            get_spatial_extent_evidence_observation(
+                complete_candidate,
+                incomplete_reference,
+            ),
+            {
+                "relation": "unknown",
+            },
+        )
+
+    def test_spatial_extent_observation_is_unknown_for_invalid_geometry(self):
+        from .geography.resolution import (
+            get_spatial_extent_evidence_observation,
+        )
+
+        valid_candidate = {
+            "latitude": 42.3666036,
+            "longitude": -71.1056916,
+        }
+        valid_reference = {
+            "spatial_extent": {
+                "kind": "bounding_box",
+                "north": 42.404167,
+                "south": 42.352397,
+                "east": -71.063984,
+                "west": -71.160332,
+            },
+        }
+
+        invalid_candidates = [
+            {
+                "latitude": 91.0,
+                "longitude": -71.1056916,
+            },
+            {
+                "latitude": 42.3666036,
+                "longitude": 181.0,
+            },
+        ]
+        invalid_references = [
+            {
+                "spatial_extent": {
+                    "kind": "bounding_box",
+                    "north": 42.0,
+                    "south": 43.0,
+                    "east": -71.0,
+                    "west": -72.0,
+                },
+            },
+            {
+                "spatial_extent": {
+                    "kind": "bounding_box",
+                    "north": 91.0,
+                    "south": 42.0,
+                    "east": -71.0,
+                    "west": -72.0,
+                },
+            },
+            {
+                "spatial_extent": {
+                    "kind": "bounding_box",
+                    "north": 43.0,
+                    "south": 42.0,
+                    "east": 181.0,
+                    "west": -72.0,
+                },
+            },
+        ]
+
+        for candidate in invalid_candidates:
+            self.assertEqual(
+                get_spatial_extent_evidence_observation(
+                    candidate,
+                    valid_reference,
+                ),
+                {
+                    "relation": "unknown",
+                },
+            )
+
+        for reference in invalid_references:
+            self.assertEqual(
+                get_spatial_extent_evidence_observation(
+                    valid_candidate,
+                    reference,
+                ),
+                {
+                    "relation": "unknown",
+                },
+            )
 
     def test_spatial_evidence_is_unknown_when_coordinates_are_incomplete(self):
         from .geography.resolution import (

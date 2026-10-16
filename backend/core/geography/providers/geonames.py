@@ -102,6 +102,28 @@ def normalize_geographic_result(item):
         seen_aliases.add(alias_key)
         aliases.append(alias)
 
+    bounding_box = item.get("bbox") or {}
+    bounding_box_keys = (
+        "north",
+        "south",
+        "east",
+        "west",
+    )
+
+    spatial_extent = None
+
+    if all(
+        bounding_box.get(key) is not None
+        for key in bounding_box_keys
+    ):
+        spatial_extent = {
+            "kind": "bounding_box",
+            "north": bounding_box["north"],
+            "south": bounding_box["south"],
+            "east": bounding_box["east"],
+            "west": bounding_box["west"],
+        }
+
     return {
         "name": canonical_name,
         "canonical_name": canonical_name,
@@ -117,6 +139,7 @@ def normalize_geographic_result(item):
         ),
         "population": item.get("population") or 0,
         "admin_name": (item.get("adminName1") or "").strip(),
+        "spatial_extent": spatial_extent,
         "admin_context": [
             {
                 "level": level,

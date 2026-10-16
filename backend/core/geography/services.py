@@ -14,8 +14,12 @@ from .providers.google_places import get_google_geographic_place
 from .resolution import (
     evaluate_existing_reference_gate,
     evaluate_geographic_identity_evidence,
+    evaluate_localized_identity_strategy,
     get_geographic_identity_evidence_observation,
+    get_localized_identity_evidence_observation,
+    localized_identity_strategy_can_evaluate,
     get_resolvable_admin_references,
+    observe_candidate_admin_against_reconstructed_references,
 )
 
 from ..place_utils import (
@@ -106,16 +110,54 @@ def evaluate_candidate_place_reference(
                 candidate,
                 reference,
             )
+            evaluation = evaluate_geographic_identity_evidence(
+                evidence
+            )
+            reference_evaluation = {
+                "reference": reference,
+                "evidence": evidence,
+                "evaluation": evaluation,
+            }
+
+            if localized_identity_strategy_can_evaluate(
+                candidate,
+                evidence,
+            ):
+                reconstructed_admin_evidence = (
+                    reconstruct_admin_reference_evidence(
+                        reference
+                    )
+                )
+                reconstructed_admin_observations = (
+                    observe_candidate_admin_against_reconstructed_references(
+                        candidate,
+                        reconstructed_admin_evidence,
+                    )
+                )
+                localized_evidence = (
+                    get_localized_identity_evidence_observation(
+                        candidate,
+                        reference,
+                        reconstructed_admin_observations,
+                    )
+                )
+                reference_evaluation["strategy_evaluations"] = [
+                    {
+                        "strategy": "localized",
+                        "evidence": localized_evidence,
+                        "evaluation": (
+                            evaluate_localized_identity_strategy(
+                                candidate,
+                                reference,
+                                evidence,
+                                localized_evidence,
+                            )
+                        ),
+                    }
+                ]
+
             geographic_evidence_evaluations.append(
-                {
-                    "reference": reference,
-                    "evidence": evidence,
-                    "evaluation": (
-                        evaluate_geographic_identity_evidence(
-                            evidence
-                        )
-                    ),
-                }
+                reference_evaluation
             )
 
     return {

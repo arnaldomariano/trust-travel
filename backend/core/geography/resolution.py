@@ -542,6 +542,103 @@ def observe_candidate_admin_against_reference_evidence(
     ]
 
 
+def get_spatial_extent_evidence_observation(
+    candidate,
+    reference,
+):
+    """Describe a point relative to a supported reference spatial extent.
+
+    The relation is factual evidence only. Its identity meaning depends on the
+    active evaluation strategy.
+    """
+    candidate_latitude = candidate.get("latitude")
+    candidate_longitude = candidate.get("longitude")
+    spatial_extent = reference.get("spatial_extent") or {}
+
+    if (
+        candidate_latitude is None
+        or candidate_longitude is None
+        or spatial_extent.get("kind") != "bounding_box"
+    ):
+        return {
+            "relation": "unknown",
+        }
+
+    extent_keys = (
+        "north",
+        "south",
+        "east",
+        "west",
+    )
+
+    if any(
+        spatial_extent.get(key) is None
+        for key in extent_keys
+    ):
+        return {
+            "relation": "unknown",
+        }
+
+    latitude = float(candidate_latitude)
+    longitude = float(candidate_longitude)
+    north = float(spatial_extent["north"])
+    south = float(spatial_extent["south"])
+    east = float(spatial_extent["east"])
+    west = float(spatial_extent["west"])
+
+    geometry_is_valid = (
+        -90.0 <= latitude <= 90.0
+        and -180.0 <= longitude <= 180.0
+        and -90.0 <= south <= north <= 90.0
+        and -180.0 <= east <= 180.0
+        and -180.0 <= west <= 180.0
+    )
+
+    if not geometry_is_valid:
+        return {
+            "relation": "unknown",
+        }
+
+    latitude_is_inside = (
+        south <= latitude <= north
+    )
+
+    if west <= east:
+        longitude_is_inside = (
+            west <= longitude <= east
+        )
+    else:
+        longitude_is_inside = (
+            longitude >= west
+            or longitude <= east
+        )
+
+    relation = (
+        "inside"
+        if latitude_is_inside and longitude_is_inside
+        else "outside"
+    )
+
+    return {
+        "relation": relation,
+    }
+
+
+def get_localized_identity_evidence_observation(
+    candidate,
+    reference,
+    reconstructed_admin_observations,
+):
+    """Collect factual evidence specific to localized identity resolution."""
+    return {
+        "spatial_extent": get_spatial_extent_evidence_observation(
+            candidate,
+            reference,
+        ),
+        "reconstructed_admin": reconstructed_admin_observations,
+    }
+
+
 def get_spatial_evidence_observation(
     candidate,
     reference,
@@ -664,6 +761,50 @@ def geographic_identity_evidence_supports_strategy_resolution(
         compatibility == "compatible"
         for compatibility in core_compatibilities
     )
+
+
+def localized_identity_strategy_can_evaluate(
+    candidate,
+    gate_two_evidence,
+):
+    """Return whether localized identity evaluation may proceed."""
+    strategies = get_candidate_evaluation_strategies(
+        candidate
+    )
+
+    return (
+        "localized" in strategies
+        and geographic_identity_evidence_supports_strategy_resolution(
+            gate_two_evidence
+        )
+    )
+
+
+def evaluate_localized_identity_strategy(
+    candidate,
+    reference,
+    gate_two_evidence,
+    localized_evidence,
+):
+    """Evaluate localized identity using explicitly acquired strategy evidence.
+
+    Strategy activation and core compatibility permit deeper evaluation but do
+    not establish identity. Localized evidence remains factual until a positive
+    resolution rule is formalized.
+    """
+    if not localized_identity_strategy_can_evaluate(
+        candidate,
+        gate_two_evidence,
+    ):
+        return {
+            "identity_relation": "unresolved",
+            "reconciliation_action": "preserve",
+        }
+
+    return {
+        "identity_relation": "unresolved",
+        "reconciliation_action": "preserve",
+    }
 
 
 def evaluate_geographic_identity_evidence(evidence):

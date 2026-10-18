@@ -739,6 +739,14 @@ const createCountryCandidates = createCountrySearch.trim()
 
 const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
+const selectedExperienceTarget =
+  selectedPlace || (isExperienceMode ? selectedMainGeographyResult : null);
+
+const selectedExperienceTargetName =
+  selectedPlace?.name ||
+  (isExperienceMode ? selectedMainGeographyResult?.canonical_name : "") ||
+  "";
+
 const selectedPlaceReviewsCount =
   Number(selectedPlace?.reviews_count ?? selectedPlace?.average_rating_count ?? 0);
 
@@ -1474,6 +1482,17 @@ const createSpecificPlaceForFlow = async () => {
       return;
     }
 
+    if (isExperienceMode) {
+      setSelectedMainGeographyResult(result);
+      setSelectedPlace(null);
+      setShowShareForm(true);
+      setExperienceShared(false);
+      setSharedExperience(null);
+      setEditingExperience(false);
+      setMainGeographySearchError("");
+      return;
+    }
+
     setMainGeographySearchLoading(true);
     setMainGeographySearchError("");
 
@@ -1539,6 +1558,7 @@ const createSpecificPlaceForFlow = async () => {
   const handleChangePlace = () => {
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
+    setSelectedMainGeographyResult(null);
     setShowRelatedPlaces(false);
     setRelatedPlaceSearch("");
     setTitle("");
@@ -1563,6 +1583,7 @@ const createSpecificPlaceForFlow = async () => {
   const resetShareFlow = () => {
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
+    setSelectedMainGeographyResult(null);
     setSearchTerm("");
     setTitle("");
     setComment("");
@@ -1641,7 +1662,18 @@ const continueWithoutPracticalRatings = () => {
   const handleSubmitExperience = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedPlace) return;
+    if (!selectedExperienceTarget) return;
+
+    if (
+      !selectedPlace &&
+      (!selectedMainGeographyResult?.external_source ||
+        !selectedMainGeographyResult.external_id)
+    ) {
+      setExperienceFormError(
+        "This geographic place cannot be shared right now."
+      );
+      return;
+    }
 
     if (!title.trim()) {
       setExperienceFormError("Please add a short title.");
@@ -1676,44 +1708,59 @@ const continueWithoutPracticalRatings = () => {
     try {
       const formData = new FormData();
 
-formData.append("place", String(selectedPlace.id));
-formData.append("title", title.trim());
-formData.append("rating", String(rating));
-formData.append("comment", comment.trim());
+      if (selectedPlace) {
+        formData.append("place", String(selectedPlace.id));
+      } else if (
+        selectedMainGeographyResult?.external_source &&
+        selectedMainGeographyResult.external_id
+      ) {
+        formData.append(
+          "external_source",
+          selectedMainGeographyResult.external_source
+        );
+        formData.append(
+          "external_id",
+          selectedMainGeographyResult.external_id
+        );
+      }
 
-if (safetyRating) {
-  formData.append("safety_rating", String(safetyRating));
-}
+      formData.append("title", title.trim());
+      formData.append("rating", String(rating));
+      formData.append("comment", comment.trim());
 
-if (costRating) {
-  formData.append("cost_rating", String(costRating));
-}
+      if (safetyRating) {
+        formData.append("safety_rating", String(safetyRating));
+      }
 
-if (accessibilityRating) {
-  formData.append("accessibility_rating", String(accessibilityRating));
-}
+      if (costRating) {
+        formData.append("cost_rating", String(costRating));
+      }
 
-if (convenienceRating) {
-  formData.append("convenience_rating", String(convenienceRating));
-}
+      if (accessibilityRating) {
+        formData.append("accessibility_rating", String(accessibilityRating));
+      }
 
-formData.append("trip_context", tripContext);
-formData.append("trip_style", tripStyle);
+      if (convenienceRating) {
+        formData.append("convenience_rating", String(convenienceRating));
+      }
+
+      formData.append("trip_context", tripContext);
+      formData.append("trip_style", tripStyle);
 
 
-if (imageFile) {
-  formData.append("image", imageFile);
-}
+      if (imageFile) {
+        formData.append("image", imageFile);
+      }
 
-formData.append("image_display_mode", imageDisplayMode);
-formData.append("image_caption", imageCaption.trim());
+      formData.append("image_display_mode", imageDisplayMode);
+      formData.append("image_caption", imageCaption.trim());
 
-const res = await fetch(`${API_URL}/api/experiences/`, {
+      const res = await fetch(`${API_URL}/api/experiences/`, {
 
-  method: "POST",
-  credentials: "include",
-  body: formData,
-});
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
 
       const data = await res.json();
 
@@ -2294,6 +2341,17 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   marginTop: "16px",
                 }}
               >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowShareForm(true);
+                    router.push("/destinations?mode=experience");
+                  }}
+                  style={primaryButton}
+                >
+                  Share an experience
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setSelectedMainGeographyResult(null)}
@@ -3556,7 +3614,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       </section>
     )}
 
-        {selectedPlace && showShareForm && (
+        {selectedExperienceTarget && showShareForm && (
           <section
             id="share-experience-form"
             style={{
@@ -3569,7 +3627,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             }}
           >
             <h2 style={{ marginTop: 0 }}>
-              Share your experience about {selectedPlace.name}
+              {experienceShared
+                ? `Experience shared in ${sharedExperience?.place_name || selectedExperienceTargetName}`
+                : `Share your experience about ${selectedExperienceTargetName}`}
             </h2>
 
             {experienceShared ? (
@@ -3577,6 +3637,28 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 <p style={{ color: "#555", lineHeight: 1.5 }}>
                   Your experience was shared successfully.
                 </p>
+
+                {sharedExperience?.place && (
+                  <div style={helperCard}>
+                    <div style={{ fontSize: "13px", color: "#666" }}>
+                      Your experience was published in
+                    </div>
+
+                    <div style={{ fontWeight: 600, marginTop: "6px" }}>
+                      {sharedExperience.place_name}
+                    </div>
+
+                    {sharedExperience.destination_name && (
+                      <div style={{ color: "#666", marginTop: "4px" }}>
+                        {sharedExperience.destination_name}
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: "8px", color: "#267347" }}>
+                      ✓ Saved on Trust Travel
+                    </div>
+                  </div>
+                )}
 
                 {sharedExperience && (
                   <div style={previewCard}>
@@ -3660,29 +3742,49 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   </button>
 
                   <button
-                    onClick={() =>
-                      sharedExperience
-                        ? router.push(
-                            `/experiences/${sharedExperience.id}`
-                          )
-                        : router.push(`/places/${selectedPlace.id}/experiences`)
-                    }
+                    onClick={() => {
+                      if (sharedExperience) {
+                        router.push(`/experiences/${sharedExperience.id}`);
+                      }
+                    }}
                     style={primaryButton}
                   >
                     View your experience
                   </button>
 
-                  <button onClick={handleChangePlace} style={secondaryButton}>
-                    Choose another place
+                  {sharedExperience?.place && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/places/${sharedExperience.place}/experiences`
+                        )
+                      }
+                      style={secondaryButton}
+                    >
+                      View place
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetShareFlow();
+                      setMainGeographyResults([]);
+                      setMainGeographySearchError("");
+                      setMainGeographyMeaningfulAmbiguity(false);
+                      setMainGeographyCountryRefinementOptions([]);
+                      setMainGeographyCountryRefinement(null);
+                    }}
+                    style={secondaryButton}
+                  >
+                    Search for another place
                   </button>
 
                   <button onClick={() => router.push("/")} style={secondaryButton}>
                     Back to feed
                   </button>
 
-                  <button onClick={resetShareFlow} style={secondaryButton}>
-                    Start over
-                  </button>
                 </div>
               </div>
             ) : (

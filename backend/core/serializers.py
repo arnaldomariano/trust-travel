@@ -31,6 +31,39 @@ from .place_utils import (
 )
 from .trust_services import get_trust_level
 
+class UpdateCreateSerializer(serializers.ModelSerializer):
+    type = serializers.ChoiceField(
+        choices=["event", "alert", "info"]
+    )
+    text = serializers.CharField(
+        allow_blank=False,
+        trim_whitespace=True
+    )
+
+    class Meta:
+        model = Update
+        fields = [
+            "type",
+            "category",
+            "title",
+            "text",
+            "event_date",
+            "external_link",
+            "source_name",
+            "source_url",
+            "priority",
+        ]
+        extra_kwargs = {
+            "category": {"required": False},
+            "title": {"required": False},
+            "event_date": {"required": False, "allow_null": True},
+            "external_link": {"required": False},
+            "source_name": {"required": False},
+            "source_url": {"required": False},
+            "priority": {"required": False},
+        }
+
+
 class UpdateSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.username", read_only=True)
     place_name = serializers.CharField(source="place.name", read_only=True)

@@ -140,9 +140,26 @@ useEffect(() => {
                     </span>
                   </div>
 
-                  <MenuLink href="/destinations" onClick={() => setMenuOpen(false)}>
-                      Create / Share
-                    </MenuLink>
+                  <MenuLink
+                    href="/destinations?mode=experience"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Share an experience
+                  </MenuLink>
+
+                  <MenuLink
+                    href="/destinations?mode=update"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Share an update
+                  </MenuLink>
+
+                  <MenuLink
+                    href="/destinations"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Find or add a place
+                  </MenuLink>
 
                     <MenuLink href="/trip-plans" onClick={() => setMenuOpen(false)}>
                       Build my trip

@@ -10220,3 +10220,318 @@ class ExternalExperienceCreationTests(TestCase):
             geographic_result=geographic_result,
             user=self.user,
         )
+
+
+class ExternalUpdateCreationTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        from .models import Destination, Place
+
+        self.user = User.objects.create_user(
+            username="external-update-user",
+            password="test-password",
+        )
+        self.access_token = str(AccessToken.for_user(self.user))
+
+        self.destination = Destination.objects.create(
+            name="Netherlands",
+            country="Netherlands",
+        )
+        self.place = Place.objects.create(
+            destination=self.destination,
+            name="Breda",
+            canonical_name="Breda",
+            country_code="NL",
+            place_type="city",
+            city="Breda",
+        )
+        self.url = "/api/updates/"
+
+    def post_update(self, **overrides):
+        payload = {
+            "type": "event",
+            "title": "Local festival",
+            "text": "A festival in the city center.",
+            "category": "culture",
+            **overrides,
+        }
+        return self.client.post(
+            self.url,
+            data=payload,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_creation_requires_place_or_complete_external_identity(
+        self,
+        reconstruct_reference,
+    ):
+        from .models import Update
+
+        for identity in (
+            {},
+            {"external_source": "geonames"},
+            {"external_id": "2758401"},
+        ):
+            with self.subTest(identity=identity):
+                response = self.post_update(**identity)
+                self.assertEqual(response.status_code, 400)
+
+        self.assertEqual(Update.objects.count(), 0)
+        reconstruct_reference.assert_not_called()
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_invalid_update_does_not_trigger_geographic_lookup(
+        self,
+        reconstruct_reference,
+    ):
+        from .models import Update
+
+        response = self.post_update(
+            external_source="geonames",
+            external_id="2758401",
+            type="experience",
+            text=" ",
+            source_url="not-a-url",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Update.objects.count(), 0)
+        reconstruct_reference.assert_not_called()
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_existing_place_update_does_not_trigger_geographic_lookup(
+        self,
+        reconstruct_reference,
+    ):
+        from .models import Update
+
+        response = self.post_update(place=self.place.id)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["place_id"], self.place.id)
+        self.assertEqual(Update.objects.count(), 1)
+        self.assertEqual(Update.objects.get().place_id, self.place.id)
+        reconstruct_reference.assert_not_called()
+
+    @patch(
+        "core.views.resolve_reconstructed_geographic_reference_for_commit"
+    )
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_update_materializes_place_on_successful_publication(
+        self,
+        reconstruct_reference,
+        resolve_reference,
+    ):
+        from .models import Place, Update
+
+        reconstruct_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "external-update-place",
+            "name": "External Update Place",
+            "country_code": "NL",
+            "geographic_type": "settlement",
+        }
+
+        def materialize_place(**kwargs):
+            place = Place.objects.create(
+                destination=self.destination,
+                name="External Update Place",
+                canonical_name="External Update Place",
+                country_code="NL",
+                place_type="city",
+                city="External Update Place",
+            )
+            return {
+                "state": "created",
+                "place": place,
+                "created": True,
+                "evaluations": [],
+            }
+
+        resolve_reference.side_effect = materialize_place
+
+        self.assertFalse(
+            Place.objects.filter(name="External Update Place").exists()
+        )
+
+        response = self.post_update(
+            external_source="geonames",
+            external_id="external-update-place",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Update.objects.count(), 1)
+
+        place = Place.objects.get(name="External Update Place")
+        self.assertEqual(response.json()["place_id"], place.id)
+        self.assertEqual(Update.objects.get().place_id, place.id)
+
+        reconstruct_reference.assert_called_once()
+        resolve_reference.assert_called_once()
+
+    @patch(
+        "core.views.resolve_reconstructed_geographic_reference_for_commit"
+    )
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_update_reuses_existing_place(
+        self,
+        reconstruct_reference,
+        resolve_reference,
+    ):
+        from .models import Place, Update
+
+        reconstruct_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "2758401",
+            "name": "Breda",
+            "country_code": "NL",
+            "geographic_type": "settlement",
+        }
+
+        resolve_reference.return_value = {
+            "state": "reuse",
+            "place": self.place,
+            "created": False,
+            "evaluations": [],
+        }
+
+        initial_place_count = Place.objects.count()
+
+        response = self.post_update(
+            external_source="geonames",
+            external_id="2758401",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(Update.objects.count(), 1)
+        self.assertEqual(Update.objects.get().place_id, self.place.id)
+        self.assertEqual(response.json()["place_id"], self.place.id)
+
+        resolve_reference.assert_called_once()
+
+    @patch(
+        "core.views.resolve_reconstructed_geographic_reference_for_commit"
+    )
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_update_returns_conflict_without_persisting(
+        self,
+        reconstruct_reference,
+        resolve_reference,
+    ):
+        from .models import Place, Update
+
+        reconstruct_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "2758401",
+            "name": "Breda",
+            "country_code": "NL",
+            "geographic_type": "settlement",
+        }
+        resolve_reference.return_value = {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "evaluations": [],
+        }
+
+        initial_place_count = Place.objects.count()
+
+        response = self.post_update(
+            external_source="geonames",
+            external_id="2758401",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["code"],
+            "geographic_resolution_required",
+        )
+        self.assertEqual(response.json()["references"], [])
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(Update.objects.count(), 0)
+
+    @patch(
+        "core.views.resolve_reconstructed_geographic_reference_for_commit"
+    )
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_update_returns_503_when_provider_fails(
+        self,
+        reconstruct_reference,
+        resolve_reference,
+    ):
+        from .geography.providers.geonames import GeoNamesRequestError
+        from .models import Place, Update
+
+        reconstruct_reference.side_effect = GeoNamesRequestError(
+            "Simulated provider failure."
+        )
+
+        initial_place_count = Place.objects.count()
+
+        response = self.post_update(
+            external_source="geonames",
+            external_id="2758401",
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(Update.objects.count(), 0)
+        resolve_reference.assert_not_called()
+
+    @patch("core.serializers.UpdateCreateSerializer.create")
+    @patch(
+        "core.views.resolve_reconstructed_geographic_reference_for_commit"
+    )
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_place_materialization_rolls_back_if_update_fails(
+        self,
+        reconstruct_reference,
+        resolve_reference,
+        create_update,
+    ):
+        from .models import Place, Update
+
+        reconstruct_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "rollback-update-place",
+            "name": "Rollback Update Place",
+            "country_code": "NL",
+            "geographic_type": "settlement",
+        }
+
+        def materialize_place(**kwargs):
+            place = Place.objects.create(
+                destination=self.destination,
+                name="Rollback Update Place",
+                canonical_name="Rollback Update Place",
+                country_code="NL",
+                place_type="city",
+                city="Rollback Update Place",
+            )
+            return {
+                "state": "created",
+                "place": place,
+                "created": True,
+                "evaluations": [],
+            }
+
+        resolve_reference.side_effect = materialize_place
+        create_update.side_effect = RuntimeError(
+            "Simulated Update creation failure."
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.post_update(
+                external_source="geonames",
+                external_id="rollback-update-place",
+            )
+
+        self.assertFalse(
+            Place.objects.filter(name="Rollback Update Place").exists()
+        )
+        self.assertEqual(Update.objects.count(), 0)

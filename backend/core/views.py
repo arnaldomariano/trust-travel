@@ -65,6 +65,7 @@ from .serializers import (
     BusinessClaimRequestSerializer,
     ExperienceSerializer,
     ExperienceCreateSerializer,
+    UpdateCreateSerializer,
     ExperiencePhotoSerializer,
     UserRegisterSerializer,
     ExperienceReplySerializer,
@@ -6928,54 +6929,110 @@ class UpdateListView(APIView):
         })
 
     def post(self, request):
+        serializer = UpdateCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         place_id = request.data.get("place")
-        text = request.data.get("text")
-        update_type = request.data.get("type")
-        category = request.data.get("category") or "general"
+        external_source = str(
+            request.data.get("external_source") or ""
+        ).strip()
+        external_id = str(
+            request.data.get("external_id") or ""
+        ).strip()
 
-        title = (request.data.get("title") or "").strip()
-        event_date = request.data.get("event_date") or None
-        external_link = (request.data.get("external_link") or "").strip()
-        source_name = (request.data.get("source_name") or "").strip()
-        source_url = (request.data.get("source_url") or "").strip()
-        priority = request.data.get("priority") or "normal"
+        has_external_identity = bool(external_source or external_id)
 
-        valid_types = ["event", "alert", "info"]
-        valid_priorities = ["low", "normal", "high", "urgent"]
+        if place_id and has_external_identity:
+            raise serializers.ValidationError({
+                "place": (
+                    "Provide either a place or an external "
+                    "geographic identity, not both."
+                )
+            })
 
-        if not place_id or not update_type:
-            return Response({"detail": "Missing required fields."}, status=400)
+        if external_source and external_source not in {
+            "geonames",
+            "google_places",
+        }:
+            raise serializers.ValidationError({
+                "external_source": (
+                    "A supported geographic external source is required."
+                )
+            })
 
-        if update_type not in valid_types:
-            return Response({"detail": "Invalid update type."}, status=400)
+        geographic_result = None
+        place = None
 
-        if priority not in valid_priorities:
-            return Response({"detail": "Invalid priority."}, status=400)
+        if place_id:
+            try:
+                place = Place.objects.get(id=place_id)
+            except (Place.DoesNotExist, ValueError, TypeError):
+                raise serializers.ValidationError({
+                    "place": "Invalid place id."
+                })
+        else:
+            if not external_source or not external_id:
+                raise serializers.ValidationError({
+                    "place": (
+                        "Provide either a place or a complete "
+                        "external geographic identity."
+                    )
+                })
 
-        if not text or not str(text).strip():
-            return Response({"detail": "Text is required."}, status=400)
+            try:
+                geographic_result = reconstruct_external_geographic_reference(
+                    external_source=external_source,
+                    external_id=external_id,
+                )
+            except (
+                GeoNamesConfigurationError,
+                GooglePlacesConfigurationError,
+            ):
+                raise GeographicProviderUnavailable(
+                    "Geographic search is not configured."
+                )
+            except (
+                GeoNamesRequestError,
+                GooglePlacesRequestError,
+            ):
+                raise GeographicProviderUnavailable(
+                    "Geographic place lookup is temporarily unavailable."
+                )
 
-        try:
-            place = Place.objects.get(id=place_id)
-        except Place.DoesNotExist:
-            return Response({"detail": "Invalid place id"}, status=400)
+        with transaction.atomic():
+            if geographic_result is not None:
+                resolution = (
+                    resolve_reconstructed_geographic_reference_for_commit(
+                        geographic_result=geographic_result,
+                        user=request.user,
+                    )
+                )
 
-        update = Update.objects.create(
-            user=request.user,
-            place=place,
-            type=update_type,
-            category=category,
-            title=title,
-            text=str(text).strip(),
-            event_date=event_date,
-            external_link=external_link,
-            source_name=source_name,
-            source_url=source_url,
-            priority=priority,
+                if resolution["state"] == "preserve":
+                    raise GeographicResolutionRequired(resolution)
+
+                if resolution["state"] not in {"reuse", "created"}:
+                    raise ValueError(
+                        "Unsupported geographic commit resolution state: "
+                        f"{resolution['state']}"
+                    )
+
+                place = resolution.get("place")
+
+                if place is None:
+                    raise ValueError(
+                        "Geographic commit resolution did not return a place."
+                    )
+
+            update = serializer.save(
+                user=request.user,
+                place=place,
+            )
+
+        return Response(
+            serialize_update(update, request),
+            status=status.HTTP_201_CREATED,
         )
-
-        return Response(serialize_update(update, request), status=201)
-
 
 class UpdateDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]

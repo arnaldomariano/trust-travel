@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
+import UpdateForm from "../components/UpdateForm";
 import { API_URL } from "../lib/api";
 
 type CountryCatalogItem = {
@@ -1370,6 +1371,9 @@ const createSpecificPlaceForFlow = async () => {
       // whether to share/post about the country or choose a place inside it.
       setSelectedCountryPlace(place);
       setSelectedPlace(null);
+      if (isUpdateMode) {
+        setSelectedMainGeographyResult(null);
+      }
       setShowShareForm(false);
       setShowRelatedPlaces(false);
       setRelatedPlaceSearch("");
@@ -1493,46 +1497,11 @@ const createSpecificPlaceForFlow = async () => {
       return;
     }
 
-    setMainGeographySearchLoading(true);
+    // Keep the external reference transient until the Update is published.
+    setSelectedMainGeographyResult(result);
+    setSelectedPlace(null);
+    setShowShareForm(true);
     setMainGeographySearchError("");
-
-    try {
-      const res = await fetch(
-        `${API_URL}/api/geography/places/materialize/`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            external_source: result.external_source,
-            external_id: result.external_id,
-          }),
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setMainGeographySearchError(
-          data.detail || "Could not add this geographic place."
-        );
-        return;
-      }
-
-      handleSelectExistingPlace(data);
-    } catch (error) {
-      console.error(
-        "Main geographic place materialization failed:",
-        error
-      );
-      setMainGeographySearchError(
-        "Could not add this geographic place."
-      );
-    } finally {
-      setMainGeographySearchLoading(false);
-    }
   };
 
   // =========================
@@ -1992,6 +1961,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               setSearchTerm(value);
               setMainGeographyResults([]);
               setMainGeographySearchError("");
+              if (isUpdateMode) {
+                setSelectedMainGeographyResult(null);
+                setShowShareForm(false);
+              }
               setCreateFlowOpen(false);
               setCreateFlowError("");
               setCreateSelectedCountry(null);
@@ -2701,13 +2674,21 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             are looking for, Trust Travel can guide you through adding it correctly.
           </p>
 
-          <button
-            type="button"
-            onClick={openGuidedCreateFlow}
-            style={secondaryButton}
-          >
-            Add a new place
-          </button>
+          {isUpdateMode ? (
+            <p style={helperNote}>
+              You can publish about a place already listed on Trust Travel
+              or select an available geographic search result. Adding a new
+              specific place while preparing an update is not supported yet.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={openGuidedCreateFlow}
+              style={secondaryButton}
+            >
+              Add a new place
+            </button>
+          )}
         </div>
       </section>
             ) : !selectedCountryPlace &&
@@ -2757,7 +2738,12 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           </div>
         )}
 
-        {!createFlowOpen ? (
+        {isUpdateMode ? (
+          <p style={helperNote}>
+            Try another search or select an existing place above.
+            Geographic results can be used directly when publishing an update.
+          </p>
+        ) : !createFlowOpen ? (
           <button
             type="button"
             onClick={openGuidedCreateFlow}
@@ -3395,13 +3381,15 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 : `View experiences in ${selectedCountryPlace.name}`}
             </button>
 
-          <button
-            type="button"
-            onClick={openCreateCityInSelectedCountry}
-            style={secondaryButton}
-          >
-            Choose another geographic place in {selectedCountryPlace.name}
-          </button>
+          {!isUpdateMode && (
+            <button
+              type="button"
+              onClick={openCreateCityInSelectedCountry}
+              style={secondaryButton}
+            >
+              Choose another geographic place in {selectedCountryPlace.name}
+            </button>
+          )}
 
           <button
             type="button"
@@ -4127,6 +4115,42 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             )}
           </section>
         )}
+
+        {isUpdateMode &&
+          showShareForm &&
+          !selectedPlace &&
+          !selectedCountryPlace &&
+          selectedMainGeographyResult?.external_source &&
+          selectedMainGeographyResult?.external_id && (
+            <section
+              id="share-update-form"
+              style={{
+                marginTop: "18px",
+                padding: "22px",
+                border: "1px solid #eee",
+                borderRadius: "16px",
+                background: "white",
+                maxWidth: "620px",
+              }}
+            >
+              <h2 style={{ marginTop: 0 }}>
+                Share an update about {selectedMainGeographyResult.canonical_name}
+              </h2>
+
+              <UpdateForm
+                externalSource={selectedMainGeographyResult.external_source}
+                externalId={selectedMainGeographyResult.external_id}
+                placeName={selectedMainGeographyResult.canonical_name}
+                onSuccess={(update) => {
+                  const placeId = update.place_id;
+
+                  if (typeof placeId === "number" && placeId > 0) {
+                    router.push(`/places/${placeId}`);
+                  }
+                }}
+              />
+            </section>
+          )}
     </main>
   );
 }

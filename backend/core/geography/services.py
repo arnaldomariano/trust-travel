@@ -531,6 +531,7 @@ def materialize_country_place(
 
         return place, True
 
+
 def get_poi_name_match_rank(
     poi_result,
     query,
@@ -1002,7 +1003,6 @@ def annotate_existing_city_places(results, country_code):
     return results
 
 
-
 def geographic_result_exactly_matches_query(
     result,
     query,
@@ -1019,7 +1019,6 @@ def geographic_result_exactly_matches_query(
     )
 
     return normalized_query in result_values
-
 
 
 def resolve_discovery_geographic_context(
@@ -1080,7 +1079,6 @@ def resolve_discovery_geographic_context(
         return None
 
     return candidates[0]
-
 
 
 def discovery_poi_matches_geographic_context(

@@ -164,6 +164,7 @@ class MeView(APIView):
             "is_superuser": request.user.is_superuser,
         })
 
+
 class ProfileView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -191,6 +192,7 @@ class ProfileView(APIView):
             return Response(serializer.data)
 
         return Response(serializer.errors, status=400)
+
 
 class ProfessionalPresenceView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -277,6 +279,7 @@ class ProfessionalPresenceView(APIView):
             status=400,
         )
 
+
 class ProfessionalPresencePublicView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -311,6 +314,7 @@ class ProfessionalPresencePublicView(APIView):
         )
 
         return Response(serializer.data)
+
 
 class ProfessionalFeedMuteView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -430,6 +434,7 @@ class ProfessionalEvaluationSummaryView(APIView):
                 **summary,
             }
         )
+
 
 class ProfessionalEvaluationAnalyticsView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -578,6 +583,7 @@ class ProfessionalEvaluationAnalyticsView(APIView):
             }
         )
 
+
 class ProfessionalContributionPublicListView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -644,6 +650,7 @@ class ProfessionalContributionPublicListView(APIView):
 
         return Response(serializer.data)
 
+
 class PlaceProfessionalContributionPublicListView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -694,6 +701,7 @@ class PlaceProfessionalContributionPublicListView(APIView):
         )
 
         return Response(serializer.data)
+
 
 class ProfessionalPresenceLinkCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -910,6 +918,7 @@ class ProfessionalPresenceLinkDetailView(APIView):
             status=200,
         )
 
+
 class ProfessionalBusinessRelationshipListCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1027,6 +1036,7 @@ class ProfessionalBusinessRelationshipListCreateView(APIView):
             response_serializer.data,
             status=201,
         )
+
 
 class ProfessionalBusinessRelationshipDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -1180,6 +1190,7 @@ class ProfessionalBusinessRelationshipDetailView(APIView):
             status=200,
         )
 
+
 class ProfessionalContributionListCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1268,6 +1279,7 @@ class ProfessionalContributionListCreateView(APIView):
             response_serializer.data,
             status=201,
         )
+
 
 class ProfessionalContributionDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -1388,6 +1400,7 @@ class ProfessionalContributionDetailView(APIView):
             status=200,
         )
 
+
 class ProfessionalEvaluationListCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1440,6 +1453,7 @@ class ProfessionalEvaluationListCreateView(APIView):
             response_serializer.data,
             status=201,
         )
+
 
 class ProfessionalEvaluationDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -1542,8 +1556,10 @@ class ProfessionalEvaluationDetailView(APIView):
             status=200,
         )
 
+
 class UserRegisterView(generics.CreateAPIView):
     serializer_class = UserRegisterSerializer
+
 
 class RecoverPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -1635,6 +1651,7 @@ class DestinationListView(generics.ListAPIView):
     queryset = Destination.objects.all()
     serializer_class = DestinationSerializer
 
+
 class CountryCatalogView(APIView):
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
@@ -1660,6 +1677,7 @@ class CountryCatalogView(APIView):
                 "results": results,
             }
         )
+
 
 class GeographyCountryMaterializeView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -1769,7 +1787,6 @@ class GeographyPlaceSearchView(APIView):
                 ],
             }
         )
-
 
 
 def _serialize_geographic_resolution_references(evaluations):
@@ -2164,6 +2181,7 @@ class GeographyCitySearchView(APIView):
             }
         )
 
+
 class GeographyCityMaterializeView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -2496,6 +2514,7 @@ class GeographyPOISearchView(APIView):
             }
         )
 
+
 class GeographyPOIMaterializeView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -2664,6 +2683,7 @@ class GeographyPOIMaterializeView(APIView):
             ),
         )
 
+
 class GeographyPOIManualCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -2796,6 +2816,7 @@ class PlaceDetailView(generics.RetrieveAPIView):
     queryset = Place.objects.all()
     serializer_class = PlaceSerializer
 
+
 class BusinessPresenceDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -2888,6 +2909,7 @@ class BusinessPresenceDetailView(APIView):
             "status": presence.status,
             "is_verified": presence.is_verified,
         })
+
 
 class BusinessPresenceLinkCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -2988,6 +3010,7 @@ class BusinessPresenceLinkCreateView(APIView):
             },
             status=201,
         )
+
 
 class BusinessPresenceLinkDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -3121,6 +3144,7 @@ class BusinessPresenceLinkDetailView(APIView):
             status=200,
         )
 
+
 class PlaceBusinessContextView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -3240,6 +3264,7 @@ class PlaceBusinessContextView(APIView):
             "business_manager": business_manager,
         })
 
+
 class PlaceMapPointsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -3305,6 +3330,7 @@ class PlaceMapPointsView(APIView):
 
         return Response(result)
 
+
 class PlaceLocationSuggestionCreateView(generics.CreateAPIView):
     serializer_class = PlaceLocationSuggestionSerializer
     authentication_classes = [CookieJWTAuthentication]
@@ -3312,6 +3338,7 @@ class PlaceLocationSuggestionCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(suggested_by=self.request.user)
+
 
 class BusinessClaimRequestCreateView(generics.CreateAPIView):
     serializer_class = BusinessClaimRequestSerializer
@@ -3322,6 +3349,7 @@ class BusinessClaimRequestCreateView(generics.CreateAPIView):
         serializer.save(
             requested_by=self.request.user
         )
+
 
 class BusinessClaimRequestWithdrawView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -3344,6 +3372,7 @@ class BusinessClaimRequestWithdrawView(APIView):
             "status": claim.status,
         })
 
+
 class PlaceLocationSuggestionListView(generics.ListAPIView):
     serializer_class = PlaceLocationSuggestionSerializer
     permission_classes = [permissions.AllowAny]
@@ -3362,6 +3391,7 @@ class PlaceLocationSuggestionListView(generics.ListAPIView):
             .filter(place_id=place_id)
             .order_by("-created_at")
         )
+
 
 class PlaceRatingsSummaryView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -3447,6 +3477,7 @@ class PlaceRatingsSummaryView(APIView):
             }
         )
 
+
 class PlaceSearchView(APIView):
     def get(self, request):
         query = (request.query_params.get("q") or "").strip()
@@ -3493,6 +3524,7 @@ class PlaceSearchView(APIView):
                 "results": results,
             }
         )
+
 
 class CountryContextView(APIView):
     authentication_classes = []
@@ -3726,6 +3758,7 @@ class ExperienceListView(generics.ListCreateAPIView):
                 text=feed_text,
             )
 
+
 class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -3807,6 +3840,7 @@ class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
             update.text = feed_text
             update.save()
 
+
 class ExperiencePhotoListCreateView(generics.ListCreateAPIView):
     serializer_class = ExperiencePhotoSerializer
     parser_classes = [MultiPartParser, FormParser]
@@ -3836,6 +3870,7 @@ class ExperiencePhotoListCreateView(generics.ListCreateAPIView):
             )
 
         serializer.save(experience=experience)
+
 
 class ExperiencePhotoDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ExperiencePhotoSerializer
@@ -3869,6 +3904,7 @@ class ExperiencePhotoDetailView(generics.RetrieveUpdateDestroyAPIView):
             )
 
         instance.delete()
+
 
 class PlaceExperiencesListView(generics.ListAPIView):
     serializer_class = ExperienceSerializer
@@ -4119,6 +4155,7 @@ def validate_trip_plan_destinations_payload(destinations_payload):
         key=lambda destination: destination["position"],
     )
 
+
 def replace_trip_plan_destinations(plan, normalized_destinations):
     if normalized_destinations is None:
         return
@@ -4136,6 +4173,7 @@ def replace_trip_plan_destinations(plan, normalized_destinations):
             for destination in normalized_destinations
         ]
     )
+
 
 def resolve_trip_plan_scope(plan):
     structured_destinations = list(
@@ -4273,6 +4311,7 @@ def resolve_trip_plan_scope(plan):
         "is_legacy": False,
     }
 
+
 def get_trip_plans_accessible_to_user(user):
     return TripPlan.objects.filter(
         Q(user=user)
@@ -4308,6 +4347,7 @@ def user_can_contribute_to_trip_plan(user, plan):
         role="collaborator",
     ).exists()
 
+
 def serialize_trip_plan_member(member):
     profile = getattr(member.user, "profile", None)
 
@@ -4319,6 +4359,7 @@ def serialize_trip_plan_member(member):
         "role": member.role,
         "joined_at": member.joined_at,
     }
+
 
 def serialize_trip_plan(plan):
     saved_items_count = plan.saved_items.count()
@@ -4409,6 +4450,7 @@ def serialize_saved_item(saved_item, request=None):
         "experience_created_at": experience.created_at,
     }
 
+
 def serialize_saved_place(saved_place, request=None):
     place = saved_place.place
     destination = place.destination if place else None
@@ -4455,6 +4497,7 @@ def serialize_saved_place(saved_place, request=None):
             related_experiences_count > 0 or related_updates_count > 0
         ),
     }
+
 
 def serialize_saved_update(saved_update, request=None):
     update = saved_update.update
@@ -4503,6 +4546,7 @@ def serialize_saved_update(saved_update, request=None):
         "update_created_at": update.created_at,
     }
 
+
 def serialize_trip_plan_resource(resource):
     place = resource.place
     destination = place.destination if place else None
@@ -4541,6 +4585,7 @@ def serialize_trip_plan_resource(resource):
         "created_at": resource.created_at,
         "updated_at": resource.updated_at,
     }
+
 
 class TripPlanListCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -4726,6 +4771,7 @@ class TripPlanDetailView(APIView):
 
         return Response({"detail": "Trip plan deleted."})
 
+
 class TripPlanMembersView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -4827,6 +4873,7 @@ class TripPlanMembersView(APIView):
             status=201 if created else 200,
         )
 
+
 class TripPlanMemberDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -4862,6 +4909,7 @@ class TripPlanMemberDetailView(APIView):
                 "removed_user_id": user_id,
             }
         )
+
 
 class TripPlanResourcesView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -5002,6 +5050,7 @@ class TripPlanResourcesView(APIView):
             status=201 if created else 200,
         )
 
+
 class TripPlanResourceDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -5046,6 +5095,7 @@ class TripPlanResourceDetailView(APIView):
                 "removed_resource_id": resource_id,
             }
         )
+
 
 class TripPlanExperienceView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -5141,6 +5191,7 @@ class TripPlanExperienceView(APIView):
                 "saved": False,
             }
         )
+
 
 class TripPlanPlaceView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -5243,6 +5294,7 @@ class TripPlanPlaceView(APIView):
                 "saved": False,
             }
         )
+
 
 class TripPlanUpdateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -5371,6 +5423,7 @@ class TripPlanUpdateView(APIView):
             }
         )
 
+
 class TripPlanWatchedPlaceView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -5476,6 +5529,7 @@ class TripPlanWatchedPlaceView(APIView):
             {"detail": "Place removed from Trust Radar watchlist."},
             status=status.HTTP_200_OK,
         )
+
 
 class TripPlanRadarPlaceSearchView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -5585,6 +5639,7 @@ class TripPlanRadarPlaceSearchView(APIView):
                 "has_out_of_scope_matches": has_out_of_scope_matches,
             }
         )
+
 
 class TripPlanRadarView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -5849,6 +5904,7 @@ class TripPlanRadarView(APIView):
                 "saved_place_ids": saved_place_ids,
             }
         )
+
 
 class TripPlanActivitySummaryView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -6173,6 +6229,7 @@ class TripPlanActivitySeenView(APIView):
             }
         )
 
+
 class TripPlanActivityItemsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -6435,6 +6492,8 @@ def serialize_update(update, request=None):
         "updated_at": update.updated_at,
 
     }
+
+
 class TripPlanSuggestionsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -6917,6 +6976,7 @@ class UpdateListView(APIView):
 
         return Response(serialize_update(update, request), status=201)
 
+
 class UpdateDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -7155,6 +7215,7 @@ class SendFriendRequestView(APIView):
 
         return Response({"detail": "Friend request sent"}, status=201)
 
+
 class AcceptFriendRequestView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -7286,6 +7347,7 @@ class MarkUserSeenView(APIView):
 
         return Response({"status": "ok"})
 
+
 class MarkUpdateSeenView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -7331,6 +7393,7 @@ class PlaceUpdatesListView(APIView):
             serialize_update(update, request)
             for update in updates
         ])
+
 
 class PlacePhotosView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -7386,6 +7449,7 @@ class MyUpdatesView(APIView):
             serialize_update(update, request)
             for update in updates
         ])
+
 
 class GalleryView(APIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -7610,6 +7674,7 @@ class ContentReportListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(reported_by=self.request.user)
 
+
 class ContentReportDetailView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -7678,6 +7743,7 @@ def get_filtered_saved_items(request):
 
     return saved_items
 
+
 class PlannerCountriesAnalyticsView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -7713,6 +7779,7 @@ class PlannerCountriesAnalyticsView(APIView):
             })
 
         return Response(result)
+
 
 class TopSavedExperiencesAnalyticsView(APIView):
     authentication_classes = [CookieJWTAuthentication]

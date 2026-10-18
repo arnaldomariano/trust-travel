@@ -6,11 +6,14 @@ from urllib.request import urlopen
 
 from django.conf import settings
 
+
 class GeoNamesConfigurationError(RuntimeError):
     pass
 
+
 class GeoNamesRequestError(RuntimeError):
     pass
+
 
 def get_geonames_username():
     username = (settings.GEONAMES_USERNAME or "").strip()
@@ -329,6 +332,7 @@ def get_geographic_place(external_id):
         )
 
     return normalized
+
 
 def search_cities(query, country_code, max_rows=8):
     query = str(query or "").strip()

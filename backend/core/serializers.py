@@ -529,6 +529,14 @@ class ExperienceSerializer(serializers.ModelSerializer):
 
         return get_trust_level(request.user, obj.user)
 
+
+class ExperienceCreateSerializer(ExperienceSerializer):
+    place = serializers.PrimaryKeyRelatedField(
+        queryset=Place.objects.all(),
+        required=False,
+    )
+
+
 class ExperiencePhotoSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 

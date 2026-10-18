@@ -71,6 +71,10 @@ function DestinationsPageContent() {
   const [mainGeographyResults, setMainGeographyResults] = useState<
     GeographyPlaceResult[]
   >([]);
+  const [
+    selectedMainGeographyResult,
+    setSelectedMainGeographyResult,
+  ] = useState<GeographyPlaceResult | null>(null);
   const [mainGeographySearchLoading, setMainGeographySearchLoading] =
     useState(false);
   const [mainGeographySearchError, setMainGeographySearchError] = useState("");
@@ -802,6 +806,8 @@ const visibleMainGeographyResults = mainGeographyCountryRefinement
 const handleMainGeographySearch = async () => {
   const query = searchTerm.trim();
 
+  setSelectedMainGeographyResult(null);
+
   if (query.length < 2) {
     setMainGeographyResults([]);
     setMainGeographySearchError("");
@@ -1440,7 +1446,7 @@ const createSpecificPlaceForFlow = async () => {
     };
 
   // =========================
-  // Materialize an external geographic place selected from main search
+  // Handle a geographic place selected from main search
   // =========================
   const handleSelectMainGeographyResult = async (
     result: GeographyPlaceResult
@@ -1453,6 +1459,11 @@ const createSpecificPlaceForFlow = async () => {
       handleSelectExistingPlace({
         id: result.existing_place_id,
       });
+      return;
+    }
+
+    if (!isExperienceMode && !isUpdateMode) {
+      setSelectedMainGeographyResult(result);
       return;
     }
 
@@ -2135,7 +2146,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   Geographic matches
                 </div>
 
-                {visibleMainGeographyResults.map((result) => {
+                {!selectedMainGeographyResult &&
+                  visibleMainGeographyResults.map((result) => {
                   const country =
                     countryCatalog.find(
                       (item) =>
@@ -2240,6 +2252,58 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             )}
           </div>
         )}
+
+        {selectedMainGeographyResult &&
+          !isExperienceMode &&
+          !isUpdateMode && (
+            <section
+              style={{
+                marginTop: "22px",
+                padding: "22px",
+                border: "1px solid #eee",
+                borderRadius: "16px",
+                background: "white",
+                maxWidth: "620px",
+              }}
+            >
+              <h2 style={{ marginTop: 0 }}>
+                {selectedMainGeographyResult.canonical_name}
+              </h2>
+
+              <p style={{ color: "#666", lineHeight: 1.5 }}>
+                {getGeographicTypeLabel(
+                  selectedMainGeographyResult.geographic_type
+                )}
+                {selectedMainGeographyResult.admin_name
+                  ? ` · ${selectedMainGeographyResult.admin_name}`
+                  : ""}
+                {selectedMainGeographyResult.country_code
+                  ? ` · ${selectedMainGeographyResult.country_code}`
+                  : ""}
+              </p>
+
+              <div style={helperNote}>
+                This selection is not currently linked to a Trust Travel place.
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  flexWrap: "wrap",
+                  marginTop: "16px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedMainGeographyResult(null)}
+                  style={secondaryButton}
+                >
+                  Change selection
+                </button>
+              </div>
+            </section>
+          )}
 
           {loading ? (
       <p style={{ color: "#666" }}>Loading places...</p>

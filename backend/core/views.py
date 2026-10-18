@@ -13,7 +13,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import serializers
@@ -64,6 +64,7 @@ from .serializers import (
     PlaceLocationSuggestionSerializer,
     BusinessClaimRequestSerializer,
     ExperienceSerializer,
+    ExperienceCreateSerializer,
     ExperiencePhotoSerializer,
     UserRegisterSerializer,
     ExperienceReplySerializer,
@@ -112,7 +113,6 @@ from .geography.providers.geonames import (
 from .geography.providers.google_places import (
     GooglePlacesConfigurationError,
     GooglePlacesRequestError,
-    get_google_geographic_place,
     search_google_geographic_places,
 )
 
@@ -130,6 +130,9 @@ from .geography.services import (
     materialize_city_place,
     materialize_country_place,
     materialize_poi_place,
+    preflight_external_geographic_reference,
+    reconstruct_external_geographic_reference,
+    resolve_reconstructed_geographic_reference_for_commit,
     merge_registry_and_provider_poi_results,
     poi_matches_city_context,
     rank_poi_search_results,
@@ -1769,12 +1772,10 @@ class GeographyPlaceSearchView(APIView):
 
 
 
-def _build_geographic_resolution_required_response(
-    materialization_result,
-):
+def _serialize_geographic_resolution_references(evaluations):
     references = []
 
-    for evaluation in materialization_result.get("evaluations", []):
+    for evaluation in evaluations:
         place = evaluation.get("place")
 
         if not place:
@@ -1794,17 +1795,154 @@ def _build_geographic_resolution_required_response(
             }
         )
 
+    return references
+
+
+def _build_geographic_resolution_required_payload(
+    materialization_result,
+):
+    return {
+        "code": "geographic_resolution_required",
+        "detail": (
+            "This geographic place needs confirmation "
+            "before it can be added."
+        ),
+        "references": _serialize_geographic_resolution_references(
+            materialization_result.get("evaluations", [])
+        ),
+    }
+
+
+class GeographicResolutionRequired(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "geographic_resolution_required"
+
+    def __init__(self, materialization_result):
+        self.detail = _build_geographic_resolution_required_payload(
+            materialization_result
+        )
+
+
+class GeographicProviderUnavailable(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_code = "geographic_provider_unavailable"
+
+
+def _build_geographic_resolution_required_response(
+    materialization_result,
+):
     return Response(
-        {
-            "code": "geographic_resolution_required",
-            "detail": (
-                "This geographic place needs confirmation "
-                "before it can be added."
-            ),
-            "references": references,
-        },
+        _build_geographic_resolution_required_payload(
+            materialization_result
+        ),
         status=status.HTTP_409_CONFLICT,
     )
+
+
+class GeographyPlacePreflightView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        external_source = str(
+            request.data.get("external_source") or ""
+        ).strip()
+        external_id = str(
+            request.data.get("external_id") or ""
+        ).strip()
+
+        if external_source not in {
+            "geonames",
+            "google_places",
+        }:
+            return Response(
+                {
+                    "detail": (
+                        "A supported geographic external source is required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not external_id:
+            return Response(
+                {
+                    "detail": "Geographic external ID is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            preflight_result = preflight_external_geographic_reference(
+                external_source=external_source,
+                external_id=external_id,
+            )
+        except (
+            GeoNamesConfigurationError,
+            GooglePlacesConfigurationError,
+        ):
+            return Response(
+                {
+                    "detail": "Geographic search is not configured."
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except (
+            GeoNamesRequestError,
+            GooglePlacesRequestError,
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Geographic place lookup is temporarily unavailable."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except ValueError as error:
+            return Response(
+                {"detail": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if preflight_result["state"] == "no_reference":
+            return Response(
+                {"state": "no_reference"},
+                status=status.HTTP_200_OK,
+            )
+
+        if preflight_result["state"] == "reuse":
+            place = preflight_result["place"]
+            serializer = PlaceSerializer(
+                place,
+                context={"request": request},
+            )
+
+            return Response(
+                {
+                    "state": "reuse",
+                    "place": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        if preflight_result["state"] == "preserve":
+            references = _serialize_geographic_resolution_references(
+                preflight_result.get("evaluations", [])
+            )
+
+            return Response(
+                {
+                    "state": "resolution_required",
+                    "references": references,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        raise ValueError(
+            "Unsupported geographic preflight state: "
+            f"{preflight_result['state']}"
+        )
 
 
 class GeographyPlaceMaterializeView(APIView):
@@ -1844,14 +1982,10 @@ class GeographyPlaceMaterializeView(APIView):
             )
 
         try:
-            if external_source == "geonames":
-                geographic_result = get_geographic_place(
-                    external_id
-                )
-            else:
-                geographic_result = get_google_geographic_place(
-                    external_id
-                )
+            geographic_result = reconstruct_external_geographic_reference(
+                external_source,
+                external_id,
+            )
 
         except (
             GeoNamesConfigurationError,
@@ -3461,12 +3595,19 @@ class CountryContextView(APIView):
             }
         )
 
+
 class ExperienceListView(generics.ListCreateAPIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     queryset = Experience.objects.all()
     serializer_class = ExperienceSerializer
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return ExperienceCreateSerializer
+
+        return ExperienceSerializer
 
     def get_serializer_context(self):
         return {"request": self.request}
@@ -3475,23 +3616,115 @@ class ExperienceListView(generics.ListCreateAPIView):
         if not self.request.user.is_authenticated:
             raise PermissionDenied("You must be logged in to share an experience.")
 
-        experience = serializer.save(user=self.request.user)
+        place = serializer.validated_data.get("place")
+        external_source = str(
+            self.request.data.get("external_source") or ""
+        ).strip()
+        external_id = str(
+            self.request.data.get("external_id") or ""
+        ).strip()
 
-        # Use the short experience title as the main feed text.
-        # If no title is provided, fall back to the beginning of the comment.
-        feed_text = (experience.title or "").strip()
-
-        if not feed_text:
-            feed_text = experience.comment.strip()[:120]
-
-        Update.objects.create(
-            user=self.request.user,
-            place=experience.place,
-            experience=experience,
-            type="experience",
-            category="tourism",
-            text=feed_text,
+        has_external_identity = bool(
+            external_source or external_id
         )
+
+        if (
+            external_source
+            and external_source not in {
+                "geonames",
+                "google_places",
+            }
+        ):
+            raise serializers.ValidationError({
+                "external_source": (
+                    "A supported geographic external source is required."
+                )
+            })
+
+        if place is not None and has_external_identity:
+            raise serializers.ValidationError({
+                "place": (
+                    "Provide either a place or an external "
+                    "geographic identity, not both."
+                )
+            })
+
+        geographic_result = None
+
+        if place is None:
+            if not external_source or not external_id:
+                raise serializers.ValidationError({
+                    "place": (
+                        "Provide either a place or a complete "
+                        "external geographic identity."
+                    )
+                })
+
+            try:
+                geographic_result = reconstruct_external_geographic_reference(
+                    external_source=external_source,
+                    external_id=external_id,
+                )
+            except (
+                GeoNamesConfigurationError,
+                GooglePlacesConfigurationError,
+            ):
+                raise GeographicProviderUnavailable(
+                    "Geographic search is not configured."
+                )
+            except (
+                GeoNamesRequestError,
+                GooglePlacesRequestError,
+            ):
+                raise GeographicProviderUnavailable(
+                    "Geographic place lookup is temporarily unavailable."
+                )
+
+        with transaction.atomic():
+            if geographic_result is not None:
+                resolution = (
+                    resolve_reconstructed_geographic_reference_for_commit(
+                        geographic_result=geographic_result,
+                        user=self.request.user,
+                    )
+                )
+
+                if resolution["state"] == "preserve":
+                    raise GeographicResolutionRequired(resolution)
+
+                if resolution["state"] not in {"reuse", "created"}:
+                    raise ValueError(
+                        "Unsupported geographic commit resolution state: "
+                        f"{resolution['state']}"
+                    )
+
+                place = resolution.get("place")
+
+                if place is None:
+                    raise ValueError(
+                        "Geographic commit resolution did not return a place."
+                    )
+
+            experience = serializer.save(
+                user=self.request.user,
+                place=place,
+            )
+
+            # Use the short experience title as the main feed text.
+            # If no title is provided, fall back to the beginning of the comment.
+            feed_text = (experience.title or "").strip()
+
+            if not feed_text:
+                feed_text = experience.comment.strip()[:120]
+
+            Update.objects.create(
+                user=self.request.user,
+                place=experience.place,
+                experience=experience,
+                type="experience",
+                category="tourism",
+                text=feed_text,
+            )
 
 class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [CookieJWTAuthentication]

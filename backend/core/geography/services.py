@@ -27,7 +27,167 @@ from ..place_utils import (
     get_or_create_country,
     get_place_name_identity_values,
     normalize_place_text,
+    resolve_country,
+    resolve_country_catalog_entry,
 )
+
+
+def reconstruct_external_geographic_reference(
+    external_source,
+    external_id,
+):
+    """Fetch authoritative evidence for one selected external identity."""
+    if external_source == "geonames":
+        return get_geographic_place(external_id)
+
+    if external_source == "google_places":
+        return get_google_geographic_place(external_id)
+
+    raise ValueError(
+        "Unsupported geographic reference source: "
+        f"{external_source}"
+    )
+
+
+def preflight_external_geographic_reference(
+    external_source,
+    external_id,
+):
+    """Evaluate one external geographic identity without materializing it."""
+    geographic_result = reconstruct_external_geographic_reference(
+        external_source=external_source,
+        external_id=external_id,
+    )
+
+    country_code = str(
+        geographic_result.get("country_code") or ""
+    ).strip().upper()
+
+    country_entry = resolve_country_catalog_entry(
+        code=country_code,
+    )
+
+    if not country_entry:
+        raise ValueError(
+            "Could not resolve the country for this geographic place."
+        )
+
+    resolved_country = resolve_country(
+        value=country_entry["canonical_name"],
+        code=country_entry["code"],
+    )
+
+    return evaluate_city_reference_gate(
+        city_result=geographic_result,
+        resolved_country=resolved_country,
+        country_code=country_entry["code"],
+    )
+
+
+def resolve_reconstructed_geographic_reference_for_commit(
+    geographic_result,
+    user,
+):
+    """Resolve reconstructed geographic evidence at the persistence boundary."""
+    country_code = str(
+        geographic_result.get("country_code") or ""
+    ).strip().upper()
+
+    country_entry = resolve_country_catalog_entry(
+        code=country_code,
+    )
+
+    if not country_entry:
+        raise ValueError(
+            "Could not resolve the country for this geographic place."
+        )
+
+    resolved_country = resolve_country(
+        value=country_entry["canonical_name"],
+        code=country_entry["code"],
+    )
+
+    reference_result = evaluate_city_reference_gate(
+        city_result=geographic_result,
+        resolved_country=resolved_country,
+        country_code=country_entry["code"],
+    )
+
+    if reference_result["state"] == "preserve":
+        return {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "evaluations": reference_result["evaluations"],
+        }
+
+    if reference_result["state"] == "reuse":
+        country_place, _ = materialize_country_place(
+            country_entry=country_entry,
+            user=user,
+        )
+
+        materialized_country = country_place.country_ref
+
+        place = enrich_existing_city_place(
+            existing_place=reference_result["place"],
+            city_result=geographic_result,
+            resolved_country=materialized_country,
+            country_code=country_entry["code"],
+            country_place=country_place,
+        )
+
+        return {
+            "state": "reuse",
+            "place": place,
+            "created": False,
+            "evaluations": reference_result["evaluations"],
+        }
+
+    if reference_result["state"] == "no_reference":
+        country_place, _ = materialize_country_place(
+            country_entry=country_entry,
+            user=user,
+        )
+
+        materialized_country = country_place.country_ref
+
+        place, created = create_city_place(
+            city_result=geographic_result,
+            resolved_country=materialized_country,
+            country_code=country_entry["code"],
+            country_place=country_place,
+            user=user,
+        )
+
+        return {
+            "state": "created" if created else "reuse",
+            "place": place,
+            "created": created,
+            "evaluations": reference_result["evaluations"],
+        }
+
+    raise ValueError(
+        "Unsupported geographic commit resolution state: "
+        f"{reference_result['state']}"
+    )
+
+
+def resolve_external_geographic_reference_for_commit(
+    external_source,
+    external_id,
+    user,
+):
+    """Acquire external evidence and resolve it at the persistence boundary."""
+    geographic_result = reconstruct_external_geographic_reference(
+        external_source=external_source,
+        external_id=external_id,
+    )
+
+    return resolve_reconstructed_geographic_reference_for_commit(
+        geographic_result=geographic_result,
+        user=user,
+    )
 
 
 def reconstruct_admin_reference_evidence(evidence):
@@ -187,11 +347,38 @@ def resolve_candidate_place_references(
     candidate,
     places,
 ):
-    """Preserve unresolved reference evaluations for later resolution."""
+    """Reuse only one uniquely authorized Place; preserve ambiguity."""
     evaluations = evaluate_candidate_place_references(
         candidate,
         places,
     )
+
+    reusable_evaluations = [
+        evaluation
+        for evaluation in evaluations
+        if (
+            evaluation.get("identity_relation") == "same"
+            and evaluation.get("reconciliation_action") == "reuse"
+        )
+    ]
+
+    if len(reusable_evaluations) == 1:
+        reusable_evaluation = reusable_evaluations[0]
+        competing_evaluations = [
+            evaluation
+            for evaluation in evaluations
+            if evaluation is not reusable_evaluation
+        ]
+
+        if all(
+            evaluation.get("identity_relation") == "distinct"
+            for evaluation in competing_evaluations
+        ):
+            return {
+                "state": "reuse",
+                "place": reusable_evaluation["place"],
+                "evaluations": evaluations,
+            }
 
     return {
         "state": (
@@ -1441,14 +1628,16 @@ def find_candidate_city_reference_places(
     country_code,
 ):
     """Return plausible existing Places without deciding reconciliation."""
+    country_filter = Q(country_code=country_code)
+
+    if resolved_country is not None:
+        country_filter |= Q(country_ref=resolved_country)
+
     possible_places = (
         Place.objects.filter(
             place_type="city",
         )
-        .filter(
-            Q(country_ref=resolved_country)
-            | Q(country_code=country_code)
-        )
+        .filter(country_filter)
         .distinct()
     )
 
@@ -1485,6 +1674,31 @@ def enrich_existing_city_place(
         locked_place = Place.objects.select_for_update().get(
             pk=existing_place.pk
         )
+
+        external_source = (
+            city_result.get("external_source") or ""
+        ).strip()
+
+        external_id = str(
+            city_result.get("external_id") or ""
+        ).strip()
+
+        if external_source and external_id:
+            external_identity, _ = (
+                PlaceExternalIdentity.objects.get_or_create(
+                    external_source=external_source,
+                    external_id=external_id,
+                    defaults={
+                        "place": locked_place,
+                        "geographic_type": (
+                            city_result.get("geographic_type") or ""
+                        ).strip(),
+                    },
+                )
+            )
+
+            if external_identity.place_id != locked_place.pk:
+                return external_identity.place
 
         merged_aliases = []
 
@@ -1531,65 +1745,19 @@ def enrich_existing_city_place(
         if not locked_place.city:
             locked_place.city = locked_place.name
 
-        try:
-            with transaction.atomic():
-                locked_place.save(
-                    update_fields=[
-                        "country_ref",
-                        "country_code",
-                        "parent_place",
-                        "canonical_name",
-                        "aliases",
-                        "geographic_type",
-                        "latitude",
-                        "longitude",
-                        "city",
-                    ]
-                )
-        except IntegrityError:
-            external_source = (
-                city_result.get("external_source") or ""
-            ).strip()
-
-            external_id = str(
-                city_result.get("external_id") or ""
-            ).strip()
-
-            if external_source and external_id:
-                winner_identity = (
-                    PlaceExternalIdentity.objects
-                    .select_related("place")
-                    .filter(
-                        external_source=external_source,
-                        external_id=external_id,
-                    )
-                    .first()
-                )
-
-                if winner_identity:
-                    return winner_identity.place
-
-            raise
-
-        external_source = (
-            city_result.get("external_source") or ""
-        ).strip()
-
-        external_id = str(
-            city_result.get("external_id") or ""
-        ).strip()
-
-        if external_source and external_id:
-            PlaceExternalIdentity.objects.get_or_create(
-                external_source=external_source,
-                external_id=external_id,
-                defaults={
-                    "place": locked_place,
-                    "geographic_type": (
-                        city_result.get("geographic_type") or ""
-                    ).strip(),
-                },
-            )
+        locked_place.save(
+            update_fields=[
+                "country_ref",
+                "country_code",
+                "parent_place",
+                "canonical_name",
+                "aliases",
+                "geographic_type",
+                "latitude",
+                "longitude",
+                "city",
+            ]
+        )
 
         return locked_place
 

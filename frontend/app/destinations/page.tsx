@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import UpdateForm from "../components/UpdateForm";
 import { API_URL } from "../lib/api";
+import { getPoiMaterializationError } from "../lib/poiResolution";
 
 type CountryCatalogItem = {
   code: string;
@@ -1186,7 +1187,7 @@ const handleMaterializeCreateFlowSpecificPlace = async (
 
     if (!res.ok) {
       setCreateFlowError(
-        data.detail || "Could not add this specific place."
+        getPoiMaterializationError(res.status, data)
       );
       return;
     }

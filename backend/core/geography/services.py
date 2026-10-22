@@ -1546,7 +1546,9 @@ def annotate_existing_poi_places(
         )
 
         if external_match_id is not None:
+            # Only a persisted external identity confirms an existing POI.
             result["existing_place_id"] = external_match_id
+            result["candidate_place_ids"] = []
             continue
 
         result_values = get_place_name_identity_values(
@@ -1565,12 +1567,9 @@ def annotate_existing_poi_places(
                 )
             )
 
-        if len(candidate_place_ids) == 1:
-            result["existing_place_id"] = next(
-                iter(candidate_place_ids)
-            )
-        else:
-            result["existing_place_id"] = None
+        # Name matches are candidates, not proof of POI identity.
+        result["existing_place_id"] = None
+        result["candidate_place_ids"] = sorted(candidate_place_ids)
 
     return results
 
@@ -1602,22 +1601,72 @@ def find_existing_poi_place(
         if external_identity:
             return external_identity.place
 
-    possible_places = Place.objects.filter(
-        parent_place=city_place,
+    # A matching name alone does not establish POI identity.
+    # Candidate reconciliation is handled separately.
+    return None
+
+
+
+def evaluate_poi_reference_gate(
+    poi_result,
+    city_place,
+    place_type,
+):
+    """Evaluate POI identity without changing persisted records."""
+    existing_place = find_existing_poi_place(
+        poi_result=poi_result,
+        city_place=city_place,
         place_type=place_type,
     )
 
-    matching_places = get_matching_places_by_name_identity(
-        possible_places,
+    if existing_place is not None:
+        compatible_context = (
+            existing_place.place_type == place_type
+            and existing_place.parent_place_id == city_place.id
+            and existing_place.country_ref_id == city_place.country_ref_id
+        )
+
+        if compatible_context:
+            return {
+                "state": "reuse",
+                "place": existing_place,
+                "candidate_place_ids": [],
+                "reason": "confirmed_external_identity",
+            }
+
+        return {
+            "state": "preserve",
+            "place": None,
+            "candidate_place_ids": [existing_place.id],
+            "reason": "external_identity_context_conflict",
+        }
+
+    candidates = get_matching_places_by_name_identity(
+        Place.objects.filter(
+            parent_place=city_place,
+            place_type=place_type,
+        ),
         name=poi_result.get("name"),
         canonical_name=poi_result.get("canonical_name"),
         aliases=poi_result.get("aliases"),
     )
 
-    if len(matching_places) == 1:
-        return matching_places[0]
+    if candidates:
+        return {
+            "state": "preserve",
+            "place": None,
+            "candidate_place_ids": sorted(
+                candidate.id for candidate in candidates
+            ),
+            "reason": "unresolved_identity",
+        }
 
-    return None
+    return {
+        "state": "create",
+        "place": None,
+        "candidate_place_ids": [],
+        "reason": "no_existing_candidates",
+    }
 
 
 def find_candidate_city_reference_places(
@@ -2033,6 +2082,7 @@ def ensure_business_presence_for_poi(
     return business_presence
 
 
+
 def materialize_poi_place(
     poi_result,
     city_place,
@@ -2040,35 +2090,85 @@ def materialize_poi_place(
     place_type,
     user,
 ):
-    existing_place = find_existing_poi_place(
+    decision = evaluate_poi_reference_gate(
         poi_result=poi_result,
         city_place=city_place,
         place_type=place_type,
     )
 
-    if existing_place:
-        place = enrich_existing_poi_place(
-            existing_place=existing_place,
-            poi_result=poi_result,
-            city_place=city_place,
-            country_code=country_code,
+    if decision["state"] == "preserve":
+        return {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "candidate_place_ids": decision["candidate_place_ids"],
+            "reason": decision["reason"],
+        }
+
+    if decision["state"] == "reuse":
+        # Confirmed identity must not overwrite historical Place data.
+        place = decision["place"]
+        return {
+            "state": "reuse",
+            "place": place,
+            "created": False,
+            "candidate_place_ids": [],
+            "reason": decision["reason"],
+        }
+
+    if decision["state"] != "create":
+        raise ValueError(
+            "Unsupported POI reconciliation state: "
+            f"{decision['state']}"
         )
-        created = False
-    else:
-        place, created = create_poi_place(
+
+    place, created = create_poi_place(
+        poi_result=poi_result,
+        city_place=city_place,
+        country_code=country_code,
+        place_type=place_type,
+        user=user,
+    )
+
+    if not created:
+        # Recheck identity after a concurrent creation conflict.
+        concurrent_decision = evaluate_poi_reference_gate(
             poi_result=poi_result,
             city_place=city_place,
-            country_code=country_code,
             place_type=place_type,
-            user=user,
         )
+
+        if concurrent_decision["state"] == "preserve":
+            return {
+                "state": "preserve",
+                "place": None,
+                "created": False,
+                "candidate_place_ids": (
+                    concurrent_decision["candidate_place_ids"]
+                ),
+                "reason": concurrent_decision["reason"],
+            }
+
+        if (
+            concurrent_decision["state"] != "reuse"
+            or concurrent_decision["place"].id != place.id
+        ):
+            raise ValueError(
+                "Concurrent POI identity could not be reconciled."
+            )
 
     ensure_business_presence_for_poi(
         place=place,
         place_type=place_type,
     )
 
-    return place, created
+    return {
+        "state": "created" if created else "reuse",
+        "place": place,
+        "created": created,
+        "candidate_place_ids": [],
+        "reason": "new_poi" if created else "concurrent_identity",
+    }
 
 
 def materialize_city_place(

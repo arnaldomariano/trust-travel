@@ -2662,7 +2662,7 @@ class GeographyPOIMaterializeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        place, created = materialize_poi_place(
+        materialization_result = materialize_poi_place(
             poi_result=poi_result,
             city_place=city_place,
             country_code=country_code,
@@ -2670,8 +2670,24 @@ class GeographyPOIMaterializeView(APIView):
             user=request.user,
         )
 
+        if materialization_result["state"] == "preserve":
+            return Response(
+                {
+                    "code": "poi_resolution_required",
+                    "detail": (
+                        "This place needs confirmation "
+                        "before it can be added."
+                    ),
+                    "reason": materialization_result["reason"],
+                    "candidate_place_ids": (
+                        materialization_result["candidate_place_ids"]
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         serializer = PlaceSerializer(
-            place,
+            materialization_result["place"],
             context={"request": request},
         )
 
@@ -2679,7 +2695,7 @@ class GeographyPOIMaterializeView(APIView):
             serializer.data,
             status=(
                 status.HTTP_201_CREATED
-                if created
+                if materialization_result["created"]
                 else status.HTTP_200_OK
             ),
         )
@@ -2783,7 +2799,7 @@ class GeographyPOIManualCreateView(APIView):
             "external_id": "",
         }
 
-        place, created = materialize_poi_place(
+        materialization_result = materialize_poi_place(
             poi_result=poi_result,
             city_place=city_place,
             country_code=country_code,
@@ -2791,8 +2807,24 @@ class GeographyPOIManualCreateView(APIView):
             user=request.user,
         )
 
+        if materialization_result["state"] == "preserve":
+            return Response(
+                {
+                    "code": "poi_resolution_required",
+                    "detail": (
+                        "This place needs confirmation "
+                        "before it can be added."
+                    ),
+                    "reason": materialization_result["reason"],
+                    "candidate_place_ids": (
+                        materialization_result["candidate_place_ids"]
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         serializer = PlaceSerializer(
-            place,
+            materialization_result["place"],
             context={"request": request},
         )
 
@@ -2800,7 +2832,7 @@ class GeographyPOIManualCreateView(APIView):
             serializer.data,
             status=(
                 status.HTTP_201_CREATED
-                if created
+                if materialization_result["created"]
                 else status.HTTP_200_OK
             ),
         )

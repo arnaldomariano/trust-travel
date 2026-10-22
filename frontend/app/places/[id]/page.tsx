@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
+import { getPoiMaterializationError } from "../../lib/poiResolution";
 import UpdateForm from "../../components/UpdateForm";
 
 const PlacesMap = dynamic(
@@ -1839,7 +1840,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
             data
           );
           setSpecificPlaceSearchError(
-            data.detail || "Could not add this specific place."
+            getPoiMaterializationError(res.status, data)
           );
           return;
         }
@@ -1896,7 +1897,13 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         if (!res.ok) {
           console.error("Failed to create specific place:", data);
-          setCreateSpecificPlaceError(data.detail || "Could not create this specific place.");
+          setCreateSpecificPlaceError(
+            getPoiMaterializationError(
+              res.status,
+              data,
+              "Could not create this specific place."
+            )
+          );
           return;
         }
 

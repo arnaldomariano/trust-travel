@@ -9629,6 +9629,643 @@ class GeographyPlaceSearchViewTests(TestCase):
         )
 
 
+
+
+class POIPlaceReconciliationTests(TestCase):
+    def setUp(self):
+        from .models import Destination, Place
+
+        self.country = get_or_create_country(value="Italy")
+        self.destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        self.country_place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            name="Italy",
+            canonical_name="Italy",
+            aliases=[],
+            country_code="IT",
+            place_type="country",
+        )
+
+        self.city_place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Rome",
+            canonical_name="Rome",
+            aliases=[],
+            country_code="IT",
+            place_type="city",
+            geographic_type="settlement",
+            city="Rome",
+            latitude="41.9028",
+            longitude="12.4964",
+        )
+
+        self.existing_restaurant = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.city_place,
+            name="Bella Italia",
+            canonical_name="Bella Italia",
+            aliases=[],
+            country_code="IT",
+            place_type="restaurant",
+            city="Rome",
+            latitude="41.9028",
+            longitude="12.4964",
+        )
+
+    def test_same_name_does_not_confirm_external_poi_identity(self):
+        from .geography.services import annotate_existing_poi_places
+
+        provider_result = {
+            "name": "Bella Italia",
+            "canonical_name": "Bella Italia",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "different-bella-italia",
+            "country_code": "IT",
+            "latitude": 41.9200,
+            "longitude": 12.5100,
+        }
+
+        results = annotate_existing_poi_places(
+            results=[provider_result],
+            city_place=self.city_place,
+            place_type="restaurant",
+        )
+
+        self.assertIsNone(results[0]["existing_place_id"])
+        self.assertEqual(
+            results[0]["candidate_place_ids"],
+            [self.existing_restaurant.id],
+        )
+
+        self.existing_restaurant.refresh_from_db()
+        self.assertEqual(
+            str(self.existing_restaurant.latitude),
+            "41.902800",
+        )
+
+
+    def test_confirmed_external_identity_reuses_correct_poi(self):
+        from .models import Place, PlaceExternalIdentity
+        from .geography.services import annotate_existing_poi_places
+
+        other_restaurant = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.city_place,
+            name="Bella Italia",
+            canonical_name="Bella Italia",
+            aliases=[],
+            country_code="IT",
+            place_type="restaurant",
+            city="Rome",
+            latitude="41.9200",
+            longitude="12.5100",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=other_restaurant,
+            external_source="foursquare",
+            external_id="bella-italia-confirmed",
+            geographic_type="",
+        )
+
+        provider_result = {
+            "name": "Bella Italia",
+            "canonical_name": "Bella Italia",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "bella-italia-confirmed",
+            "country_code": "IT",
+            "latitude": 41.9200,
+            "longitude": 12.5100,
+        }
+
+        results = annotate_existing_poi_places(
+            results=[provider_result],
+            city_place=self.city_place,
+            place_type="restaurant",
+        )
+
+        self.assertEqual(
+            results[0]["existing_place_id"],
+            other_restaurant.id,
+        )
+        self.assertNotEqual(
+            results[0]["existing_place_id"],
+            self.existing_restaurant.id,
+        )
+
+        other_restaurant.refresh_from_db()
+        self.existing_restaurant.refresh_from_db()
+
+        self.assertEqual(
+            str(other_restaurant.latitude),
+            "41.920000",
+        )
+        self.assertEqual(
+            str(self.existing_restaurant.latitude),
+            "41.902800",
+        )
+
+
+    def test_same_name_does_not_reuse_poi_during_materialization(self):
+        from .geography.services import find_existing_poi_place
+
+        provider_result = {
+            "name": "Bella Italia",
+            "canonical_name": "Bella Italia",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "different-bella-italia",
+            "country_code": "IT",
+            "latitude": 41.9200,
+            "longitude": 12.5100,
+        }
+
+        existing_place = find_existing_poi_place(
+            poi_result=provider_result,
+            city_place=self.city_place,
+            place_type="restaurant",
+        )
+
+        self.assertIsNone(existing_place)
+
+
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_ambiguous_poi_materialization_preserves_existing_place(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+    ):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        from .models import Place, PlaceExternalIdentity
+
+        user = User.objects.create_user(
+            username="poi-materialization-user",
+            password="test-password",
+        )
+        access_token = str(AccessToken.for_user(user))
+
+        provider_result = {
+            "name": "Bella Italia",
+            "canonical_name": "Bella Italia",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "different-bella-italia",
+            "country_code": "IT",
+            "locality": "Rome",
+            "latitude": 41.9200,
+            "longitude": 12.5100,
+        }
+
+        mock_get_poi.return_value = provider_result
+        mock_search_pois.return_value = [provider_result]
+
+        original_place_count = Place.objects.count()
+
+        response = self.client.post(
+            "/api/geography/pois/materialize/",
+            data={
+                "external_id": "different-bella-italia",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["code"],
+            "poi_resolution_required",
+        )
+        self.assertIn(
+            self.existing_restaurant.id,
+            response.json()["candidate_place_ids"],
+        )
+
+        self.assertEqual(
+            Place.objects.count(),
+            original_place_count,
+        )
+
+        self.existing_restaurant.refresh_from_db()
+
+        self.assertEqual(
+            str(self.existing_restaurant.latitude),
+            "41.902800",
+        )
+        self.assertEqual(
+            str(self.existing_restaurant.longitude),
+            "12.496400",
+        )
+
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="foursquare",
+                external_id="different-bella-italia",
+            ).exists()
+        )
+
+
+
+    def test_poi_gate_preserves_name_only_candidate(self):
+        from .geography.services import evaluate_poi_reference_gate
+
+        decision = evaluate_poi_reference_gate(
+            poi_result={
+                "name": "Bella Italia",
+                "canonical_name": "Bella Italia",
+                "aliases": [],
+                "external_source": "foursquare",
+                "external_id": "different-bella-italia",
+            },
+            city_place=self.city_place,
+            place_type="restaurant",
+        )
+
+        self.assertEqual(decision["state"], "preserve")
+        self.assertEqual(
+            decision["candidate_place_ids"],
+            [self.existing_restaurant.id],
+        )
+        self.assertEqual(decision["reason"], "unresolved_identity")
+
+    def test_poi_gate_reuses_confirmed_compatible_identity(self):
+        from .models import PlaceExternalIdentity
+        from .geography.services import evaluate_poi_reference_gate
+
+        PlaceExternalIdentity.objects.create(
+            place=self.existing_restaurant,
+            external_source="foursquare",
+            external_id="confirmed-bella-italia",
+        )
+
+        decision = evaluate_poi_reference_gate(
+            poi_result={
+                "name": "Bella Italia",
+                "external_source": "foursquare",
+                "external_id": "confirmed-bella-italia",
+            },
+            city_place=self.city_place,
+            place_type="restaurant",
+        )
+
+        self.assertEqual(decision["state"], "reuse")
+        self.assertEqual(
+            decision["place"].id,
+            self.existing_restaurant.id,
+        )
+
+    def test_poi_gate_allows_creation_without_candidates(self):
+        from .geography.services import evaluate_poi_reference_gate
+
+        decision = evaluate_poi_reference_gate(
+            poi_result={
+                "name": "Trattoria Nuova",
+                "canonical_name": "Trattoria Nuova",
+                "aliases": [],
+                "external_source": "foursquare",
+                "external_id": "new-trattoria",
+            },
+            city_place=self.city_place,
+            place_type="restaurant",
+        )
+
+        self.assertEqual(decision["state"], "create")
+        self.assertEqual(decision["candidate_place_ids"], [])
+
+
+
+    def test_poi_gate_preserves_conflicting_external_identity(self):
+        from .models import PlaceExternalIdentity
+        from .geography.services import evaluate_poi_reference_gate
+
+        PlaceExternalIdentity.objects.create(
+            place=self.existing_restaurant,
+            external_source="foursquare",
+            external_id="conflicting-bella-italia",
+        )
+
+        decision = evaluate_poi_reference_gate(
+            poi_result={
+                "name": "Bella Italia",
+                "external_source": "foursquare",
+                "external_id": "conflicting-bella-italia",
+            },
+            city_place=self.city_place,
+            place_type="hotel",
+        )
+
+        self.assertEqual(decision["state"], "preserve")
+        self.assertIsNone(decision["place"])
+        self.assertEqual(
+            decision["candidate_place_ids"],
+            [self.existing_restaurant.id],
+        )
+        self.assertEqual(
+            decision["reason"],
+            "external_identity_context_conflict",
+        )
+
+
+
+    @patch("core.geography.services.create_poi_place")
+    @patch("core.geography.services.evaluate_poi_reference_gate")
+    def test_poi_materialization_preserves_concurrent_identity_conflict(
+        self,
+        mock_gate,
+        mock_create,
+    ):
+        from .geography.services import materialize_poi_place
+
+        mock_gate.side_effect = [
+            {
+                "state": "create",
+                "place": None,
+                "candidate_place_ids": [],
+                "reason": "no_existing_candidates",
+            },
+            {
+                "state": "preserve",
+                "place": None,
+                "candidate_place_ids": [self.existing_restaurant.id],
+                "reason": "external_identity_context_conflict",
+            },
+        ]
+
+        mock_create.return_value = (
+            self.existing_restaurant,
+            False,
+        )
+
+        result = materialize_poi_place(
+            poi_result={
+                "name": "Bella Italia",
+                "canonical_name": "Bella Italia",
+                "aliases": [],
+                "external_source": "foursquare",
+                "external_id": "concurrent-bella-italia",
+            },
+            city_place=self.city_place,
+            country_code="IT",
+            place_type="hotel",
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertEqual(
+            result["candidate_place_ids"],
+            [self.existing_restaurant.id],
+        )
+        self.assertEqual(mock_gate.call_count, 2)
+
+
+
+    def test_create_poi_recovers_existing_identity_after_integrity_error(self):
+        from .geography.services import create_poi_place
+        from .models import Place, PlaceExternalIdentity
+
+        PlaceExternalIdentity.objects.create(
+            place=self.existing_restaurant,
+            external_source="foursquare",
+            external_id="existing-bella-italia",
+            geographic_type="",
+        )
+
+        initial_place_count = Place.objects.count()
+
+        place, created = create_poi_place(
+            poi_result={
+                "name": "Bella Italia",
+                "canonical_name": "Bella Italia",
+                "aliases": [],
+                "external_source": "foursquare",
+                "external_id": "existing-bella-italia",
+                "latitude": 41.9,
+                "longitude": 12.5,
+            },
+            city_place=self.city_place,
+            country_code="IT",
+            place_type="restaurant",
+            user=None,
+        )
+
+        self.assertFalse(created)
+        self.assertEqual(place.id, self.existing_restaurant.id)
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.filter(
+                external_source="foursquare",
+                external_id="existing-bella-italia",
+            ).count(),
+            1,
+        )
+
+
+
+    def test_poi_materialization_preserves_integrity_error_identity_conflict(
+        self,
+    ):
+        from .geography.services import (
+            evaluate_poi_reference_gate,
+            materialize_poi_place,
+        )
+        from .models import BusinessPresence, Place, PlaceExternalIdentity
+
+        PlaceExternalIdentity.objects.create(
+            place=self.existing_restaurant,
+            external_source="foursquare",
+            external_id="concurrent-hotel-identity",
+            geographic_type="",
+        )
+
+        initial_place_count = Place.objects.count()
+        initial_presence_count = BusinessPresence.objects.count()
+        initial_name = self.existing_restaurant.name
+        initial_parent_id = self.existing_restaurant.parent_place_id
+
+        def gate_with_concurrent_identity(**kwargs):
+            if mock_gate.call_count == 1:
+                return {
+                    "state": "create",
+                    "place": None,
+                    "candidate_place_ids": [],
+                    "reason": "no_existing_candidates",
+                }
+
+            return evaluate_poi_reference_gate(**kwargs)
+
+
+        with patch(
+            "core.geography.services.evaluate_poi_reference_gate"
+        ) as mock_gate:
+            mock_gate.side_effect = gate_with_concurrent_identity
+
+            result = materialize_poi_place(
+                poi_result={
+                    "name": "Bella Italia",
+                    "canonical_name": "Bella Italia",
+                    "aliases": [],
+                    "external_source": "foursquare",
+                    "external_id": "concurrent-hotel-identity",
+                    "latitude": 41.9,
+                    "longitude": 12.5,
+                },
+                city_place=self.city_place,
+                country_code="IT",
+                place_type="hotel",
+                user=None,
+            )
+        self.assertEqual(result["state"], "preserve")
+        self.assertEqual(
+            result["reason"],
+            "external_identity_context_conflict",
+        )
+        self.assertEqual(
+            result["candidate_place_ids"],
+            [self.existing_restaurant.id],
+        )
+        self.assertEqual(mock_gate.call_count, 2)
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            BusinessPresence.objects.count(),
+            initial_presence_count,
+        )
+
+        self.existing_restaurant.refresh_from_db()
+        self.assertEqual(self.existing_restaurant.name, initial_name)
+        self.assertEqual(
+            self.existing_restaurant.parent_place_id,
+            initial_parent_id,
+        )
+
+
+
+    def test_manual_poi_creation_preserves_existing_name_candidate(self):
+        from decimal import Decimal
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        from .models import Place
+
+        user = User.objects.create_user(
+            username="manual-poi-test-user",
+            password="test-password",
+        )
+        access_token = str(AccessToken.for_user(user))
+
+        initial_place_count = Place.objects.count()
+        original_latitude = self.existing_restaurant.latitude
+        original_longitude = self.existing_restaurant.longitude
+
+        response = self.client.post(
+            "/api/geography/pois/create-manual/",
+            data={
+                "name": "Bella Italia",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+        data = response.json()
+
+        self.assertEqual(
+            data["code"],
+            "poi_resolution_required",
+        )
+        self.assertEqual(
+            data["reason"],
+            "unresolved_identity",
+        )
+        self.assertEqual(
+            data["candidate_place_ids"],
+            [self.existing_restaurant.id],
+        )
+
+        self.assertEqual(
+            Place.objects.count(),
+            initial_place_count,
+        )
+
+        self.existing_restaurant.refresh_from_db()
+
+        self.assertEqual(
+            Decimal(str(self.existing_restaurant.latitude)),
+            Decimal(str(original_latitude)),
+        )
+        self.assertEqual(
+            Decimal(str(self.existing_restaurant.longitude)),
+            Decimal(str(original_longitude)),
+        )
+
+
+
+    def test_manual_poi_creation_without_candidates_creates_place(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        from .models import Place
+
+        user = User.objects.create_user(
+            username="manual-poi-create-user",
+            password="test-password",
+        )
+        access_token = str(AccessToken.for_user(user))
+
+        initial_place_count = Place.objects.count()
+
+        response = self.client.post(
+            "/api/geography/pois/create-manual/",
+            data={
+                "name": "Trattoria Test Roma",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            Place.objects.count(),
+            initial_place_count + 1,
+        )
+
+        created_place = Place.objects.get(
+            name="Trattoria Test Roma",
+        )
+
+        self.assertEqual(
+            created_place.place_type,
+            "restaurant",
+        )
+        self.assertEqual(
+            created_place.parent_place_id,
+            self.city_place.id,
+        )
+        self.assertEqual(
+            created_place.country_ref_id,
+            self.country.id,
+        )
+
+
 class ExperienceCreationAtomicityTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User

@@ -1354,6 +1354,162 @@ class ExternalGeographicReferencePreflightTests(TestCase):
 
 
 class ExternalGeographicReferenceCommitResolutionTests(TestCase):
+
+    @patch("core.geography.services.enrich_existing_city_place")
+    @patch("core.geography.services.materialize_country_place")
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    @patch("core.geography.services.resolve_country")
+    @patch("core.geography.services.resolve_country_catalog_entry")
+    def test_commit_resolution_preserves_conflict_during_enrichment(
+        self,
+        mock_country_catalog,
+        mock_resolve_country,
+        mock_reference_gate,
+        mock_materialize_country,
+        mock_enrich,
+    ):
+        from types import SimpleNamespace
+
+        from .geography.services import (
+            GeographicContextConflict,
+            resolve_reconstructed_geographic_reference_for_commit,
+        )
+
+        geographic_result = {
+            "external_source": "geonames",
+            "external_id": "12345",
+            "name": "Example City",
+            "canonical_name": "Example City",
+            "country_code": "IT",
+            "geographic_type": "settlement",
+        }
+
+        existing_place = SimpleNamespace(
+            pk=123,
+            country_code="FR",
+        )
+
+        mock_country_catalog.return_value = {
+            "code": "IT",
+            "canonical_name": "Italy",
+            "aliases": ["Italia"],
+        }
+        mock_resolve_country.return_value = object()
+        mock_reference_gate.return_value = {
+            "state": "reuse",
+            "place": existing_place,
+            "evaluations": [],
+        }
+        mock_materialize_country.return_value = (
+            SimpleNamespace(country_ref=object()),
+            False,
+        )
+        mock_enrich.side_effect = GeographicContextConflict(
+            existing_place,
+            "country_code",
+        )
+
+        result = resolve_reconstructed_geographic_reference_for_commit(
+            geographic_result=geographic_result,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertIsNone(result["place"])
+        self.assertFalse(result["created"])
+        self.assertEqual(
+            result["evaluations"][0]["context_conflict"],
+            "country_code",
+        )
+        self.assertIs(
+            result["evaluations"][0]["place"],
+            existing_place,
+        )
+
+        mock_enrich.assert_called_once()
+
+
+    @patch("core.geography.services.create_city_place")
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    @patch("core.geography.services.resolve_country")
+    @patch("core.geography.services.resolve_country_catalog_entry")
+    def test_country_materialization_rolls_back_after_identity_conflict(
+        self,
+        mock_country_catalog,
+        mock_resolve_country,
+        mock_reference_gate,
+        mock_create_city,
+    ):
+        from types import SimpleNamespace
+
+        from .geography.services import (
+            resolve_reconstructed_geographic_reference_for_commit,
+        )
+        from .models import Country, Destination, Place
+
+        geographic_result = {
+            "external_source": "geonames",
+            "external_id": "12345",
+            "name": "Example City",
+            "canonical_name": "Example City",
+            "country_code": "IT",
+            "geographic_type": "settlement",
+        }
+
+        country_entry = {
+            "code": "IT",
+            "canonical_name": "Italy",
+            "aliases": ["Italia"],
+        }
+
+        mock_country_catalog.return_value = country_entry
+        mock_resolve_country.return_value = SimpleNamespace(code="IT")
+        mock_reference_gate.return_value = {
+            "state": "no_reference",
+            "evaluations": [],
+        }
+        mock_create_city.return_value = (
+            SimpleNamespace(pk=123, country_code="FR"),
+            False,
+        )
+
+        self.assertFalse(Country.objects.filter(code="IT").exists())
+        self.assertFalse(
+            Destination.objects.filter(
+                name="Italy",
+                country="Italy",
+            ).exists()
+        )
+
+        result = resolve_reconstructed_geographic_reference_for_commit(
+            geographic_result=geographic_result,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertIsNone(result["place"])
+        self.assertFalse(result["created"])
+        self.assertEqual(
+            result["evaluations"][0]["context_conflict"],
+            "country_code",
+        )
+
+        mock_create_city.assert_called_once()
+
+        self.assertFalse(Country.objects.filter(code="IT").exists())
+        self.assertFalse(
+            Destination.objects.filter(
+                name="Italy",
+                country="Italy",
+            ).exists()
+        )
+        self.assertFalse(
+            Place.objects.filter(
+                place_type="country",
+                country_code="IT",
+            ).exists()
+        )
+
     @patch("core.geography.services.materialize_country_place")
     @patch("core.geography.services.evaluate_city_reference_gate")
     @patch("core.geography.services.resolve_country")
@@ -1697,7 +1853,10 @@ class ExternalGeographicReferenceCommitResolutionTests(TestCase):
         country_place = SimpleNamespace(
             country_ref=materialized_country,
         )
-        winning_place = object()
+        winning_place = SimpleNamespace(
+            pk=123,
+            country_code="IT",
+        )
         user = object()
 
         mock_reconstruct_external_geographic_reference.return_value = (
@@ -1741,6 +1900,79 @@ class ExternalGeographicReferenceCommitResolutionTests(TestCase):
             user=user,
         )
 
+
+    @patch("core.geography.services.create_city_place")
+    @patch("core.geography.services.materialize_country_place")
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    @patch("core.geography.services.resolve_country")
+    @patch("core.geography.services.resolve_country_catalog_entry")
+    def test_creation_race_preserves_conflicting_country(
+        self,
+        mock_country_catalog,
+        mock_resolve_country,
+        mock_reference_gate,
+        mock_materialize_country,
+        mock_create_city,
+    ):
+        from types import SimpleNamespace
+
+        from .geography.services import (
+            resolve_reconstructed_geographic_reference_for_commit,
+        )
+
+        geographic_result = {
+            "external_source": "geonames",
+            "external_id": "12345",
+            "name": "Example City",
+            "canonical_name": "Example City",
+            "country_code": "IT",
+            "geographic_type": "settlement",
+        }
+
+        country_entry = {
+            "code": "IT",
+            "canonical_name": "Italy",
+            "aliases": ["Italia"],
+        }
+
+        winning_place = SimpleNamespace(
+            pk=123,
+            country_code="FR",
+        )
+
+        mock_country_catalog.return_value = country_entry
+        mock_resolve_country.return_value = object()
+        mock_reference_gate.return_value = {
+            "state": "no_reference",
+            "evaluations": [],
+        }
+        mock_materialize_country.return_value = (
+            SimpleNamespace(country_ref=object()),
+            True,
+        )
+        mock_create_city.return_value = (
+            winning_place,
+            False,
+        )
+
+        result = resolve_reconstructed_geographic_reference_for_commit(
+            geographic_result=geographic_result,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertIsNone(result["place"])
+        self.assertFalse(result["created"])
+        self.assertEqual(len(result["evaluations"]), 1)
+        self.assertIs(
+            result["evaluations"][0]["place"],
+            winning_place,
+        )
+        self.assertEqual(
+            result["evaluations"][0]["context_conflict"],
+            "country_code",
+        )
+        mock_create_city.assert_called_once()
 
     @patch("core.geography.services.enrich_existing_city_place")
     @patch("core.geography.services.materialize_country_place")
@@ -3098,6 +3330,32 @@ class GeographicPlaceReconciliationTests(TestCase):
         self.assertEqual(result["evaluations"], [])
         mock_find_references.assert_not_called()
 
+    def test_city_reference_gate_preserves_exact_identity_with_country_conflict(
+        self,
+    ):
+        from .geography.services import evaluate_city_reference_gate
+
+        france = get_or_create_country(value="France", code="FR")
+
+        candidate = {
+            "name": "Lago di Como",
+            "canonical_name": "Lago di Como",
+            "aliases": ["Lake Como"],
+            "country_code": "FR",
+            "geographic_type": "lake",
+            "external_source": "geonames",
+            "external_id": "3178228",
+        }
+
+        result = evaluate_city_reference_gate(
+            city_result=candidate,
+            resolved_country=france,
+            country_code="FR",
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertNotEqual(result.get("place"), self.lake)
+
     @patch("core.geography.services.get_geographic_place")
     def test_city_reference_gate_preserves_single_unresolved_reference(
         self,
@@ -3234,6 +3492,57 @@ class GeographicPlaceReconciliationTests(TestCase):
         self.assertEqual(str(self.lake.latitude), "46.016049")
         self.assertEqual(str(self.lake.longitude), "9.257168")
 
+
+    def test_city_enrichment_rejects_country_conflict_without_mutation(
+        self,
+    ):
+        from .geography.services import enrich_existing_city_place
+        from .models import Destination, Place
+
+        france = get_or_create_country(value="France", code="FR")
+        france_destination = Destination.objects.create(
+            name="France",
+            country="France",
+        )
+        france_place = Place.objects.create(
+            destination=france_destination,
+            country_ref=france,
+            name="France",
+            canonical_name="France",
+            aliases=[],
+            country_code="FR",
+            place_type="country",
+        )
+
+        original_country_id = self.lake.country_ref_id
+        original_country_code = self.lake.country_code
+        original_parent_id = self.lake.parent_place_id
+        original_canonical_name = self.lake.canonical_name
+        original_aliases = list(self.lake.aliases or [])
+
+        with self.assertRaises(ValueError):
+            enrich_existing_city_place(
+                existing_place=self.lake,
+                city_result={
+                    "name": "Lago di Como",
+                    "canonical_name": "Lake Como",
+                    "aliases": ["French Lake Como"],
+                    "country_code": "FR",
+                    "geographic_type": "lake",
+                    "external_source": "geonames",
+                    "external_id": "3178228",
+                },
+                resolved_country=france,
+                country_code="FR",
+                country_place=france_place,
+            )
+
+        self.lake.refresh_from_db()
+        self.assertEqual(self.lake.country_ref_id, original_country_id)
+        self.assertEqual(self.lake.country_code, original_country_code)
+        self.assertEqual(self.lake.parent_place_id, original_parent_id)
+        self.assertEqual(self.lake.canonical_name, original_canonical_name)
+        self.assertEqual(self.lake.aliases, original_aliases)
 
     def test_city_enrichment_returns_external_identity_owner(
         self,
@@ -10360,6 +10669,78 @@ class ExternalExperienceCreationTests(TestCase):
         self.url = "/api/experiences/"
 
     @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_identity_country_conflict_returns_409_without_publication(
+        self,
+        reconstruct_external_reference,
+    ):
+        from .models import Experience, PlaceExternalIdentity, Update
+
+        PlaceExternalIdentity.objects.create(
+            place=self.place,
+            external_source="geonames",
+            external_id="2758401",
+            geographic_type="settlement",
+        )
+
+        reconstruct_external_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "2758401",
+            "name": "Breda",
+            "canonical_name": "Breda",
+            "country_code": "BE",
+            "geographic_type": "settlement",
+        }
+
+        original_country_code = self.place.country_code
+        original_destination_id = self.place.destination_id
+        original_parent_id = self.place.parent_place_id
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "geonames",
+                "external_id": "2758401",
+                "title": "A day in Breda",
+                "comment": "A useful experience.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["code"],
+            "geographic_resolution_required",
+        )
+
+        self.assertEqual(Experience.objects.count(), 0)
+        self.assertEqual(Update.objects.count(), 0)
+
+        self.place.refresh_from_db()
+
+        self.assertEqual(self.place.country_code, original_country_code)
+        self.assertEqual(
+            self.place.destination_id,
+            original_destination_id,
+        )
+        self.assertEqual(
+            self.place.parent_place_id,
+            original_parent_id,
+        )
+
+        self.assertEqual(
+            PlaceExternalIdentity.objects.filter(
+                place=self.place,
+                external_source="geonames",
+                external_id="2758401",
+            ).count(),
+            1,
+        )
+
+        reconstruct_external_reference.assert_called_once()
+
+    @patch("core.views.reconstruct_external_geographic_reference")
     def test_creation_requires_place_or_external_identity(
         self,
         reconstruct_external_reference,
@@ -10900,6 +11281,70 @@ class ExternalUpdateCreationTests(TestCase):
             content_type="application/json",
             HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
         )
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_identity_country_conflict_returns_409_without_update(
+        self,
+        reconstruct_reference,
+    ):
+        from .models import Experience, PlaceExternalIdentity, Update
+
+        PlaceExternalIdentity.objects.create(
+            place=self.place,
+            external_source="geonames",
+            external_id="2758401",
+            geographic_type="settlement",
+        )
+
+        reconstruct_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "2758401",
+            "name": "Breda",
+            "canonical_name": "Breda",
+            "country_code": "BE",
+            "geographic_type": "settlement",
+        }
+
+        original_country_code = self.place.country_code
+        original_destination_id = self.place.destination_id
+        original_parent_id = self.place.parent_place_id
+
+        response = self.post_update(
+            external_source="geonames",
+            external_id="2758401",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["code"],
+            "geographic_resolution_required",
+        )
+
+        self.assertEqual(Update.objects.count(), 0)
+        self.assertEqual(Experience.objects.count(), 0)
+
+        self.place.refresh_from_db()
+
+        self.assertEqual(self.place.country_code, original_country_code)
+        self.assertEqual(
+            self.place.destination_id,
+            original_destination_id,
+        )
+        self.assertEqual(
+            self.place.parent_place_id,
+            original_parent_id,
+        )
+
+        self.assertEqual(
+            PlaceExternalIdentity.objects.filter(
+                place=self.place,
+                external_source="geonames",
+                external_id="2758401",
+            ).count(),
+            1,
+        )
+
+        reconstruct_reference.assert_called_once()
 
     @patch("core.views.reconstruct_external_geographic_reference")
     def test_creation_requires_place_or_complete_external_identity(

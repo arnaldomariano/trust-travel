@@ -32,6 +32,47 @@ from ..place_utils import (
 )
 
 
+class GeographicContextConflict(ValueError):
+    """An existing geographic identity conflicts with incoming context."""
+
+    def __init__(self, place, reason):
+        self.place = place
+        self.reason = reason
+        super().__init__(
+            f"Geographic context conflict ({reason}) for Place {place.pk}."
+        )
+
+
+def assert_compatible_geographic_country(place, country_code):
+    """Reject reuse across known, conflicting country codes."""
+    existing_code = str(place.country_code or "").strip().upper()
+    incoming_code = str(country_code or "").strip().upper()
+
+    if (
+        existing_code
+        and incoming_code
+        and existing_code != incoming_code
+    ):
+        raise GeographicContextConflict(place, "country_code")
+
+
+def preserve_geographic_context_conflict(conflict):
+    """Represent a persistence conflict as unresolved reconciliation."""
+    return {
+        "state": "preserve",
+        "place": None,
+        "created": False,
+        "evaluations": [
+            {
+                "place": conflict.place,
+                "identity_relation": "same",
+                "reconciliation_action": "preserve",
+                "context_conflict": conflict.reason,
+            }
+        ],
+    }
+
+
 def reconstruct_external_geographic_reference(
     external_source,
     external_id,
@@ -121,44 +162,42 @@ def resolve_reconstructed_geographic_reference_for_commit(
             "evaluations": reference_result["evaluations"],
         }
 
-    if reference_result["state"] == "reuse":
-        country_place, _ = materialize_country_place(
-            country_entry=country_entry,
-            user=user,
-        )
+    if reference_result["state"] in {"reuse", "no_reference"}:
+        try:
+            with transaction.atomic():
+                country_place, _ = materialize_country_place(
+                    country_entry=country_entry,
+                    user=user,
+                )
 
-        materialized_country = country_place.country_ref
+                materialized_country = country_place.country_ref
 
-        place = enrich_existing_city_place(
-            existing_place=reference_result["place"],
-            city_result=geographic_result,
-            resolved_country=materialized_country,
-            country_code=country_entry["code"],
-            country_place=country_place,
-        )
+                if reference_result["state"] == "reuse":
+                    place = enrich_existing_city_place(
+                        existing_place=reference_result["place"],
+                        city_result=geographic_result,
+                        resolved_country=materialized_country,
+                        country_code=country_entry["code"],
+                        country_place=country_place,
+                    )
+                    created = False
+                else:
+                    place, created = create_city_place(
+                        city_result=geographic_result,
+                        resolved_country=materialized_country,
+                        country_code=country_entry["code"],
+                        country_place=country_place,
+                        user=user,
+                    )
 
-        return {
-            "state": "reuse",
-            "place": place,
-            "created": False,
-            "evaluations": reference_result["evaluations"],
-        }
+                    if not created:
+                        assert_compatible_geographic_country(
+                            place,
+                            country_entry["code"],
+                        )
 
-    if reference_result["state"] == "no_reference":
-        country_place, _ = materialize_country_place(
-            country_entry=country_entry,
-            user=user,
-        )
-
-        materialized_country = country_place.country_ref
-
-        place, created = create_city_place(
-            city_result=geographic_result,
-            resolved_country=materialized_country,
-            country_code=country_entry["code"],
-            country_place=country_place,
-            user=user,
-        )
+        except GeographicContextConflict as conflict:
+            return preserve_geographic_context_conflict(conflict)
 
         return {
             "state": "created" if created else "reuse",
@@ -416,9 +455,35 @@ def evaluate_city_reference_gate(
         )
 
         if external_identity:
+            existing_place = external_identity.place
+            existing_country_code = str(
+                existing_place.country_code or ""
+            ).strip().upper()
+            candidate_country_code = str(
+                country_code or ""
+            ).strip().upper()
+
+            if (
+                existing_country_code
+                and candidate_country_code
+                and existing_country_code != candidate_country_code
+            ):
+                return {
+                    "state": "preserve",
+                    "place": None,
+                    "evaluations": [
+                        {
+                            "place": existing_place,
+                            "identity_relation": "same",
+                            "reconciliation_action": "preserve",
+                            "context_conflict": "country_code",
+                        }
+                    ],
+                }
+
             return {
                 "state": "reuse",
-                "place": external_identity.place,
+                "place": existing_place,
                 "evaluations": [],
             }
 
@@ -1722,6 +1787,11 @@ def enrich_existing_city_place(
             pk=existing_place.pk
         )
 
+        assert_compatible_geographic_country(
+            locked_place,
+            country_code,
+        )
+
         external_source = (
             city_result.get("external_source") or ""
         ).strip()
@@ -1745,7 +1815,12 @@ def enrich_existing_city_place(
             )
 
             if external_identity.place_id != locked_place.pk:
-                return external_identity.place
+                identity_owner = external_identity.place
+                assert_compatible_geographic_country(
+                    identity_owner,
+                    country_code,
+                )
+                return identity_owner
 
         merged_aliases = []
 
@@ -1988,7 +2063,12 @@ def create_city_place(
             )
 
             if winner_identity:
-                return winner_identity.place, False
+                identity_owner = winner_identity.place
+                assert_compatible_geographic_country(
+                    identity_owner,
+                    country_code,
+                )
+                return identity_owner, False
 
         raise
 
@@ -2185,13 +2265,18 @@ def materialize_city_place(
     )
 
     if reference_result["state"] == "reuse":
-        place = enrich_existing_city_place(
-            existing_place=reference_result["place"],
-            city_result=city_result,
-            resolved_country=resolved_country,
-            country_code=country_code,
-            country_place=country_place,
-        )
+        try:
+            with transaction.atomic():
+                place = enrich_existing_city_place(
+                    existing_place=reference_result["place"],
+                    city_result=city_result,
+                    resolved_country=resolved_country,
+                    country_code=country_code,
+                    country_place=country_place,
+                )
+        except GeographicContextConflict as conflict:
+            return preserve_geographic_context_conflict(conflict)
+
         return {
             "state": "reuse",
             "place": place,
@@ -2213,13 +2298,23 @@ def materialize_city_place(
             f"{reference_result['state']}"
         )
 
-    place, created = create_city_place(
-        city_result=city_result,
-        resolved_country=resolved_country,
-        country_code=country_code,
-        country_place=country_place,
-        user=user,
-    )
+    try:
+        with transaction.atomic():
+            place, created = create_city_place(
+                city_result=city_result,
+                resolved_country=resolved_country,
+                country_code=country_code,
+                country_place=country_place,
+                user=user,
+            )
+
+            if not created:
+                assert_compatible_geographic_country(
+                    place,
+                    country_code,
+                )
+    except GeographicContextConflict as conflict:
+        return preserve_geographic_context_conflict(conflict)
 
     return {
         "state": "created" if created else "reuse",

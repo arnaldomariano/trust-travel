@@ -44,7 +44,7 @@ class GeographicContextConflict(ValueError):
 
 
 def assert_compatible_geographic_country(place, country_code):
-    """Reject reuse across known, conflicting country codes."""
+    """Reject reuse when known country evidence conflicts."""
     existing_code = str(place.country_code or "").strip().upper()
     incoming_code = str(country_code or "").strip().upper()
 
@@ -54,6 +54,19 @@ def assert_compatible_geographic_country(place, country_code):
         and existing_code != incoming_code
     ):
         raise GeographicContextConflict(place, "country_code")
+
+    # A missing direct code does not invalidate a known country reference.
+    if place.country_ref_id:
+        reference_code = str(
+            place.country_ref.code or ""
+        ).strip().upper()
+
+        if (
+            reference_code
+            and incoming_code
+            and reference_code != incoming_code
+        ):
+            raise GeographicContextConflict(place, "country_ref")
 
 
 def preserve_geographic_context_conflict(conflict):
@@ -1792,6 +1805,12 @@ def enrich_existing_city_place(
             country_code,
         )
 
+        assert_compatible_country_ancestor(
+            resolved_country=resolved_country,
+            country_code=country_code,
+            country_place=country_place,
+        )
+
         external_source = (
             city_result.get("external_source") or ""
         ).strip()
@@ -1995,6 +2014,65 @@ def enrich_existing_poi_place(
         return locked_place
 
 
+def assert_compatible_country_ancestor(
+    resolved_country,
+    country_code,
+    country_place,
+):
+    """Reject contradictory country inputs and existing ancestry."""
+    incoming_code = str(country_code or "").strip().upper()
+    resolved_code = str(
+        resolved_country.code if resolved_country else ""
+    ).strip().upper()
+
+    if (
+        incoming_code
+        and resolved_code
+        and incoming_code != resolved_code
+    ):
+        raise ValueError(
+            "Conflicting country code and resolved country."
+        )
+
+    if country_place.place_type != "country":
+        raise GeographicContextConflict(
+            country_place,
+            "country_ancestor",
+        )
+
+    # An explicit country relationship must agree with the resolved identity.
+    if (
+        resolved_country is not None
+        and country_place.country_ref_id is not None
+        and country_place.country_ref_id != resolved_country.pk
+    ):
+        raise GeographicContextConflict(
+            country_place,
+            "country_ancestor",
+        )
+
+    ancestor_codes = [
+        str(country_place.country_code or "").strip().upper(),
+        str(
+            country_place.country_ref.code
+            if country_place.country_ref_id
+            else ""
+        ).strip().upper(),
+    ]
+
+    known_codes = {
+        code
+        for code in [incoming_code, resolved_code, *ancestor_codes]
+        if code
+    }
+
+    if len(known_codes) > 1:
+        raise GeographicContextConflict(
+            country_place,
+            "country_ancestor",
+        )
+
+
 def create_city_place(
     city_result,
     resolved_country,
@@ -2002,6 +2080,12 @@ def create_city_place(
     country_place,
     user,
 ):
+    assert_compatible_country_ancestor(
+        resolved_country=resolved_country,
+        country_code=country_code,
+        country_place=country_place,
+    )
+
     destination = country_place.destination
 
     try:

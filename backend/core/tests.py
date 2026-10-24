@@ -1856,6 +1856,7 @@ class ExternalGeographicReferenceCommitResolutionTests(TestCase):
         winning_place = SimpleNamespace(
             pk=123,
             country_code="IT",
+            country_ref_id=None,
         )
         user = object()
 
@@ -2097,6 +2098,83 @@ class GeographicPlaceReconciliationTests(TestCase):
             external_id="3178228",
             geographic_type="lake",
         )
+
+    def test_country_ancestor_rejects_distinct_country_identity(self):
+        from .geography.services import (
+            GeographicContextConflict,
+            assert_compatible_country_ancestor,
+        )
+        from .models import Country, Destination, Place
+
+        unknown_country = Country.objects.create(
+            code="",
+            canonical_name="Unknown Country",
+        )
+        destination = Destination.objects.create(
+            name="Unknown Country",
+            country="Unknown Country",
+        )
+        ancestor = Place.objects.create(
+            destination=destination,
+            country_ref=unknown_country,
+            name="Unknown Country",
+            canonical_name="Unknown Country",
+            aliases=[],
+            country_code="",
+            place_type="country",
+        )
+
+        with self.assertRaises(GeographicContextConflict) as caught:
+            assert_compatible_country_ancestor(
+                resolved_country=self.country,
+                country_code="IT",
+                country_place=ancestor,
+            )
+
+        self.assertEqual(
+            caught.exception.reason,
+            "country_ancestor",
+        )
+
+    def test_city_creation_rejects_conflicting_country_ancestor(self):
+        from .geography.services import create_city_place
+        from .models import Destination, Place
+
+        france = get_or_create_country(value="France", code="FR")
+        france_destination = Destination.objects.create(
+            name="France",
+            country="France",
+        )
+        france_place = Place.objects.create(
+            destination=france_destination,
+            country_ref=france,
+            name="France",
+            canonical_name="France",
+            aliases=[],
+            country_code="FR",
+            place_type="country",
+        )
+
+        city_result = {
+            "name": "Test Italian City",
+            "canonical_name": "Test Italian City",
+            "aliases": [],
+            "country_code": "IT",
+            "geographic_type": "settlement",
+        }
+
+        before_count = Place.objects.count()
+
+        with self.assertRaises(ValueError):
+            create_city_place(
+                city_result=city_result,
+                resolved_country=self.country,
+                country_code="IT",
+                country_place=france_place,
+                user=None,
+            )
+
+        self.assertEqual(Place.objects.count(), before_count)
 
     def test_candidate_reference_discovery_returns_plausible_existing_place(self):
         from .geography.services import (
@@ -3544,6 +3622,63 @@ class GeographicPlaceReconciliationTests(TestCase):
         self.assertEqual(self.lake.canonical_name, original_canonical_name)
         self.assertEqual(self.lake.aliases, original_aliases)
 
+    def test_city_enrichment_rejects_country_ref_conflict_without_mutation(
+        self,
+    ):
+        from .geography.services import enrich_existing_city_place
+        from .models import Destination, Place
+
+        france = get_or_create_country(value="France", code="FR")
+        france_destination = Destination.objects.create(
+            name="France",
+            country="France",
+        )
+        france_place = Place.objects.create(
+            destination=france_destination,
+            country_ref=france,
+            name="France",
+            canonical_name="France",
+            aliases=[],
+            country_code="FR",
+            place_type="country",
+        )
+
+        # A missing country code must not override a known country reference.
+        self.lake.country_code = ""
+        self.lake.save(update_fields=["country_code"])
+
+        original_country_id = self.lake.country_ref_id
+        original_parent_id = self.lake.parent_place_id
+        original_canonical_name = self.lake.canonical_name
+        original_aliases = list(self.lake.aliases or [])
+
+        with self.assertRaises(ValueError):
+            enrich_existing_city_place(
+                existing_place=self.lake,
+                city_result={
+                    "name": "Lago di Como",
+                    "canonical_name": "Lake Como",
+                    "aliases": ["French Lake Como"],
+                    "country_code": "FR",
+                    "geographic_type": "lake",
+                    "external_source": "geonames",
+                    "external_id": "3178228",
+                },
+                resolved_country=france,
+                country_code="FR",
+                country_place=france_place,
+            )
+
+        self.lake.refresh_from_db()
+        self.assertEqual(self.lake.country_ref_id, original_country_id)
+        self.assertEqual(self.lake.country_code, "")
+        self.assertEqual(self.lake.parent_place_id, original_parent_id)
+        self.assertEqual(
+            self.lake.canonical_name,
+            original_canonical_name,
+        )
+        self.assertEqual(self.lake.aliases, original_aliases)
+
     def test_city_enrichment_returns_external_identity_owner(
         self,
     ):
@@ -3609,6 +3744,76 @@ class GeographicPlaceReconciliationTests(TestCase):
         )
 
 
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    def test_city_materialization_preserves_conflicting_country_ancestor(
+        self,
+        mock_reference_gate,
+    ):
+        from .geography.services import materialize_city_place
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        france = get_or_create_country(value="France", code="FR")
+        france_destination = Destination.objects.create(
+            name="France",
+            country="France",
+        )
+        france_place = Place.objects.create(
+            destination=france_destination,
+            country_ref=france,
+            name="France",
+            canonical_name="France",
+            aliases=[],
+            country_code="FR",
+            place_type="country",
+        )
+
+        mock_reference_gate.return_value = {
+            "state": "reuse",
+            "place": self.lake,
+            "evaluations": [],
+        }
+
+        original_parent_id = self.lake.parent_place_id
+        original_country_id = self.lake.country_ref_id
+        original_canonical_name = self.lake.canonical_name
+        original_identity_count = PlaceExternalIdentity.objects.count()
+
+        result = materialize_city_place(
+            city_result={
+                "name": "Lake Como",
+                "canonical_name": "Lake Como Updated",
+                "aliases": ["French Lake Como"],
+                "country_code": "IT",
+                "geographic_type": "lake",
+                "external_source": "google_places",
+                "external_id": "geo02-conflicting-ancestor",
+            },
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=france_place,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertIsNone(result["place"])
+        self.assertFalse(result["created"])
+        self.assertEqual(
+            result["evaluations"][0]["context_conflict"],
+            "country_ancestor",
+        )
+
+        self.lake.refresh_from_db()
+        self.assertEqual(self.lake.parent_place_id, original_parent_id)
+        self.assertEqual(self.lake.country_ref_id, original_country_id)
+        self.assertEqual(
+            self.lake.canonical_name,
+            original_canonical_name,
+        )
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            original_identity_count,
+        )
+
     @patch("core.geography.services.create_city_place")
     @patch("core.geography.services.enrich_existing_city_place")
     @patch("core.geography.services.evaluate_city_reference_gate")
@@ -3657,6 +3862,59 @@ class GeographicPlaceReconciliationTests(TestCase):
             country_place=self.country_place,
         )
         mock_create.assert_not_called()
+
+    @patch("core.geography.services.evaluate_city_reference_gate")
+    def test_city_materialization_preserves_conflicting_ancestor_on_creation(
+        self,
+        mock_reference_gate,
+    ):
+        from .geography.services import materialize_city_place
+        from .models import Destination, Place
+
+        france = get_or_create_country(value="France", code="FR")
+        france_destination = Destination.objects.create(
+            name="France",
+            country="France",
+        )
+        france_place = Place.objects.create(
+            destination=france_destination,
+            country_ref=france,
+            name="France",
+            canonical_name="France",
+            aliases=[],
+            country_code="FR",
+            place_type="country",
+        )
+
+        mock_reference_gate.return_value = {
+            "state": "no_reference",
+            "evaluations": [],
+        }
+
+        before_count = Place.objects.count()
+
+        result = materialize_city_place(
+            city_result={
+                "name": "Test Italian City",
+                "canonical_name": "Test Italian City",
+                "aliases": [],
+                "country_code": "IT",
+                "geographic_type": "settlement",
+            },
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=france_place,
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertIsNone(result["place"])
+        self.assertFalse(result["created"])
+        self.assertEqual(
+            result["evaluations"][0]["context_conflict"],
+            "country_ancestor",
+        )
+        self.assertEqual(Place.objects.count(), before_count)
 
     @patch("core.geography.services.create_city_place")
     @patch("core.geography.services.enrich_existing_city_place")

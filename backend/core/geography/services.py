@@ -74,6 +74,24 @@ def assert_compatible_geographic_country(place, country_code):
             raise GeographicContextConflict(place, "country_ref")
 
 
+def assert_compatible_city_reuse_context(
+    place,
+    country_code,
+    country_place,
+):
+    """Reject city reuse when country or destination evidence conflicts."""
+    assert_compatible_geographic_country(
+        place,
+        country_code,
+    )
+
+    if place.destination_id != country_place.destination_id:
+        raise GeographicContextConflict(
+            place,
+            "destination",
+        )
+
+
 def preserve_geographic_context_conflict(conflict):
     """Represent a persistence conflict as unresolved reconciliation."""
     return {
@@ -209,9 +227,10 @@ def resolve_reconstructed_geographic_reference_for_commit(
                     )
 
                     if not created:
-                        assert_compatible_geographic_country(
+                        assert_compatible_city_reuse_context(
                             place,
                             country_entry["code"],
+                            country_place,
                         )
 
         except GeographicContextConflict as conflict:
@@ -1809,15 +1828,16 @@ def enrich_existing_city_place(
             pk=existing_place.pk
         )
 
-        assert_compatible_geographic_country(
-            locked_place,
-            country_code,
-        )
-
         assert_compatible_country_ancestor(
             resolved_country=resolved_country,
             country_code=country_code,
             country_place=country_place,
+        )
+
+        assert_compatible_city_reuse_context(
+            locked_place,
+            country_code,
+            country_place,
         )
 
         external_source = (
@@ -1844,9 +1864,10 @@ def enrich_existing_city_place(
 
             if external_identity.place_id != locked_place.pk:
                 identity_owner = external_identity.place
-                assert_compatible_geographic_country(
+                assert_compatible_city_reuse_context(
                     identity_owner,
                     country_code,
+                    country_place,
                 )
                 return identity_owner
 
@@ -2157,9 +2178,10 @@ def create_city_place(
 
             if winner_identity:
                 identity_owner = winner_identity.place
-                assert_compatible_geographic_country(
+                assert_compatible_city_reuse_context(
                     identity_owner,
                     country_code,
+                    country_place,
                 )
                 return identity_owner, False
 
@@ -2418,9 +2440,10 @@ def materialize_city_place(
             )
 
             if not created:
-                assert_compatible_geographic_country(
+                assert_compatible_city_reuse_context(
                     place,
                     country_code,
+                    country_place,
                 )
     except GeographicContextConflict as conflict:
         return preserve_geographic_context_conflict(conflict)

@@ -1468,6 +1468,84 @@ class GeographicCityMaterializationAPITests(TestCase):
             )
 
 
+    @patch("core.views.get_geographic_place")
+    def test_reuse_preserves_city_with_conflicting_destination(
+        self,
+        mock_get_geographic_place,
+    ):
+        from .models import (
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+        )
+
+        conflicting_destination = Destination.objects.create(
+            name="France",
+            country="France",
+        )
+
+        city = Place.objects.create(
+            destination=conflicting_destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=city,
+            external_source="geonames",
+            external_id="springfield-destination-conflict",
+            geographic_type="settlement",
+        )
+
+        mock_get_geographic_place.return_value = {
+            "name": "Springfield",
+            "canonical_name": "Springfield",
+            "aliases": [],
+            "external_source": "geonames",
+            "external_id": "springfield-destination-conflict",
+            "country_code": "US",
+            "geographic_type": "settlement",
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_id": "springfield-destination-conflict",
+                "country_code": "US",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+        self.assertEqual(
+            response.json()["code"],
+            "geographic_resolution_required",
+        )
+
+        city.refresh_from_db()
+
+        self.assertEqual(
+            city.destination_id,
+            conflicting_destination.id,
+        )
+        self.assertEqual(
+            city.parent_place_id,
+            self.country_place.id,
+        )
+        self.assertEqual(city.country_code, "US")
+        self.assertEqual(city.country_ref_id, self.country.id)
+
+
 class ExternalGeographicReferenceReconstructionTests(TestCase):
     @patch("core.geography.services.get_geographic_place")
     def test_geonames_reference_is_reconstructed_from_provider(
@@ -2196,11 +2274,13 @@ class ExternalGeographicReferenceCommitResolutionTests(TestCase):
         materialized_country = object()
         country_place = SimpleNamespace(
             country_ref=materialized_country,
+            destination_id=10,
         )
         winning_place = SimpleNamespace(
             pk=123,
             country_code="IT",
             country_ref_id=None,
+            destination_id=10,
         )
         user = object()
 
@@ -2396,10 +2476,6 @@ class ExternalGeographicReferenceCommitResolutionTests(TestCase):
             country_place=country_place,
         )
 
-
-
-
-
 class GeographicPlaceReconciliationTests(TestCase):
     def setUp(self):
         from .models import Destination, Place, PlaceExternalIdentity
@@ -2478,6 +2554,81 @@ class GeographicPlaceReconciliationTests(TestCase):
         self.assertEqual(
             caught.exception.reason,
             "country_ancestor",
+        )
+
+    def test_city_creation_preserves_conflicting_identity_owner_after_integrity_error(
+        self,
+    ):
+        from .geography.services import (
+            GeographicContextConflict,
+            create_city_place,
+        )
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        conflicting_destination = Destination.objects.create(
+            name="France",
+            country="France",
+        )
+
+        identity_owner = Place.objects.create(
+            destination=conflicting_destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Conflicting City Identity Owner",
+            canonical_name="Conflicting City Identity Owner",
+            aliases=[],
+            country_code="IT",
+            place_type="city",
+            geographic_type="settlement",
+            city="Conflicting City Identity Owner",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=identity_owner,
+            external_source="google_places",
+            external_id="conflicting-city-creation",
+            geographic_type="settlement",
+        )
+
+        original_place_count = Place.objects.count()
+        original_identity_count = PlaceExternalIdentity.objects.count()
+        original_destination_id = identity_owner.destination_id
+        original_parent_id = identity_owner.parent_place_id
+
+        with self.assertRaises(GeographicContextConflict) as context:
+            create_city_place(
+                city_result={
+                    "name": "Conflicting City",
+                    "canonical_name": "Conflicting City",
+                    "aliases": [],
+                    "country_code": "IT",
+                    "geographic_type": "settlement",
+                    "external_source": "google_places",
+                    "external_id": "conflicting-city-creation",
+                },
+                resolved_country=self.country,
+                country_code="IT",
+                country_place=self.country_place,
+                user=None,
+            )
+
+        self.assertEqual(context.exception.reason, "destination")
+        self.assertEqual(context.exception.place.pk, identity_owner.pk)
+
+        identity_owner.refresh_from_db()
+
+        self.assertEqual(
+            identity_owner.destination_id,
+            original_destination_id,
+        )
+        self.assertEqual(
+            identity_owner.parent_place_id,
+            original_parent_id,
+        )
+        self.assertEqual(Place.objects.count(), original_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            original_identity_count,
         )
 
     def test_city_creation_rejects_conflicting_country_ancestor(self):
@@ -4085,6 +4236,86 @@ class GeographicPlaceReconciliationTests(TestCase):
         self.assertEqual(
             str(self.lake.longitude),
             "9.260790",
+        )
+
+
+    def test_city_enrichment_preserves_conflicting_identity_owner_destination(
+        self,
+    ):
+        from .geography.services import (
+            GeographicContextConflict,
+            enrich_existing_city_place,
+        )
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        conflicting_destination = Destination.objects.create(
+            name="France",
+            country="France",
+        )
+
+        identity_owner = Place.objects.create(
+            destination=conflicting_destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Lake Como Identity Owner",
+            canonical_name="Lake Como Identity Owner",
+            aliases=[],
+            country_code="IT",
+            place_type="city",
+            geographic_type="lake",
+            city="Lake Como Identity Owner",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=identity_owner,
+            external_source="google_places",
+            external_id="google-lake-como-conflict",
+            geographic_type="lake",
+        )
+
+        original_lake_destination_id = self.lake.destination_id
+        original_lake_parent_id = self.lake.parent_place_id
+        original_owner_destination_id = identity_owner.destination_id
+        original_owner_parent_id = identity_owner.parent_place_id
+
+        with self.assertRaises(GeographicContextConflict) as context:
+            enrich_existing_city_place(
+                existing_place=self.lake,
+                city_result={
+                    "name": "Lake Como",
+                    "canonical_name": "Lake Como",
+                    "aliases": [],
+                    "country_code": "IT",
+                    "geographic_type": "lake",
+                    "external_source": "google_places",
+                    "external_id": "google-lake-como-conflict",
+                },
+                resolved_country=self.country,
+                country_code="IT",
+                country_place=self.country_place,
+            )
+
+        self.assertEqual(context.exception.reason, "destination")
+        self.assertEqual(context.exception.place.pk, identity_owner.pk)
+
+        self.lake.refresh_from_db()
+        identity_owner.refresh_from_db()
+
+        self.assertEqual(
+            self.lake.destination_id,
+            original_lake_destination_id,
+        )
+        self.assertEqual(
+            self.lake.parent_place_id,
+            original_lake_parent_id,
+        )
+        self.assertEqual(
+            identity_owner.destination_id,
+            original_owner_destination_id,
+        )
+        self.assertEqual(
+            identity_owner.parent_place_id,
+            original_owner_parent_id,
         )
 
 

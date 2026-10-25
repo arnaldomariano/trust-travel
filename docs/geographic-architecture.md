@@ -308,9 +308,72 @@ Status: Verified by automated tests for the specified conflict
 scenario; broader geographic invariants remain under investigation.
 
 
+### GEO-04/005 — City Destination Consistency During Geographic Reuse
+
+City materialization must not reuse an existing Place when its
+Destination contradicts the Destination associated with the
+resolved country Place.
+
+Compatible country_code and country_ref values alone do not
+establish complete geographic context compatibility.
+
+The shared assert_compatible_city_reuse_context helper verifies:
+
+- Compatibility of existing country_code and country_ref evidence.
+- Equality between the existing Place destination_id and the
+  resolved country Place destination_id.
+
+A detected contradiction raises GeographicContextConflict with
+reason destination.
+
+The validation protects the following reuse paths:
+
+- Existing city enrichment.
+- Reuse through an alternative external identity owner.
+- Recovery after an IntegrityError during city creation.
+- Reuse at geographic reference commit resolution.
+- Reuse at the city materialization boundary.
+
+The existing country ancestry validation remains separate.
+
+Materialization boundaries convert geographic context conflicts
+into preserve results rather than automatically modifying or
+consolidating conflicting records.
+
+The geographic materialization API returns HTTP 409 with code
+geographic_resolution_required for the tested preserve scenario.
+
+Verification:
+
+- A regression test verifies HTTP 409 when an existing city has
+  compatible national references but an incompatible Destination.
+- A regression test verifies preservation when an alternative
+  external identity owner has an incompatible Destination.
+- A regression test verifies preservation during IntegrityError
+  recovery when the winning identity owner has an incompatible
+  Destination.
+- The existing concurrency test was updated to represent the
+  Destination relationship required by the shared validation.
+- All 269 backend tests passed.
+- Django detected no pending model migrations.
+
+This protection does not establish complete geographic consistency
+across all Place creation paths or guarantee protection against
+concurrent changes to geographic references.
+
+Implementation checkpoint:
+
+- Commit: 05a1fb3
+- Branch: dev
+
+Status: Verified by automated tests for the specified city reuse
+and Destination conflict scenarios; broader geographic invariants
+remain under investigation.
+
+
 ## 11. Open Investigations
 
-- Extend country consistency auditing across Country, Destination, city, and POI records, beyond the GEO-04/004 materialization guard.
+- Extend geographic consistency auditing across Country, Destination, city, and POI records, beyond the GEO-04/004 and GEO-04/005 guards.
 - Audit the complete POI creation and concurrent recovery paths.
 - Verify test coverage for POI identity and context conflicts.
 - Review the representation of closed, renamed, or relocated places.

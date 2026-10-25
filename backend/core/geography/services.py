@@ -32,6 +32,11 @@ from ..place_utils import (
 )
 
 
+class CountryIdentityConflict(ValueError):
+    """An existing Country identity conflicts with the requested country."""
+
+
+
 class GeographicContextConflict(ValueError):
     """An existing geographic identity conflicts with incoming context."""
 
@@ -541,6 +546,16 @@ def materialize_country_place(
                 "Could not resolve the selected country."
             )
 
+        resolved_code = str(
+            resolved_country.code or ""
+        ).strip().upper()
+
+        if resolved_code != country_code:
+            raise CountryIdentityConflict(
+                "Resolved country identity conflicts with the "
+                "requested country code."
+            )
+
         existing_place = (
             Place.objects
             .select_for_update()
@@ -552,6 +567,11 @@ def materialize_country_place(
         )
 
         if existing_place:
+            assert_compatible_geographic_country(
+                existing_place,
+                country_code,
+            )
+
             update_fields = []
 
             if existing_place.name != canonical_name:
@@ -584,28 +604,17 @@ def materialize_country_place(
             country=canonical_name,
         )
 
-        try:
-            place = Place.objects.create(
-                destination=destination,
-                country_ref=resolved_country,
-                name=canonical_name,
-                canonical_name=canonical_name,
-                aliases=list(resolved_country.aliases or []),
-                country_code=country_code,
-                place_type="country",
-                city="",
-                created_by=user,
-            )
-        except IntegrityError:
-            place = Place.objects.filter(
-                place_type="country",
-                country_ref=resolved_country,
-            ).first()
-
-            if place:
-                return place, False
-
-            raise
+        place = Place.objects.create(
+            destination=destination,
+            country_ref=resolved_country,
+            name=canonical_name,
+            canonical_name=canonical_name,
+            aliases=list(resolved_country.aliases or []),
+            country_code=country_code,
+            place_type="country",
+            city="",
+            created_by=user,
+        )
 
         return place, True
 

@@ -238,6 +238,40 @@ class GeographicRegistrySearchTests(TestCase):
 
 
 class CountryMaterializationTests(TestCase):
+    def test_materialize_country_place_propagates_creation_integrity_error(self):
+        from unittest.mock import patch
+
+        from django.db import IntegrityError
+
+        from .geography.services import materialize_country_place
+        from .models import Place
+
+        country_entry = resolve_country_catalog_entry(code="AR")
+
+        with patch.object(
+            Place.objects,
+            "create",
+            side_effect=IntegrityError("Simulated creation failure"),
+        ) as mock_create:
+            with patch.object(
+                Place.objects,
+                "filter",
+                side_effect=AssertionError(
+                    "Unexpected recovery query after IntegrityError"
+                ),
+            ):
+                with self.assertRaises(IntegrityError):
+                    materialize_country_place(
+                        country_entry=country_entry,
+                        user=None,
+                    )
+
+        mock_create.assert_called_once()
+        self.assertEqual(
+            Place.objects.filter(place_type="country").count(),
+            0,
+        )
+
     def test_materialize_country_place_creates_canonical_structure_once(self):
         from .geography.services import materialize_country_place
         from .models import Destination, Place
@@ -312,6 +346,105 @@ class CountryMaterializationTests(TestCase):
             ).count(),
             1,
         )
+
+
+    def test_materialize_country_place_preserves_conflicting_country_code(self):
+        from .geography.services import (
+            GeographicContextConflict,
+            materialize_country_place,
+        )
+        from .models import Place
+
+        country_entry = resolve_country_catalog_entry(code="AR")
+
+        place, created = materialize_country_place(
+            country_entry=country_entry,
+            user=None,
+        )
+        self.assertTrue(created)
+
+        place.country_code = "FR"
+        place.save(update_fields=["country_code"])
+
+        with self.assertRaises(GeographicContextConflict) as caught:
+            materialize_country_place(
+                country_entry=country_entry,
+                user=None,
+            )
+
+        self.assertEqual(caught.exception.place.pk, place.pk)
+        self.assertEqual(caught.exception.reason, "country_code")
+
+        place.refresh_from_db()
+        self.assertEqual(place.country_code, "FR")
+        self.assertEqual(
+            Place.objects.filter(
+                place_type="country",
+                country_ref=place.country_ref,
+            ).count(),
+            1,
+        )
+
+
+    def test_materialize_country_place_enriches_missing_country_code(self):
+        from .geography.services import materialize_country_place
+
+        country_entry = resolve_country_catalog_entry(code="AR")
+
+        place, created = materialize_country_place(
+            country_entry=country_entry,
+            user=None,
+        )
+        self.assertTrue(created)
+
+        place.country_code = ""
+        place.save(update_fields=["country_code"])
+
+        same_place, created_again = materialize_country_place(
+            country_entry=country_entry,
+            user=None,
+        )
+
+        self.assertFalse(created_again)
+        self.assertEqual(same_place.pk, place.pk)
+
+        place.refresh_from_db()
+        self.assertEqual(place.country_code, "AR")
+
+
+    def test_materialize_country_place_rejects_conflicting_country_identity(self):
+        from .geography.services import (
+            CountryIdentityConflict,
+            materialize_country_place,
+        )
+        from .models import Destination, Place
+
+        conflicting_country = Country.objects.create(
+            code="FR",
+            canonical_name="Argentina",
+            aliases=[],
+        )
+
+        country_entry = resolve_country_catalog_entry(code="AR")
+
+        with self.assertRaises(CountryIdentityConflict):
+            materialize_country_place(
+                country_entry=country_entry,
+                user=None,
+            )
+
+        conflicting_country.refresh_from_db()
+
+        self.assertEqual(conflicting_country.code, "FR")
+        self.assertEqual(
+            conflicting_country.canonical_name,
+            "Argentina",
+        )
+        self.assertEqual(conflicting_country.aliases, [])
+
+        self.assertFalse(Country.objects.filter(code="AR").exists())
+        self.assertFalse(Place.objects.exists())
+        self.assertFalse(Destination.objects.exists())
 
 
 class CountryMaterializationAPITests(TestCase):
@@ -421,6 +554,81 @@ class CountryMaterializationAPITests(TestCase):
             place.created_by_id,
             self.user.id,
         )
+
+
+    def test_country_materialization_returns_409_for_conflicting_place(self):
+        from .geography.services import materialize_country_place
+        from .models import Place
+
+        country_entry = resolve_country_catalog_entry(code="AR")
+
+        place, created = materialize_country_place(
+            country_entry=country_entry,
+            user=self.user,
+        )
+        self.assertTrue(created)
+
+        place.country_code = "FR"
+        place.save(update_fields=["country_code"])
+
+        response = self.client.post(
+            self.url,
+            data={"country_code": "AR"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+
+        place.refresh_from_db()
+        self.assertEqual(place.country_code, "FR")
+
+        self.assertEqual(
+            Place.objects.filter(
+                place_type="country",
+                country_ref=place.country_ref,
+            ).count(),
+            1,
+        )
+
+
+    def test_country_materialization_returns_409_for_conflicting_country_identity(self):
+        from .models import Country, Destination, Place
+
+        conflicting_country = Country.objects.create(
+            code="FR",
+            canonical_name="Argentina",
+            aliases=[],
+        )
+
+        response = self.client.post(
+            self.url,
+            data={"country_code": "AR"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+
+        conflicting_country.refresh_from_db()
+        self.assertEqual(conflicting_country.code, "FR")
+        self.assertEqual(
+            conflicting_country.canonical_name,
+            "Argentina",
+        )
+        self.assertEqual(conflicting_country.aliases, [])
+
+        self.assertFalse(Country.objects.filter(code="AR").exists())
+        self.assertFalse(Place.objects.exists())
+        self.assertFalse(Destination.objects.exists())
 
 
 
@@ -613,6 +821,142 @@ class GeographicPlaceMaterializationAPITests(TestCase):
             AccessToken.for_user(self.user)
         )
         self.url = "/api/geography/places/materialize/"
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_country_identity_conflict_returns_409_without_materializing_place(
+        self,
+        mock_reconstruct_external_geographic_reference,
+        mock_materialize_city_place,
+    ):
+        from .models import Country, Destination, Place
+
+        conflicting_country = Country.objects.create(
+            code="FR",
+            canonical_name="Argentina",
+            aliases=[],
+        )
+
+        mock_reconstruct_external_geographic_reference.return_value = {
+            "name": "Buenos Aires",
+            "canonical_name": "Buenos Aires",
+            "aliases": [],
+            "external_source": "google_places",
+            "external_id": "buenos-aires-google",
+            "country_code": "AR",
+            "geographic_type": "settlement",
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "google_places",
+                "external_id": "buenos-aires-google",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+        self.assertEqual(
+            response.json()["code"],
+            "country_identity_conflict",
+        )
+
+        mock_materialize_city_place.assert_not_called()
+
+        conflicting_country.refresh_from_db()
+        self.assertEqual(conflicting_country.code, "FR")
+        self.assertEqual(
+            conflicting_country.canonical_name,
+            "Argentina",
+        )
+
+        self.assertFalse(Country.objects.filter(code="AR").exists())
+        self.assertFalse(Destination.objects.exists())
+        self.assertFalse(Place.objects.exists())
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_country_place_context_conflict_returns_resolution_required(
+        self,
+        mock_reconstruct_external_geographic_reference,
+        mock_materialize_city_place,
+    ):
+        from .geography.services import materialize_country_place
+        from .models import Place
+
+        country_entry = resolve_country_catalog_entry(code="AR")
+
+        country_place, created = materialize_country_place(
+            country_entry=country_entry,
+            user=self.user,
+        )
+        self.assertTrue(created)
+
+        country_place.country_code = "FR"
+        country_place.save(update_fields=["country_code"])
+
+        mock_reconstruct_external_geographic_reference.return_value = {
+            "name": "Buenos Aires",
+            "canonical_name": "Buenos Aires",
+            "aliases": [],
+            "external_source": "google_places",
+            "external_id": "buenos-aires-google",
+            "country_code": "AR",
+            "geographic_type": "settlement",
+        }
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "google_places",
+                "external_id": "buenos-aires-google",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+
+        data = response.json()
+
+        self.assertEqual(
+            data["code"],
+            "geographic_resolution_required",
+        )
+        self.assertEqual(
+            len(data["references"]),
+            1,
+        )
+        self.assertEqual(
+            data["references"][0]["id"],
+            country_place.id,
+        )
+
+        self.assertNotIn("evaluations", data)
+        self.assertNotIn("context_conflict", str(data))
+
+        mock_materialize_city_place.assert_not_called()
+
+        country_place.refresh_from_db()
+        self.assertEqual(country_place.country_code, "FR")
+
+        self.assertEqual(
+            Place.objects.filter(
+                place_type="country",
+                country_ref=country_place.country_ref,
+            ).count(),
+            1,
+        )
 
     @patch("core.views.materialize_city_place")
     @patch("core.views.reconstruct_external_geographic_reference")
@@ -10999,6 +11343,79 @@ class ExternalExperienceCreationTests(TestCase):
         reconstruct_external_reference.assert_called_once()
 
     @patch("core.views.reconstruct_external_geographic_reference")
+    def test_country_identity_conflict_returns_409_without_experience(
+        self,
+        reconstruct_external_reference,
+    ):
+        from .models import Country, Destination, Experience, Place, Update
+
+        conflicting_country = Country.objects.create(
+            code="FR",
+            canonical_name="Argentina",
+            aliases=[],
+        )
+
+        reconstruct_external_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "3435910",
+            "name": "Buenos Aires",
+            "canonical_name": "Buenos Aires",
+            "aliases": [],
+            "country_code": "AR",
+            "geographic_type": "settlement",
+        }
+
+        original_place_count = Place.objects.count()
+        original_destination_count = Destination.objects.count()
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "geonames",
+                "external_id": "3435910",
+                "title": "A day in Buenos Aires",
+                "comment": "A useful experience.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+        self.assertEqual(
+            response.json()["code"],
+            "country_identity_conflict",
+        )
+
+        self.assertEqual(Experience.objects.count(), 0)
+        self.assertEqual(Update.objects.count(), 0)
+
+        conflicting_country.refresh_from_db()
+        self.assertEqual(conflicting_country.code, "FR")
+        self.assertEqual(
+            conflicting_country.canonical_name,
+            "Argentina",
+        )
+
+        self.assertFalse(
+            Country.objects.filter(code="AR").exists()
+        )
+        self.assertEqual(
+            Place.objects.count(),
+            original_place_count,
+        )
+        self.assertEqual(
+            Destination.objects.count(),
+            original_destination_count,
+        )
+
+        reconstruct_external_reference.assert_called_once()
+
+    @patch("core.views.reconstruct_external_geographic_reference")
     def test_creation_requires_place_or_external_identity(
         self,
         reconstruct_external_reference,
@@ -11600,6 +12017,72 @@ class ExternalUpdateCreationTests(TestCase):
                 external_id="2758401",
             ).count(),
             1,
+        )
+
+        reconstruct_reference.assert_called_once()
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_country_identity_conflict_returns_409_without_update(
+        self,
+        reconstruct_reference,
+    ):
+        from .models import Country, Destination, Experience, Place, Update
+
+        conflicting_country = Country.objects.create(
+            code="FR",
+            canonical_name="Argentina",
+            aliases=[],
+        )
+
+        reconstruct_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "3435910",
+            "name": "Buenos Aires",
+            "canonical_name": "Buenos Aires",
+            "aliases": [],
+            "country_code": "AR",
+            "geographic_type": "settlement",
+        }
+
+        original_place_count = Place.objects.count()
+        original_destination_count = Destination.objects.count()
+
+        response = self.post_update(
+            external_source="geonames",
+            external_id="3435910",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            409,
+            response.content,
+        )
+        self.assertEqual(
+            response.json()["code"],
+            "country_identity_conflict",
+        )
+
+        self.assertEqual(Update.objects.count(), 0)
+        self.assertEqual(Experience.objects.count(), 0)
+
+        conflicting_country.refresh_from_db()
+
+        self.assertEqual(conflicting_country.code, "FR")
+        self.assertEqual(
+            conflicting_country.canonical_name,
+            "Argentina",
+        )
+
+        self.assertFalse(
+            Country.objects.filter(code="AR").exists()
+        )
+        self.assertEqual(
+            Place.objects.count(),
+            original_place_count,
+        )
+        self.assertEqual(
+            Destination.objects.count(),
+            original_destination_count,
         )
 
         reconstruct_reference.assert_called_once()

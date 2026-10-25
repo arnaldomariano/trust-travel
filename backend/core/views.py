@@ -126,6 +126,9 @@ from .geography.providers.foursquare import (
 )
 
 from .geography.services import (
+    CountryIdentityConflict,
+    GeographicContextConflict,
+    preserve_geographic_context_conflict,
     annotate_existing_city_places,
     annotate_existing_poi_places,
     materialize_city_place,
@@ -1708,6 +1711,14 @@ class GeographyCountryMaterializeView(APIView):
                 country_entry=country,
                 user=request.user,
             )
+        except (
+            CountryIdentityConflict,
+            GeographicContextConflict,
+        ) as error:
+            return Response(
+                {"detail": str(error)},
+                status=status.HTTP_409_CONFLICT,
+            )
         except ValueError as error:
             return Response(
                 {"detail": str(error)},
@@ -1839,6 +1850,17 @@ class GeographicResolutionRequired(APIException):
         self.detail = _build_geographic_resolution_required_payload(
             materialization_result
         )
+
+
+class CountryIdentityConflictResponse(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "country_identity_conflict"
+
+    def __init__(self, error):
+        self.detail = {
+            "code": "country_identity_conflict",
+            "detail": str(error),
+        }
 
 
 class GeographicProviderUnavailable(APIException):
@@ -2055,10 +2077,23 @@ class GeographyPlaceMaterializeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        country_place, _ = materialize_country_place(
-            country_entry=country,
-            user=request.user,
-        )
+        try:
+            country_place, _ = materialize_country_place(
+                country_entry=country,
+                user=request.user,
+            )
+        except CountryIdentityConflict as error:
+            return Response(
+                {
+                    "code": "country_identity_conflict",
+                    "detail": str(error),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except GeographicContextConflict as conflict:
+            return _build_geographic_resolution_required_response(
+                preserve_geographic_context_conflict(conflict)
+            )
 
         resolved_country = country_place.country_ref
 
@@ -3747,12 +3782,15 @@ class ExperienceListView(generics.ListCreateAPIView):
 
         with transaction.atomic():
             if geographic_result is not None:
-                resolution = (
-                    resolve_reconstructed_geographic_reference_for_commit(
-                        geographic_result=geographic_result,
-                        user=self.request.user,
+                try:
+                    resolution = (
+                        resolve_reconstructed_geographic_reference_for_commit(
+                            geographic_result=geographic_result,
+                            user=self.request.user,
+                        )
                     )
-                )
+                except CountryIdentityConflict as error:
+                    raise CountryIdentityConflictResponse(error) from error
 
                 if resolution["state"] == "preserve":
                     raise GeographicResolutionRequired(resolution)
@@ -7033,12 +7071,15 @@ class UpdateListView(APIView):
 
         with transaction.atomic():
             if geographic_result is not None:
-                resolution = (
-                    resolve_reconstructed_geographic_reference_for_commit(
-                        geographic_result=geographic_result,
-                        user=request.user,
+                try:
+                    resolution = (
+                        resolve_reconstructed_geographic_reference_for_commit(
+                            geographic_result=geographic_result,
+                            user=request.user,
+                        )
                     )
-                )
+                except CountryIdentityConflict as error:
+                    raise CountryIdentityConflictResponse(error) from error
 
                 if resolution["state"] == "preserve":
                     raise GeographicResolutionRequired(resolution)

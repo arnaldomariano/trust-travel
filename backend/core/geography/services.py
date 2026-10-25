@@ -2263,6 +2263,22 @@ def materialize_poi_place(
     place_type,
     user,
 ):
+    # Reject contradictory country evidence in the selected city ancestor.
+    # Preserve existing Places and experiences for explicit reconciliation.
+    try:
+        assert_compatible_geographic_country(
+            city_place,
+            country_code,
+        )
+    except GeographicContextConflict:
+        return {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "candidate_place_ids": [],
+            "reason": "country_ancestry_conflict",
+        }
+
     decision = evaluate_poi_reference_gate(
         poi_result=poi_result,
         city_place=city_place,

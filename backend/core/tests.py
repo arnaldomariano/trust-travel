@@ -11177,6 +11177,174 @@ class POIPlaceReconciliationTests(TestCase):
         )
 
 
+    def test_poi_materialization_preserves_conflicting_city_country(self):
+        from .geography.services import materialize_poi_place
+        from .models import Place
+
+        self.city_place.country_code = "FR"
+        self.city_place.save(update_fields=["country_code"])
+
+        initial_place_count = Place.objects.count()
+
+        result = materialize_poi_place(
+            poi_result={
+                "name": "Trattoria Country Conflict",
+                "canonical_name": "Trattoria Country Conflict",
+                "aliases": [],
+                "external_source": "",
+                "external_id": "",
+            },
+            city_place=self.city_place,
+            country_code="IT",
+            place_type="restaurant",
+            user=None,
+        )
+
+        self.assertEqual(result["state"], "preserve")
+        self.assertEqual(
+            result["reason"],
+            "country_ancestry_conflict",
+        )
+        self.assertEqual(
+            result["candidate_place_ids"],
+            [],
+        )
+        self.assertEqual(
+            Place.objects.count(),
+            initial_place_count,
+        )
+
+        self.city_place.refresh_from_db()
+        self.assertEqual(self.city_place.country_code, "FR")
+
+
+    def test_manual_poi_creation_preserves_conflicting_city_country(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        from .models import Place
+
+        user = User.objects.create_user(
+            username="manual-poi-country-conflict-user",
+            password="test-password",
+        )
+        access_token = str(AccessToken.for_user(user))
+
+        self.city_place.country_code = "FR"
+        self.city_place.save(update_fields=["country_code"])
+
+        initial_place_count = Place.objects.count()
+
+        response = self.client.post(
+            "/api/geography/pois/create-manual/",
+            data={
+                "name": "Trattoria Country Conflict",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+        data = response.json()
+
+        self.assertEqual(
+            data["code"],
+            "poi_resolution_required",
+        )
+        self.assertEqual(
+            data["reason"],
+            "country_ancestry_conflict",
+        )
+        self.assertEqual(
+            data["candidate_place_ids"],
+            [],
+        )
+        self.assertEqual(
+            Place.objects.count(),
+            initial_place_count,
+        )
+
+        self.city_place.refresh_from_db()
+        self.assertEqual(self.city_place.country_code, "FR")
+
+
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_materialization_preserves_conflicting_city_country(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+    ):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        from .models import Place
+
+        user = User.objects.create_user(
+            username="external-poi-country-conflict-user",
+            password="test-password",
+        )
+        access_token = str(AccessToken.for_user(user))
+
+        provider_result = {
+            "name": "Trattoria Country Conflict",
+            "canonical_name": "Trattoria Country Conflict",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "trattoria-country-conflict",
+            "country_code": "IT",
+            "locality": "Rome",
+            "latitude": 41.9200,
+            "longitude": 12.5100,
+        }
+
+        mock_get_poi.return_value = provider_result
+        mock_search_pois.return_value = [provider_result]
+
+        self.city_place.country_code = "FR"
+        self.city_place.save(update_fields=["country_code"])
+
+        initial_place_count = Place.objects.count()
+
+        response = self.client.post(
+            "/api/geography/pois/materialize/",
+            data={
+                "external_id": "trattoria-country-conflict",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+        data = response.json()
+
+        self.assertEqual(
+            data["code"],
+            "poi_resolution_required",
+        )
+        self.assertEqual(
+            data["reason"],
+            "country_ancestry_conflict",
+        )
+        self.assertEqual(
+            data["candidate_place_ids"],
+            [],
+        )
+        self.assertEqual(
+            Place.objects.count(),
+            initial_place_count,
+        )
+
+        self.city_place.refresh_from_db()
+        self.assertEqual(self.city_place.country_code, "FR")
+
+
 class ExperienceCreationAtomicityTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User

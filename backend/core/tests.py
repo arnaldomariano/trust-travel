@@ -1546,6 +1546,325 @@ class GeographicCityMaterializationAPITests(TestCase):
         self.assertEqual(city.country_ref_id, self.country.id)
 
 
+class GeographicPlaceExternalDetailAPITests(TestCase):
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_public_geonames_detail_does_not_materialize_place(
+        self,
+        mock_reconstruct,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        reference = {
+            "external_source": "geonames",
+            "external_id": "12345",
+            "name": "Example Place",
+            "canonical_name": "Example Place",
+            "geographic_type": "settlement",
+            "country_code": "BR",
+        }
+        mock_reconstruct.return_value = reference
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "geonames",
+                "external_id": "12345",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), reference)
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id="12345",
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_public_google_detail_does_not_materialize_place(
+        self,
+        mock_reconstruct,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        reference = {
+            "external_source": "google_places",
+            "external_id": "google-example-123",
+            "name": "Example Island",
+            "canonical_name": "Example Island",
+            "geographic_type": "island",
+            "country_code": "BR",
+            "latitude": "-23.5",
+            "longitude": "-45.1",
+        }
+        mock_reconstruct.return_value = reference
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "google_places",
+                "external_id": "google-example-123",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), reference)
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="google_places",
+            external_id="google-example-123",
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+    def test_external_detail_reconstruction_does_not_materialize(self):
+        from .models import Place, PlaceExternalIdentity
+
+        cases = [
+            (
+                "geonames",
+                "12345",
+                "core.geography.services.get_geographic_place",
+            ),
+            (
+                "google_places",
+                "google-example-123",
+                "core.geography.services.get_google_geographic_place",
+            ),
+        ]
+
+        for external_source, external_id, provider_path in cases:
+            with self.subTest(external_source=external_source):
+                reference = {
+                    "external_source": external_source,
+                    "external_id": external_id,
+                    "name": "Example Place",
+                    "canonical_name": "Example Place",
+                    "geographic_type": "settlement",
+                    "country_code": "BR",
+                }
+
+                places_before = Place.objects.count()
+                identities_before = PlaceExternalIdentity.objects.count()
+
+                with patch(
+                    provider_path,
+                    return_value=reference,
+                ) as mock_provider:
+                    response = self.client.get(
+                        "/api/geography/places/external-detail/",
+                        {
+                            "external_source": external_source,
+                            "external_id": external_id,
+                        },
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), reference)
+
+                mock_provider.assert_called_once_with(external_id)
+
+                self.assertEqual(
+                    Place.objects.count(),
+                    places_before,
+                )
+                self.assertEqual(
+                    PlaceExternalIdentity.objects.count(),
+                    identities_before,
+                )
+
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_detail_rejects_unsupported_source(
+        self,
+        mock_reconstruct,
+    ):
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "unsupported",
+                "external_id": "12345",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        mock_reconstruct.assert_not_called()
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_detail_requires_external_id(
+        self,
+        mock_reconstruct,
+    ):
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "geonames",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        mock_reconstruct.assert_not_called()
+
+
+    def test_external_detail_handles_provider_errors(self):
+        from .geography.providers.geonames import (
+            GeoNamesConfigurationError,
+            GeoNamesRequestError,
+        )
+        from .geography.providers.google_places import (
+            GooglePlacesConfigurationError,
+            GooglePlacesRequestError,
+        )
+
+        cases = [
+            ("geonames", GeoNamesConfigurationError),
+            ("google_places", GooglePlacesConfigurationError),
+            ("geonames", GeoNamesRequestError),
+            ("google_places", GooglePlacesRequestError),
+        ]
+
+        for external_source, error_class in cases:
+            with self.subTest(
+                external_source=external_source,
+                error=error_class.__name__,
+            ):
+                with patch(
+                    "core.views.reconstruct_external_geographic_reference",
+                    side_effect=error_class("Provider unavailable"),
+                ) as mock_reconstruct:
+                    response = self.client.get(
+                        "/api/geography/places/external-detail/",
+                        {
+                            "external_source": external_source,
+                            "external_id": "example-123",
+                        },
+                    )
+
+                self.assertEqual(response.status_code, 503)
+                mock_reconstruct.assert_called_once_with(
+                    external_source=external_source,
+                    external_id="example-123",
+                )
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_detail_returns_404_for_google_missing_reference(
+        self,
+        mock_reconstruct,
+    ):
+        from .geography.providers.google_places import (
+            GooglePlacesReferenceNotFoundError,
+        )
+        from .models import Place, PlaceExternalIdentity
+
+        mock_reconstruct.side_effect = GooglePlacesReferenceNotFoundError(
+            "Google Places geographic reference does not exist."
+        )
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "google_places",
+                "external_id": "missing-place",
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="google_places",
+            external_id="missing-place",
+        )
+
+        self.assertEqual(
+            Place.objects.count(),
+            places_before,
+        )
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_detail_returns_404_for_geonames_missing_reference(
+        self,
+        mock_reconstruct,
+    ):
+        from .geography.providers.geonames import (
+            GeoNamesReferenceNotFoundError,
+        )
+        from .models import Place, PlaceExternalIdentity
+
+        mock_reconstruct.side_effect = GeoNamesReferenceNotFoundError(
+            "GeoNames geographic reference does not exist."
+        )
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "geonames",
+                "external_id": "999999999",
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id="999999999",
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_detail_returns_404_for_missing_reference(
+        self,
+        mock_reconstruct,
+    ):
+        mock_reconstruct.return_value = None
+
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "geonames",
+                "external_id": "missing-123",
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id="missing-123",
+        )
+
+
 class ExternalGeographicReferenceReconstructionTests(TestCase):
     @patch("core.geography.services.get_geographic_place")
     def test_geonames_reference_is_reconstructed_from_provider(
@@ -5473,6 +5792,152 @@ class GooglePlacesDiscoveryTests(TestCase):
             results[0]["geographic_type"]
         )
 
+    def test_google_place_details_distinguishes_missing_reference(self):
+        import io
+        import json
+        from urllib.error import HTTPError
+        from unittest.mock import patch
+
+        from .geography.providers import google_places
+
+        error_payload = {
+            "error": {
+                "code": 404,
+                "message": "Place not found.",
+                "status": "NOT_FOUND",
+            }
+        }
+
+        error = HTTPError(
+            url="https://places.googleapis.com/v1/places/missing-place",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=io.BytesIO(
+                json.dumps(error_payload).encode("utf-8")
+            ),
+        )
+
+        with (
+            patch(
+                "core.geography.providers.google_places."
+                "get_google_places_api_key",
+                return_value="test-api-key",
+            ),
+            patch(
+                "core.geography.providers.google_places.urlopen",
+                side_effect=error,
+            ),
+        ):
+            with self.assertRaises(
+                google_places.GooglePlacesReferenceNotFoundError
+            ):
+                google_places.get_google_geographic_place(
+                    "missing-place"
+                )
+
+    def test_google_place_details_preserves_other_provider_errors(self):
+        import io
+        import json
+        from urllib.error import HTTPError
+        from unittest.mock import patch
+
+        from .geography.providers import google_places
+
+        cases = [
+            (403, "PERMISSION_DENIED"),
+            (429, "RESOURCE_EXHAUSTED"),
+            (503, "UNAVAILABLE"),
+            (404, None),
+        ]
+
+        for http_code, provider_status in cases:
+            with self.subTest(
+                http_code=http_code,
+                provider_status=provider_status,
+            ):
+                error_payload = {
+                    "error": {
+                        "code": http_code,
+                        "message": "Provider request failed.",
+                    }
+                }
+
+                if provider_status:
+                    error_payload["error"]["status"] = provider_status
+
+                error = HTTPError(
+                    url="https://places.googleapis.com/v1/places/test-place",
+                    code=http_code,
+                    msg="Provider Error",
+                    hdrs=None,
+                    fp=io.BytesIO(
+                        json.dumps(error_payload).encode("utf-8")
+                    ),
+                )
+
+                with (
+                    patch(
+                        "core.geography.providers.google_places."
+                        "get_google_places_api_key",
+                        return_value="test-api-key",
+                    ),
+                    patch(
+                        "core.geography.providers.google_places.urlopen",
+                        side_effect=error,
+                    ),
+                ):
+                    with self.assertRaises(
+                        google_places.GooglePlacesRequestError
+                    ) as context:
+                        google_places.get_google_geographic_place(
+                            "test-place"
+                        )
+
+                self.assertNotIsInstance(
+                    context.exception,
+                    google_places.GooglePlacesReferenceNotFoundError,
+                )
+
+    def test_google_place_details_handles_unexpected_error_payload(self):
+        import io
+        import json
+        from urllib.error import HTTPError
+        from unittest.mock import patch
+
+        from .geography.providers import google_places
+
+        error = HTTPError(
+            url="https://places.googleapis.com/v1/places/test-place",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=io.BytesIO(json.dumps([]).encode("utf-8")),
+        )
+
+        with (
+            patch(
+                "core.geography.providers.google_places."
+                "get_google_places_api_key",
+                return_value="test-api-key",
+            ),
+            patch(
+                "core.geography.providers.google_places.urlopen",
+                side_effect=error,
+            ),
+        ):
+            with self.assertRaises(
+                google_places.GooglePlacesRequestError
+            ) as context:
+                google_places.get_google_geographic_place(
+                    "test-place"
+                )
+
+        self.assertNotIsInstance(
+            context.exception,
+            google_places.GooglePlacesReferenceNotFoundError,
+        )
+
     def test_google_place_details_requests_resolution_evidence(self):
         import io
         import json
@@ -5924,6 +6389,42 @@ class GeoNamesDiscoveryTests(TestCase):
             )
 
         self.assertEqual(results, [])
+
+
+class GeoNamesReferenceNotFoundTests(TestCase):
+    def test_geographic_lookup_distinguishes_missing_reference(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers import geonames
+
+        response_payload = {
+            "status": {
+                "message": "record does not exist",
+                "value": 11,
+            }
+        }
+
+        response = io.BytesIO(
+            json.dumps(response_payload).encode("utf-8")
+        )
+
+        with (
+            patch(
+                "core.geography.providers.geonames."
+                "get_geonames_username",
+                return_value="test-user",
+            ),
+            patch(
+                "core.geography.providers.geonames.urlopen",
+                return_value=response,
+            ),
+        ):
+            with self.assertRaises(
+                geonames.GeoNamesReferenceNotFoundError
+            ):
+                geonames.get_geographic_place("999999999")
 
 
 class GeographicDiscoveryIdentityTests(TestCase):

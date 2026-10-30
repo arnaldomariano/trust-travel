@@ -106,6 +106,7 @@ from .geography.discovery import (
 
 from .geography.providers.geonames import (
     GeoNamesConfigurationError,
+    GeoNamesReferenceNotFoundError,
     GeoNamesRequestError,
     get_geographic_place,
     search_geographic_places,
@@ -113,6 +114,7 @@ from .geography.providers.geonames import (
 
 from .geography.providers.google_places import (
     GooglePlacesConfigurationError,
+    GooglePlacesReferenceNotFoundError,
     GooglePlacesRequestError,
     search_google_geographic_places,
 )
@@ -1738,6 +1740,69 @@ class GeographyCountryMaterializeView(APIView):
                 else status.HTTP_200_OK
             ),
         )
+
+
+class GeographyPlaceExternalDetailView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        external_source = (
+            request.query_params.get("external_source") or ""
+        ).strip()
+        external_id = (
+            request.query_params.get("external_id") or ""
+        ).strip()
+
+        if external_source not in {"geonames", "google_places"}:
+            return Response(
+                {"detail": "Unsupported external geographic source."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not external_id:
+            return Response(
+                {"detail": "External geographic ID is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            reference = reconstruct_external_geographic_reference(
+                external_source=external_source,
+                external_id=external_id,
+            )
+        except (
+            GeoNamesConfigurationError,
+            GooglePlacesConfigurationError,
+        ):
+            return Response(
+                {"detail": "Geographic lookup is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except (
+            GeoNamesReferenceNotFoundError,
+            GooglePlacesReferenceNotFoundError,
+        ):
+            return Response(
+                {"detail": "External geographic reference not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except (
+            GeoNamesRequestError,
+            GooglePlacesRequestError,
+        ):
+            return Response(
+                {"detail": "Geographic lookup is temporarily unavailable."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if not reference:
+            return Response(
+                {"detail": "External geographic reference not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(reference)
 
 
 class GeographyPlaceSearchView(APIView):

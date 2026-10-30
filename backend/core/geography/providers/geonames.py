@@ -15,6 +15,11 @@ class GeoNamesRequestError(RuntimeError):
     pass
 
 
+class GeoNamesReferenceNotFoundError(GeoNamesRequestError):
+    """GeoNames confirms that the requested reference does not exist."""
+    pass
+
+
 def get_geonames_username():
     username = (settings.GEONAMES_USERNAME or "").strip()
 
@@ -313,9 +318,19 @@ def get_geographic_place(external_id):
 
     status = payload.get("status")
 
+    if isinstance(status, dict):
+        if status.get("value") == 11:
+            raise GeoNamesReferenceNotFoundError(
+                "GeoNames geographic reference does not exist."
+            )
+
     if status:
         raise GeoNamesRequestError(
-            status.get("message")
+            (
+                status.get("message")
+                if isinstance(status, dict)
+                else None
+            )
             or "GeoNames returned an error."
         )
 

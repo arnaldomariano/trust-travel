@@ -13,6 +13,11 @@ class GooglePlacesRequestError(RuntimeError):
     pass
 
 
+class GooglePlacesReferenceNotFoundError(GooglePlacesRequestError):
+    """Google Places confirms that the requested reference does not exist."""
+    pass
+
+
 GOOGLE_PLACES_SEARCH_URL = (
     "https://places.googleapis.com/v1/places:searchText"
 )
@@ -241,7 +246,34 @@ def get_google_geographic_place(external_id):
     try:
         with urlopen(request, timeout=5) as response:
             payload = json.load(response)
-    except (HTTPError, URLError, TimeoutError) as error:
+
+    except HTTPError as error:
+        if error.code == 404:
+            try:
+                error_payload = json.load(error)
+            except (ValueError, OSError):
+                error_payload = {}
+
+            provider_error = (
+                error_payload.get("error")
+                if isinstance(error_payload, dict)
+                else None
+            )
+
+            if (
+                isinstance(provider_error, dict)
+                and provider_error.get("code") == 404
+                and provider_error.get("status") == "NOT_FOUND"
+            ):
+                raise GooglePlacesReferenceNotFoundError(
+                    "Google Places geographic reference does not exist."
+                ) from error
+
+        raise GooglePlacesRequestError(
+            "Google Places geographic lookup failed."
+        ) from error
+
+    except (URLError, TimeoutError) as error:
         raise GooglePlacesRequestError(
             "Google Places geographic lookup failed."
         ) from error

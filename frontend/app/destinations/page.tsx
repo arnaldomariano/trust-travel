@@ -36,6 +36,43 @@ type GeographyPlaceResult = {
   can_open: boolean;
 };
 
+type ExternalGeographicDetail = {
+  name: string;
+  canonical_name: string;
+  aliases: string[];
+  country_code: string;
+  latitude: string | number | null;
+  longitude: string | number | null;
+  geographic_type: string;
+  feature_class: string;
+  feature_code: string;
+  population: number;
+  admin_name: string;
+  admin_context: {
+    level: number;
+    name: string;
+    code: string;
+    external_id: string;
+    iso_code: string;
+  }[];
+  external_source: "geonames" | "google_places";
+  external_id: string;
+  spatial_extent?: {
+    kind: "bounding_box";
+    north: string | number;
+    south: string | number;
+    east: string | number;
+    west: string | number;
+  } | null;
+  primary_type?: string;
+  formatted_address?: string;
+  location_context?: {
+    type: string;
+    name: string;
+    short_name: string;
+  }[];
+};
+
 function getGeographicTypeLabel(geographicType: string) {
   const labels: Record<string, string> = {
     settlement: "City / Settlement",
@@ -77,6 +114,20 @@ function DestinationsPageContent() {
     selectedMainGeographyResult,
     setSelectedMainGeographyResult,
   ] = useState<GeographyPlaceResult | null>(null);
+  const [
+    externalGeographicDetail,
+    setExternalGeographicDetail,
+  ] = useState<ExternalGeographicDetail | null>(null);
+  const [
+    externalGeographicDetailLoading,
+    setExternalGeographicDetailLoading,
+  ] = useState(false);
+  const [
+    externalGeographicDetailError,
+    setExternalGeographicDetailError,
+  ] = useState<"not_found" | "unavailable" | null>(null);
+  const externalGeographicDetailRequestId = useRef(0);
+
   const [mainGeographySearchLoading, setMainGeographySearchLoading] =
     useState(false);
   const [mainGeographySearchError, setMainGeographySearchError] = useState("");
@@ -816,6 +867,8 @@ const visibleMainGeographyResults = mainGeographyCountryRefinement
 const handleMainGeographySearch = async () => {
   const query = searchTerm.trim();
 
+  // Invalidate external details when a new search begins.
+  clearExternalGeographicDetail();
   setSelectedMainGeographyResult(null);
 
   if (query.length < 2) {
@@ -1373,6 +1426,7 @@ const createSpecificPlaceForFlow = async () => {
       setSelectedCountryPlace(place);
       setSelectedPlace(null);
       if (isUpdateMode) {
+        clearExternalGeographicDetail();
         setSelectedMainGeographyResult(null);
       }
       setShowShareForm(false);
@@ -1458,6 +1512,78 @@ const createSpecificPlaceForFlow = async () => {
       }, 0);
     };
 
+  // Invalidate pending external detail requests and clear their state.
+  const clearExternalGeographicDetail = () => {
+    externalGeographicDetailRequestId.current += 1;
+    setExternalGeographicDetail(null);
+    setExternalGeographicDetailError(null);
+    setExternalGeographicDetailLoading(false);
+  };
+
+  // Load external geographic evidence without materializing a Place.
+  const loadExternalGeographicDetail = async (
+    externalSource: string,
+    externalId: string
+  ) => {
+    const requestId = ++externalGeographicDetailRequestId.current;
+
+    setExternalGeographicDetail(null);
+    setExternalGeographicDetailError(null);
+    setExternalGeographicDetailLoading(true);
+
+    try {
+      const params = new URLSearchParams({
+        external_source: externalSource,
+        external_id: externalId,
+      });
+
+      const response = await fetch(
+        `${API_URL}/api/geography/places/external-detail/?${params.toString()}`
+      );
+
+      if (requestId !== externalGeographicDetailRequestId.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        setExternalGeographicDetailError(
+          response.status === 404 ? "not_found" : "unavailable"
+        );
+        return;
+      }
+
+      const data: ExternalGeographicDetail = await response.json();
+
+      if (
+        !data ||
+        data.external_source !== externalSource ||
+        data.external_id !== externalId ||
+        !data.canonical_name ||
+        !data.geographic_type ||
+        !Array.isArray(data.admin_context) ||
+        !data.admin_context.every(
+          (item) => item && typeof item.name === "string"
+        )
+      ) {
+        setExternalGeographicDetailError("unavailable");
+        return;
+      }
+
+      if (requestId === externalGeographicDetailRequestId.current) {
+        setExternalGeographicDetail(data);
+      }
+    } catch (error) {
+      if (requestId === externalGeographicDetailRequestId.current) {
+        console.error("External geographic detail lookup failed:", error);
+        setExternalGeographicDetailError("unavailable");
+      }
+    } finally {
+      if (requestId === externalGeographicDetailRequestId.current) {
+        setExternalGeographicDetailLoading(false);
+      }
+    }
+  };
+
   // =========================
   // Handle a geographic place selected from main search
   // =========================
@@ -1468,6 +1594,9 @@ const createSpecificPlaceForFlow = async () => {
       return;
     }
 
+    // Invalidate details from any previous external selection.
+    clearExternalGeographicDetail();
+
     if (result.existing_place_id) {
       handleSelectExistingPlace({
         id: result.existing_place_id,
@@ -1475,14 +1604,20 @@ const createSpecificPlaceForFlow = async () => {
       return;
     }
 
-    if (!isExperienceMode && !isUpdateMode) {
-      setSelectedMainGeographyResult(result);
-      return;
-    }
-
     if (!result.external_source || !result.external_id) {
       setMainGeographySearchError(
         "This geographic place cannot be opened right now."
+      );
+      return;
+    }
+
+    if (!isExperienceMode && !isUpdateMode) {
+      setSelectedMainGeographyResult(result);
+      setMainGeographySearchError("");
+
+      void loadExternalGeographicDetail(
+        result.external_source,
+        result.external_id
       );
       return;
     }
@@ -1528,6 +1663,7 @@ const createSpecificPlaceForFlow = async () => {
   const handleChangePlace = () => {
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
+    clearExternalGeographicDetail();
     setSelectedMainGeographyResult(null);
     setShowRelatedPlaces(false);
     setRelatedPlaceSearch("");
@@ -1553,6 +1689,7 @@ const createSpecificPlaceForFlow = async () => {
   const resetShareFlow = () => {
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
+    clearExternalGeographicDetail();
     setSelectedMainGeographyResult(null);
     setSearchTerm("");
     setTitle("");
@@ -1963,6 +2100,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               setMainGeographyResults([]);
               setMainGeographySearchError("");
               if (isUpdateMode) {
+                clearExternalGeographicDetail();
                 setSelectedMainGeographyResult(null);
                 setShowShareForm(false);
               }
@@ -2291,6 +2429,46 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 {selectedMainGeographyResult.canonical_name}
               </h2>
 
+              {externalGeographicDetailLoading && (
+                <div role="status" style={helperNote}>
+                  Loading geographic details...
+                </div>
+              )}
+
+              {externalGeographicDetailError === "not_found" && (
+                <div role="alert" style={helperNote}>
+                  This external geographic reference could not be found.
+                  You can return to the search and select another result.
+                </div>
+              )}
+
+              {externalGeographicDetailError === "unavailable" && (
+                <div role="alert" style={helperNote}>
+                  <p style={{ margin: "0 0 12px" }}>
+                    Geographic details are temporarily unavailable.
+                    This does not mean the place does not exist.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        selectedMainGeographyResult.external_source &&
+                        selectedMainGeographyResult.external_id
+                      ) {
+                        void loadExternalGeographicDetail(
+                          selectedMainGeographyResult.external_source,
+                          selectedMainGeographyResult.external_id
+                        );
+                      }
+                    }}
+                    style={secondaryButton}
+                  >
+                    Retry geographic details
+                  </button>
+                </div>
+              )}
+
               <p style={{ color: "#666", lineHeight: 1.5 }}>
                 {getGeographicTypeLabel(
                   selectedMainGeographyResult.geographic_type
@@ -2302,6 +2480,67 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   ? ` · ${selectedMainGeographyResult.country_code}`
                   : ""}
               </p>
+
+              {externalGeographicDetail && (
+                <div
+                  style={{
+                    marginTop: "16px",
+                    padding: "16px",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "12px",
+                    background: "#f9fafb",
+                  }}
+                >
+                  <p style={{ margin: "0 0 12px", fontWeight: 600 }}>
+                    Geographic reference information
+                  </p>
+
+                  {externalGeographicDetail.formatted_address && (
+                    <p style={{ margin: "0 0 10px", lineHeight: 1.5 }}>
+                      <strong>Address:</strong>{" "}
+                      {externalGeographicDetail.formatted_address}
+                    </p>
+                  )}
+
+                  {externalGeographicDetail.admin_context.length > 0 && (
+                    <p style={{ margin: "0 0 10px", lineHeight: 1.5 }}>
+                      <strong>Administrative context:</strong>{" "}
+                      {externalGeographicDetail.admin_context
+                        .map((item) => item.name)
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  )}
+
+                  {externalGeographicDetail.country_code && (
+                    <p style={{ margin: "0 0 10px", lineHeight: 1.5 }}>
+                      <strong>Country:</strong>{" "}
+                      {externalGeographicDetail.country_code}
+                    </p>
+                  )}
+
+                  {externalGeographicDetail.latitude != null &&
+                    externalGeographicDetail.longitude != null && (
+                      <p style={{ margin: "0 0 10px", lineHeight: 1.5 }}>
+                        <strong>Coordinates:</strong>{" "}
+                        {externalGeographicDetail.latitude},{" "}
+                        {externalGeographicDetail.longitude}
+                      </p>
+                    )}
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#666",
+                      fontSize: "13px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Geographic information supplied by an external reference
+                    provider. It is not a Trust Travel community review.
+                  </p>
+                </div>
+              )}
 
               <div style={helperNote}>
                 This selection is not currently linked to a Trust Travel place.
@@ -2328,7 +2567,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
                 <button
                   type="button"
-                  onClick={() => setSelectedMainGeographyResult(null)}
+                  onClick={() => {
+                    clearExternalGeographicDetail();
+                    setSelectedMainGeographyResult(null);
+                  }}
                   style={secondaryButton}
                 >
                   Change selection

@@ -30,6 +30,13 @@ type GeographyPlaceResult = {
   feature_code: string;
   population: number;
   admin_name: string;
+  admin_context?: {
+    level: number;
+    name: string;
+    code: string;
+    external_id: string;
+    iso_code: string;
+  }[];
   external_source?: string;
   external_id?: string;
   existing_place_id: number | null;
@@ -73,6 +80,31 @@ type ExternalGeographicDetail = {
     short_name: string;
   }[];
 };
+
+function getGeographicAdminLabel(result: GeographyPlaceResult): string {
+  const entries = [...(result.admin_context || [])]
+    .filter((entry) => entry.name?.trim())
+    .sort((a, b) => a.level - b.level);
+
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of entries) {
+    const name = entry.name.trim();
+    const key = name.toLocaleLowerCase();
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      names.push(name);
+    }
+  }
+
+  if (names.length > 0) {
+    return names.join(" · ");
+  }
+
+  return result.admin_name?.trim() || "";
+}
 
 function getGeographicTypeLabel(geographicType: string) {
   const labels: Record<string, string> = {
@@ -2348,8 +2380,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                           }}
                         >
                           {getGeographicTypeLabel(result.geographic_type)}
-                          {result.admin_name
-                            ? ` · ${result.admin_name}`
+                          {getGeographicAdminLabel(result)
+                            ? ` · ${getGeographicAdminLabel(result)}`
                             : ""}
                           {country ? ` · ${country}` : ""}
                         </div>
@@ -2407,8 +2439,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                         }}
                       >
                         {getGeographicTypeLabel(result.geographic_type)}
-                        {result.admin_name
-                          ? ` · ${result.admin_name}`
+                        {getGeographicAdminLabel(result)
+                          ? ` · ${getGeographicAdminLabel(result)}`
                           : ""}
                         {country ? ` · ${country}` : ""}
                       </div>

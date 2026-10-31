@@ -1834,6 +1834,58 @@ def find_candidate_city_reference_places(
     ]
 
 
+
+def merge_compatible_admin_context(place, incoming_context):
+    """Merge administrative evidence without overwriting known conflicts."""
+    existing_context = place.admin_context or []
+    incoming_context = incoming_context or []
+
+    merged = [dict(entry) for entry in existing_context]
+    by_level = {
+        entry.get("level"): entry
+        for entry in merged
+        if entry.get("level") is not None
+    }
+
+    for incoming in incoming_context:
+        level = incoming.get("level")
+
+        if level is None:
+            continue
+
+        existing = by_level.get(level)
+
+        if existing is None:
+            added = dict(incoming)
+            merged.append(added)
+            by_level[level] = added
+            continue
+
+        for field in ("name", "code", "external_id", "iso_code"):
+            old_value = str(existing.get(field) or "").strip()
+            new_value = str(incoming.get(field) or "").strip()
+
+            if old_value and new_value:
+                if field == "name":
+                    conflicting = (
+                        normalize_place_text(old_value)
+                        != normalize_place_text(new_value)
+                    )
+                else:
+                    conflicting = old_value.casefold() != new_value.casefold()
+
+                if conflicting:
+                    raise GeographicContextConflict(
+                        place,
+                        f"admin_context_{level}_{field}",
+                    )
+
+            if not old_value and new_value:
+                existing[field] = incoming[field]
+
+    return merged
+
+
 def enrich_existing_city_place(
     existing_place,
     city_result,
@@ -1924,6 +1976,10 @@ def enrich_existing_city_place(
         locked_place.geographic_type = (
             city_result.get("geographic_type") or ""
         ).strip()
+        locked_place.admin_context = merge_compatible_admin_context(
+            locked_place,
+            city_result.get("admin_context"),
+        )
         locked_place.latitude = (
             city_result.get("latitude") or None
         )
@@ -1942,6 +1998,7 @@ def enrich_existing_city_place(
                 "canonical_name",
                 "aliases",
                 "geographic_type",
+                "admin_context",
                 "latitude",
                 "longitude",
                 "city",
@@ -2150,6 +2207,7 @@ def create_city_place(
                 geographic_type=(
                     city_result.get("geographic_type") or ""
                 ).strip(),
+                admin_context=city_result.get("admin_context") or [],
                 city=city_result["canonical_name"],
                 latitude=city_result.get("latitude") or None,
                 longitude=city_result.get("longitude") or None,

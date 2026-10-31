@@ -408,6 +408,10 @@ class Place(models.Model):
         blank=True,
     )
 
+    # Administrative context from verified geographic reference evidence.
+    # Supports disambiguation; does not establish geographic identity.
+    admin_context = models.JSONField(default=list, blank=True)
+
     city = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True)
     image_url = models.URLField(blank=True)

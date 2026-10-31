@@ -14,6 +14,19 @@ def normalize_registry_discovery_result(place):
     Normalize a materialized Trust Travel Place for discovery without
     representing the registry itself as an external provider.
     """
+    admin_context = list(place.admin_context or [])
+    admin_name = next(
+        (
+            str(entry.get("name") or "").strip()
+            for entry in admin_context
+            if (
+                entry.get("level") == 1
+                and str(entry.get("name") or "").strip()
+            )
+        ),
+        "",
+    )
+
     return {
         "name": place.name,
         "canonical_name": place.canonical_name,
@@ -25,8 +38,8 @@ def normalize_registry_discovery_result(place):
         "feature_code": "",
         "geographic_type": place.geographic_type or "",
         "population": 0,
-        "admin_name": "",
-        "admin_context": [],
+        "admin_name": admin_name,
+        "admin_context": admin_context,
         "place_type": place.place_type,
         "existing_place_id": place.id,
     }

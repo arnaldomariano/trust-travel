@@ -2834,6 +2834,48 @@ class GeographicPlaceReconciliationTests(TestCase):
             geographic_type="lake",
         )
 
+    def test_city_creation_preserves_administrative_context(self):
+        from .geography.services import create_city_place
+
+        context = [
+            {
+                "level": 1,
+                "name": "Lombardy",
+                "code": "09",
+                "external_id": "",
+                "iso_code": "IT-25",
+            },
+            {
+                "level": 2,
+                "name": "Como",
+                "code": "CO",
+                "external_id": "",
+                "iso_code": "",
+            },
+        ]
+
+        place, created = create_city_place(
+            city_result={
+                "name": "Test City",
+                "canonical_name": "Test City",
+                "aliases": [],
+                "country_code": "IT",
+                "geographic_type": "settlement",
+                "external_source": "geonames",
+                "external_id": "geo05c-test-city",
+                "admin_name": "Lombardy",
+                "admin_context": context,
+            },
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+            user=None,
+        )
+
+        self.assertTrue(created)
+        place.refresh_from_db()
+        self.assertEqual(place.admin_context, context)
+
     def test_country_ancestor_rejects_distinct_country_identity(self):
         from .geography.services import (
             GeographicContextConflict,
@@ -4348,6 +4390,349 @@ class GeographicPlaceReconciliationTests(TestCase):
             resolved_country=self.country,
             country_code="IT",
         )
+
+    def test_city_enrichment_rolls_back_on_admin_conflict(self):
+        from decimal import Decimal
+        from .geography.services import (
+            GeographicContextConflict,
+            enrich_existing_city_place,
+        )
+
+        original_context = [
+            {
+                "level": 1,
+                "name": "Illinois",
+                "code": "IL",
+                "external_id": "",
+                "iso_code": "US-IL",
+            },
+        ]
+
+        self.lake.admin_context = original_context
+        self.lake.save(update_fields=["admin_context"])
+
+        original_canonical_name = self.lake.canonical_name
+        original_latitude = self.lake.latitude
+
+        with self.assertRaises(GeographicContextConflict):
+            enrich_existing_city_place(
+                existing_place=self.lake,
+                city_result={
+                    "name": "Lake Como",
+                    "canonical_name": "Changed Lake Name",
+                    "aliases": ["Conflicting Alias"],
+                    "country_code": "IT",
+                    "geographic_type": "lake",
+                    "external_source": "geonames",
+                    "external_id": "3178228",
+                    "admin_context": [
+                        {
+                            "level": 1,
+                            "name": "Massachusetts",
+                            "code": "MA",
+                            "external_id": "",
+                            "iso_code": "US-MA",
+                        },
+                    ],
+                    "latitude": 40.0,
+                    "longitude": 9.257168,
+                },
+                resolved_country=self.country,
+                country_code="IT",
+                country_place=self.country_place,
+            )
+
+        self.lake.refresh_from_db()
+
+        self.assertEqual(self.lake.admin_context, original_context)
+        self.assertEqual(
+            self.lake.canonical_name,
+            original_canonical_name,
+        )
+        self.assertEqual(
+            Decimal(str(self.lake.latitude)),
+            Decimal(str(original_latitude)),
+        )
+        self.assertNotIn("Conflicting Alias", self.lake.aliases or [])
+
+    def test_registry_discovery_preserves_admin_context(self):
+        from .geography.registry import normalize_registry_discovery_result
+
+        context = [
+            {
+                "level": 1,
+                "name": "Lombardy",
+                "code": "09",
+                "external_id": "",
+                "iso_code": "IT-25",
+            },
+            {
+                "level": 2,
+                "name": "Como",
+                "code": "CO",
+                "external_id": "",
+                "iso_code": "",
+            },
+        ]
+
+        self.lake.admin_context = context
+        self.lake.save(update_fields=["admin_context"])
+
+        result = normalize_registry_discovery_result(self.lake)
+
+        self.assertEqual(result["admin_context"], context)
+        self.assertEqual(result["admin_name"], "Lombardy")
+        self.assertEqual(
+            result["existing_place_id"],
+            self.lake.pk,
+        )
+
+    def test_admin_context_merge_accepts_compatible_provider_evidence(self):
+        from .geography.providers.geonames import (
+            normalize_geographic_result,
+        )
+        from .geography.providers.google_places import (
+            normalize_google_discovery_result,
+        )
+        from .geography.services import merge_compatible_admin_context
+
+        geonames = normalize_geographic_result(
+            {
+                "geonameId": 123456,
+                "name": "Test City",
+                "toponymName": "Test City",
+                "countryCode": "BR",
+                "fcl": "P",
+                "fcode": "PPL",
+                "adminName1": "São Paulo",
+                "adminCode1": "27",
+                "adminId1": "3448433",
+                "adminCodes1": {"ISO3166_2": "SP"},
+            }
+        )
+
+        google = normalize_google_discovery_result(
+            {
+                "id": "google-test-city",
+                "displayName": {"text": "Test City"},
+                "types": ["locality", "political"],
+                "addressComponents": [
+                    {
+                        "longText": "São Paulo",
+                        "shortText": "SP",
+                        "types": ["administrative_area_level_1", "political"],
+                    },
+                    {
+                        "longText": "Brazil",
+                        "shortText": "BR",
+                        "types": ["country", "political"],
+                    },
+                ],
+            }
+        )
+
+        self.assertIsNotNone(google)
+        self.lake.admin_context = geonames["admin_context"]
+
+        merged = merge_compatible_admin_context(
+            self.lake,
+            google["admin_context"],
+        )
+
+        self.assertEqual(merged, geonames["admin_context"])
+        self.assertEqual(merged[0]["name"], "São Paulo")
+        self.assertEqual(merged[0]["code"], "27")
+        self.assertEqual(merged[0]["external_id"], "3448433")
+        self.assertEqual(merged[0]["iso_code"], "SP")
+
+    def test_admin_context_merge_rejects_conflicting_codes(self):
+        from .geography.services import (
+            GeographicContextConflict,
+            merge_compatible_admin_context,
+        )
+
+        original_context = [
+            {
+                "level": 1,
+                "name": "Springfield Region",
+                "code": "IL",
+                "external_id": "",
+                "iso_code": "US-IL",
+            },
+        ]
+
+        self.lake.admin_context = original_context
+        self.lake.save(update_fields=["admin_context"])
+
+        incoming_context = [
+            {
+                "level": 1,
+                "name": "Springfield Region",
+                "code": "MA",
+                "external_id": "",
+                "iso_code": "US-MA",
+            },
+        ]
+
+        with self.assertRaises(GeographicContextConflict) as raised:
+            merge_compatible_admin_context(
+                self.lake,
+                incoming_context,
+            )
+
+        self.assertEqual(
+            raised.exception.reason,
+            "admin_context_1_code",
+        )
+
+        self.lake.refresh_from_db()
+        self.assertEqual(self.lake.admin_context, original_context)
+
+    def test_admin_context_merge_rejects_conflicting_states(self):
+        from .geography.services import (
+            GeographicContextConflict,
+            merge_compatible_admin_context,
+        )
+
+        original_context = [
+            {
+                "level": 1,
+                "name": "Illinois",
+                "code": "IL",
+                "external_id": "",
+                "iso_code": "US-IL",
+            },
+        ]
+
+        self.lake.admin_context = original_context
+        self.lake.save(update_fields=["admin_context"])
+
+        incoming_context = [
+            {
+                "level": 1,
+                "name": "Massachusetts",
+                "code": "MA",
+                "external_id": "",
+                "iso_code": "US-MA",
+            },
+        ]
+
+        with self.assertRaises(GeographicContextConflict) as raised:
+            merge_compatible_admin_context(
+                self.lake,
+                incoming_context,
+            )
+
+        self.assertEqual(
+            raised.exception.reason,
+            "admin_context_1_name",
+        )
+
+        self.lake.refresh_from_db()
+        self.assertEqual(self.lake.admin_context, original_context)
+
+    def test_city_enrichment_adds_compatible_admin_context(self):
+        from .geography.services import enrich_existing_city_place
+
+        original_context = [
+            {
+                "level": 1,
+                "name": "Lombardy",
+                "code": "09",
+                "external_id": "",
+                "iso_code": "IT-25",
+            },
+        ]
+
+        additional_context = [
+            {
+                "level": 1,
+                "name": "Lombardy",
+                "code": "",
+                "external_id": "",
+                "iso_code": "",
+            },
+            {
+                "level": 2,
+                "name": "Como",
+                "code": "",
+                "external_id": "",
+                "iso_code": "",
+            },
+        ]
+
+        self.lake.admin_context = original_context
+        self.lake.save(update_fields=["admin_context"])
+
+        enrich_existing_city_place(
+            existing_place=self.lake,
+            city_result={
+                "name": "Lake Como",
+                "canonical_name": "Lake Como",
+                "aliases": [],
+                "country_code": "IT",
+                "geographic_type": "lake",
+                "external_source": "geonames",
+                "external_id": "3178228",
+                "admin_context": additional_context,
+                "latitude": 46.016049,
+                "longitude": 9.257168,
+            },
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+        )
+
+        self.lake.refresh_from_db()
+
+        self.assertEqual(
+            self.lake.admin_context,
+            [
+                original_context[0],
+                additional_context[1],
+            ],
+        )
+
+    def test_city_enrichment_preserves_admin_context_when_new_evidence_is_empty(
+        self,
+    ):
+        from .geography.services import enrich_existing_city_place
+
+        original_context = [
+            {
+                "level": 1,
+                "name": "Lombardy",
+                "code": "09",
+                "external_id": "",
+                "iso_code": "IT-25",
+            },
+        ]
+
+        self.lake.admin_context = original_context
+        self.lake.save(update_fields=["admin_context"])
+
+        result = enrich_existing_city_place(
+            existing_place=self.lake,
+            city_result={
+                "name": "Lake Como",
+                "canonical_name": "Lake Como",
+                "aliases": [],
+                "country_code": "IT",
+                "geographic_type": "lake",
+                "external_source": "geonames",
+                "external_id": "3178228",
+                "admin_context": [],
+                "latitude": 46.016049,
+                "longitude": 9.257168,
+            },
+            resolved_country=self.country,
+            country_code="IT",
+            country_place=self.country_place,
+        )
+
+        self.assertEqual(result.pk, self.lake.pk)
+        self.lake.refresh_from_db()
+        self.assertEqual(self.lake.admin_context, original_context)
 
     def test_city_enrichment_updates_place_that_already_owns_identity(
         self,

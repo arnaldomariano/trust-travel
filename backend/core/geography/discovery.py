@@ -502,6 +502,22 @@ def annotate_discovery_presentation_actionability(candidates):
             can_open = False
 
         presented_candidate["can_open"] = can_open
+
+        external_source = str(
+            candidate.get("external_source") or ""
+        ).strip()
+        external_id = str(
+            candidate.get("external_id") or ""
+        ).strip()
+
+        presented_candidate["can_explore"] = bool(
+            candidate.get("existing_place_id")
+            or (
+                external_source in {"geonames", "google_places"}
+                and external_id
+            )
+        )
+
         presented_candidates.append(presented_candidate)
 
     return presented_candidates

@@ -217,7 +217,11 @@ def normalize_google_geographic_result(item):
     return result
 
 
-def get_google_geographic_place(external_id):
+def _get_google_geographic_place_reference(
+    external_id,
+    *,
+    require_supported_type=True,
+):
     external_id = str(external_id or "").strip()
 
     if not external_id:
@@ -278,16 +282,35 @@ def get_google_geographic_place(external_id):
             "Google Places geographic lookup failed."
         ) from error
 
-    normalized = normalize_google_geographic_result(
+    normalized = normalize_google_discovery_result(
         payload
     )
 
-    if not normalized:
+    if not normalized or (
+        require_supported_type
+        and not normalized.get("geographic_type")
+    ):
         raise GooglePlacesRequestError(
             "Google Places result is not a supported geographic place."
         )
 
+    normalized.pop("provider_types", None)
     return normalized
+
+
+
+def get_google_geographic_place(external_id):
+    return _get_google_geographic_place_reference(
+        external_id,
+        require_supported_type=True,
+    )
+
+
+def get_google_geographic_place_for_exploration(external_id):
+    return _get_google_geographic_place_reference(
+        external_id,
+        require_supported_type=False,
+    )
 
 
 def _request_google_places_text_search(

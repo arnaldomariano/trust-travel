@@ -287,7 +287,11 @@ def get_city(external_id):
     return normalized
 
 
-def get_geographic_place(external_id):
+def _get_geographic_place_reference(
+    external_id,
+    *,
+    require_supported_type=True,
+):
     external_id = str(external_id or "").strip()
 
     if not external_id:
@@ -339,14 +343,33 @@ def get_geographic_place(external_id):
     if (
         not normalized["external_id"]
         or not normalized["name"]
-        or normalized["geographic_type"]
-        not in TRAVEL_GEOGRAPHIC_TYPES
+        or (
+            require_supported_type
+            and normalized["geographic_type"]
+            not in TRAVEL_GEOGRAPHIC_TYPES
+        )
     ):
         raise GeoNamesRequestError(
             "GeoNames result is not a supported geographic place."
         )
 
     return normalized
+
+
+def get_geographic_place(external_id):
+    """Retrieve a reference under the existing supported-type policy."""
+    return _get_geographic_place_reference(
+        external_id,
+        require_supported_type=True,
+    )
+
+
+def get_geographic_place_for_exploration(external_id):
+    """Read an external reference without materialization-type restrictions."""
+    return _get_geographic_place_reference(
+        external_id,
+        require_supported_type=False,
+    )
 
 
 def search_cities(query, country_code, max_rows=8):

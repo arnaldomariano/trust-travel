@@ -34,6 +34,7 @@ type GeographyPlaceResult = {
   external_id?: string;
   existing_place_id: number | null;
   can_open: boolean;
+  can_explore: boolean;
 };
 
 type ExternalGeographicDetail = {
@@ -1590,7 +1591,11 @@ const createSpecificPlaceForFlow = async () => {
   const handleSelectMainGeographyResult = async (
     result: GeographyPlaceResult
   ) => {
-    if (!result.can_open) {
+    const canSelect = isExperienceMode || isUpdateMode
+      ? result.can_open
+      : result.can_explore;
+
+    if (!canSelect) {
       return;
     }
 
@@ -1612,13 +1617,12 @@ const createSpecificPlaceForFlow = async () => {
     }
 
     if (!isExperienceMode && !isUpdateMode) {
-      setSelectedMainGeographyResult(result);
-      setMainGeographySearchError("");
+      const params = new URLSearchParams({
+        source: result.external_source,
+        id: result.external_id,
+      });
 
-      void loadExternalGeographicDetail(
-        result.external_source,
-        result.external_id
-      );
+      router.push(`/explore/geographic?${params.toString()}`);
       return;
     }
 
@@ -2318,7 +2322,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                     ? `place-${result.existing_place_id}`
                     : `${result.external_source}-${result.external_id}`;
 
-                  if (!result.can_open) {
+                  const canSelect = isExperienceMode || isUpdateMode
+                    ? result.can_open
+                    : result.can_explore;
+
+                  if (!canSelect) {
                     return (
                       <div
                         key={resultKey}

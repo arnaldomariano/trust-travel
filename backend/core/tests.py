@@ -1547,7 +1547,7 @@ class GeographicCityMaterializationAPITests(TestCase):
 
 
 class GeographicPlaceExternalDetailAPITests(TestCase):
-    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.views.get_geographic_place_for_exploration")
     def test_public_geonames_detail_does_not_materialize_place(
         self,
         mock_reconstruct,
@@ -1579,8 +1579,7 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
         self.assertEqual(response.json(), reference)
 
         mock_reconstruct.assert_called_once_with(
-            external_source="geonames",
-            external_id="12345",
+            "12345",
         )
 
         self.assertEqual(Place.objects.count(), places_before)
@@ -1590,7 +1589,7 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
         )
 
 
-    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.views.get_google_geographic_place_for_exploration")
     def test_public_google_detail_does_not_materialize_place(
         self,
         mock_reconstruct,
@@ -1624,8 +1623,7 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
         self.assertEqual(response.json(), reference)
 
         mock_reconstruct.assert_called_once_with(
-            external_source="google_places",
-            external_id="google-example-123",
+            "google-example-123",
         )
 
         self.assertEqual(Place.objects.count(), places_before)
@@ -1642,12 +1640,12 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
             (
                 "geonames",
                 "12345",
-                "core.geography.services.get_geographic_place",
+                "core.views.get_geographic_place_for_exploration",
             ),
             (
                 "google_places",
                 "google-example-123",
-                "core.geography.services.get_google_geographic_place",
+                "core.views.get_google_geographic_place_for_exploration",
             ),
         ]
 
@@ -1746,8 +1744,14 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
                 external_source=external_source,
                 error=error_class.__name__,
             ):
+                provider_path = (
+                    "core.views.get_geographic_place_for_exploration"
+                    if external_source == "geonames"
+                    else "core.views.get_google_geographic_place_for_exploration"
+                )
+
                 with patch(
-                    "core.views.reconstruct_external_geographic_reference",
+                    provider_path,
                     side_effect=error_class("Provider unavailable"),
                 ) as mock_reconstruct:
                     response = self.client.get(
@@ -1759,12 +1763,9 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
                     )
 
                 self.assertEqual(response.status_code, 503)
-                mock_reconstruct.assert_called_once_with(
-                    external_source=external_source,
-                    external_id="example-123",
-                )
+                mock_reconstruct.assert_called_once_with("example-123")
 
-    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.views.get_google_geographic_place_for_exploration")
     def test_external_detail_returns_404_for_google_missing_reference(
         self,
         mock_reconstruct,
@@ -1791,10 +1792,7 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-        mock_reconstruct.assert_called_once_with(
-            external_source="google_places",
-            external_id="missing-place",
-        )
+        mock_reconstruct.assert_called_once_with("missing-place")
 
         self.assertEqual(
             Place.objects.count(),
@@ -1805,7 +1803,7 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
             identities_before,
         )
 
-    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.views.get_geographic_place_for_exploration")
     def test_external_detail_returns_404_for_geonames_missing_reference(
         self,
         mock_reconstruct,
@@ -1833,8 +1831,7 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
         self.assertEqual(response.status_code, 404)
 
         mock_reconstruct.assert_called_once_with(
-            external_source="geonames",
-            external_id="999999999",
+            "999999999",
         )
 
         self.assertEqual(Place.objects.count(), places_before)
@@ -1843,7 +1840,7 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
             identities_before,
         )
 
-    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.views.get_geographic_place_for_exploration")
     def test_external_detail_returns_404_for_missing_reference(
         self,
         mock_reconstruct,
@@ -1860,8 +1857,7 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         mock_reconstruct.assert_called_once_with(
-            external_source="geonames",
-            external_id="missing-123",
+            "missing-123",
         )
 
 
@@ -5792,6 +5788,54 @@ class GooglePlacesDiscoveryTests(TestCase):
             results[0]["geographic_type"]
         )
 
+    def test_unclassified_google_place_can_be_read_for_exploration(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers import google_places
+
+        payload = {
+            "id": "google-chapada-diamantina",
+            "displayName": {"text": "Chapada Diamantina"},
+            "types": ["natural_feature", "establishment"],
+            "primaryType": "natural_feature",
+            "formattedAddress": "Chapada Diamantina, Bahia, Brazil",
+            "location": {
+                "latitude": -12.8801668,
+                "longitude": -41.3721853,
+            },
+            "addressComponents": [
+                {
+                    "types": ["country"],
+                    "longText": "Brazil",
+                    "shortText": "BR",
+                },
+            ],
+        }
+
+        with patch.object(
+            google_places,
+            "get_google_places_api_key",
+            return_value="test-key",
+        ), patch.object(
+            google_places,
+            "urlopen",
+            return_value=io.BytesIO(json.dumps(payload).encode("utf-8")),
+        ):
+            result = google_places.get_google_geographic_place_for_exploration(
+                "google-chapada-diamantina"
+            )
+
+        self.assertEqual(result["external_source"], "google_places")
+        self.assertEqual(result["external_id"], "google-chapada-diamantina")
+        self.assertEqual(result["canonical_name"], "Chapada Diamantina")
+        self.assertEqual(result["country_code"], "BR")
+        self.assertIsNone(result["geographic_type"])
+        self.assertFalse(
+            google_places.geographic_result_can_materialize(result)
+        )
+
     def test_google_place_details_distinguishes_missing_reference(self):
         import io
         import json
@@ -6390,6 +6434,43 @@ class GeoNamesDiscoveryTests(TestCase):
 
         self.assertEqual(results, [])
 
+
+class GeoNamesExplorationDetailTests(TestCase):
+    def test_non_materializable_park_can_be_read_for_exploration(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        from .geography.providers import geonames
+
+        payload = {
+            "geonameId": 3464726,
+            "name": "Chapada Diamantina",
+            "toponymName": "Chapada Diamantina",
+            "countryCode": "BR",
+            "fcl": "L",
+            "fcode": "PRK",
+            "lat": "-12.8",
+            "lng": "-41.4",
+        }
+
+        response = io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+        with patch.object(
+            geonames, "get_geonames_username", return_value="test"
+        ), patch.object(
+            geonames, "urlopen", return_value=response
+        ):
+            result = geonames.get_geographic_place_for_exploration(
+                "3464726"
+            )
+
+        self.assertEqual(result["external_id"], "3464726")
+        self.assertEqual(result["canonical_name"], "Chapada Diamantina")
+        self.assertEqual(result["geographic_type"], "park")
+        self.assertFalse(
+            geonames.geographic_result_can_materialize(result)
+        )
 
 class GeoNamesReferenceNotFoundTests(TestCase):
     def test_geographic_lookup_distinguishes_missing_reference(self):
@@ -7337,6 +7418,7 @@ class GeographicDiscoveryInterpretedSearchTests(TestCase):
                 {
                     **registry_candidate,
                     "can_open": True,
+                    "can_explore": True,
                 },
             ],
         )
@@ -7509,6 +7591,61 @@ class GeographicDiscoveryInterpretedSearchTests(TestCase):
             result["refined_candidates"][0],
             park_candidate,
         )
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_unsupported_geonames_type_remains_explorable(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        candidate = {
+            "name": "Parque Estoril",
+            "canonical_name": "Parque Estoril",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "park",
+            "external_source": "geonames",
+            "external_id": "13015945",
+            "existing_place_id": None,
+        }
+        mock_search_global_discovery_places.return_value = [candidate]
+
+        result = search_interpreted_global_discovery_places("Parque Estoril")
+        presented = result["refined_candidates"][0]
+
+        self.assertFalse(presented["can_open"])
+        self.assertTrue(presented["can_explore"])
+        self.assertNotIn("can_explore", candidate)
+
+    @patch("core.geography.discovery.search_global_discovery_places")
+    def test_external_reference_without_id_cannot_be_explored(
+        self,
+        mock_search_global_discovery_places,
+    ):
+        from .geography.discovery import (
+            search_interpreted_global_discovery_places,
+        )
+
+        candidate = {
+            "name": "Unnamed reference",
+            "canonical_name": "Unnamed reference",
+            "aliases": [],
+            "country_code": "BR",
+            "geographic_type": "park",
+            "external_source": "geonames",
+            "external_id": "",
+            "existing_place_id": None,
+        }
+        mock_search_global_discovery_places.return_value = [candidate]
+
+        result = search_interpreted_global_discovery_places("Unnamed reference")
+        presented = result["refined_candidates"][0]
+
+        self.assertFalse(presented["can_explore"])
+        self.assertFalse(presented["can_open"])
 
     @patch("core.geography.discovery.search_global_discovery_places")
     def test_interpreted_search_marks_supported_geonames_result_as_openable(
@@ -8675,6 +8812,7 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
                 {
                     **portugal_candidate,
                     "can_open": False,
+                    "can_explore": False,
                 },
             ],
         )
@@ -8822,10 +8960,12 @@ class GeographicDiscoveryRefinementApplicationTests(TestCase):
                 {
                     **candidates[0],
                     "can_open": False,
+                    "can_explore": False,
                 },
                 {
                     **candidates[1],
                     "can_open": False,
+                    "can_explore": False,
                 },
             ],
         )

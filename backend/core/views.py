@@ -1,3 +1,5 @@
+from core.geography.providers.geonames import get_geographic_place_for_exploration
+from core.geography.providers.google_places import get_google_geographic_place_for_exploration
 
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -1767,10 +1769,14 @@ class GeographyPlaceExternalDetailView(APIView):
             )
 
         try:
-            reference = reconstruct_external_geographic_reference(
-                external_source=external_source,
-                external_id=external_id,
-            )
+            if external_source == "geonames":
+                reference = get_geographic_place_for_exploration(
+                    external_id
+                )
+            else:
+                reference = get_google_geographic_place_for_exploration(
+                    external_id
+                )
         except (
             GeoNamesConfigurationError,
             GooglePlacesConfigurationError,

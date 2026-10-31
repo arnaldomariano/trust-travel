@@ -5044,6 +5044,30 @@ class GeographicPlaceReconciliationTests(TestCase):
             self.lake.pk,
         )
 
+    def test_deduplication_prefers_registry_candidate_regardless_of_order(self):
+        from .geography.services import (
+            deduplicate_geographic_results_by_existing_place,
+        )
+
+        provider_candidate = {
+            "name": "Lake Como",
+            "external_source": "geonames",
+            "external_id": "3178228",
+            "existing_place_id": self.lake.pk,
+        }
+
+        registry_candidate = {
+            "name": "Lago di Como",
+            "place_type": "city",
+            "existing_place_id": self.lake.pk,
+        }
+
+        results = deduplicate_geographic_results_by_existing_place(
+            [provider_candidate, registry_candidate]
+        )
+
+        self.assertEqual(results, [registry_candidate])
+
     def test_deduplication_keeps_unresolved_provider_results_separate(self):
         from .geography.services import (
             deduplicate_geographic_results_by_existing_place,

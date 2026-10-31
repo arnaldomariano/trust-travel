@@ -1551,32 +1551,50 @@ def annotate_existing_geographic_places(
     return results
 
 
-def deduplicate_geographic_results_by_existing_place(
-    results,
-):
-    # Different providers may return separate records for a geographic place
-    # that Trust Travel has already reconciled into one internal Place.
-    # Collapse only results with the same known Place ID; unresolved provider
-    # results remain separate so similarly named places are never merged here.
+def deduplicate_geographic_results_by_existing_place(results):
+    """
+    Collapse candidates only when they share a known internal Place ID.
+
+    Prefer the Trust Travel registry representation regardless of candidate
+    order, preserving the first position assigned to that Place ID.
+
+    Unresolved external references remain separate. Matching names,
+    countries, or coordinates do not establish identity.
+    """
     deduplicated_results = []
-    seen_existing_place_ids = set()
+    positions_by_existing_place_id = {}
 
     for result in results:
-        existing_place_id = result.get(
-            "existing_place_id"
-        )
+        existing_place_id = result.get("existing_place_id")
 
         if existing_place_id is None:
             deduplicated_results.append(result)
             continue
 
-        if existing_place_id in seen_existing_place_ids:
-            continue
-
-        seen_existing_place_ids.add(
+        position = positions_by_existing_place_id.get(
             existing_place_id
         )
-        deduplicated_results.append(result)
+
+        if position is None:
+            positions_by_existing_place_id[
+                existing_place_id
+            ] = len(deduplicated_results)
+            deduplicated_results.append(result)
+            continue
+
+        current_result = deduplicated_results[position]
+
+        current_is_registry = (
+            current_result.get("place_type") is not None
+            and not current_result.get("external_source")
+        )
+        new_is_registry = (
+            result.get("place_type") is not None
+            and not result.get("external_source")
+        )
+
+        if new_is_registry and not current_is_registry:
+            deduplicated_results[position] = result
 
     return deduplicated_results
 

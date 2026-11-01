@@ -2206,7 +2206,7 @@ class ExternalGeographicReferenceCommitResolutionTests(TestCase):
             "evaluations": [],
         }
         mock_create_city.return_value = (
-            SimpleNamespace(pk=123, country_code="FR"),
+            SimpleNamespace(pk=123, country_code="FR", place_type="city"),
             False,
         )
 
@@ -2596,6 +2596,7 @@ class ExternalGeographicReferenceCommitResolutionTests(TestCase):
             country_code="IT",
             country_ref_id=None,
             destination_id=10,
+            place_type="city",
         )
         user = object()
 
@@ -2678,6 +2679,7 @@ class ExternalGeographicReferenceCommitResolutionTests(TestCase):
         winning_place = SimpleNamespace(
             pk=123,
             country_code="FR",
+            place_type="city",
         )
 
         mock_country_catalog.return_value = country_entry
@@ -2912,6 +2914,59 @@ class GeographicPlaceReconciliationTests(TestCase):
             caught.exception.reason,
             "country_ancestor",
         )
+
+    def test_city_creation_rejects_identity_owned_by_non_city_place(self):
+        from .geography.services import (
+            GeographicContextConflict,
+            create_city_place,
+        )
+        from .models import Place, PlaceExternalIdentity
+
+        restaurant = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Example Restaurant",
+            canonical_name="Example Restaurant",
+            country_code="IT",
+            place_type="restaurant",
+            city="Como",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=restaurant,
+            external_source="geonames",
+            external_id="restaurant-identity-conflict",
+        )
+
+        original_place_count = Place.objects.count()
+        original_identity_count = PlaceExternalIdentity.objects.count()
+
+        with self.assertRaises(GeographicContextConflict):
+            create_city_place(
+                city_result={
+                    "name": "Example City",
+                    "canonical_name": "Example City",
+                    "aliases": [],
+                    "country_code": "IT",
+                    "geographic_type": "settlement",
+                    "external_source": "geonames",
+                    "external_id": "restaurant-identity-conflict",
+                },
+                resolved_country=self.country,
+                country_code="IT",
+                country_place=self.country_place,
+                user=None,
+            )
+
+        self.assertEqual(Place.objects.count(), original_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            original_identity_count,
+        )
+        restaurant.refresh_from_db()
+        self.assertEqual(restaurant.place_type, "restaurant")
+
 
     def test_city_creation_preserves_conflicting_identity_owner_after_integrity_error(
         self,
@@ -12718,6 +12773,163 @@ class ExternalExperienceCreationTests(TestCase):
             city="Breda",
         )
         self.url = "/api/experiences/"
+
+    @patch("core.views.Update.objects.create")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_geographic_materialization_rolls_back_with_feed_failure(
+        self,
+        reconstruct_external_reference,
+        create_update,
+    ):
+        from .models import (
+            Country,
+            Destination,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        external_id = "geo05d-rollback-city"
+
+        reconstruct_external_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": external_id,
+            "name": "GEO05D Rollback City",
+            "canonical_name": "GEO05D Rollback City",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+        }
+
+        original_counts = {
+            "countries": Country.objects.count(),
+            "destinations": Destination.objects.count(),
+            "places": Place.objects.count(),
+            "identities": PlaceExternalIdentity.objects.count(),
+            "experiences": Experience.objects.count(),
+            "updates": Update.objects.count(),
+        }
+
+        create_update.side_effect = RuntimeError(
+            "Simulated feed creation failure."
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "Simulated feed creation failure",
+        ):
+            self.client.post(
+                self.url,
+                data={
+                    "external_source": "geonames",
+                    "external_id": external_id,
+                    "title": "Visiting GEO05D Rollback City",
+                    "comment": "Testing geographic rollback.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+        self.assertEqual(Country.objects.count(), original_counts["countries"])
+        self.assertEqual(
+            Destination.objects.count(),
+            original_counts["destinations"],
+        )
+        self.assertEqual(Place.objects.count(), original_counts["places"])
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            original_counts["identities"],
+        )
+        self.assertEqual(
+            Experience.objects.count(),
+            original_counts["experiences"],
+        )
+        self.assertEqual(Update.objects.count(), original_counts["updates"])
+
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=external_id,
+            ).exists()
+        )
+        self.assertFalse(
+            Place.objects.filter(
+                canonical_name="GEO05D Rollback City",
+            ).exists()
+        )
+
+        reconstruct_external_reference.assert_called_once()
+        create_update.assert_called_once()
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_experience_materializes_city_at_publication(
+        self,
+        reconstruct_external_reference,
+    ):
+        from .models import Experience, Place, PlaceExternalIdentity
+
+        external_id = "geo05d-integration-city"
+
+        reconstruct_external_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": external_id,
+            "name": "GEO05D Test City",
+            "canonical_name": "GEO05D Test City",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+        }
+
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=external_id,
+            ).exists()
+        )
+        self.assertFalse(
+            Place.objects.filter(
+                canonical_name="GEO05D Test City",
+            ).exists()
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "geonames",
+                "external_id": external_id,
+                "title": "Visiting GEO05D Test City",
+                "comment": "A geographic integration test.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+        identity = PlaceExternalIdentity.objects.get(
+            external_source="geonames",
+            external_id=external_id,
+        )
+        city = identity.place
+
+        self.assertEqual(city.place_type, "city")
+        self.assertEqual(city.country_code, "NL")
+        self.assertEqual(city.canonical_name, "GEO05D Test City")
+        self.assertEqual(city.parent_place.place_type, "country")
+        self.assertEqual(city.parent_place.country_code, "NL")
+        self.assertEqual(city.destination_id, city.parent_place.destination_id)
+
+        experience = Experience.objects.get()
+        self.assertEqual(experience.place_id, city.id)
+        self.assertEqual(experience.user_id, self.user.id)
+
+        reconstruct_external_reference.assert_called_once_with(
+            external_source="geonames",
+            external_id=external_id,
+        )
 
     @patch("core.views.reconstruct_external_geographic_reference")
     def test_external_identity_country_conflict_returns_409_without_publication(

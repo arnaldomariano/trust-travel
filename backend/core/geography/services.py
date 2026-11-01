@@ -79,7 +79,13 @@ def assert_compatible_city_reuse_context(
     country_code,
     country_place,
 ):
-    """Reject city reuse when country or destination evidence conflicts."""
+    """Reject city reuse when type, country, or destination conflicts."""
+    if place.place_type != "city":
+        raise GeographicContextConflict(
+            place,
+            "place_type",
+        )
+
     assert_compatible_geographic_country(
         place,
         country_code,

@@ -12681,6 +12681,534 @@ class POIPlaceReconciliationTests(TestCase):
         self.assertEqual(self.city_place.country_code, "FR")
 
 
+
+class GeographyPOISearchAPITests(TestCase):
+    def setUp(self):
+        from .models import Destination, Place
+
+        self.country = get_or_create_country(value="Italy")
+        self.destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        self.country_place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            name="Italy",
+            canonical_name="Italy",
+            country_code="IT",
+            place_type="country",
+        )
+
+        self.city_place = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Rome",
+            canonical_name="Rome",
+            country_code="IT",
+            place_type="city",
+            geographic_type="settlement",
+            latitude="41.9028",
+            longitude="12.4964",
+        )
+
+        self.restaurant = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.city_place,
+            name="Bella Italia",
+            canonical_name="Bella Italia",
+            country_code="IT",
+            place_type="restaurant",
+        )
+
+    @patch("core.views.search_pois")
+    def test_search_existing_city_combines_results_without_persistence(
+        self,
+        mock_search_pois,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        mock_search_pois.return_value = [
+            {
+                "name": "Trattoria Italia",
+                "canonical_name": "Trattoria Italia",
+                "aliases": [],
+                "external_source": "foursquare",
+                "external_id": "trattoria-roma-external",
+                "country_code": "IT",
+                "latitude": 41.91,
+                "longitude": 12.50,
+            }
+        ]
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        from .geography.services import search_registry_poi_places
+
+        registry_results = search_registry_poi_places(
+            city_place=self.city_place,
+            place_type="restaurant",
+            query="Italia",
+        )
+        self.assertTrue(
+            any(
+                result.get("existing_place_id") == self.restaurant.id
+                for result in registry_results
+            ),
+            f"Registry search results: {registry_results!r}",
+        )
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "Italia",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["count"], len(data["results"]))
+
+        self.assertTrue(
+            any(
+                result.get("existing_place_id") == self.restaurant.id
+                for result in data["results"]
+            )
+        )
+        self.assertTrue(
+            any(
+                result.get("external_id") == "trattoria-roma-external"
+                for result in data["results"]
+            )
+        )
+
+        from decimal import Decimal
+
+        mock_search_pois.assert_called_once_with(
+            query="Italia",
+            latitude=Decimal("41.902800"),
+            longitude=Decimal("12.496400"),
+            radius=15000,
+            limit=10,
+            place_type="restaurant",
+        )
+
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+
+
+    @patch("core.views.search_pois")
+    def test_search_returns_registry_results_when_foursquare_fails(
+        self,
+        mock_search_pois,
+    ):
+        from .geography.providers.foursquare import FoursquareRequestError
+        from .models import Place, PlaceExternalIdentity
+
+        mock_search_pois.side_effect = FoursquareRequestError(
+            "Simulated provider failure"
+        )
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "Italia",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertEqual(
+            data["results"][0]["existing_place_id"],
+            self.restaurant.id,
+        )
+
+        mock_search_pois.assert_called_once()
+
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+
+
+    @patch("core.views.search_pois")
+    def test_search_returns_503_when_provider_fails_without_registry_results(
+        self,
+        mock_search_pois,
+    ):
+        from .geography.providers.foursquare import FoursquareRequestError
+        from .models import Place, PlaceExternalIdentity
+
+        mock_search_pois.side_effect = FoursquareRequestError(
+            "Simulated provider failure"
+        )
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "Nonexistent Restaurant",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.json()["detail"],
+            "POI search is temporarily unavailable.",
+        )
+
+        mock_search_pois.assert_called_once()
+
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+
+
+    @patch("core.views.search_pois")
+    def test_search_rejects_invalid_parameters_without_provider_calls(
+        self,
+        mock_search_pois,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        scenarios = [
+            (
+                "short query",
+                {
+                    "q": "I",
+                    "place_type": "restaurant",
+                    "city_place_id": self.city_place.id,
+                },
+                400,
+            ),
+            (
+                "invalid place type",
+                {
+                    "q": "Italia",
+                    "place_type": "invalid",
+                    "city_place_id": self.city_place.id,
+                },
+                400,
+            ),
+            (
+                "missing city identifier",
+                {
+                    "q": "Italia",
+                    "place_type": "restaurant",
+                },
+                400,
+            ),
+            (
+                "non-numeric city identifier",
+                {
+                    "q": "Italia",
+                    "place_type": "restaurant",
+                    "city_place_id": "invalid",
+                },
+                400,
+            ),
+            (
+                "unknown city identifier",
+                {
+                    "q": "Italia",
+                    "place_type": "restaurant",
+                    "city_place_id": 999999,
+                },
+                404,
+            ),
+        ]
+
+        for label, params, expected_status in scenarios:
+            with self.subTest(scenario=label):
+                response = self.client.get(
+                    "/api/geography/pois/search/",
+                    params,
+                )
+                self.assertEqual(response.status_code, expected_status)
+
+        mock_search_pois.assert_not_called()
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+
+
+    @patch("core.views.search_pois")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_search_external_city_without_materialization(
+        self,
+        mock_reconstruct,
+        mock_search_pois,
+    ):
+        from .models import (
+            Country,
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+        )
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": "geo05e-external-city",
+            "name": "GEO05E External City",
+            "canonical_name": "GEO05E External City",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5900,
+            "longitude": 4.7800,
+        }
+
+        mock_search_pois.return_value = [
+            {
+                "name": "GEO05E Restaurant",
+                "canonical_name": "GEO05E Restaurant",
+                "aliases": [],
+                "external_source": "foursquare",
+                "external_id": "geo05e-restaurant",
+                "country_code": "NL",
+                "latitude": 51.5910,
+                "longitude": 4.7810,
+            }
+        ]
+
+        original_counts = {
+            "countries": Country.objects.count(),
+            "destinations": Destination.objects.count(),
+            "places": Place.objects.count(),
+            "identities": PlaceExternalIdentity.objects.count(),
+        }
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "GEO05E Restaurant",
+                "place_type": "restaurant",
+                "external_source": "geonames",
+                "external_id": "geo05e-external-city",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(
+            data["results"][0]["external_id"],
+            "geo05e-restaurant",
+        )
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id="geo05e-external-city",
+        )
+
+        mock_search_pois.assert_called_once_with(
+            query="GEO05E Restaurant",
+            latitude=51.5900,
+            longitude=4.7800,
+            radius=15000,
+            limit=10,
+            place_type="restaurant",
+        )
+
+        self.assertEqual(Country.objects.count(), original_counts["countries"])
+        self.assertEqual(
+            Destination.objects.count(),
+            original_counts["destinations"],
+        )
+        self.assertEqual(Place.objects.count(), original_counts["places"])
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            original_counts["identities"],
+        )
+
+
+    @patch("core.views.search_pois")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_search_rejects_inconsistent_external_geographic_evidence(
+        self,
+        mock_reconstruct,
+        mock_search_pois,
+    ):
+        from .models import (
+            Country,
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+        )
+
+        valid_reference = {
+            "external_source": "geonames",
+            "external_id": "geo05e-external-city",
+            "name": "GEO05E External City",
+            "canonical_name": "GEO05E External City",
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5900,
+            "longitude": 4.7800,
+        }
+
+        scenarios = [
+            ("different provider", {"external_source": "google_places"}),
+            ("different identity", {"external_id": "another-city"}),
+            ("non-locality", {"geographic_type": "region"}),
+            ("unknown country", {"country_code": "ZZ"}),
+            ("missing latitude", {"latitude": None}),
+            ("invalid longitude", {"longitude": 181}),
+            ("non-finite latitude", {"latitude": float("nan")}),
+        ]
+
+        original_counts = (
+            Country.objects.count(),
+            Destination.objects.count(),
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+        )
+
+        for label, changes in scenarios:
+            with self.subTest(scenario=label):
+                mock_reconstruct.reset_mock()
+                mock_search_pois.reset_mock()
+                mock_reconstruct.return_value = {
+                    **valid_reference,
+                    **changes,
+                }
+
+                response = self.client.get(
+                    "/api/geography/pois/search/",
+                    {
+                        "q": "Restaurant",
+                        "place_type": "restaurant",
+                        "external_source": "geonames",
+                        "external_id": "geo05e-external-city",
+                    },
+                )
+
+                self.assertEqual(response.status_code, 400)
+                mock_reconstruct.assert_called_once_with(
+                    external_source="geonames",
+                    external_id="geo05e-external-city",
+                )
+                mock_search_pois.assert_not_called()
+
+                self.assertEqual(
+                    (
+                        Country.objects.count(),
+                        Destination.objects.count(),
+                        Place.objects.count(),
+                        PlaceExternalIdentity.objects.count(),
+                    ),
+                    original_counts,
+                )
+
+
+    @patch("core.views.search_pois")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_search_rejects_invalid_external_reference_parameters(
+        self,
+        mock_reconstruct,
+        mock_search_pois,
+    ):
+        from .models import (
+            Country,
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+        )
+
+        base_params = {
+            "q": "Restaurant",
+            "place_type": "restaurant",
+        }
+
+        scenarios = [
+            (
+                "unsupported provider",
+                {
+                    "external_source": "unsupported",
+                    "external_id": "external-city",
+                },
+            ),
+            (
+                "missing external identifier",
+                {
+                    "external_source": "geonames",
+                },
+            ),
+            (
+                "missing external provider",
+                {
+                    "external_id": "external-city",
+                },
+            ),
+            (
+                "mixed internal and external references",
+                {
+                    "city_place_id": str(self.city_place.id),
+                    "external_source": "geonames",
+                    "external_id": "external-city",
+                },
+            ),
+        ]
+
+        original_counts = (
+            Country.objects.count(),
+            Destination.objects.count(),
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+        )
+
+        for label, extra_params in scenarios:
+            with self.subTest(scenario=label):
+                response = self.client.get(
+                    "/api/geography/pois/search/",
+                    {**base_params, **extra_params},
+                )
+                self.assertEqual(response.status_code, 400)
+
+        mock_reconstruct.assert_not_called()
+        mock_search_pois.assert_not_called()
+
+        self.assertEqual(
+            (
+                Country.objects.count(),
+                Destination.objects.count(),
+                Place.objects.count(),
+                PlaceExternalIdentity.objects.count(),
+            ),
+            original_counts,
+        )
+
 class ExperienceCreationAtomicityTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User

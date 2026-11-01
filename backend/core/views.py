@@ -2442,6 +2442,16 @@ class GeographyPOISearchView(APIView):
                 request.query_params.get("city_place_id") or ""
         ).strip()
 
+        external_source = (
+            request.query_params.get("external_source") or ""
+        ).strip()
+
+        external_id = (
+            request.query_params.get("external_id") or ""
+        ).strip()
+
+        external_mode = bool(external_source or external_id)
+
         if len(query) < 2:
             return Response(
                 {
@@ -2470,7 +2480,124 @@ class GeographyPOISearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not city_place_id.isdigit():
+        if external_mode:
+            if city_place_id or external_source not in {
+                "geonames",
+                "google_places",
+            } or not external_id:
+                return Response(
+                    {"detail": "A valid external geographic reference is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                geographic_result = reconstruct_external_geographic_reference(
+                    external_source=external_source,
+                    external_id=external_id,
+                )
+            except (
+                GeoNamesConfigurationError,
+                GooglePlacesConfigurationError,
+                GeoNamesRequestError,
+                GooglePlacesRequestError,
+            ):
+                return Response(
+                    {"detail": "Geographic place lookup is unavailable."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            except (
+                GeoNamesReferenceNotFoundError,
+                GooglePlacesReferenceNotFoundError,
+                ValueError,
+            ):
+                return Response(
+                    {"detail": "Invalid external geographic reference."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if (
+                geographic_result.get("external_source") != external_source
+                or str(geographic_result.get("external_id") or "") != external_id
+                or geographic_result.get("geographic_type") != "settlement"
+            ):
+                return Response(
+                    {"detail": "A supported locality reference is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            country_code = str(
+                geographic_result.get("country_code") or ""
+            ).strip().upper()
+
+            if not resolve_country_catalog_entry(code=country_code):
+                return Response(
+                    {"detail": "A recognized country is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            latitude = geographic_result.get("latitude")
+            longitude = geographic_result.get("longitude")
+
+            try:
+                latitude = float(latitude)
+                longitude = float(longitude)
+            except (TypeError, ValueError, OverflowError):
+                return Response(
+                    {"detail": "Valid geographic coordinates are required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            from math import isfinite
+
+            if not (
+                isfinite(latitude)
+                and isfinite(longitude)
+                and -90 <= latitude <= 90
+                and -180 <= longitude <= 180
+            ):
+                return Response(
+                    {"detail": "Valid geographic coordinates are required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                results = search_pois(
+                    query=query,
+                    latitude=latitude,
+                    longitude=longitude,
+                    radius=15000,
+                    limit=10,
+                    place_type=place_type,
+                )
+            except FoursquareConfigurationError:
+                return Response(
+                    {"detail": "POI search is not configured."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            except FoursquareRequestError:
+                return Response(
+                    {"detail": "POI search is temporarily unavailable."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+            results = [
+                result
+                for result in results
+                if (
+                    not result.get("country_code")
+                    or str(result["country_code"]).strip().upper()
+                    == country_code
+                )
+            ]
+
+            results = rank_poi_search_results(results, query)
+
+            return Response({
+                "count": len(results),
+                "results": results,
+            })
+
+        if not external_mode and not city_place_id.isdigit():
             return Response(
                 {
                     "detail": (

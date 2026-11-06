@@ -181,8 +181,6 @@ export default function PlacePage() {
     "nature" | "restaurant" | "hotel" | "attraction" | "other"
   >("nature");
   const [externalSpecificPlaceResults, setExternalSpecificPlaceResults] = useState<any[]>([]);
-  const [materializingSpecificPlaceId, setMaterializingSpecificPlaceId] =
-    useState<string | null>(null);
   const [showSpecificPlaceTools, setShowSpecificPlaceTools] = useState(false);
 
   const [showCreateSpecificPlaceForm, setShowCreateSpecificPlaceForm] = useState(false);
@@ -1781,81 +1779,6 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         setSpecificPlaceSearchError("Could not search specific places right now.");
       } finally {
         setSpecificPlaceSearchLoading(false);
-      }
-    };
-
-    const handleMaterializeSpecificPlace = async (
-      externalPlace: any
-    ) => {
-      if (!place || place.place_type !== "city") return;
-
-      if (externalPlace.existing_place_id) {
-        router.push(
-          `/places/${externalPlace.existing_place_id}`
-        );
-        return;
-      }
-
-      if (!isLoggedIn) {
-        router.push(`/login?next=/places/${place.id}`);
-        return;
-      }
-
-      const externalId = String(
-        externalPlace.external_id || ""
-      ).trim();
-
-      if (!externalId) {
-        setSpecificPlaceSearchError(
-          "Could not identify this specific place."
-        );
-        return;
-      }
-
-      setMaterializingSpecificPlaceId(externalId);
-      setSpecificPlaceSearchError("");
-
-      try {
-        const res = await fetch(
-          `${API_URL}/api/geography/pois/materialize/`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              external_id: externalId,
-              place_type: specificPlaceType,
-              city_place_id: place.id,
-            }),
-          }
-        );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          console.error(
-            "Specific place materialization failed:",
-            data
-          );
-          setSpecificPlaceSearchError(
-            getPoiMaterializationError(res.status, data)
-          );
-          return;
-        }
-
-        router.push(`/places/${data.id}`);
-      } catch (error) {
-        console.error(
-          "Specific place materialization failed:",
-          error
-        );
-        setSpecificPlaceSearchError(
-          "Could not add this specific place."
-        );
-      } finally {
-        setMaterializingSpecificPlaceId(null);
       }
     };
 
@@ -4135,9 +4058,6 @@ const handleToggleEventsInfo = () => {
                           externalPlace.external_id || ""
                         );
 
-                        const isMaterializing =
-                          materializingSpecificPlaceId === externalId;
-
                         return (
                           <div
                             key={
@@ -4202,28 +4122,23 @@ const handleToggleEventsInfo = () => {
                                 View place
                               </Link>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleMaterializeSpecificPlace(
-                                    externalPlace
-                                  )
-                                }
-                                disabled={isMaterializing}
+                              <Link
+                                href={`/explore/poi?${new URLSearchParams({
+                                  source: "foursquare",
+                                  id: externalId,
+                                  poi_type: specificPlaceType,
+                                  city_place_id: String(place.id),
+                                }).toString()}`}
                                 style={{
                                   ...secondaryButton,
+                                  display: "inline-block",
                                   fontSize: "13px",
                                   padding: "8px 10px",
-                                  opacity: isMaterializing ? 0.5 : 1,
-                                  cursor: isMaterializing
-                                    ? "not-allowed"
-                                    : "pointer",
+                                  textDecoration: "none",
                                 }}
                               >
-                                {isMaterializing
-                                  ? "Adding..."
-                                  : "Use this place"}
-                              </button>
+                                Explore place
+                              </Link>
                             )}
                           </div>
                         );

@@ -14,6 +14,10 @@ class FoursquareRequestError(RuntimeError):
     pass
 
 
+class FoursquareReferenceNotFoundError(FoursquareRequestError):
+    pass
+
+
 TT_POI_CATEGORY_IDS = {
     "hotel": [
         "4bf58dd8d48988d1fa931735",  # Hotel
@@ -163,7 +167,16 @@ def get_poi(external_id):
     try:
         with urlopen(request, timeout=5) as response:
             payload = json.load(response)
-    except (HTTPError, URLError, TimeoutError) as error:
+    except HTTPError as error:
+        if error.code == 404:
+            raise FoursquareReferenceNotFoundError(
+                "Foursquare POI reference not found."
+            ) from error
+
+        raise FoursquareRequestError(
+            "Foursquare POI lookup failed."
+        ) from error
+    except (URLError, TimeoutError) as error:
         raise FoursquareRequestError(
             "Foursquare POI lookup failed."
         ) from error

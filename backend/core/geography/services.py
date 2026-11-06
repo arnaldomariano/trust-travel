@@ -675,6 +675,12 @@ def get_poi_name_match_rank(
     ):
         return 1
 
+    if any(
+        f" {normalized_query} " in f" {identity_value} "
+        for identity_value in identity_values
+    ):
+        return 1
+
     return 0
 
 
@@ -1087,6 +1093,7 @@ def annotate_existing_city_places(results, country_code):
 
         if external_match_id is not None:
             result["existing_place_id"] = external_match_id
+            result["candidate_place_ids"] = []
             continue
 
         result_values = get_place_name_identity_values(
@@ -1105,12 +1112,8 @@ def annotate_existing_city_places(results, country_code):
                 )
             )
 
-        if len(candidate_place_ids) == 1:
-            result["existing_place_id"] = next(
-                iter(candidate_place_ids)
-            )
-        else:
-            result["existing_place_id"] = None
+        result["existing_place_id"] = None
+        result["candidate_place_ids"] = sorted(candidate_place_ids)
 
     return results
 
@@ -2401,6 +2404,12 @@ def materialize_poi_place(
     if decision["state"] == "reuse":
         # Confirmed identity must not overwrite historical Place data.
         place = decision["place"]
+
+        ensure_business_presence_for_poi(
+            place=place,
+            place_type=place_type,
+        )
+
         return {
             "state": "reuse",
             "place": place,

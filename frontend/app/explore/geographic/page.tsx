@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
@@ -25,6 +25,24 @@ type ExternalGeographicDetail = {
   formatted_address?: string;
 };
 
+type POIType = "hotel" | "restaurant" | "attraction" | "nature" | "other";
+
+type ExternalPOIResult = {
+  name: string;
+  address?: string;
+  locality?: string;
+  external_source: "foursquare";
+  external_id: string;
+};
+
+const poiTypeOptions: { value: POIType; label: string }[] = [
+  { value: "hotel", label: "Hotel" },
+  { value: "restaurant", label: "Restaurant / Café" },
+  { value: "attraction", label: "Tourist attraction" },
+  { value: "nature", label: "Beach / Nature" },
+  { value: "other", label: "Other place" },
+];
+
 const geographicTypeLabels: Record<string, string> = {
   settlement: "City / Settlement",
   administrative_area: "Administrative area",
@@ -47,12 +65,25 @@ function GeographicExplorationContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<"invalid" | "not_found" | "unavailable" | null>(null);
 
+  const [poiType, setPOIType] = useState<POIType>("hotel");
+  const [poiQuery, setPOIQuery] = useState("");
+  const [poiResults, setPOIResults] = useState<ExternalPOIResult[]>([]);
+  const [poiLoading, setPOILoading] = useState(false);
+  const [poiSearched, setPOISearched] = useState(false);
+  const [poiError, setPOIError] = useState("");
+  const poiRequestId = useRef(0);
+
   useEffect(() => {
     let active = true;
+    poiRequestId.current += 1;
+    setPOILoading(false);
 
     setDetail(null);
     setError(null);
     setLoading(true);
+    setPOIResults([]);
+    setPOISearched(false);
+    setPOIError("");
 
     if (
       (source !== "geonames" && source !== "google_places") ||
@@ -116,6 +147,7 @@ function GeographicExplorationContent() {
 
     return () => {
       active = false;
+      poiRequestId.current += 1;
     };
   }, [source, id]);
 
@@ -178,6 +210,156 @@ function GeographicExplorationContent() {
               <strong>Coordinates:</strong> {detail.latitude}, {detail.longitude}
             </p>
           )}
+
+          {detail.geographic_type === "settlement" &&
+            detail.latitude != null &&
+            detail.longitude != null &&
+            Number.isFinite(Number(detail.latitude)) &&
+            Number.isFinite(Number(detail.longitude)) && (
+              <section style={{ display: "grid", gap: 12, marginTop: 20 }}>
+                <h3>Find places in {detail.canonical_name}</h3>
+
+                <form
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+
+                    const query = poiQuery.trim();
+                    const requestId = ++poiRequestId.current;
+
+                    setPOISearched(true);
+                    setPOIResults([]);
+                    setPOIError("");
+
+                    if (query.length < 2) {
+                      setPOIError("Enter at least 2 characters.");
+                      return;
+                    }
+
+                    setPOILoading(true);
+
+                    try {
+                      const params = new URLSearchParams({
+                        q: query,
+                        place_type: poiType,
+                        external_source: detail.external_source,
+                        external_id: detail.external_id,
+                      });
+
+                      const response = await fetch(
+                        `${API_URL}/api/geography/pois/search/?${params.toString()}`
+                      );
+
+                      if (!response.ok) {
+                        throw new Error("search_failed");
+                      }
+
+                      const data = await response.json();
+
+                      if (requestId !== poiRequestId.current) return;
+
+                      if (!Array.isArray(data.results)) {
+                        throw new Error("invalid_results");
+                      }
+
+                      setPOIResults(
+                        data.results.filter(
+                          (item: ExternalPOIResult) =>
+                            item.external_source === "foursquare" &&
+                            typeof item.external_id === "string" &&
+                            item.external_id.length > 0
+                        )
+                      );
+                    } catch {
+                      if (requestId === poiRequestId.current) {
+                        setPOIError(
+                          "Place discovery is temporarily unavailable. Please try again."
+                        );
+                      }
+                    } finally {
+                      if (requestId === poiRequestId.current) {
+                        setPOILoading(false);
+                      }
+                    }
+                  }}
+                  style={{ display: "grid", gap: 10 }}
+                >
+                  <label>
+                    Place type
+                    <select
+                      value={poiType}
+                      onChange={(event) => {
+                        poiRequestId.current += 1;
+                        setPOILoading(false);
+                        setPOIType(event.target.value as POIType);
+                        setPOIResults([]);
+                        setPOISearched(false);
+                        setPOIError("");
+                      }}
+                      style={{ display: "block", width: "100%", padding: 10 }}
+                    >
+                      {poiTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Search
+                    <input
+                      value={poiQuery}
+                      onChange={(event) => {
+                        poiRequestId.current += 1;
+                        setPOILoading(false);
+                        setPOIQuery(event.target.value);
+                        setPOIResults([]);
+                        setPOISearched(false);
+                        setPOIError("");
+                      }}
+                      placeholder="Example: hotel, museum, restaurant"
+                      style={{ display: "block", width: "100%", padding: 10 }}
+                    />
+                  </label>
+
+                  <button type="submit" disabled={poiLoading}>
+                    {poiLoading ? "Searching..." : "Find places"}
+                  </button>
+                </form>
+
+                {poiError && <p role="alert">{poiError}</p>}
+
+                {poiSearched && !poiLoading && !poiError &&
+                  poiResults.length === 0 && (
+                    <p>No places found for this search.</p>
+                  )}
+
+                {poiResults.map((poi) => (
+                  <article
+                    key={poi.external_id}
+                    style={{
+                      border: "1px solid #ddd",
+                      borderRadius: 10,
+                      padding: 14,
+                    }}
+                  >
+                    <h4 style={{ marginTop: 0 }}>{poi.name}</h4>
+                    {(poi.address || poi.locality) && (
+                      <p>{poi.address || poi.locality}</p>
+                    )}
+                    <Link
+                      href={`/explore/poi?${new URLSearchParams({
+                        source: "foursquare",
+                        id: poi.external_id,
+                        poi_type: poiType,
+                      }).toString()}`}
+                    >
+                      Explore place
+                    </Link>
+                  </article>
+                ))}
+              </section>
+            )}
 
           <p style={{
             padding: 16,

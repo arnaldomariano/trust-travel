@@ -425,6 +425,18 @@ class ExperienceSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
+        if (
+            self.instance is not None
+            and "place" in attrs
+            and attrs["place"].pk != self.instance.place_id
+        ):
+            raise serializers.ValidationError({
+                "place": (
+                    "The place associated with an existing experience "
+                    "cannot be changed during editing."
+                )
+            })
+
         rating_fields = [
             "rating",
             "safety_rating",
@@ -568,6 +580,135 @@ class ExperienceCreateSerializer(ExperienceSerializer):
         queryset=Place.objects.all(),
         required=False,
     )
+    manual_poi_name = serializers.CharField(
+        required=False,
+        allow_blank=False,
+        trim_whitespace=True,
+        write_only=True,
+        max_length=255,
+    )
+    manual_poi_type = serializers.ChoiceField(
+        choices=["hotel", "restaurant", "attraction", "nature", "other"],
+        required=False,
+        write_only=True,
+    )
+    manual_city_place_id = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        write_only=True,
+    )
+
+    external_poi_type = serializers.ChoiceField(
+        choices=["hotel", "restaurant", "attraction", "nature", "other"],
+        required=False,
+        write_only=True,
+    )
+    external_city_place_id = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        write_only=True,
+    )
+
+    class Meta(ExperienceSerializer.Meta):
+        fields = ExperienceSerializer.Meta.fields + [
+            "manual_poi_name",
+            "manual_poi_type",
+            "manual_city_place_id",
+            "external_poi_type",
+            "external_city_place_id",
+        ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        manual_fields = (
+            "manual_poi_name",
+            "manual_poi_type",
+            "manual_city_place_id",
+        )
+
+        provided_fields = [
+            field for field in manual_fields
+            if field in attrs
+        ]
+
+        if provided_fields and len(provided_fields) != len(manual_fields):
+            raise serializers.ValidationError({
+                "manual_poi": (
+                    "Manual POI fields must be provided together."
+                )
+            })
+
+        if provided_fields:
+            if attrs.get("place") is not None:
+                raise serializers.ValidationError({
+                    "place": (
+                        "A manual POI cannot be combined "
+                        "with an existing place."
+                    )
+                })
+
+            request = self.context.get("request")
+
+            if request and (
+                request.data.get("external_source")
+                or request.data.get("external_id")
+            ):
+                raise serializers.ValidationError({
+                    "manual_poi": (
+                        "A manual POI cannot be combined "
+                        "with an external geographic identity."
+                    )
+                })
+
+        external_poi_fields = (
+            "external_poi_type",
+            "external_city_place_id",
+        )
+        provided_external_poi_fields = [
+            field for field in external_poi_fields
+            if field in attrs
+        ]
+
+        request = self.context.get("request")
+        external_source = str(
+            request.data.get("external_source") or ""
+        ).strip() if request else ""
+        external_id = str(
+            request.data.get("external_id") or ""
+        ).strip() if request else ""
+
+        if provided_external_poi_fields:
+            if len(provided_external_poi_fields) != len(external_poi_fields):
+                raise serializers.ValidationError({
+                    "external_poi": (
+                        "External POI fields must be provided together."
+                    )
+                })
+
+            if external_source != "foursquare" or not external_id:
+                raise serializers.ValidationError({
+                    "external_poi": (
+                        "A complete Foursquare identity is required."
+                    )
+                })
+
+            if attrs.get("place") is not None or provided_fields:
+                raise serializers.ValidationError({
+                    "external_poi": (
+                        "An external POI cannot be combined "
+                        "with another publication target."
+                    )
+                })
+
+        elif external_source == "foursquare":
+            raise serializers.ValidationError({
+                "external_poi": (
+                    "External POI type and city are required."
+                )
+            })
+
+        return attrs
 
 
 class ExperiencePhotoSerializer(serializers.ModelSerializer):

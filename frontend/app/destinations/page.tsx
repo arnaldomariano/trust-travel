@@ -6,7 +6,6 @@ import Link from "next/link";
 
 import UpdateForm from "../components/UpdateForm";
 import { API_URL } from "../lib/api";
-import { getPoiMaterializationError } from "../lib/poiResolution";
 
 type CountryCatalogItem = {
   code: string;
@@ -129,11 +128,39 @@ function DestinationsPageContent() {
   const placeFromUrl = searchParams.get("place");
   const shouldOpenShareForm = searchParams.get("share") === "true";
 
+  const poiSourceFromUrl = searchParams.get("poi_source");
+  const poiIdFromUrl = searchParams.get("poi_id");
+  const poiTypeFromUrl = searchParams.get("poi_type");
+  const poiCityPlaceIdFromUrl = searchParams.get("city_place_id");
+
+  const validExternalPOITypes = [
+    "attraction",
+    "hotel",
+    "restaurant",
+    "nature",
+    "other",
+  ] as const;
+
+  const externalPOITypeFromUrl = validExternalPOITypes.find(
+    (type) => type === poiTypeFromUrl
+  );
+
+  const externalPOICityIdFromUrl =
+    poiCityPlaceIdFromUrl &&
+    /^[1-9][0-9]*$/.test(poiCityPlaceIdFromUrl)
+      ? Number(poiCityPlaceIdFromUrl)
+      : null;
+
+  const hasValidExternalPOICityId =
+    externalPOICityIdFromUrl !== null &&
+    Number.isSafeInteger(externalPOICityIdFromUrl);
+
   const mode = searchParams.get("mode");
   const isExperienceMode = mode === "experience";
   const isUpdateMode = mode === "update";
 
   const [places, setPlaces] = useState<any[]>([]);
+  const [placesLoadedSuccessfully, setPlacesLoadedSuccessfully] = useState(false);
   const [countryCatalog, setCountryCatalog] = useState<CountryCatalogItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
@@ -182,6 +209,17 @@ function DestinationsPageContent() {
 
   const [selectedCountryPlace, setSelectedCountryPlace] = useState<any>(null);
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
+  const [selectedManualPOI, setSelectedManualPOI] = useState<{
+    name: string;
+    place_type: "attraction" | "hotel" | "restaurant" | "nature" | "other";
+    city_place_id: number;
+  } | null>(null);
+  const [selectedExternalPOI, setSelectedExternalPOI] = useState<{
+    name: string;
+    external_id: string;
+    place_type: "attraction" | "hotel" | "restaurant" | "nature" | "other";
+    city_place_id: number;
+  } | null>(null);
   const [showShareForm, setShowShareForm] = useState(false);
   const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
   const [relatedPlaceSearch, setRelatedPlaceSearch] = useState("");
@@ -210,13 +248,10 @@ function DestinationsPageContent() {
     useState(false);
   const [createSpecificPlaceHasSearched, setCreateSpecificPlaceHasSearched] =
     useState(false);
-  const [materializingCreateFlowSpecificPlaceId, setMaterializingCreateFlowSpecificPlaceId] =
-    useState<string | null>(null);
 
   const [creatingCreateFlowCountry, setCreatingCreateFlowCountry] = useState(false);
   const [creatingCreateFlowCity, setCreatingCreateFlowCity] = useState(false);
-  const [creatingCreateFlowSpecificPlace, setCreatingCreateFlowSpecificPlace] =
-    useState(false);
+
   const [createFlowError, setCreateFlowError] = useState("");
 
   const [title, setTitle] = useState("");
@@ -266,6 +301,28 @@ function DestinationsPageContent() {
   };
 
   const [submittingExperience, setSubmittingExperience] = useState(false);
+  const [externalPOISelectionError, setExternalPOISelectionError] = useState("");
+  const externalPOISelectionRequestId = useRef(0);
+  const dismissedExternalPOIUrl = useRef<string | null>(null);
+  const currentExternalPOIUrl = searchParams.toString();
+
+  const leaveExternalPOISelection = () => {
+    externalPOISelectionRequestId.current += 1;
+
+    if (poiSourceFromUrl) {
+      dismissedExternalPOIUrl.current = currentExternalPOIUrl;
+    }
+
+    if (poiSourceFromUrl) {
+      router.replace(
+        isExperienceMode ? "/destinations?mode=experience" : "/destinations"
+      );
+    }
+
+    setSelectedExternalPOI(null);
+    setExternalPOISelectionError("");
+  };
+
   const [experienceFormError, setExperienceFormError] = useState("");
   const [experienceShared, setExperienceShared] = useState(false);
   const [sharedExperience, setSharedExperience] = useState<any>(null);
@@ -275,6 +332,15 @@ function DestinationsPageContent() {
   const [pendingExperienceAction, setPendingExperienceAction] = useState<"create" | "update" | null>(null);
   const [skipPracticalRatingsConfirm, setSkipPracticalRatingsConfirm] = useState(false);
   const skipPracticalRatingsConfirmRef = useRef(false);
+  const experienceSubmissionGenerationRef = useRef(0);
+
+  const invalidatePendingExperienceSubmission = () => {
+    experienceSubmissionGenerationRef.current += 1;
+    setShowPracticalRatingsConfirm(false);
+    setPendingExperienceAction(null);
+    setSkipPracticalRatingsConfirm(false);
+    skipPracticalRatingsConfirmRef.current = false;
+  };
 
   // =========================
   // Load places and country catalog
@@ -294,7 +360,13 @@ function DestinationsPageContent() {
 
         const placesData = await placesRes.json();
 
-        setPlaces(placesData || []);
+        if (!Array.isArray(placesData)) {
+          console.error("Unexpected places response format");
+          return;
+        }
+
+        setPlaces(placesData);
+        setPlacesLoadedSuccessfully(true);
 
         if (countriesRes.ok) {
           const countriesData = await countriesRes.json();
@@ -345,6 +417,133 @@ useEffect(() => {
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, 0);
 }, [placeFromUrl, shouldOpenShareForm, places]);
+
+// =========================
+// Select external Foursquare POI from URL
+// =========================
+useEffect(() => {
+  if (!poiSourceFromUrl || !isExperienceMode) {
+    dismissedExternalPOIUrl.current = null;
+    return;
+  }
+
+  if (dismissedExternalPOIUrl.current === currentExternalPOIUrl) return;
+  dismissedExternalPOIUrl.current = null;
+
+  if (loading) return;
+
+  if (poiSourceFromUrl !== "foursquare") {
+    setSelectedExternalPOI(null);
+    setShowShareForm(false);
+    setExternalPOISelectionError(
+      "This external place provider is not supported."
+    );
+    return;
+  }
+
+  let active = true;
+  const requestId = ++externalPOISelectionRequestId.current;
+
+  const selectExternalPOI = async () => {
+    setExternalPOISelectionError("");
+    setSelectedExternalPOI(null);
+    setSelectedPlace(null);
+    setSelectedManualPOI(null);
+    setSelectedMainGeographyResult(null);
+    setSelectedCountryPlace(null);
+    setShowShareForm(false);
+
+    if (
+      !placesLoadedSuccessfully ||
+      !poiIdFromUrl?.trim() ||
+      !externalPOITypeFromUrl ||
+      !hasValidExternalPOICityId
+    ) {
+      setExternalPOISelectionError(
+        "This external place cannot be selected for sharing right now."
+      );
+      return;
+    }
+
+    const cityPlace = places.find(
+      (place) =>
+        Number(place.id) === externalPOICityIdFromUrl &&
+        place.place_type === "city"
+    );
+
+    if (!cityPlace) {
+      setExternalPOISelectionError(
+        "The selected city is not registered in Trust Travel."
+      );
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        external_source: "foursquare",
+        external_id: poiIdFromUrl.trim(),
+      });
+
+      const response = await fetch(
+        `${API_URL}/api/geography/pois/external-detail/?${params.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error("External place detail unavailable");
+      }
+
+      const detail = await response.json();
+
+      if (
+        detail.external_source !== "foursquare" ||
+        detail.external_id !== poiIdFromUrl.trim() ||
+        typeof detail.name !== "string" ||
+        !detail.name.trim()
+      ) {
+        throw new Error("Invalid external place detail");
+      }
+
+      if (!active || requestId !== externalPOISelectionRequestId.current) return;
+
+      setSelectedExternalPOI({
+        name: detail.name.trim(),
+        external_id: detail.external_id,
+        place_type: externalPOITypeFromUrl,
+        city_place_id: externalPOICityIdFromUrl!,
+      });
+      setSearchTerm(detail.name.trim());
+      setExperienceShared(false);
+      setSharedExperience(null);
+      setEditingExperience(false);
+      setExperienceFormError("");
+      setShowShareForm(shouldOpenShareForm);
+    } catch (error) {
+      if (!active || requestId !== externalPOISelectionRequestId.current) return;
+      console.error("External POI selection failed:", error);
+      setExternalPOISelectionError(
+        "Could not load this external place. Please return to the search."
+      );
+    }
+  };
+
+  void selectExternalPOI();
+
+  return () => {
+    active = false;
+  };
+}, [
+  currentExternalPOIUrl,
+  poiSourceFromUrl,
+  poiIdFromUrl,
+  externalPOITypeFromUrl,
+  externalPOICityIdFromUrl,
+  hasValidExternalPOICityId,
+  isExperienceMode,
+  shouldOpenShareForm,
+  loading,
+  placesLoadedSuccessfully,
+  places,
+]);
 
   // =========================
   // Search and filtering
@@ -826,11 +1025,18 @@ const createCountryCandidates = createCountrySearch.trim()
 const isDirectPlaceFlow = !!placeFromUrl && !!selectedPlace;
 
 const selectedExperienceTarget =
-  selectedPlace || (isExperienceMode ? selectedMainGeographyResult : null);
+  selectedPlace ||
+  (isExperienceMode
+    ? selectedExternalPOI || selectedManualPOI || selectedMainGeographyResult
+    : null);
 
 const selectedExperienceTargetName =
   selectedPlace?.name ||
-  (isExperienceMode ? selectedMainGeographyResult?.canonical_name : "") ||
+  (isExperienceMode
+    ? selectedExternalPOI?.name ||
+      selectedManualPOI?.name ||
+      selectedMainGeographyResult?.canonical_name
+    : "") ||
   "";
 
 const selectedPlaceReviewsCount =
@@ -898,6 +1104,7 @@ const visibleMainGeographyResults = mainGeographyCountryRefinement
   : mainGeographyResults;
 
 const handleMainGeographySearch = async () => {
+  setSelectedManualPOI(null);
   const query = searchTerm.trim();
 
   // Invalidate external details when a new search begins.
@@ -965,6 +1172,8 @@ const handleMainGeographySearch = async () => {
 };
 
 const openGuidedCreateFlow = () => {
+  leaveExternalPOISelection();
+  setSelectedManualPOI(null);
   setCreateFlowOpen(true);
   setCreateFlowError("");
   setCreateSelectedCountry(null);
@@ -980,6 +1189,7 @@ const openGuidedCreateFlow = () => {
 };
 
 const selectCreateFlowCountry = (countryPlace: any) => {
+  setSelectedManualPOI(null);
   setCreateSelectedCountry(countryPlace);
   setCreateSelectedCity(null);
   setCreateFlowError("");
@@ -1063,6 +1273,7 @@ const handleSearchCreateFlowCities = async () => {
 };
 
 const selectCreateFlowCity = (cityPlace: any) => {
+  setSelectedManualPOI(null);
   setCreateSelectedCity(cityPlace);
   setCreateFlowError("");
   setCreateSpecificPlaceType("nature");
@@ -1077,7 +1288,7 @@ const selectCreateFlowCity = (cityPlace: any) => {
   }, 0);
 };
 
-const selectGeographyCityForFlow = async (
+const selectGeographyCityForFlow = (
   cityResult: GeographyPlaceResult
 ) => {
   if (!createSelectedCountry) {
@@ -1085,69 +1296,58 @@ const selectGeographyCityForFlow = async (
     return;
   }
 
-  const countryCode = (
+  const countryCode = String(
     createSelectedCountry.country_code || ""
   ).trim().toUpperCase();
 
-  if (!countryCode) {
+  if (!countryCode || cityResult.country_code !== countryCode) {
     setCreateFlowError(
-      "Could not identify the country code for this place."
+      "The selected geographic place does not match the chosen country."
     );
     return;
   }
 
-  setCreatingCreateFlowCity(true);
-  setCreateFlowError("");
-  setGeographyCitySearchError("");
+  const existingPlaceId = cityResult.existing_place_id;
 
-  try {
-    const res = await fetch(
-      `${API_URL}/api/geography/cities/materialize/`,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          external_id: cityResult.external_id,
-          country_code: countryCode,
-        }),
-      }
+  if (existingPlaceId != null) {
+    const existingCity = places.find(
+      (place) => place.id === existingPlaceId
     );
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      setCreateFlowError(
-        data.detail || "Could not prepare this geographic place."
-      );
+    if (existingCity) {
+      setCreateCitySearch(cityResult.canonical_name);
+      selectCreateFlowCity(existingCity);
       return;
     }
-
-    setPlaces((prev) => {
-      const exists = prev.some((place) => place.id === data.id);
-
-      return exists
-        ? prev.map((place) =>
-            place.id === data.id ? data : place
-          )
-        : [data, ...prev];
-    });
-
-    setCreateCitySearch(cityResult.canonical_name);
-    selectCreateFlowCity(data);
-  } catch (error) {
-    console.error(
-      "Guided geographic city materialization failed:",
-      error
-    );
-    setCreateFlowError(
-      "Something went wrong while preparing this geographic place."
-    );
-  } finally {
-    setCreatingCreateFlowCity(false);
   }
+
+  const externalSource = String(
+    cityResult.external_source || ""
+  ).trim();
+
+  const externalId = String(
+    cityResult.external_id || ""
+  ).trim();
+
+  if (
+    !["geonames", "google_places"].includes(externalSource) ||
+    !externalId
+  ) {
+    setCreateFlowError(
+      "This geographic place does not have a valid external reference."
+    );
+    return;
+  }
+
+  setCreateCitySearch(cityResult.canonical_name);
+
+  selectCreateFlowCity({
+    ...cityResult,
+    name: cityResult.canonical_name,
+    external_source: externalSource,
+    external_id: externalId,
+    existing_place_id: existingPlaceId,
+  });
 };
 
 const handleSearchCreateFlowSpecificPlaces = async () => {
@@ -1176,8 +1376,35 @@ const handleSearchCreateFlowSpecificPlaces = async () => {
     const params = new URLSearchParams({
       q: query,
       place_type: createSpecificPlaceType,
-      city_place_id: String(createSelectedCity.id),
     });
+
+    if (createSelectedCity.id != null) {
+      params.set(
+        "city_place_id",
+        String(createSelectedCity.id)
+      );
+    } else {
+      const externalSource = String(
+        createSelectedCity.external_source || ""
+      ).trim();
+
+      const externalId = String(
+        createSelectedCity.external_id || ""
+      ).trim();
+
+      if (
+        !["geonames", "google_places"].includes(externalSource) ||
+        !externalId
+      ) {
+        setCreateFlowError(
+          "This geographic place does not have a valid reference."
+        );
+        return;
+      }
+
+      params.set("external_source", externalSource);
+      params.set("external_id", externalId);
+    }
 
     const res = await fetch(
       `${API_URL}/api/geography/pois/search/?${params.toString()}`,
@@ -1225,7 +1452,7 @@ const handleSearchCreateFlowSpecificPlaces = async () => {
   }
 };
 
-const handleMaterializeCreateFlowSpecificPlace = async (
+const handleSelectCreateFlowSpecificPlace = (
   specificPlaceResult: any
 ) => {
   if (!createSelectedCity) {
@@ -1233,166 +1460,89 @@ const handleMaterializeCreateFlowSpecificPlace = async (
     return;
   }
 
+  setCreateFlowError("");
+
   if (specificPlaceResult.existing_place_id) {
     router.push(`/places/${specificPlaceResult.existing_place_id}`);
     return;
   }
 
+  const externalSource = String(
+    specificPlaceResult.external_source || ""
+  ).trim();
+
   const externalId = String(
     specificPlaceResult.external_id || ""
   ).trim();
 
-  if (!externalId) {
+  if (externalSource !== "foursquare" || !externalId) {
     setCreateFlowError(
-      "Could not identify this specific place."
+      "Could not identify this external place."
     );
     return;
   }
 
-  setMaterializingCreateFlowSpecificPlaceId(externalId);
-  setCreateFlowError("");
+  const params = new URLSearchParams({
+    source: externalSource,
+    id: externalId,
+    poi_type: createSpecificPlaceType,
+  });
 
-  try {
-    const res = await fetch(
-      `${API_URL}/api/geography/pois/materialize/`,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          external_id: externalId,
-          place_type: createSpecificPlaceType,
-          city_place_id: createSelectedCity.id,
-        }),
-      }
-    );
+  const cityPlaceId = Number(createSelectedCity.id);
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      setCreateFlowError(
-        getPoiMaterializationError(res.status, data)
-      );
-      return;
-    }
-
-    setPlaces((prev) => {
-      const alreadyExists = prev.some(
-        (place) => place.id === data.id
-      );
-
-      if (alreadyExists) {
-        return prev.map((place) =>
-          place.id === data.id ? data : place
-        );
-      }
-
-      return [data, ...prev];
-    });
-
-    router.push(`/places/${data.id}`);
-  } catch (error) {
-    console.error(
-      "Guided specific place materialization failed:",
-      error
-    );
-    setCreateFlowError(
-      "Something went wrong while adding this specific place."
-    );
-  } finally {
-    setMaterializingCreateFlowSpecificPlaceId(null);
+  if (
+    createSelectedCity.place_type === "city" &&
+    Number.isSafeInteger(cityPlaceId) &&
+    cityPlaceId > 0
+  ) {
+    params.set("city_place_id", String(cityPlaceId));
   }
+
+  router.push(`/explore/poi?${params.toString()}`);
 };
 
-const selectCreateFlowCountryFromCatalog = async (
+const selectCreateFlowCountryFromCatalog = (
   country: CountryCatalogItem
 ) => {
-  setCreatingCreateFlowCountry(true);
   setCreateFlowError("");
 
-  try {
-    const normalizedCatalogNames = [
-      country.canonical_name,
-      ...(country.aliases || []),
-    ].map((value) => normalizeText(value));
+  const normalizedCatalogNames = [
+    country.canonical_name,
+    ...(country.aliases || []),
+  ].map((value) => normalizeText(value));
 
-    const existingCountryPlace = places.find((place) => {
-      if (place.place_type !== "country") return false;
+  const existingCountryPlace = places.find((place) => {
+    if (place.place_type !== "country") return false;
 
-      const placeCountryCode = (place.country_code || "").toUpperCase();
+    const placeCountryCode = (place.country_code || "").toUpperCase();
 
-      if (placeCountryCode) {
-        return placeCountryCode === country.code.toUpperCase();
-      }
-
-      const placeNames = getNormalizedPlaceSearchNames(place);
-
-      return placeNames.some((value) =>
-        normalizedCatalogNames.includes(value)
-      );
-    });
-
-    if (existingCountryPlace) {
-      setCreateCountrySearch(country.canonical_name);
-      selectCreateFlowCountry(existingCountryPlace);
-      return;
+    if (placeCountryCode) {
+      return placeCountryCode === country.code.toUpperCase();
     }
 
-    const res = await fetch(
-      `${API_URL}/api/geography/countries/materialize/`,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          country_code: country.code,
-        }),
-      }
+    const placeNames = getNormalizedPlaceSearchNames(place);
+
+    return placeNames.some((value) =>
+      normalizedCatalogNames.includes(value)
     );
+  });
 
-    const data = await res.json();
+  const selectedCountry = existingCountryPlace || {
+    name: country.canonical_name,
+    canonical_name: country.canonical_name,
+    country_code: country.code.toUpperCase(),
+    place_type: "country",
+  };
 
-    if (!res.ok) {
-      setCreateFlowError(
-        data.detail || "Could not prepare this country."
-      );
-      return;
-    }
-
-    setPlaces((prev) => {
-      const alreadyExists = prev.some((place) => place.id === data.id);
-
-      if (alreadyExists) return prev;
-
-      return [data, ...prev];
-    });
-
-    setCreateCountrySearch(country.canonical_name);
-    selectCreateFlowCountry(data);
-  } catch (error) {
-    console.error("Guided country selection failed:", error);
-    setCreateFlowError(
-      "Something went wrong while preparing the country."
-    );
-  } finally {
-    setCreatingCreateFlowCountry(false);
-  }
+  setCreateCountrySearch(country.canonical_name);
+  selectCreateFlowCountry(selectedCountry);
 };
 
-const createSpecificPlaceForFlow = async () => {
+const createSpecificPlaceForFlow = () => {
   const specificPlaceName = formatPlaceNameForCreation(createSpecificPlaceName);
 
-  if (!createSelectedCountry) {
-    setCreateFlowError("Please choose or create a country first.");
-    return;
-  }
-
-  if (!createSelectedCity) {
-    setCreateFlowError("Please choose or create a geographic place first.");
+  if (!createSelectedCountry || !createSelectedCity) {
+    setCreateFlowError("Please choose a country and geographic place first.");
     return;
   }
 
@@ -1401,52 +1551,54 @@ const createSpecificPlaceForFlow = async () => {
     return;
   }
 
-  setCreatingCreateFlowSpecificPlace(true);
-  setCreateFlowError("");
+  const cityPlaceId = Number(createSelectedCity.id);
 
-  try {
-    const res = await fetch(`${API_URL}/api/places/create-basic/`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: specificPlaceName,
-        place_type: createSpecificPlaceType,
-        city: createSelectedCity.name,
-        country: createSelectedCountry.name,
-        country_code: createSelectedCountry.country_code || "",
-      }),
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      setCreateFlowError(data.detail || "Could not create this specific place.");
-      return;
-    }
-
-    setPlaces((prev) => {
-      const alreadyExists = prev.some((place) => place.id === data.id);
-
-      if (alreadyExists) return prev;
-
-      return [data, ...prev];
-    });
-
-    router.push(`/places/${data.id}`);
-  } catch (error) {
-    console.error("Guided specific place creation failed:", error);
-    setCreateFlowError("Something went wrong while creating the specific place.");
-  } finally {
-    setCreatingCreateFlowSpecificPlace(false);
+  if (
+    !Number.isSafeInteger(cityPlaceId) ||
+    cityPlaceId <= 0 ||
+    createSelectedCity.place_type !== "city"
+  ) {
+    setCreateFlowError(
+      "Manual place sharing currently requires a geographic place already registered as a city on Trust Travel. External geographic references are not supported for manual place sharing yet."
+    );
+    return;
   }
+
+  setSelectedExternalPOI(null);
+  setExternalPOISelectionError("");
+  setSelectedManualPOI({
+    name: specificPlaceName,
+    place_type: createSpecificPlaceType,
+    city_place_id: cityPlaceId,
+  });
+  setSelectedPlace(null);
+  setSelectedMainGeographyResult(null);
+  setSelectedCountryPlace(null);
+  setExperienceShared(false);
+  setSharedExperience(null);
+  setEditingExperience(false);
+  setExperienceFormError("");
+  setCreateFlowError("");
+  setCreateFlowOpen(false);
+  setShowShareForm(true);
+
+  if (!isExperienceMode) {
+    router.push("/destinations?mode=experience");
+  }
+
+  setTimeout(() => {
+    document
+      .getElementById("share-experience-form")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
 };
 
     // =========================
     // Select country as search context
     // =========================
     const handleSelectCountry = (place: any) => {
+      leaveExternalPOISelection();
+      setSelectedManualPOI(null);
       // In normal exploration mode, opening a country should go directly
       // to the country experiences page.
       if (!isExperienceMode && !isUpdateMode) {
@@ -1490,6 +1642,7 @@ const createSpecificPlaceForFlow = async () => {
     // Share directly about selected country
     // =========================
     const handleShareAboutCountry = () => {
+      setSelectedManualPOI(null);
       if (!selectedCountryPlace) return;
 
       setSelectedPlace(selectedCountryPlace);
@@ -1521,6 +1674,7 @@ const createSpecificPlaceForFlow = async () => {
     const openCreateCityInSelectedCountry = () => {
       if (!selectedCountryPlace) return;
 
+      setSelectedManualPOI(null);
       setCreateFlowOpen(true);
       setCreateFlowError("");
       setCreateSelectedCountry(selectedCountryPlace);
@@ -1631,6 +1785,9 @@ const createSpecificPlaceForFlow = async () => {
       return;
     }
 
+    leaveExternalPOISelection();
+    setSelectedManualPOI(null);
+
     // Invalidate details from any previous external selection.
     clearExternalGeographicDetail();
 
@@ -1697,8 +1854,12 @@ const createSpecificPlaceForFlow = async () => {
   // Change selected place
   // =========================
   const handleChangePlace = () => {
+    invalidatePendingExperienceSubmission();
+    leaveExternalPOISelection();
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
+    setSelectedManualPOI(null);
+    setSelectedExternalPOI(null);
     clearExternalGeographicDetail();
     setSelectedMainGeographyResult(null);
     setShowRelatedPlaces(false);
@@ -1723,8 +1884,12 @@ const createSpecificPlaceForFlow = async () => {
   // Reset share flow
   // =========================
   const resetShareFlow = () => {
+    invalidatePendingExperienceSubmission();
+    leaveExternalPOISelection();
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
+    setSelectedManualPOI(null);
+    setSelectedExternalPOI(null);
     clearExternalGeographicDetail();
     setSelectedMainGeographyResult(null);
     setSearchTerm("");
@@ -1792,7 +1957,13 @@ const continueWithoutPracticalRatings = () => {
   setSkipPracticalRatingsConfirm(true);
   skipPracticalRatingsConfirmRef.current = true;
 
+  const submissionGeneration = experienceSubmissionGenerationRef.current;
+
   setTimeout(() => {
+    if (submissionGeneration !== experienceSubmissionGenerationRef.current) {
+      return;
+    }
+
     const form = document.getElementById("experience-share-form") as HTMLFormElement | null;
     form?.requestSubmit();
   }, 0);
@@ -1809,6 +1980,8 @@ const continueWithoutPracticalRatings = () => {
 
     if (
       !selectedPlace &&
+      !selectedExternalPOI &&
+      !selectedManualPOI &&
       (!selectedMainGeographyResult?.external_source ||
         !selectedMainGeographyResult.external_id)
     ) {
@@ -1853,6 +2026,21 @@ const continueWithoutPracticalRatings = () => {
 
       if (selectedPlace) {
         formData.append("place", String(selectedPlace.id));
+      } else if (selectedExternalPOI) {
+        formData.append("external_source", "foursquare");
+        formData.append("external_id", selectedExternalPOI.external_id);
+        formData.append("external_poi_type", selectedExternalPOI.place_type);
+        formData.append(
+          "external_city_place_id",
+          String(selectedExternalPOI.city_place_id)
+        );
+      } else if (selectedManualPOI) {
+        formData.append("manual_poi_name", selectedManualPOI.name);
+        formData.append("manual_poi_type", selectedManualPOI.place_type);
+        formData.append(
+          "manual_city_place_id",
+          String(selectedManualPOI.city_place_id)
+        );
       } else if (
         selectedMainGeographyResult?.external_source &&
         selectedMainGeographyResult.external_id
@@ -1908,9 +2096,27 @@ const continueWithoutPracticalRatings = () => {
       const data = await res.json();
 
       if (!res.ok) {
-          console.error("Experience error:", data);
-          setExperienceFormError(data.detail || "Could not share this experience.");
+        console.error("Experience error:", data);
+
+        if (
+          selectedManualPOI &&
+          res.status === 409 &&
+          data.code === "poi_resolution_required"
+        ) {
+          setExperienceFormError(
+            "This place may already exist or needs further geographic verification. " +
+            "Your experience has not been published. Please review the place selection " +
+            "before trying again."
+          );
           return;
+        }
+
+        setExperienceFormError(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Could not share this experience."
+        );
+        return;
       }
 
       setSharedExperience(data);
@@ -1974,7 +2180,6 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
   try {
     const formData = new FormData();
 
-    formData.append("place", String(selectedPlace.id));
     formData.append("title", title.trim());
     formData.append("rating", String(rating));
     formData.append("comment", comment.trim());
@@ -2101,6 +2306,23 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       </div>
     )}
 
+      {externalPOISelectionError && (
+        <div
+          role="alert"
+          style={{
+            padding: "16px",
+            marginBottom: "20px",
+            border: "1px solid #f0c5c5",
+            borderRadius: "10px",
+            background: "#fff5f5",
+            color: "#8b2424",
+            lineHeight: 1.5,
+          }}
+        >
+          {externalPOISelectionError}
+        </div>
+      )}
+
       <div style={{ marginBottom: "20px", color: "#666", fontSize: "14px" }}>
         <Link href="/" style={{ color: "#666", textDecoration: "none" }}>
           Home
@@ -2132,7 +2354,11 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           onChange={(e) => {
               const value = e.target.value;
 
+              leaveExternalPOISelection();
+
               setSearchTerm(value);
+              setSelectedManualPOI(null);
+              setShowShareForm(false);
               setMainGeographyResults([]);
               setMainGeographySearchError("");
               if (isUpdateMode) {
@@ -2976,6 +3202,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       </section>
             ) : !selectedCountryPlace &&
                 !selectedPlace &&
+                !selectedExternalPOI &&
                 mainGeographyResults.length === 0 ? (
       <section style={helperCard}>
         <strong>No exact place found for “{searchTerm.trim()}”.</strong>
@@ -3241,7 +3468,26 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedPlace(createSelectedCity);
+                            setSelectedManualPOI(null);
+                            if (createSelectedCity.external_source &&
+                                createSelectedCity.external_id &&
+                                !createSelectedCity.id) {
+                              setSelectedMainGeographyResult(createSelectedCity);
+                              setSelectedPlace(null);
+                            } else if (createSelectedCity.id) {
+                              setSelectedMainGeographyResult(null);
+                              setSelectedPlace(createSelectedCity);
+                            } else {
+                              setCreateFlowError(
+                                "This geographic place cannot be shared right now."
+                              );
+                              return;
+                            }
+
+                            setExperienceShared(false);
+                            setSharedExperience(null);
+                            setEditingExperience(false);
+                            setExperienceFormError("");
                             setShowShareForm(true);
 
                             setTimeout(() => {
@@ -3443,7 +3689,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                                       <button
                                         type="button"
                                         onClick={() =>
-                                          handleMaterializeCreateFlowSpecificPlace(
+                                          handleSelectCreateFlowSpecificPlace(
                                             specificPlaceResult
                                           )
                                         }
@@ -3459,42 +3705,17 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                                       <button
                                         type="button"
                                         onClick={() =>
-                                          handleMaterializeCreateFlowSpecificPlace(
+                                          handleSelectCreateFlowSpecificPlace(
                                             specificPlaceResult
-                                          )
-                                        }
-                                        disabled={
-                                          materializingCreateFlowSpecificPlaceId ===
-                                          String(
-                                            specificPlaceResult.external_id || ""
                                           )
                                         }
                                         style={{
                                           ...secondaryButton,
                                           fontSize: "13px",
                                           padding: "8px 10px",
-                                          opacity:
-                                            materializingCreateFlowSpecificPlaceId ===
-                                            String(
-                                              specificPlaceResult.external_id || ""
-                                            )
-                                              ? 0.5
-                                              : 1,
-                                          cursor:
-                                            materializingCreateFlowSpecificPlaceId ===
-                                            String(
-                                              specificPlaceResult.external_id || ""
-                                            )
-                                              ? "not-allowed"
-                                              : "pointer",
                                         }}
                                       >
-                                        {materializingCreateFlowSpecificPlaceId ===
-                                        String(
-                                          specificPlaceResult.external_id || ""
-                                        )
-                                          ? "Adding..."
-                                          : "Use this place"}
+                                        Explore this place
                                       </button>
                                     )}
                                   </div>
@@ -3537,37 +3758,26 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                           </div>
 
                           <p style={guidedCreateText}>
-                            Create a new place manually only if the place you are looking for is
-                            genuinely different from the results above.
+                            If this is a genuinely different place, you can identify it manually.
+                            Trust Travel will add it only when your experience is successfully published.
                           </p>
 
                           <button
                             type="button"
                             onClick={createSpecificPlaceForFlow}
-                            disabled={
-                              creatingCreateFlowSpecificPlace ||
-                              !createSpecificPlaceName.trim()
-                            }
+                            disabled={!createSpecificPlaceName.trim()}
                             style={{
                               ...secondaryButton,
                               width: "fit-content",
-                              opacity:
-                                creatingCreateFlowSpecificPlace ||
-                                !createSpecificPlaceName.trim()
-                                  ? 0.5
-                                  : 1,
-                              cursor:
-                                creatingCreateFlowSpecificPlace ||
-                                !createSpecificPlaceName.trim()
-                                  ? "not-allowed"
-                                  : "pointer",
+                              opacity: !createSpecificPlaceName.trim() ? 0.5 : 1,
+                              cursor: !createSpecificPlaceName.trim()
+                                ? "not-allowed"
+                                : "pointer",
                             }}
                           >
-                            {creatingCreateFlowSpecificPlace
-                              ? "Creating specific place..."
-                              : `Create this ${getPlaceTypeLabel(
-                                  createSpecificPlaceType
-                                )} manually`}
+                            {`Share an experience about this ${getPlaceTypeLabel(
+                              createSpecificPlaceType
+                            )}`}
                           </button>
                         </div>
                       )}

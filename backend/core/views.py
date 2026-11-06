@@ -15,7 +15,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied, NotFound
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import serializers
@@ -123,6 +123,7 @@ from .geography.providers.google_places import (
 
 from .geography.providers.foursquare import (
     FoursquareConfigurationError,
+    FoursquareReferenceNotFoundError,
     FoursquareRequestError,
     get_poi,
     poi_matches_place_type,
@@ -1744,6 +1745,57 @@ class GeographyCountryMaterializeView(APIView):
         )
 
 
+class GeographyPOIExternalDetailView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        external_source = (
+            request.query_params.get("external_source") or ""
+        ).strip()
+        external_id = (
+            request.query_params.get("external_id") or ""
+        ).strip()
+
+        if external_source != "foursquare":
+            return Response(
+                {"detail": "Unsupported external POI source."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not external_id:
+            return Response(
+                {"detail": "External POI ID is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            reference = get_poi(external_id=external_id)
+        except FoursquareReferenceNotFoundError:
+            return Response(
+                {"detail": "External POI reference not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except FoursquareConfigurationError:
+            return Response(
+                {"detail": "POI lookup is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except FoursquareRequestError:
+            return Response(
+                {"detail": "POI lookup is temporarily unavailable."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if not reference:
+            return Response(
+                {"detail": "External POI reference not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(reference)
+
+
 class GeographyPlaceExternalDetailView(APIView):
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
@@ -1921,6 +1973,24 @@ class GeographicResolutionRequired(APIException):
         self.detail = _build_geographic_resolution_required_payload(
             materialization_result
         )
+
+
+class POIResolutionRequired(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "poi_resolution_required"
+
+    def __init__(self, materialization_result):
+        self.detail = {
+            "code": "poi_resolution_required",
+            "detail": (
+                "This place needs confirmation "
+                "before it can be added."
+            ),
+            "reason": materialization_result["reason"],
+            "candidate_place_ids": (
+                materialization_result["candidate_place_ids"]
+            ),
+        }
 
 
 class CountryIdentityConflictResponse(APIException):
@@ -2645,6 +2715,10 @@ class GeographyPOISearchView(APIView):
                     {
                         "count": len(registry_results),
                         "results": registry_results,
+                        "external_search": {
+                            "status": "unavailable",
+                            "reason": "missing_city_coordinates",
+                        },
                     }
                 )
 
@@ -2684,6 +2758,10 @@ class GeographyPOISearchView(APIView):
                     {
                         "count": len(registry_results),
                         "results": registry_results,
+                        "external_search": {
+                            "status": "unavailable",
+                            "reason": "provider_not_configured",
+                        },
                     }
                 )
 
@@ -2702,6 +2780,10 @@ class GeographyPOISearchView(APIView):
                     {
                         "count": len(registry_results),
                         "results": registry_results,
+                        "external_search": {
+                            "status": "unavailable",
+                            "reason": "provider_unavailable",
+                        },
                     }
                 )
 
@@ -3915,6 +3997,19 @@ class ExperienceListView(generics.ListCreateAPIView):
             raise PermissionDenied("You must be logged in to share an experience.")
 
         place = serializer.validated_data.get("place")
+
+        manual_poi_name = serializer.validated_data.get(
+            "manual_poi_name"
+        )
+        manual_poi_type = serializer.validated_data.get(
+            "manual_poi_type"
+        )
+        manual_city_place_id = serializer.validated_data.get(
+            "manual_city_place_id"
+        )
+
+        has_manual_poi = manual_poi_name is not None
+
         external_source = str(
             self.request.data.get("external_source") or ""
         ).strip()
@@ -3925,12 +4020,14 @@ class ExperienceListView(generics.ListCreateAPIView):
         has_external_identity = bool(
             external_source or external_id
         )
+        has_external_poi = external_source == "foursquare"
 
         if (
             external_source
             and external_source not in {
                 "geonames",
                 "google_places",
+                "foursquare",
             }
         ):
             raise serializers.ValidationError({
@@ -3947,9 +4044,84 @@ class ExperienceListView(generics.ListCreateAPIView):
                 )
             })
 
+        external_poi_result = None
+        external_poi_city = None
+        external_poi_country_code = None
+
+        if has_external_poi:
+            external_poi_type = serializer.validated_data[
+                "external_poi_type"
+            ]
+            external_city_place_id = serializer.validated_data[
+                "external_city_place_id"
+            ]
+
+            external_poi_city = (
+                Place.objects
+                .select_related("country_ref", "destination")
+                .filter(
+                    id=external_city_place_id,
+                    place_type="city",
+                )
+                .first()
+            )
+
+            if external_poi_city is None:
+                raise serializers.ValidationError({
+                    "external_city_place_id": (
+                        "The requested city or locality was not found."
+                    )
+                })
+
+            external_poi_country_code = str(
+                (
+                    external_poi_city.country_ref.code
+                    if external_poi_city.country_ref
+                    else external_poi_city.country_code
+                ) or ""
+            ).strip().upper()
+
+            try:
+                external_poi_result = get_poi(
+                    external_id=external_id,
+                )
+            except FoursquareReferenceNotFoundError as error:
+                raise NotFound(
+                    "External POI reference not found."
+                ) from error
+            except (
+                FoursquareConfigurationError,
+                FoursquareRequestError,
+            ) as error:
+                raise GeographicProviderUnavailable(
+                    "POI lookup is temporarily unavailable."
+                ) from error
+
+            if not poi_matches_place_type(
+                poi_result=external_poi_result,
+                place_type=external_poi_type,
+            ):
+                raise serializers.ValidationError({
+                    "external_poi_type": (
+                        "The selected POI does not match "
+                        "the requested place type."
+                    )
+                })
+
+            if not poi_matches_city_context(
+                poi_result=external_poi_result,
+                city_place=external_poi_city,
+            ):
+                raise serializers.ValidationError({
+                    "external_city_place_id": (
+                        "The selected POI does not match "
+                        "the requested city or locality."
+                    )
+                })
+
         geographic_result = None
 
-        if place is None:
+        if place is None and not has_manual_poi and not has_external_poi:
             if not external_source or not external_id:
                 raise serializers.ValidationError({
                     "place": (
@@ -3979,6 +4151,104 @@ class ExperienceListView(generics.ListCreateAPIView):
                 )
 
         with transaction.atomic():
+            if has_manual_poi:
+                city_place = (
+                    Place.objects
+                    .select_related("country_ref", "destination")
+                    .filter(
+                        id=manual_city_place_id,
+                        place_type="city",
+                    )
+                    .first()
+                )
+
+                if city_place is None:
+                    raise serializers.ValidationError({
+                        "manual_city_place_id": (
+                            "The requested city or locality was not found."
+                        )
+                    })
+
+                country_code = str(
+                    (
+                        city_place.country_ref.code
+                        if city_place.country_ref
+                        else city_place.country_code
+                    ) or ""
+                ).strip().upper()
+
+                poi_result = {
+                    "name": manual_poi_name,
+                    "canonical_name": manual_poi_name,
+                    "aliases": [],
+                    "latitude": None,
+                    "longitude": None,
+                    "external_source": "",
+                    "external_id": "",
+                }
+
+                poi_resolution = materialize_poi_place(
+                    poi_result=poi_result,
+                    city_place=city_place,
+                    country_code=country_code,
+                    place_type=manual_poi_type,
+                    user=self.request.user,
+                )
+
+                if poi_resolution["state"] == "preserve":
+                    raise POIResolutionRequired(poi_resolution)
+
+                if poi_resolution["state"] not in {"created", "reuse"}:
+                    raise ValueError(
+                        "Unsupported manual POI resolution state: "
+                        f"{poi_resolution['state']}"
+                    )
+
+                place = poi_resolution.get("place")
+
+                if place is None:
+                    raise ValueError(
+                        "Manual POI resolution did not return a place."
+                    )
+
+                for field in (
+                    "manual_poi_name",
+                    "manual_poi_type",
+                    "manual_city_place_id",
+                ):
+                    serializer.validated_data.pop(field, None)
+
+            if external_poi_result is not None:
+                poi_resolution = materialize_poi_place(
+                    poi_result=external_poi_result,
+                    city_place=external_poi_city,
+                    country_code=external_poi_country_code,
+                    place_type=external_poi_type,
+                    user=self.request.user,
+                )
+
+                if poi_resolution["state"] == "preserve":
+                    raise POIResolutionRequired(poi_resolution)
+
+                if poi_resolution["state"] not in {"created", "reuse"}:
+                    raise ValueError(
+                        "Unsupported external POI resolution state: "
+                        f"{poi_resolution['state']}"
+                    )
+
+                place = poi_resolution.get("place")
+
+                if place is None:
+                    raise ValueError(
+                        "External POI resolution did not return a place."
+                    )
+
+                for field in (
+                    "external_poi_type",
+                    "external_city_place_id",
+                ):
+                    serializer.validated_data.pop(field, None)
+
             if geographic_result is not None:
                 try:
                     resolution = (
@@ -4100,9 +4370,8 @@ class ExperienceDetailView(generics.RetrieveUpdateDestroyAPIView):
 
         update = Update.objects.filter(
             user=self.request.user,
-            place=experience.place,
+            experience=experience,
             type="experience",
-            created_at__gte=experience.created_at,
         ).order_by("created_at").first()
 
         if update:

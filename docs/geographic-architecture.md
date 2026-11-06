@@ -147,15 +147,82 @@ Status: Partially verified; historical preservation under investigation.
 
 ## 3. Geographic Discovery
 
-Status: Pending documentation.
+Geographic discovery combines internal Trust Travel records with
+references obtained from supported external providers.
+
+The implementation includes GeoNames and Google Places for geographic
+discovery and Foursquare for specific POI discovery.
+
+An external search result may be displayed and explored without
+creating an internal Place.
+
+External reference detail endpoints reconstruct provider information
+for exploration. They do not independently materialize Places.
+
+POI search may return internal registry results even when external
+search is unavailable. The API distinguishes missing city coordinates,
+missing provider configuration, and provider unavailability.
+
+Status: Verified in inspected code and automated tests for the
+documented discovery and exploration paths.
 
 ## 4. Identity Resolution
 
-Status: Pending documentation.
+Internal Place identity is distinct from provider identity.
+
+PlaceExternalIdentity records confirmed provider references using
+external_source and external_id.
+
+A matching name, alias, or nearby location is not sufficient to
+confirm that two records represent the same place.
+
+POI resolution distinguishes:
+
+- reuse: a compatible existing identity has been confirmed.
+- created: a new internal Place has been persisted.
+- preserve: identity or geographic context requires resolution.
+
+Preserve results must not automatically merge or modify ambiguous
+existing records.
+
+City discovery likewise preserves multiple same-name candidates
+without treating name similarity as confirmed external identity.
+
+Geographic country, city, parent, Destination, and place-type
+compatibility remain relevant to resolution decisions.
+
+Status: Verified in inspected implementation and relevant automated
+tests. Broader concurrency and geographic consistency guarantees
+remain under investigation.
 
 ## 5. Geographic Materialization
 
-Status: Pending documentation.
+Geographic materialization creates or reuses an internal Place
+from a validated geographic or POI reference.
+
+The current contribution flow separates exploration from persistence:
+
+1. Search and reconstruct external reference information.
+2. Allow exploration without creating an internal Place.
+3. Validate the selected publication target.
+4. Resolve and materialize or reuse the Place during publication.
+5. Persist the associated contribution.
+
+Supported experience publication targets include existing Places,
+external geographic references, Foursquare POIs, and manually
+specified POIs within an existing city/locality.
+
+The shared POI materialization service checks identity and geographic
+compatibility. Ambiguous candidates produce preserve results instead
+of automatic consolidation.
+
+Existing standalone materialization endpoints also remain in the
+backend. Therefore, late materialization describes the audited
+contribution flow, not an absolute prohibition on every other
+materialization operation.
+
+Status: Verified in inspected implementation and automated tests
+for the documented experience publication paths.
 
 ## 6. Geographic Invariants
 
@@ -224,15 +291,139 @@ Status: Verified in inspected application code.
 
 ## 7. Concurrency and Transactions
 
-Status: Pending documentation.
+Experience publication involving a new or reused POI executes
+Place resolution/materialization and Experience/Update persistence
+inside transaction.atomic().
+
+A failure while creating the associated feed Update rolls back
+the transaction, including a newly materialized Place.
+
+External provider lookup and validation occur before entering
+the publication transaction in the audited external POI flow.
+
+The shared materialization services also include identity reuse
+and IntegrityError recovery paths. Their geographic compatibility
+guards are documented in the architecture decision log.
+
+These mechanisms do not establish complete protection against
+all concurrent geographic reference changes or all possible
+creation paths.
+
+Status: Verified in inspected code and automated rollback tests;
+broader concurrency guarantees remain under investigation.
 
 ## 8. API Contracts
 
-Status: Pending documentation.
+The following routes are registered under the backend API prefix.
+
+### 8.1 Geographic discovery and exploration
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | /api/geography/places/search/ | Geographic discovery |
+| GET | /api/geography/places/external-detail/ | External geographic reference preview |
+| GET | /api/geography/cities/search/ | City/locality search |
+| GET | /api/geography/pois/search/ | POI search |
+| GET | /api/geography/pois/external-detail/ | Foursquare POI reference preview |
+
+The external POI detail endpoint requires external_source=foursquare
+and a nonempty external_id.
+
+For this endpoint, invalid source or missing ID returns HTTP 400,
+a missing reference returns HTTP 404, and provider configuration
+or request failures return HTTP 503.
+
+These discovery and external-detail operations do not independently
+materialize internal Places.
+
+### 8.2 Explicit materialization and validation
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | /api/geography/places/preflight/ | Geographic reference preflight |
+| POST | /api/geography/places/materialize/ | Geographic Place materialization |
+| POST | /api/geography/cities/materialize/ | City materialization |
+| POST | /api/geography/pois/materialize/ | POI materialization |
+| POST | /api/geography/pois/create-manual/ | Manual POI creation |
+
+These explicit endpoints remain registered. They must not be
+confused with read-only discovery or exploration.
+
+### 8.3 Experience publication
+
+POST /api/experiences/ supports publication against an existing
+Place or supported external/manual publication targets.
+
+External Foursquare POI publication requires a complete external
+identity together with external_poi_type and external_city_place_id.
+
+Manual POI publication requires manual_poi_name, manual_poi_type,
+and manual_city_place_id.
+
+The serializer rejects incomplete or incompatible combinations
+of publication targets.
+
+The publication view validates external POI type and city context
+before materialization. Ambiguous POI resolution returns HTTP 409
+with code poi_resolution_required.
+
+Place resolution/materialization and Experience/Update persistence
+are atomic in the audited publication flow.
+
+Experience editing prevents reassignment to another Place.
+
+Status: Routes and HTTP methods verified in code; the documented
+external POI error handling, publication validation, and rollback
+behavior are verified in inspected code and automated tests.
+This is not an exhaustive specification of every endpoint parameter
+or response schema.
 
 ## 9. Test Coverage
 
-Status: Pending documentation.
+### GEO-05E.3 verification checkpoint
+
+The backend core test suite completed successfully with 342 tests.
+
+An AST-based comparison of backend/core/tests.py against the
+HEAD baseline identified:
+
+- 305 test methods in the baseline.
+- 37 additional test methods.
+- 342 test methods in the current working tree.
+- No missing or renamed baseline test methods.
+- No duplicate top-level test classes.
+- No duplicate test methods within the same class.
+
+The comparison verifies method names and class membership; it does
+not establish that every existing test body remained unchanged.
+
+The added regression tests cover:
+
+- Manual POI publication and late materialization.
+- External Foursquare POI publication and identity reuse.
+- Ambiguous name-only candidates and geographic conflicts.
+- Incomplete or incompatible publication targets.
+- Provider errors and unavailable external references.
+- Transaction rollback when feed publication fails.
+- Read-only external POI detail exploration.
+- City identity annotation without name-only confirmation.
+- POI search fallback and name matching.
+- Experience editing and feed association.
+- Gallery main-photo selection cleanup.
+
+The frontend production build also completed successfully.
+
+A browser-based functional test verified publication of an external
+Foursquare hotel POI, creation of its Place and associated feed entry,
+subsequent experience editing, and navigation to the Place Hub.
+
+These results apply to the inspected GEO-05E.3 working tree and do
+not establish complete coverage of all geographic creation paths,
+concurrent modifications, historical preservation, or user interfaces.
+
+Status: Verified by test execution, source inspection, and functional
+inspection. Earlier GEO-04 test counts remain historical checkpoints
+in the architecture decision log.
 
 ## 10. Architecture Decision Log
 
@@ -371,11 +562,62 @@ and Destination conflict scenarios; broader geographic invariants
 remain under investigation.
 
 
+### GEO-05E/001 — Exploration Without Automatic Materialization
+
+Decision:
+
+External geographic and POI references may be searched, selected,
+and explored without creating an internal Trust Travel Place.
+
+For the audited experience publication flow, Place materialization
+or confirmed identity reuse occurs only when the contribution is
+being persisted.
+
+Rationale:
+
+- Avoid creating unused internal Places from exploratory searches.
+- Preserve the distinction between provider information and
+  traveler-contributed Trust Travel content.
+- Prevent name-only matches from silently consolidating identities.
+- Keep Place, Experience, and feed Update persistence atomic.
+
+Implementation:
+
+- External geographic and Foursquare POI detail views are read-only.
+- Manual and external POI publication use shared materialization logic.
+- Ambiguous resolution returns preserve rather than automatic reuse.
+- Publication uses transaction.atomic() for Place resolution and
+  Experience/Update persistence.
+- Existing explicit materialization endpoints remain available.
+
+Limitations:
+
+- The decision describes the audited contribution workflow, not
+  every possible backend materialization path.
+- Complete concurrency and geographic consistency guarantees
+  remain under investigation.
+- Historical Place lifecycle and deletion behavior require
+  separate architectural work.
+
+Verification:
+
+- Relevant backend regression tests passed.
+- The complete backend core suite passed 342 tests.
+- The frontend production build passed.
+- External POI exploration and experience publication were
+  inspected in a functional browser test.
+
+Status: Implemented and verified for the audited GEO-05E.3 paths.
+
 ## 11. Open Investigations
 
 - Extend geographic consistency auditing across Country, Destination, city, and POI records, beyond the GEO-04/004 and GEO-04/005 guards.
 - Audit the complete POI creation and concurrent recovery paths.
-- Verify test coverage for POI identity and context conflicts.
+- Extend the existing regression coverage for POI identity and
+  geographic context conflicts. GEO-05E.3 tests verify selected
+  ambiguity, identity reuse, validation, and rollback scenarios,
+  but exhaustive coverage of concurrent and alternate creation
+  paths remains open.
 - Review the representation of closed, renamed, or relocated places.
 - Determine how historical experience locations should be preserved.
 - Audit remaining geographic creation paths for bypasses.

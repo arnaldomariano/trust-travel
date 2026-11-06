@@ -12808,6 +12808,53 @@ class GeographyPOISearchAPITests(TestCase):
 
 
     @patch("core.views.search_pois")
+    def test_search_city_without_coordinates_preserves_registry_results(
+        self,
+        mock_search_pois,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        self.city_place.latitude = None
+        self.city_place.longitude = None
+        self.city_place.save(update_fields=["latitude", "longitude"])
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "Italia",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(
+            data["results"][0]["existing_place_id"],
+            self.restaurant.id,
+        )
+        self.assertEqual(
+            data["external_search"],
+            {
+                "status": "unavailable",
+                "reason": "missing_city_coordinates",
+            },
+        )
+
+        mock_search_pois.assert_not_called()
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+
+
+    @patch("core.views.search_pois")
     def test_search_returns_registry_results_when_foursquare_fails(
         self,
         mock_search_pois,
@@ -12841,8 +12888,64 @@ class GeographyPOISearchAPITests(TestCase):
             self.restaurant.id,
         )
 
+        self.assertEqual(
+            data["external_search"],
+            {
+                "status": "unavailable",
+                "reason": "provider_unavailable",
+            },
+        )
+
         mock_search_pois.assert_called_once()
 
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+
+
+    @patch("core.views.search_pois")
+    def test_search_returns_registry_results_when_provider_not_configured(
+        self,
+        mock_search_pois,
+    ):
+        from .geography.providers.foursquare import FoursquareConfigurationError
+        from .models import Place, PlaceExternalIdentity
+
+        mock_search_pois.side_effect = FoursquareConfigurationError(
+            "Simulated missing configuration"
+        )
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "Italia",
+                "place_type": "restaurant",
+                "city_place_id": self.city_place.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(
+            data["results"][0]["existing_place_id"],
+            self.restaurant.id,
+        )
+        self.assertEqual(
+            data["external_search"],
+            {
+                "status": "unavailable",
+                "reason": "provider_not_configured",
+            },
+        )
+
+        mock_search_pois.assert_called_once()
         self.assertEqual(Place.objects.count(), initial_place_count)
         self.assertEqual(
             PlaceExternalIdentity.objects.count(),
@@ -13208,6 +13311,108 @@ class GeographyPOISearchAPITests(TestCase):
             ),
             original_counts,
         )
+
+
+    @patch("core.views.search_pois")
+    def test_search_matches_consecutive_words_inside_poi_name(
+        self,
+        mock_search_pois,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        mock_search_pois.return_value = [
+            {
+                "name": "Hotel Nacional Inn",
+                "canonical_name": "Hotel Nacional Inn",
+                "aliases": [],
+                "external_source": "foursquare",
+                "external_id": "hotel-nacional-inn-example",
+                "country_code": "IT",
+                "latitude": 41.91,
+                "longitude": 12.50,
+            }
+        ]
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "Nacional Inn",
+                "place_type": "hotel",
+                "city_place_id": self.city_place.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(
+            data["results"][0]["external_id"],
+            "hotel-nacional-inn-example",
+        )
+
+        mock_search_pois.assert_called_once()
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+
+
+
+    @patch("core.views.search_pois")
+    def test_search_rejects_nonconsecutive_poi_name_matches(
+        self,
+        mock_search_pois,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        names = [
+            "Hotel Nacional Palace",
+            "Hotel Internacional Inn",
+            "Hotel Nacional Innover",
+        ]
+
+        mock_search_pois.return_value = [
+            {
+                "name": name,
+                "canonical_name": name,
+                "aliases": [],
+                "external_source": "foursquare",
+                "external_id": f"negative-match-{index}",
+                "country_code": "IT",
+                "latitude": 41.91,
+                "longitude": 12.50,
+            }
+            for index, name in enumerate(names)
+        ]
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "Nacional Inn",
+                "place_type": "hotel",
+                "city_place_id": self.city_place.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 0)
+        self.assertEqual(response.json()["results"], [])
+
+        mock_search_pois.assert_called_once()
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+
 
 class ExperienceCreationAtomicityTests(TestCase):
     def setUp(self):
@@ -14104,6 +14309,1366 @@ class ExternalExperienceCreationTests(TestCase):
         )
 
 
+class ManualPOIExperienceCreationTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+        from .models import Destination, Place
+
+        self.user = User.objects.create_user(
+            username="manual-poi-experience-user",
+            password="test-password",
+        )
+        self.access_token = str(AccessToken.for_user(self.user))
+
+        self.destination = Destination.objects.create(
+            name="Netherlands",
+            country="Netherlands",
+        )
+        self.city = Place.objects.create(
+            destination=self.destination,
+            name="Breda",
+            canonical_name="Breda",
+            country_code="NL",
+            place_type="city",
+            city="Breda",
+        )
+        self.url = "/api/experiences/"
+
+    def test_manual_poi_experience_materializes_at_publication(self):
+        from .models import (
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        self.assertFalse(
+            Place.objects.filter(
+                name="Café do Parque",
+                place_type="restaurant",
+            ).exists()
+        )
+
+        original_identity_count = PlaceExternalIdentity.objects.count()
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "Café do Parque",
+                "manual_poi_type": "restaurant",
+                "manual_city_place_id": self.city.id,
+                "title": "A pleasant afternoon",
+                "comment": "A welcoming café in Breda.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+        poi = Place.objects.get(
+            name="Café do Parque",
+            place_type="restaurant",
+        )
+        self.assertEqual(poi.parent_place_id, self.city.id)
+        self.assertEqual(poi.destination_id, self.city.destination_id)
+
+        experience = Experience.objects.get()
+        self.assertEqual(experience.place_id, poi.id)
+        self.assertEqual(experience.user_id, self.user.id)
+
+        update = Update.objects.get(experience=experience)
+        self.assertEqual(update.place_id, poi.id)
+
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            original_identity_count,
+        )
+
+
+
+    def test_manual_poi_experience_preserves_name_only_candidate(self):
+        from .models import (
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        existing_poi = Place.objects.create(
+            destination=self.destination,
+            parent_place=self.city,
+            name="Café do Parque",
+            canonical_name="Café do Parque",
+            country_code="NL",
+            place_type="restaurant",
+        )
+
+        initial_place_count = Place.objects.count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+        initial_experience_count = Experience.objects.count()
+        initial_update_count = Update.objects.count()
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "Café do Parque",
+                "manual_poi_type": "restaurant",
+                "manual_city_place_id": self.city.id,
+                "title": "An afternoon in Breda",
+                "comment": "A visit to the café.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+
+        data = response.json()
+
+        self.assertEqual(data["code"], "poi_resolution_required")
+        self.assertEqual(data["reason"], "unresolved_identity")
+        self.assertEqual(
+            data["candidate_place_ids"],
+            [existing_poi.id],
+        )
+
+        self.assertEqual(Place.objects.count(), initial_place_count)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count,
+        )
+        self.assertEqual(
+            Experience.objects.count(),
+            initial_experience_count,
+        )
+        self.assertEqual(Update.objects.count(), initial_update_count)
+
+        existing_poi.refresh_from_db()
+        self.assertEqual(existing_poi.name, "Café do Parque")
+
+
+    @patch("core.views.Update.objects.create")
+    def test_manual_poi_experience_rolls_back_on_feed_failure(
+        self,
+        create_update,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        initial_counts = {
+            "places": Place.objects.count(),
+            "identities": PlaceExternalIdentity.objects.count(),
+            "business_presences": BusinessPresence.objects.count(),
+            "experiences": Experience.objects.count(),
+            "updates": Update.objects.count(),
+        }
+
+        create_update.side_effect = RuntimeError(
+            "Simulated manual POI feed update failure."
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.client.post(
+                self.url,
+                data={
+                    "manual_poi_name": "Café Transacional",
+                    "manual_poi_type": "restaurant",
+                    "manual_city_place_id": self.city.id,
+                    "title": "A visit to the café",
+                    "comment": "Testing atomic publication.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+        self.assertEqual(
+            Place.objects.count(),
+            initial_counts["places"],
+        )
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_counts["identities"],
+        )
+        self.assertEqual(
+            BusinessPresence.objects.count(),
+            initial_counts["business_presences"],
+        )
+        self.assertEqual(
+            Experience.objects.count(),
+            initial_counts["experiences"],
+        )
+        self.assertEqual(
+            Update.objects.count(),
+            initial_counts["updates"],
+        )
+        self.assertFalse(
+            Place.objects.filter(
+                name="Café Transacional",
+                place_type="restaurant",
+            ).exists()
+        )
+
+
+    def test_manual_poi_experience_rejects_incomplete_fields(self):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "Café Incompleto",
+                "manual_poi_type": "restaurant",
+                "title": "An incomplete experience",
+                "comment": "The city was not provided.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("manual_poi", response.json())
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        self.assertEqual(final_counts, initial_counts)
+
+
+    def test_manual_poi_experience_rejects_unknown_city(self):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        unknown_city_id = Place.objects.order_by(
+            "-id"
+        ).first().id + 1000
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "Café Inexistente",
+                "manual_poi_type": "restaurant",
+                "manual_city_place_id": unknown_city_id,
+                "title": "A visit to the café",
+                "comment": "Testing an unknown city.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("manual_city_place_id", response.json())
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        self.assertEqual(final_counts, initial_counts)
+
+
+    def test_manual_poi_experience_rejects_existing_place_combination(self):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "place": self.city.id,
+                "manual_poi_name": "Café Contraditório",
+                "manual_poi_type": "restaurant",
+                "manual_city_place_id": self.city.id,
+                "title": "An ambiguous publication",
+                "comment": "Two publication targets were supplied.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("place", response.json())
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        self.assertEqual(final_counts, initial_counts)
+
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_manual_poi_experience_rejects_external_identity_combination(
+        self,
+        reconstruct_external_reference,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "Café Externo",
+                "manual_poi_type": "restaurant",
+                "manual_city_place_id": self.city.id,
+                "external_source": "geonames",
+                "external_id": "123456",
+                "title": "An ambiguous experience",
+                "comment": "Conflicting publication targets.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("manual_poi", response.json())
+        reconstruct_external_reference.assert_not_called()
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        self.assertEqual(final_counts, initial_counts)
+
+
+    def test_manual_poi_experience_preserves_conflicting_city_country(self):
+        from .models import (
+            BusinessPresence,
+            Country,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        conflicting_country = Country.objects.create(
+            code="BE",
+            canonical_name="Belgium",
+        )
+        self.city.country_ref = conflicting_country
+        self.city.save(update_fields=["country_ref"])
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "Café Fronteira",
+                "manual_poi_type": "restaurant",
+                "manual_city_place_id": self.city.id,
+                "title": "A visit to the café",
+                "comment": "Testing conflicting country evidence.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(response.json()["code"], "poi_resolution_required")
+        self.assertEqual(
+            response.json()["reason"],
+            "country_ancestry_conflict",
+        )
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+        self.city.refresh_from_db()
+        self.assertEqual(self.city.country_code, "NL")
+        self.assertEqual(self.city.country_ref_id, conflicting_country.id)
+
+
+
+
+class ExternalPOIExperienceCreationTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+        from .models import Destination, Place
+
+        self.user = User.objects.create_user(
+            username="external-poi-experience-user",
+            password="test-password",
+        )
+        self.access_token = str(AccessToken.for_user(self.user))
+
+        self.destination = Destination.objects.create(
+            name="Netherlands",
+            country="Netherlands",
+        )
+        self.city = Place.objects.create(
+            destination=self.destination,
+            name="Breda",
+            canonical_name="Breda",
+            country_code="NL",
+            place_type="city",
+            city="Breda",
+        )
+        self.url = "/api/experiences/"
+
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_materializes_at_publication(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        mock_get_poi.return_value = {
+            "name": "Breda Garden Café",
+            "canonical_name": "Breda Garden Café",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "breda-garden-cafe",
+            "country_code": "NL",
+            "locality": "Breda",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": "breda-garden-cafe",
+                "external_poi_type": "restaurant",
+                "external_city_place_id": self.city.id,
+                "title": "A pleasant visit",
+                "comment": "A welcoming café in Breda.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        mock_get_poi.assert_called_once_with(
+            external_id="breda-garden-cafe",
+        )
+
+        poi = Place.objects.get(
+            name="Breda Garden Café",
+            place_type="restaurant",
+        )
+        self.assertEqual(poi.parent_place_id, self.city.id)
+        self.assertEqual(poi.destination_id, self.destination.id)
+
+        self.assertTrue(
+            PlaceExternalIdentity.objects.filter(
+                place=poi,
+                external_source="foursquare",
+                external_id="breda-garden-cafe",
+            ).exists()
+        )
+        self.assertTrue(
+            BusinessPresence.objects.filter(place=poi).exists()
+        )
+
+        experience = Experience.objects.get()
+        self.assertEqual(experience.place_id, poi.id)
+        self.assertEqual(experience.user_id, self.user.id)
+
+        update = Update.objects.get(experience=experience)
+        self.assertEqual(update.place_id, poi.id)
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(
+            final_counts,
+            tuple(count + 1 for count in initial_counts),
+        )
+
+
+
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_preserves_name_only_candidate(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        existing_poi = Place.objects.create(
+            destination=self.destination,
+            parent_place=self.city,
+            name="Breda Garden Café",
+            canonical_name="Breda Garden Café",
+            country_code="NL",
+            place_type="restaurant",
+        )
+
+        mock_get_poi.return_value = {
+            "name": "Breda Garden Café",
+            "canonical_name": "Breda Garden Café",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "breda-garden-cafe",
+            "country_code": "NL",
+            "locality": "Breda",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": "breda-garden-cafe",
+                "external_poi_type": "restaurant",
+                "external_city_place_id": self.city.id,
+                "title": "An afternoon in Breda",
+                "comment": "A visit to the café.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+
+        data = response.json()
+        self.assertEqual(data["code"], "poi_resolution_required")
+        self.assertEqual(data["reason"], "unresolved_identity")
+        self.assertEqual(
+            data["candidate_place_ids"],
+            [existing_poi.id],
+        )
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+        existing_poi.refresh_from_db()
+        self.assertEqual(existing_poi.name, "Breda Garden Café")
+
+
+
+    @patch("core.views.Update.objects.create")
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_rolls_back_on_feed_failure(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+        mock_create_update,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        mock_get_poi.return_value = {
+            "name": "Breda Transaction Café",
+            "canonical_name": "Breda Transaction Café",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "breda-transaction-cafe",
+            "country_code": "NL",
+            "locality": "Breda",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        mock_create_update.side_effect = RuntimeError(
+            "Simulated external POI feed update failure."
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.client.post(
+                self.url,
+                data={
+                    "external_source": "foursquare",
+                    "external_id": "breda-transaction-cafe",
+                    "external_poi_type": "restaurant",
+                    "external_city_place_id": self.city.id,
+                    "title": "A transactional visit",
+                    "comment": "Testing atomic Foursquare publication.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+        mock_create_update.assert_called_once()
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        self.assertEqual(final_counts, initial_counts)
+        self.assertFalse(
+            Place.objects.filter(
+                name="Breda Transaction Café",
+                place_type="restaurant",
+            ).exists()
+        )
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="foursquare",
+                external_id="breda-transaction-cafe",
+            ).exists()
+        )
+
+
+
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_handles_provider_errors(
+        self,
+        mock_get_poi,
+    ):
+        from .geography.providers.foursquare import (
+            FoursquareConfigurationError,
+            FoursquareReferenceNotFoundError,
+            FoursquareRequestError,
+        )
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        cases = [
+            (FoursquareReferenceNotFoundError, 404),
+            (FoursquareConfigurationError, 503),
+            (FoursquareRequestError, 503),
+        ]
+
+        for exception_type, expected_status in cases:
+            with self.subTest(exception=exception_type.__name__):
+                mock_get_poi.reset_mock()
+                mock_get_poi.side_effect = exception_type(
+                    "Simulated Foursquare failure."
+                )
+
+                initial_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+
+                response = self.client.post(
+                    self.url,
+                    data={
+                        "external_source": "foursquare",
+                        "external_id": "breda-provider-test",
+                        "external_poi_type": "restaurant",
+                        "external_city_place_id": self.city.id,
+                        "title": "A visit in Breda",
+                        "comment": "Testing provider failure.",
+                        "rating": 4,
+                    },
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    expected_status,
+                    response.content,
+                )
+                mock_get_poi.assert_called_once_with(
+                    external_id="breda-provider-test",
+                )
+
+                final_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+                self.assertEqual(final_counts, initial_counts)
+
+
+
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_preserves_conflicting_city_country(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+    ):
+        from .models import (
+            BusinessPresence,
+            Country,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        conflicting_country = Country.objects.create(
+            code="BE",
+            canonical_name="Belgium",
+        )
+        self.city.country_ref = conflicting_country
+        self.city.save(update_fields=["country_ref"])
+
+        mock_get_poi.return_value = {
+            "name": "Breda Border Café",
+            "canonical_name": "Breda Border Café",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "breda-border-cafe",
+            "country_code": "BE",
+            "locality": "Breda",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": "breda-border-cafe",
+                "external_poi_type": "restaurant",
+                "external_city_place_id": self.city.id,
+                "title": "A border visit",
+                "comment": "Testing contradictory country evidence.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(
+            response.json()["code"],
+            "poi_resolution_required",
+        )
+        self.assertEqual(
+            response.json()["reason"],
+            "country_ancestry_conflict",
+        )
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+        self.city.refresh_from_db()
+        self.assertEqual(self.city.country_code, "NL")
+        self.assertEqual(
+            self.city.country_ref_id,
+            conflicting_country.id,
+        )
+
+
+
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_rejects_mismatched_geography(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        cases = [
+            ("BE", "Breda"),
+            ("NL", "Rotterdam"),
+        ]
+
+        for country_code, locality in cases:
+            with self.subTest(
+                country_code=country_code,
+                locality=locality,
+            ):
+                mock_get_poi.return_value = {
+                    "name": "Geographic Test Café",
+                    "canonical_name": "Geographic Test Café",
+                    "aliases": [],
+                    "external_source": "foursquare",
+                    "external_id": "geographic-test-cafe",
+                    "country_code": country_code,
+                    "locality": locality,
+                    "latitude": 51.5880,
+                    "longitude": 4.7760,
+                }
+                mock_search_pois.return_value = [
+                    mock_get_poi.return_value.copy()
+                ]
+
+                initial_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+
+                response = self.client.post(
+                    self.url,
+                    data={
+                        "external_source": "foursquare",
+                        "external_id": "geographic-test-cafe",
+                        "external_poi_type": "restaurant",
+                        "external_city_place_id": self.city.id,
+                        "title": "Geographic validation",
+                        "comment": "Testing geographic mismatch.",
+                        "rating": 4,
+                    },
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    400,
+                    response.content,
+                )
+                self.assertIn(
+                    "external_city_place_id",
+                    response.json(),
+                )
+
+                final_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+                self.assertEqual(final_counts, initial_counts)
+
+
+
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_reuses_confirmed_identity(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        existing_poi = Place.objects.create(
+            destination=self.destination,
+            parent_place=self.city,
+            name="Breda Garden Café",
+            canonical_name="Breda Garden Café",
+            country_code="NL",
+            place_type="restaurant",
+            city="Breda",
+            latitude="51.5880",
+            longitude="4.7760",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=existing_poi,
+            external_source="foursquare",
+            external_id="breda-garden-cafe",
+        )
+
+        mock_get_poi.return_value = {
+            "name": "Breda Garden Café",
+            "canonical_name": "Breda Garden Café",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": "breda-garden-cafe",
+            "country_code": "NL",
+            "locality": "Breda",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        initial_places = Place.objects.count()
+        initial_identities = PlaceExternalIdentity.objects.count()
+        initial_experiences = Experience.objects.count()
+        initial_updates = Update.objects.count()
+        initial_businesses = BusinessPresence.objects.count()
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": "breda-garden-cafe",
+                "external_poi_type": "restaurant",
+                "external_city_place_id": self.city.id,
+                "title": "Another visit to Breda",
+                "comment": "A new experience at the same café.",
+                "rating": 5,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        mock_get_poi.assert_called_once_with(
+            external_id="breda-garden-cafe",
+        )
+
+        self.assertEqual(Place.objects.count(), initial_places)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identities,
+        )
+        self.assertEqual(
+            Experience.objects.count(),
+            initial_experiences + 1,
+        )
+        self.assertEqual(
+            Update.objects.count(),
+            initial_updates + 1,
+        )
+
+        experience = Experience.objects.latest("id")
+        self.assertEqual(experience.place_id, existing_poi.id)
+        self.assertEqual(experience.user_id, self.user.id)
+
+        update = Update.objects.get(experience=experience)
+        self.assertEqual(update.place_id, existing_poi.id)
+
+        self.assertTrue(
+            PlaceExternalIdentity.objects.filter(
+                place=existing_poi,
+                external_source="foursquare",
+                external_id="breda-garden-cafe",
+            ).exists()
+        )
+
+        self.assertEqual(
+            BusinessPresence.objects.count(),
+            initial_businesses + 1,
+        )
+        self.assertTrue(
+            BusinessPresence.objects.filter(
+                place=existing_poi,
+            ).exists()
+        )
+
+
+
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_rejects_incomplete_fields(
+        self,
+        mock_get_poi,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        base_payload = {
+            "external_source": "foursquare",
+            "external_id": "breda-garden-cafe",
+            "title": "An incomplete publication",
+            "comment": "Testing required Foursquare fields.",
+            "rating": 4,
+        }
+
+        cases = [
+            {
+                "name": "missing_type",
+                "fields": {
+                    "external_city_place_id": self.city.id,
+                },
+            },
+            {
+                "name": "missing_city",
+                "fields": {
+                    "external_poi_type": "restaurant",
+                },
+            },
+        ]
+
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                mock_get_poi.reset_mock()
+
+                initial_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+
+                response = self.client.post(
+                    self.url,
+                    data={
+                        **base_payload,
+                        **case["fields"],
+                    },
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    400,
+                    response.content,
+                )
+                self.assertIn("external_poi", response.json())
+                mock_get_poi.assert_not_called()
+
+                final_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+
+                self.assertEqual(final_counts, initial_counts)
+
+
+
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_rejects_unknown_city(
+        self,
+        mock_get_poi,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        unknown_city_id = Place.objects.order_by("-id").first().id + 1000
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": "breda-garden-cafe",
+                "external_poi_type": "restaurant",
+                "external_city_place_id": unknown_city_id,
+                "title": "Unknown city publication",
+                "comment": "Testing an invalid city reference.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("external_city_place_id", response.json())
+        mock_get_poi.assert_not_called()
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        self.assertEqual(final_counts, initial_counts)
+
+
+
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_rejects_existing_place_combination(
+        self,
+        mock_get_poi,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "place": self.city.id,
+                "external_source": "foursquare",
+                "external_id": "breda-garden-cafe",
+                "external_poi_type": "restaurant",
+                "external_city_place_id": self.city.id,
+                "title": "Conflicting publication targets",
+                "comment": "Two different publication targets.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("external_poi", response.json())
+        mock_get_poi.assert_not_called()
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        self.assertEqual(final_counts, initial_counts)
+
+
+
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_rejects_manual_poi_combination(
+        self,
+        mock_get_poi,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": "breda-garden-cafe",
+                "external_poi_type": "restaurant",
+                "external_city_place_id": self.city.id,
+                "manual_poi_name": "Breda Garden Café",
+                "manual_poi_type": "restaurant",
+                "manual_city_place_id": self.city.id,
+                "title": "Conflicting POI creation",
+                "comment": "Manual and external publication targets.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("manual_poi", response.json())
+        mock_get_poi.assert_not_called()
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        self.assertEqual(final_counts, initial_counts)
+
+
 class ExternalUpdateCreationTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User
@@ -14547,3 +16112,675 @@ class ExternalUpdateCreationTests(TestCase):
             Place.objects.filter(name="Rollback Update Place").exists()
         )
         self.assertEqual(Update.objects.count(), 0)
+
+
+class GeographyCityIdentityAnnotationTests(TestCase):
+
+    def test_multiple_same_name_cities_remain_unconfirmed(self):
+        from .geography.services import annotate_existing_city_places
+        from .models import Destination, Place
+
+        country = get_or_create_country(value="Italy")
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        cities = [
+            Place.objects.create(
+                destination=destination,
+                country_ref=country,
+                name="Springfield",
+                canonical_name="Springfield",
+                aliases=[],
+                country_code="IT",
+                place_type="city",
+                geographic_type="settlement",
+            )
+            for _ in range(2)
+        ]
+
+        results = annotate_existing_city_places(
+            results=[
+                {
+                    "name": "Springfield",
+                    "canonical_name": "Springfield",
+                    "aliases": [],
+                    "country_code": "IT",
+                    "geographic_type": "settlement",
+                    "external_source": "geonames",
+                    "external_id": "external-springfield",
+                }
+            ],
+            country_code="IT",
+        )
+
+        self.assertIsNone(results[0]["existing_place_id"])
+        self.assertEqual(
+            results[0]["candidate_place_ids"],
+            sorted(city.id for city in cities),
+        )
+
+    def test_exact_external_identity_confirms_existing_city(self):
+        from .geography.services import annotate_existing_city_places
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        country = get_or_create_country(value="Italy")
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        existing_city = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Rome",
+            canonical_name="Rome",
+            aliases=[],
+            country_code="IT",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=existing_city,
+            external_source="geonames",
+            external_id="3169070",
+            geographic_type="settlement",
+        )
+
+        results = annotate_existing_city_places(
+            results=[
+                {
+                    "name": "Rome",
+                    "canonical_name": "Rome",
+                    "aliases": [],
+                    "country_code": "IT",
+                    "geographic_type": "settlement",
+                    "external_source": "geonames",
+                    "external_id": "3169070",
+                }
+            ],
+            country_code="IT",
+        )
+
+        self.assertEqual(
+            results[0]["existing_place_id"],
+            existing_city.id,
+        )
+        self.assertEqual(
+            results[0]["candidate_place_ids"],
+            [],
+        )
+
+    def test_same_name_does_not_confirm_city_external_identity(self):
+        from .geography.services import annotate_existing_city_places
+        from .models import Destination, Place
+
+        country = get_or_create_country(value="Italy")
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        existing_city = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Springfield",
+            canonical_name="Springfield",
+            aliases=[],
+            country_code="IT",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        results = annotate_existing_city_places(
+            results=[
+                {
+                    "name": "Springfield",
+                    "canonical_name": "Springfield",
+                    "aliases": [],
+                    "country_code": "IT",
+                    "geographic_type": "settlement",
+                    "external_source": "geonames",
+                    "external_id": "external-springfield",
+                }
+            ],
+            country_code="IT",
+        )
+
+        self.assertIsNone(results[0]["existing_place_id"])
+        self.assertEqual(
+            results[0]["candidate_place_ids"],
+            [existing_city.id],
+        )
+
+        existing_city.refresh_from_db()
+        self.assertEqual(existing_city.name, "Springfield")
+
+
+class GeographyCitySearchAPITests(TestCase):
+    @patch("core.views.search_geographic_places")
+    def test_search_preserves_unconfirmed_city_candidate_without_materialization(
+        self,
+        mock_search_geographic_places,
+    ):
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        country = get_or_create_country(value="Italy")
+        destination = Destination.objects.create(
+            name="Italy",
+            country="Italy",
+        )
+
+        existing_city = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Springfield",
+            canonical_name="Springfield",
+            aliases=[],
+            country_code="IT",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        mock_search_geographic_places.return_value = [
+            {
+                "name": "Springfield",
+                "canonical_name": "Springfield",
+                "aliases": [],
+                "country_code": "IT",
+                "latitude": 41.0,
+                "longitude": 12.0,
+                "geographic_type": "settlement",
+                "external_source": "geonames",
+                "external_id": "external-springfield",
+            }
+        ]
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/cities/search/",
+            {
+                "q": "Springfield",
+                "country_code": "IT",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+
+        result = data["results"][0]
+
+        self.assertEqual(result["external_source"], "geonames")
+        self.assertEqual(result["external_id"], "external-springfield")
+        self.assertIsNone(result["existing_place_id"])
+        self.assertEqual(
+            result["candidate_place_ids"],
+            [existing_city.id],
+        )
+
+        mock_search_geographic_places.assert_called_once_with(
+            query="Springfield",
+            country_code="IT",
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+class FoursquarePOIProviderTests(TestCase):
+    @patch("core.geography.providers.foursquare.urlopen")
+    @patch("core.geography.providers.foursquare.get_foursquare_service_key")
+    def test_get_poi_distinguishes_not_found_reference(
+        self,
+        mock_service_key,
+        mock_urlopen,
+    ):
+        from io import BytesIO
+        from urllib.error import HTTPError
+
+        from .geography.providers.foursquare import (
+            FoursquareReferenceNotFoundError,
+            get_poi,
+        )
+
+        mock_service_key.return_value = "test-service-key"
+        mock_urlopen.side_effect = HTTPError(
+            url="https://places-api.foursquare.com/places/missing-poi",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=BytesIO(b""),
+        )
+
+        with self.assertRaises(FoursquareReferenceNotFoundError):
+            get_poi("missing-poi")
+
+    @patch("core.geography.providers.foursquare.urlopen")
+    @patch("core.geography.providers.foursquare.get_foursquare_service_key")
+    def test_get_poi_preserves_temporary_provider_failure(
+        self,
+        mock_service_key,
+        mock_urlopen,
+    ):
+        from io import BytesIO
+        from urllib.error import HTTPError
+
+        from .geography.providers.foursquare import (
+            FoursquareReferenceNotFoundError,
+            FoursquareRequestError,
+            get_poi,
+        )
+
+        mock_service_key.return_value = "test-service-key"
+        mock_urlopen.side_effect = HTTPError(
+            url="https://places-api.foursquare.com/places/test-poi",
+            code=503,
+            msg="Service Unavailable",
+            hdrs=None,
+            fp=BytesIO(b""),
+        )
+
+        with self.assertRaises(FoursquareRequestError) as context:
+            get_poi("test-poi")
+
+        self.assertNotIsInstance(
+            context.exception,
+            FoursquareReferenceNotFoundError,
+        )
+
+
+class GeographyPOIExternalDetailAPITests(TestCase):
+    @patch("core.views.get_poi")
+    def test_external_detail_rejects_invalid_parameters(
+        self,
+        mock_get_poi,
+    ):
+        cases = [
+            {
+                "external_source": "unknown",
+                "external_id": "example-123",
+            },
+            {
+                "external_source": "foursquare",
+            },
+            {
+                "external_source": "foursquare",
+                "external_id": "   ",
+            },
+        ]
+
+        for params in cases:
+            with self.subTest(params=params):
+                response = self.client.get(
+                    "/api/geography/pois/external-detail/",
+                    params,
+                )
+
+                self.assertEqual(response.status_code, 400)
+
+        mock_get_poi.assert_not_called()
+
+
+    @patch("core.views.get_poi")
+    def test_external_detail_handles_foursquare_provider_errors(
+        self,
+        mock_get_poi,
+    ):
+        from .geography.providers.foursquare import (
+            FoursquareConfigurationError,
+            FoursquareReferenceNotFoundError,
+            FoursquareRequestError,
+        )
+
+        cases = [
+            (FoursquareReferenceNotFoundError, 404),
+            (FoursquareConfigurationError, 503),
+            (FoursquareRequestError, 503),
+        ]
+
+        for exception_type, expected_status in cases:
+            with self.subTest(exception=exception_type.__name__):
+                mock_get_poi.reset_mock()
+                mock_get_poi.side_effect = exception_type("Test failure")
+
+                response = self.client.get(
+                    "/api/geography/pois/external-detail/",
+                    {
+                        "external_source": "foursquare",
+                        "external_id": "fsq-example-123",
+                    },
+                )
+
+                self.assertEqual(response.status_code, expected_status)
+                mock_get_poi.assert_called_once_with(
+                    external_id="fsq-example-123",
+                )
+
+    @patch("core.views.get_poi")
+    def test_public_foursquare_detail_does_not_materialize(
+        self,
+        mock_get_poi,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        reference = {
+            "external_source": "foursquare",
+            "external_id": "fsq-example-123",
+            "name": "Example Restaurant",
+            "latitude": 41.9028,
+            "longitude": 12.4964,
+            "address": "Example Street 10",
+            "locality": "Rome",
+            "country_code": "IT",
+            "categories": [],
+        }
+
+        mock_get_poi.return_value = reference
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/pois/external-detail/",
+            {
+                "external_source": "foursquare",
+                "external_id": "fsq-example-123",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), reference)
+
+        mock_get_poi.assert_called_once_with(
+            external_id="fsq-example-123",
+        )
+
+        self.assertEqual(
+            Place.objects.count(),
+            places_before,
+        )
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+class ExperienceEditingRegressionTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        from .models import Destination, Place
+
+        self.user = User.objects.create_user(
+            username="experience-editing-user",
+            password="test-password",
+        )
+        self.access_token = str(AccessToken.for_user(self.user))
+
+        self.destination = Destination.objects.create(
+            name="Netherlands",
+            country="Netherlands",
+        )
+        self.place = Place.objects.create(
+            destination=self.destination,
+            name="Breda",
+            canonical_name="Breda",
+            country_code="NL",
+            place_type="city",
+            city="Breda",
+        )
+
+    def test_editing_second_experience_updates_only_its_feed_entry(self):
+        from .models import Experience, Update
+
+        first = Experience.objects.create(
+            user=self.user,
+            place=self.place,
+            title="First experience",
+            comment="First visit.",
+            rating=4,
+        )
+        second = Experience.objects.create(
+            user=self.user,
+            place=self.place,
+            title="Second experience",
+            comment="Second visit.",
+            rating=5,
+        )
+
+        first_update = Update.objects.create(
+            user=self.user,
+            place=self.place,
+            experience=first,
+            type="experience",
+            category="tourism",
+            text="First experience",
+        )
+        second_update = Update.objects.create(
+            user=self.user,
+            place=self.place,
+            experience=second,
+            type="experience",
+            category="tourism",
+            text="Second experience",
+        )
+
+        response = self.client.patch(
+            f"/api/experiences/{second.id}/",
+            data={"title": "Second experience edited"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        first_update.refresh_from_db()
+        second_update.refresh_from_db()
+
+        self.assertEqual(first_update.text, "First experience")
+        self.assertEqual(
+            second_update.text,
+            "Second experience edited",
+        )
+
+    def test_editing_experience_rejects_place_change(self):
+        from .models import Experience, Place
+
+        other_place = Place.objects.create(
+            destination=self.destination,
+            name="Rotterdam",
+            canonical_name="Rotterdam",
+            country_code="NL",
+            place_type="city",
+            city="Rotterdam",
+        )
+
+        experience = Experience.objects.create(
+            user=self.user,
+            place=self.place,
+            title="A visit to Breda",
+            comment="Original experience.",
+            rating=4,
+        )
+
+        response = self.client.patch(
+            f"/api/experiences/{experience.id}/",
+            data={
+                "place": other_place.id,
+                "title": "Edited experience",
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        experience.refresh_from_db()
+        self.assertEqual(experience.place_id, self.place.id)
+        self.assertEqual(experience.title, "A visit to Breda")
+
+    def test_editing_content_without_place_preserves_existing_place(self):
+        from .models import Experience, Update
+
+        experience = Experience.objects.create(
+            user=self.user,
+            place=self.place,
+            title="Original title",
+            comment="Original comment.",
+            rating=3,
+        )
+
+        feed_update = Update.objects.create(
+            user=self.user,
+            place=self.place,
+            experience=experience,
+            type="experience",
+            category="tourism",
+            text="Original title",
+        )
+
+        response = self.client.patch(
+            f"/api/experiences/{experience.id}/",
+            data={
+                "title": "Updated title",
+                "comment": "Updated comment.",
+                "rating": 5,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        experience.refresh_from_db()
+        feed_update.refresh_from_db()
+
+        self.assertEqual(experience.place_id, self.place.id)
+        self.assertEqual(experience.title, "Updated title")
+        self.assertEqual(experience.comment, "Updated comment.")
+        self.assertEqual(experience.rating, 5)
+        self.assertEqual(feed_update.text, "Updated title")
+        self.assertEqual(feed_update.place_id, self.place.id)
+
+    def test_replacing_gallery_main_photo_clears_selection(self):
+        import shutil
+        import tempfile
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test.client import MULTIPART_CONTENT, encode_multipart
+        from django.test import override_settings
+        from django.utils import timezone
+        from PIL import Image
+
+        from .models import Experience
+
+        def make_image(name):
+            buffer = BytesIO()
+            Image.new("RGB", (10, 10), "white").save(buffer, format="PNG")
+            return SimpleUploadedFile(
+                name,
+                buffer.getvalue(),
+                content_type="image/png",
+            )
+
+        temporary_media = tempfile.mkdtemp(prefix="tt-gallery-test-")
+        self.addCleanup(shutil.rmtree, temporary_media, ignore_errors=True)
+
+        with override_settings(MEDIA_ROOT=temporary_media):
+            experience = Experience.objects.create(
+                user=self.user,
+                place=self.place,
+                title="Gallery experience",
+                comment="Original photograph.",
+                rating=5,
+                image=make_image("original.png"),
+                gallery_photo_source="main",
+                gallery_featured_at=timezone.now(),
+            )
+
+            response = self.client.patch(
+                f"/api/experiences/{experience.id}/",
+                data=encode_multipart(
+                    "BoUnDaRyStRiNg",
+                    {"image": make_image("replacement.png")},
+                ),
+                content_type=MULTIPART_CONTENT,
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+            self.assertEqual(response.status_code, 200)
+
+            experience.refresh_from_db()
+
+            self.assertTrue(experience.image)
+            self.assertIn("replacement", experience.image.name)
+            self.assertEqual(experience.gallery_photo_source, "")
+            self.assertIsNone(experience.gallery_photo)
+            self.assertIsNone(experience.gallery_featured_at)
+            self.assertEqual(experience.place_id, self.place.id)
+
+    def test_removing_gallery_main_photo_clears_selection(self):
+        import shutil
+        import tempfile
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+        from django.utils import timezone
+        from PIL import Image
+
+        from .models import Experience
+
+        buffer = BytesIO()
+        Image.new("RGB", (10, 10), "white").save(buffer, format="PNG")
+
+        temporary_media = tempfile.mkdtemp(prefix="tt-gallery-remove-")
+        self.addCleanup(shutil.rmtree, temporary_media, ignore_errors=True)
+
+        with override_settings(MEDIA_ROOT=temporary_media):
+            experience = Experience.objects.create(
+                user=self.user,
+                place=self.place,
+                title="Experience with main photo",
+                comment="Photo removal test.",
+                rating=5,
+                image=SimpleUploadedFile(
+                    "main-photo.png",
+                    buffer.getvalue(),
+                    content_type="image/png",
+                ),
+                gallery_photo_source="main",
+                gallery_featured_at=timezone.now(),
+            )
+
+            response = self.client.patch(
+                f"/api/experiences/{experience.id}/",
+                data={"remove_image": "true"},
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+            self.assertEqual(response.status_code, 200)
+
+            experience.refresh_from_db()
+
+            self.assertFalse(experience.image)
+            self.assertEqual(experience.gallery_photo_source, "")
+            self.assertIsNone(experience.gallery_photo)
+            self.assertIsNone(experience.gallery_featured_at)
+            self.assertEqual(experience.place_id, self.place.id)
+            self.assertEqual(
+                experience.title,
+                "Experience with main photo",
+            )

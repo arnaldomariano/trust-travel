@@ -283,10 +283,19 @@ The following application operations were examined:
 
 Neither examined operation directly deletes a Place.
 
-This is not an exhaustive audit of deletion paths, including
-administrative actions and indirect deletion behavior.
+The Django Admin now blocks individual and bulk deletion of
+Place and Destination records through ProtectedGeographicAdmin.
 
-Status: Verified in inspected application code.
+This protection was introduced in commit 17f3a8d and verified by
+four dedicated regression tests. The complete backend core suite
+passed 346 tests at that checkpoint.
+
+The protection applies to Django Admin operations only. It does
+not prevent deletion through direct ORM calls, database access,
+or other application paths that have not yet been audited.
+
+Status: Admin protection implemented and verified by automated
+tests; broader deletion-path audit remains open.
 
 
 ## 7. Concurrency and Transactions
@@ -621,3 +630,22 @@ Status: Implemented and verified for the audited GEO-05E.3 paths.
 - Review the representation of closed, renamed, or relocated places.
 - Determine how historical experience locations should be preserved.
 - Audit remaining geographic creation paths for bypasses.
+- Design non-destructive Place reconciliation and merge procedures
+  that preserve independent contributions, authorship, historical
+  references, and existing links. Record merge decisions and support
+  recovery from incorrect reconciliation.
+- Establish a controlled Place lifecycle and deletion policy,
+  including archival, retention, and protection against destructive
+  cascading operations outside Django Admin.
+- Plan auditable histories for critical geographic changes,
+  moderation decisions, administrative actions, and identity merges.
+- Design isolated, immutable backups for databases and media,
+  with appropriate retention, access separation, and recovery testing.
+- Plan incident recovery, including point-in-time restoration,
+  integrity verification, and reconciliation of legitimate changes
+  made after the last recoverable checkpoint.
+- Define stronger authorization and independent approval for
+  high-impact operations, including bulk changes to countries,
+  Places, and their historical contributions.
+- Ensure preservation and recovery policies respect privacy,
+  consent withdrawal, and applicable personal-data deletion rights.

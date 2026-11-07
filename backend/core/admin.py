@@ -730,12 +730,23 @@ class OfficialSourceEntryAdmin(admin.ModelAdmin):
             )
 
 
+class ProtectedGeographicAdmin(admin.ModelAdmin):
+    """Prevent destructive deletion of shared geographic records."""
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Destination)
-class DestinationAdmin(admin.ModelAdmin):
+class DestinationAdmin(ProtectedGeographicAdmin):
     list_display = ("name", "city", "country", "image_url")
 
 
-admin.site.register(Place)
+@admin.register(Place)
+class PlaceAdmin(ProtectedGeographicAdmin):
+    pass
+
+
 admin.site.register(Experience)
 admin.site.register(Friendship)
 admin.site.register(ExperienceReply)

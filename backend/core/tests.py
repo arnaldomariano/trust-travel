@@ -16784,3 +16784,65 @@ class ExperienceEditingRegressionTests(TestCase):
                 experience.title,
                 "Experience with main photo",
             )
+
+
+class PlaceDestinationAdminDeletionProtectionTests(TestCase):
+    """Protect geographic records against accidental admin deletion."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        self.superuser = get_user_model().objects.create_superuser(
+            username="geography_admin_protection",
+            email="geography-admin@example.com",
+            password="test-password",
+        )
+        self.client.force_login(self.superuser)
+
+    def test_place_admin_disallows_deletion(self):
+        from django.contrib import admin
+        from .models import Place
+
+        model_admin = admin.site._registry[Place]
+
+        self.assertFalse(
+            model_admin.has_delete_permission(
+                self.client.request().wsgi_request
+            )
+        )
+
+    def test_destination_admin_disallows_deletion(self):
+        from django.contrib import admin
+        from .models import Destination
+
+        model_admin = admin.site._registry[Destination]
+
+        self.assertFalse(
+            model_admin.has_delete_permission(
+                self.client.request().wsgi_request
+            )
+        )
+
+    def test_place_admin_excludes_bulk_delete_action(self):
+        from django.contrib import admin
+        from django.test import RequestFactory
+        from .models import Place
+
+        request = RequestFactory().get("/admin/core/place/")
+        request.user = self.superuser
+
+        actions = admin.site._registry[Place].get_actions(request)
+
+        self.assertNotIn("delete_selected", actions)
+
+    def test_destination_admin_excludes_bulk_delete_action(self):
+        from django.contrib import admin
+        from django.test import RequestFactory
+        from .models import Destination
+
+        request = RequestFactory().get("/admin/core/destination/")
+        request.user = self.superuser
+
+        actions = admin.site._registry[Destination].get_actions(request)
+
+        self.assertNotIn("delete_selected", actions)

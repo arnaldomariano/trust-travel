@@ -119,8 +119,29 @@ A traveler may publish an experience associated with:
 3. A supported external Foursquare POI.
 4. A manually specified POI within an existing city/locality.
 
+For external Foursquare POI publication, the traveler may select
+a POI associated with either:
+
+- An existing internal Trust Travel city/locality.
+- An external GeoNames or Google Places city reference that has
+  not yet been materialized internally.
+
+These alternatives are mutually exclusive. The publication API
+accepts external_city_place_id for an internal city, or the pair
+external_city_source and external_city_id for an external city.
+
 For an external or manual POI, the backend validates the publication
 target and resolves the Place during successful publication.
+
+When the Foursquare POI is associated with an external city,
+the backend resolves or materializes the city before resolving
+the POI, within the same publication transaction.
+
+A functional GEO-05F browser test verified the path from
+GeoNames Amsterdam discovery through Hilton Amsterdam Foursquare
+exploration to successful publication of a fictional Experience.
+The resulting city and hotel retained their respective external
+provider identities.
 
 Place materialization and Experience/Update creation occur inside
 a database transaction. If publication fails, the transaction rolls back.

@@ -364,7 +364,17 @@ POST /api/experiences/ supports publication against an existing
 Place or supported external/manual publication targets.
 
 External Foursquare POI publication requires a complete external
-identity together with external_poi_type and external_city_place_id.
+identity, external_poi_type, and exactly one supported city context:
+
+- An existing internal city identified by external_city_place_id.
+- An external city identified by external_city_source
+  (geonames or google_places) together with external_city_id.
+
+An external city reference is reconstructed and validated before
+publication. During the atomic publication transaction, the city
+reference is resolved and materialized or reused before resolving
+the Foursquare POI. Geographic ambiguity or incompatible context
+must not result in automatic consolidation.
 
 Manual POI publication requires manual_poi_name, manual_poi_type,
 and manual_city_place_id.
@@ -433,6 +443,55 @@ concurrent modifications, historical preservation, or user interfaces.
 Status: Verified by test execution, source inspection, and functional
 inspection. Earlier GEO-04 test counts remain historical checkpoints
 in the architecture decision log.
+
+### GEO-05F verification checkpoint
+
+The complete backend core suite passed 351 tests.
+
+All 16 ExternalPOIExperienceCreationTests passed, covering the
+supported external Foursquare POI publication paths, including
+external geographic city references, validation, identity reuse,
+geographic resolution conflicts, and transactional rollback.
+
+The frontend production build completed successfully.
+
+A functional browser test followed this path:
+
+1. Search for Amsterdam and select GeoNames reference 2759794.
+2. Explore hotels and select Hilton Amsterdam from Foursquare.
+3. Open the external POI preview without publishing.
+4. Publish a fictional test Experience through the contribution form.
+5. Verify the persisted Experience, city, POI, and external identities.
+
+The resulting development records were:
+
+- Experience: 82.
+- City Place: 131 (Amsterdam), GeoNames identity 2759794.
+- POI Place: 132 (Hilton Amsterdam), Foursquare identity
+  4a2706a5f964a5209a8b1fe3.
+
+A subsequent database query confirmed one PlaceExternalIdentity
+record for each of those external references.
+
+This browser test validates the successful publication path.
+Non-materialization before publication, conflict handling, and
+rollback are supported by automated tests rather than a direct
+before-and-after database comparison in this browser session.
+
+The fictional Experience is development test data and should be
+reviewed during the planned pre-Beta data cleanup.
+
+Implementation checkpoint:
+
+- Commit: 0a8ff89.
+- Branch: dev.
+- Backend core tests: 351 passed.
+- ExternalPOIExperienceCreationTests: 16 passed.
+- Frontend production build: passed.
+
+Status: Implemented and verified for the documented GEO-05F
+publication paths. Broader concurrency and geographic lifecycle
+guarantees remain under investigation.
 
 ## 10. Architecture Decision Log
 
@@ -617,6 +676,66 @@ Verification:
   inspected in a functional browser test.
 
 Status: Implemented and verified for the audited GEO-05E.3 paths.
+
+### GEO-05F/001 — External City Resolution During POI Publication
+
+Decision:
+
+An external Foursquare POI may be published against either an
+existing internal city or a supported external geographic city
+reference that has not yet been materialized in Trust Travel.
+
+The two city contexts are mutually exclusive.
+
+Rationale:
+
+- Allow travelers to contribute experiences without requiring
+  preliminary creation of geographic records.
+- Keep exploration separate from contribution persistence.
+- Preserve authoritative external identities and geographic context.
+- Avoid unnecessary Places created by abandoned exploration.
+- Prevent partial persistence when Experience publication fails.
+
+Implementation:
+
+- The publication serializer accepts external_city_place_id or the
+  pair external_city_source and external_city_id.
+- Supported external city sources are geonames and google_places.
+- The publication view reconstructs and validates the external
+  city reference before entering the persistence transaction.
+- Within transaction.atomic(), the city reference is resolved
+  and materialized or reused before the Foursquare POI.
+- The Experience and associated feed Update are persisted within
+  the same transaction.
+- Geographic ambiguity is preserved rather than automatically
+  merged. Geographic and POI resolution conflicts use their
+  respective HTTP 409 responses.
+
+Limitations:
+
+- Existing explicit materialization endpoints remain registered.
+- This decision does not guarantee that every creation path
+  follows late materialization.
+- Full concurrency safety, historical geographic preservation,
+  and lifecycle protection remain separate investigations.
+
+Verification:
+
+- All 351 backend core tests passed.
+- All 16 ExternalPOIExperienceCreationTests passed.
+- The frontend production build passed.
+- A browser-based test successfully published a fictional
+  experience against Hilton Amsterdam, using an external
+  GeoNames city reference and a Foursquare POI reference.
+- Database inspection confirmed the resulting external identities.
+
+Implementation checkpoint:
+
+- Commit: 0a8ff89.
+- Branch: dev.
+
+Status: Implemented and verified for the audited GEO-05F
+experience publication workflow.
 
 ## 11. Open Investigations
 

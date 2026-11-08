@@ -35,6 +35,13 @@ function POIExplorationContent() {
   const id = searchParams.get("id");
   const poiTypeParam = searchParams.get("poi_type");
   const cityPlaceIdParam = searchParams.get("city_place_id");
+  const citySourceParam = searchParams.get("city_source");
+  const cityIdParam = searchParams.get("city_id");
+
+  const hasExternalCityContext =
+    (citySourceParam === "geonames" ||
+      citySourceParam === "google_places") &&
+    Boolean(cityIdParam?.trim());
 
   const validPOITypes = [
     "attraction",
@@ -220,7 +227,8 @@ function POIExplorationContent() {
             Exploring this reference does not create a Trust Travel place.
           </p>
 
-          {selectedPOIType && hasRegisteredCityContext ? (
+          {selectedPOIType &&
+          (hasRegisteredCityContext !== hasExternalCityContext) ? (
             <Link
               href={`/destinations?${new URLSearchParams({
                 mode: "experience",
@@ -228,7 +236,12 @@ function POIExplorationContent() {
                 poi_source: "foursquare",
                 poi_id: detail.external_id,
                 poi_type: selectedPOIType,
-                city_place_id: String(selectedCityPlaceId),
+                ...(hasRegisteredCityContext
+                  ? { city_place_id: String(selectedCityPlaceId) }
+                  : {
+                      city_source: citySourceParam!,
+                      city_id: cityIdParam!.trim(),
+                    }),
               }).toString()}`}
             >
               Share your experience

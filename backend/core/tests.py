@@ -14896,6 +14896,98 @@ class ExternalPOIExperienceCreationTests(TestCase):
 
 
 
+    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_experience_materializes_external_city_at_publication(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+        mock_reconstruct,
+    ):
+        from .models import Experience, Place, PlaceExternalIdentity, Update
+
+        city_external_id = "geo05f-external-breda"
+        poi_external_id = "geo05f-external-city-cafe"
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": city_external_id,
+            "name": "GEO05F Test Locality",
+            "canonical_name": "GEO05F Test Locality",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+
+        mock_get_poi.return_value = {
+            "name": "GEO05F Test Cafe",
+            "canonical_name": "GEO05F Test Cafe",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": poi_external_id,
+            "country_code": "NL",
+            "locality": "GEO05F Test Locality",
+            "latitude": 51.5881,
+            "longitude": 4.7761,
+        }
+
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=city_external_id,
+            ).exists()
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": poi_external_id,
+                "external_poi_type": "restaurant",
+                "external_city_source": "geonames",
+                "external_city_id": city_external_id,
+                "title": "Visiting GEO05F Test Cafe",
+                "comment": "A cafe in an externally referenced locality.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+        city_identity = PlaceExternalIdentity.objects.get(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
+        city = city_identity.place
+        self.assertEqual(city.place_type, "city")
+        self.assertEqual(city.country_code, "NL")
+
+        poi_identity = PlaceExternalIdentity.objects.get(
+            external_source="foursquare",
+            external_id=poi_external_id,
+        )
+        poi = poi_identity.place
+        self.assertEqual(poi.parent_place_id, city.id)
+        self.assertEqual(poi.destination_id, city.destination_id)
+
+        experience = Experience.objects.get()
+        self.assertEqual(experience.place_id, poi.id)
+        self.assertEqual(Update.objects.get(experience=experience).place_id, poi.id)
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
+
     @patch("core.geography.providers.foursquare.search_pois")
     @patch("core.views.get_poi")
     def test_external_poi_experience_preserves_name_only_candidate(
@@ -15067,6 +15159,469 @@ class ExternalPOIExperienceCreationTests(TestCase):
         )
 
 
+
+    @patch("core.views.Update.objects.create")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_external_city_rolls_back_on_feed_failure(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+        mock_reconstruct,
+        mock_create_update,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        city_external_id = "geo05f-rollback-city"
+        poi_external_id = "geo05f-rollback-cafe"
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": city_external_id,
+            "name": "GEO05F Rollback City",
+            "canonical_name": "GEO05F Rollback City",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+
+        mock_get_poi.return_value = {
+            "name": "GEO05F Rollback Cafe",
+            "canonical_name": "GEO05F Rollback Cafe",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": poi_external_id,
+            "country_code": "NL",
+            "locality": "GEO05F Rollback City",
+            "latitude": 51.5881,
+            "longitude": 4.7761,
+        }
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        mock_create_update.side_effect = RuntimeError(
+            "Simulated external city and POI feed failure."
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.client.post(
+                self.url,
+                data={
+                    "external_source": "foursquare",
+                    "external_id": poi_external_id,
+                    "external_poi_type": "restaurant",
+                    "external_city_source": "geonames",
+                    "external_city_id": city_external_id,
+                    "title": "Rollback publication",
+                    "comment": "Testing external city transaction rollback.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+        mock_create_update.assert_called_once()
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+        self.assertFalse(
+            Place.objects.filter(
+                canonical_name="GEO05F Rollback City",
+            ).exists()
+        )
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=city_external_id,
+            ).exists()
+        )
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="foursquare",
+                external_id=poi_external_id,
+            ).exists()
+        )
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_rejects_mismatched_external_city_without_materialization(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+        mock_reconstruct,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        city_external_id = "geo05f-mismatch-city"
+        poi_external_id = "geo05f-rotterdam-cafe"
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": city_external_id,
+            "name": "GEO05F Mismatch City",
+            "canonical_name": "GEO05F Mismatch City",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+
+        mock_get_poi.return_value = {
+            "name": "GEO05F Rotterdam Cafe",
+            "canonical_name": "GEO05F Rotterdam Cafe",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": poi_external_id,
+            "country_code": "NL",
+            "locality": "Rotterdam",
+            "latitude": 51.9244,
+            "longitude": 4.4777,
+        }
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": poi_external_id,
+                "external_poi_type": "restaurant",
+                "external_city_source": "geonames",
+                "external_city_id": city_external_id,
+                "title": "An incompatible geographic selection",
+                "comment": "The selected city does not match the POI.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("external_city_id", response.json())
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=city_external_id,
+            ).exists()
+        )
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="foursquare",
+                external_id=poi_external_id,
+            ).exists()
+        )
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
+
+    @patch("core.views.resolve_reconstructed_geographic_reference_for_commit")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.views.materialize_poi_place")
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_external_city_preserve_prevents_publication(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+        mock_materialize_poi,
+        mock_reconstruct,
+        mock_resolve_city,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        city_external_id = "geo05f-preserve-city"
+        poi_external_id = "geo05f-preserve-cafe"
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": city_external_id,
+            "name": "GEO05F Preserve City",
+            "canonical_name": "GEO05F Preserve City",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+
+        mock_get_poi.return_value = {
+            "name": "GEO05F Preserve Cafe",
+            "canonical_name": "GEO05F Preserve Cafe",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": poi_external_id,
+            "country_code": "NL",
+            "locality": "GEO05F Preserve City",
+            "latitude": 51.5881,
+            "longitude": 4.7761,
+        }
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        mock_resolve_city.return_value = {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "evaluations": [],
+        }
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": poi_external_id,
+                "external_poi_type": "restaurant",
+                "external_city_source": "geonames",
+                "external_city_id": city_external_id,
+                "title": "An unresolved geographic identity",
+                "comment": "Publication must wait for geographic confirmation.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        data = response.json()
+        self.assertEqual(data["code"], "geographic_resolution_required")
+        self.assertIn("references", data)
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
+        mock_resolve_city.assert_called_once()
+        mock_materialize_poi.assert_not_called()
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=city_external_id,
+            ).exists()
+        )
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="foursquare",
+                external_id=poi_external_id,
+            ).exists()
+        )
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.geography.providers.foursquare.search_pois")
+    @patch("core.views.get_poi")
+    def test_external_poi_reuses_existing_external_city_without_duplication(
+        self,
+        mock_get_poi,
+        mock_search_pois,
+        mock_reconstruct,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        city_external_id = "geo05f-existing-breda"
+        poi_external_id = "geo05f-existing-city-cafe"
+
+        PlaceExternalIdentity.objects.create(
+            place=self.city,
+            external_source="geonames",
+            external_id=city_external_id,
+            geographic_type="settlement",
+        )
+
+        original_city_id = self.city.id
+        original_destination_id = self.city.destination_id
+        initial_city_count = Place.objects.filter(
+            place_type="city",
+        ).count()
+        initial_identity_count = PlaceExternalIdentity.objects.count()
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": city_external_id,
+            "name": "Breda",
+            "canonical_name": "Breda",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+
+        mock_get_poi.return_value = {
+            "name": "GEO05F Existing City Cafe",
+            "canonical_name": "GEO05F Existing City Cafe",
+            "aliases": [],
+            "external_source": "foursquare",
+            "external_id": poi_external_id,
+            "country_code": "NL",
+            "locality": "Breda",
+            "latitude": 51.5881,
+            "longitude": 4.7761,
+        }
+        mock_search_pois.return_value = [
+            mock_get_poi.return_value.copy()
+        ]
+
+        response = self.client.post(
+            self.url,
+            data={
+                "external_source": "foursquare",
+                "external_id": poi_external_id,
+                "external_poi_type": "restaurant",
+                "external_city_source": "geonames",
+                "external_city_id": city_external_id,
+                "title": "A cafe in an existing city",
+                "comment": "The external city identity should be reused.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+        self.city.refresh_from_db()
+        self.assertEqual(self.city.id, original_city_id)
+        self.assertEqual(
+            self.city.destination_id,
+            original_destination_id,
+        )
+        self.assertEqual(self.city.country_code, "NL")
+
+        self.assertEqual(
+            Place.objects.filter(place_type="city").count(),
+            initial_city_count,
+        )
+        self.assertEqual(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=city_external_id,
+                place_id=original_city_id,
+            ).count(),
+            1,
+        )
+
+        poi = Place.objects.get(
+            place_type="restaurant",
+            name="GEO05F Existing City Cafe",
+        )
+        self.assertEqual(poi.parent_place_id, original_city_id)
+        self.assertEqual(
+            poi.destination_id,
+            original_destination_id,
+        )
+
+        self.assertTrue(
+            PlaceExternalIdentity.objects.filter(
+                place=poi,
+                external_source="foursquare",
+                external_id=poi_external_id,
+            ).exists()
+        )
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identity_count + 1,
+        )
+        self.assertTrue(
+            BusinessPresence.objects.filter(place=poi).exists()
+        )
+
+        experience = Experience.objects.get()
+        self.assertEqual(experience.place_id, poi.id)
+        self.assertEqual(experience.user_id, self.user.id)
+        self.assertEqual(Update.objects.count(), 1)
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
 
     @patch("core.views.get_poi")
     def test_external_poi_experience_handles_provider_errors(
@@ -15464,6 +16019,46 @@ class ExternalPOIExperienceCreationTests(TestCase):
                     "external_poi_type": "restaurant",
                 },
             },
+            {
+                "name": "unsupported_external_city_source",
+                "fields": {
+                    "external_poi_type": "restaurant",
+                    "external_city_source": "unknown_provider",
+                    "external_city_id": "geo05f-breda",
+                },
+                "error_field": "external_city_source",
+            },
+            {
+                "name": "missing_external_city_id",
+                "fields": {
+                    "external_poi_type": "restaurant",
+                    "external_city_source": "geonames",
+                },
+            },
+            {
+                "name": "missing_external_city_source",
+                "fields": {
+                    "external_poi_type": "restaurant",
+                    "external_city_id": "geo05f-breda",
+                },
+            },
+            {
+                "name": "internal_and_complete_external_city",
+                "fields": {
+                    "external_poi_type": "restaurant",
+                    "external_city_place_id": self.city.id,
+                    "external_city_source": "geonames",
+                    "external_city_id": "geo05f-breda",
+                },
+            },
+            {
+                "name": "internal_and_partial_external_city",
+                "fields": {
+                    "external_poi_type": "restaurant",
+                    "external_city_place_id": self.city.id,
+                    "external_city_source": "geonames",
+                },
+            },
         ]
 
         for case in cases:
@@ -15493,7 +16088,10 @@ class ExternalPOIExperienceCreationTests(TestCase):
                     400,
                     response.content,
                 )
-                self.assertIn("external_poi", response.json())
+                self.assertIn(
+                    case.get("error_field", "external_poi"),
+                    response.json(),
+                )
                 mock_get_poi.assert_not_called()
 
                 final_counts = (

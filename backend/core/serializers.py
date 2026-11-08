@@ -608,6 +608,18 @@ class ExperienceCreateSerializer(ExperienceSerializer):
         min_value=1,
         write_only=True,
     )
+    external_city_source = serializers.ChoiceField(
+        choices=["geonames", "google_places"],
+        required=False,
+        write_only=True,
+    )
+    external_city_id = serializers.CharField(
+        required=False,
+        allow_blank=False,
+        trim_whitespace=True,
+        write_only=True,
+        max_length=255,
+    )
 
     class Meta(ExperienceSerializer.Meta):
         fields = ExperienceSerializer.Meta.fields + [
@@ -616,6 +628,8 @@ class ExperienceCreateSerializer(ExperienceSerializer):
             "manual_city_place_id",
             "external_poi_type",
             "external_city_place_id",
+            "external_city_source",
+            "external_city_id",
         ]
 
     def validate(self, attrs):
@@ -664,6 +678,8 @@ class ExperienceCreateSerializer(ExperienceSerializer):
         external_poi_fields = (
             "external_poi_type",
             "external_city_place_id",
+            "external_city_source",
+            "external_city_id",
         )
         provided_external_poi_fields = [
             field for field in external_poi_fields
@@ -678,14 +694,7 @@ class ExperienceCreateSerializer(ExperienceSerializer):
             request.data.get("external_id") or ""
         ).strip() if request else ""
 
-        if provided_external_poi_fields:
-            if len(provided_external_poi_fields) != len(external_poi_fields):
-                raise serializers.ValidationError({
-                    "external_poi": (
-                        "External POI fields must be provided together."
-                    )
-                })
-
+        if provided_external_poi_fields or external_source == "foursquare":
             if external_source != "foursquare" or not external_id:
                 raise serializers.ValidationError({
                     "external_poi": (
@@ -701,12 +710,32 @@ class ExperienceCreateSerializer(ExperienceSerializer):
                     )
                 })
 
-        elif external_source == "foursquare":
-            raise serializers.ValidationError({
-                "external_poi": (
-                    "External POI type and city are required."
-                )
-            })
+            has_internal_city = "external_city_place_id" in attrs
+            has_external_city_source = "external_city_source" in attrs
+            has_external_city_id = "external_city_id" in attrs
+
+            if "external_poi_type" not in attrs:
+                raise serializers.ValidationError({
+                    "external_poi": (
+                        "External POI type and city are required."
+                    )
+                })
+
+            if has_internal_city:
+                if has_external_city_source or has_external_city_id:
+                    raise serializers.ValidationError({
+                        "external_poi": (
+                            "Provide either an existing city or "
+                            "an external city reference, not both."
+                        )
+                    })
+            elif not (has_external_city_source and has_external_city_id):
+                raise serializers.ValidationError({
+                    "external_poi": (
+                        "Provide an existing city or a complete "
+                        "external city reference."
+                    )
+                })
 
         return attrs
 

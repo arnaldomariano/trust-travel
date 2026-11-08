@@ -4046,40 +4046,70 @@ class ExperienceListView(generics.ListCreateAPIView):
 
         external_poi_result = None
         external_poi_city = None
+        external_poi_city_reference = None
         external_poi_country_code = None
 
         if has_external_poi:
             external_poi_type = serializer.validated_data[
                 "external_poi_type"
             ]
-            external_city_place_id = serializer.validated_data[
+            external_city_place_id = serializer.validated_data.get(
                 "external_city_place_id"
-            ]
-
-            external_poi_city = (
-                Place.objects
-                .select_related("country_ref", "destination")
-                .filter(
-                    id=external_city_place_id,
-                    place_type="city",
-                )
-                .first()
             )
 
-            if external_poi_city is None:
-                raise serializers.ValidationError({
-                    "external_city_place_id": (
-                        "The requested city or locality was not found."
+            if external_city_place_id is not None:
+                external_poi_city = (
+                    Place.objects
+                    .select_related("country_ref", "destination")
+                    .filter(
+                        id=external_city_place_id,
+                        place_type="city",
                     )
-                })
+                    .first()
+                )
 
-            external_poi_country_code = str(
-                (
-                    external_poi_city.country_ref.code
-                    if external_poi_city.country_ref
-                    else external_poi_city.country_code
-                ) or ""
-            ).strip().upper()
+                if external_poi_city is None:
+                    raise serializers.ValidationError({
+                        "external_city_place_id": (
+                            "The requested city or locality was not found."
+                        )
+                    })
+
+                external_poi_country_code = str(
+                    (
+                        external_poi_city.country_ref.code
+                        if external_poi_city.country_ref
+                        else external_poi_city.country_code
+                    ) or ""
+                ).strip().upper()
+            else:
+                try:
+                    external_poi_city_reference = (
+                        reconstruct_external_geographic_reference(
+                            external_source=serializer.validated_data[
+                                "external_city_source"
+                            ],
+                            external_id=serializer.validated_data[
+                                "external_city_id"
+                            ],
+                        )
+                    )
+                except (
+                    GeoNamesConfigurationError,
+                    GooglePlacesConfigurationError,
+                    GeoNamesRequestError,
+                    GooglePlacesRequestError,
+                ) as error:
+                    raise GeographicProviderUnavailable(
+                        "Geographic place lookup is temporarily unavailable."
+                    ) from error
+                except (
+                    GeoNamesReferenceNotFoundError,
+                    GooglePlacesReferenceNotFoundError,
+                ) as error:
+                    raise NotFound(
+                        "External city reference not found."
+                    ) from error
 
             try:
                 external_poi_result = get_poi(
@@ -4108,9 +4138,12 @@ class ExperienceListView(generics.ListCreateAPIView):
                     )
                 })
 
-            if not poi_matches_city_context(
-                poi_result=external_poi_result,
-                city_place=external_poi_city,
+            if (
+                external_poi_city is not None
+                and not poi_matches_city_context(
+                    poi_result=external_poi_result,
+                    city_place=external_poi_city,
+                )
             ):
                 raise serializers.ValidationError({
                     "external_city_place_id": (
@@ -4219,6 +4252,55 @@ class ExperienceListView(generics.ListCreateAPIView):
                     serializer.validated_data.pop(field, None)
 
             if external_poi_result is not None:
+                if external_poi_city_reference is not None:
+                    try:
+                        city_resolution = (
+                            resolve_reconstructed_geographic_reference_for_commit(
+                                geographic_result=external_poi_city_reference,
+                                user=self.request.user,
+                            )
+                        )
+                    except CountryIdentityConflict as error:
+                        raise CountryIdentityConflictResponse(error) from error
+
+                    if city_resolution["state"] == "preserve":
+                        raise GeographicResolutionRequired(city_resolution)
+
+                    if city_resolution["state"] not in {"reuse", "created"}:
+                        raise ValueError(
+                            "Unsupported external POI city resolution state: "
+                            f"{city_resolution['state']}"
+                        )
+
+                    external_poi_city = city_resolution.get("place")
+
+                    if (
+                        external_poi_city is None
+                        or external_poi_city.place_type != "city"
+                    ):
+                        raise ValueError(
+                            "External POI city resolution did not return a city."
+                        )
+
+                    external_poi_country_code = str(
+                        (
+                            external_poi_city.country_ref.code
+                            if external_poi_city.country_ref
+                            else external_poi_city.country_code
+                        ) or ""
+                    ).strip().upper()
+
+                    if not poi_matches_city_context(
+                        poi_result=external_poi_result,
+                        city_place=external_poi_city,
+                    ):
+                        raise serializers.ValidationError({
+                            "external_city_id": (
+                                "The selected POI does not match "
+                                "the requested city or locality."
+                            )
+                        })
+
                 poi_resolution = materialize_poi_place(
                     poi_result=external_poi_result,
                     city_place=external_poi_city,
@@ -4246,6 +4328,8 @@ class ExperienceListView(generics.ListCreateAPIView):
                 for field in (
                     "external_poi_type",
                     "external_city_place_id",
+                    "external_city_source",
+                    "external_city_id",
                 ):
                     serializer.validated_data.pop(field, None)
 

@@ -132,6 +132,13 @@ function DestinationsPageContent() {
   const poiIdFromUrl = searchParams.get("poi_id");
   const poiTypeFromUrl = searchParams.get("poi_type");
   const poiCityPlaceIdFromUrl = searchParams.get("city_place_id");
+  const poiCitySourceFromUrl = searchParams.get("city_source");
+  const poiCityIdFromUrl = searchParams.get("city_id");
+
+  const hasValidExternalCityReference =
+    (poiCitySourceFromUrl === "geonames" ||
+      poiCitySourceFromUrl === "google_places") &&
+    Boolean(poiCityIdFromUrl?.trim());
 
   const validExternalPOITypes = [
     "attraction",
@@ -214,12 +221,23 @@ function DestinationsPageContent() {
     place_type: "attraction" | "hotel" | "restaurant" | "nature" | "other";
     city_place_id: number;
   } | null>(null);
-  const [selectedExternalPOI, setSelectedExternalPOI] = useState<{
-    name: string;
-    external_id: string;
-    place_type: "attraction" | "hotel" | "restaurant" | "nature" | "other";
-    city_place_id: number;
-  } | null>(null);
+  const [selectedExternalPOI, setSelectedExternalPOI] = useState<(
+    {
+      name: string;
+      external_id: string;
+      place_type: "attraction" | "hotel" | "restaurant" | "nature" | "other";
+    } & (
+      {
+        city_place_id: number;
+        city_source?: never;
+        city_id?: never;
+      } | {
+        city_place_id?: never;
+        city_source: "geonames" | "google_places";
+        city_id: string;
+      }
+    )
+  ) | null>(null);
   const [showShareForm, setShowShareForm] = useState(false);
   const [showRelatedPlaces, setShowRelatedPlaces] = useState(false);
   const [relatedPlaceSearch, setRelatedPlaceSearch] = useState("");
@@ -234,6 +252,8 @@ function DestinationsPageContent() {
   const [geographyCitySearchLoading, setGeographyCitySearchLoading] =
     useState(false);
   const [geographyCitySearchError, setGeographyCitySearchError] = useState("");
+  const [geographyCityHasSearched, setGeographyCityHasSearched] = useState(false);
+  const geographyCitySearchRequestId = useRef(0);
 
   const [createSelectedCountry, setCreateSelectedCountry] = useState<any>(null);
   const [createSelectedCity, setCreateSelectedCity] = useState<any>(null);
@@ -457,7 +477,11 @@ useEffect(() => {
       !placesLoadedSuccessfully ||
       !poiIdFromUrl?.trim() ||
       !externalPOITypeFromUrl ||
-      !hasValidExternalPOICityId
+      (hasValidExternalPOICityId === hasValidExternalCityReference) ||
+      (poiCityPlaceIdFromUrl !== null &&
+        (poiCitySourceFromUrl !== null || poiCityIdFromUrl !== null)) ||
+      ((poiCitySourceFromUrl !== null || poiCityIdFromUrl !== null) &&
+        !hasValidExternalCityReference)
     ) {
       setExternalPOISelectionError(
         "This external place cannot be selected for sharing right now."
@@ -465,17 +489,19 @@ useEffect(() => {
       return;
     }
 
-    const cityPlace = places.find(
-      (place) =>
-        Number(place.id) === externalPOICityIdFromUrl &&
-        place.place_type === "city"
-    );
-
-    if (!cityPlace) {
-      setExternalPOISelectionError(
-        "The selected city is not registered in Trust Travel."
+    if (hasValidExternalPOICityId) {
+      const cityPlace = places.find(
+        (place) =>
+          Number(place.id) === externalPOICityIdFromUrl &&
+          place.place_type === "city"
       );
-      return;
+
+      if (!cityPlace) {
+        setExternalPOISelectionError(
+          "The selected city is not registered in Trust Travel."
+        );
+        return;
+      }
     }
 
     try {
@@ -505,12 +531,24 @@ useEffect(() => {
 
       if (!active || requestId !== externalPOISelectionRequestId.current) return;
 
-      setSelectedExternalPOI({
+      const selectedPOIBase = {
         name: detail.name.trim(),
         external_id: detail.external_id,
         place_type: externalPOITypeFromUrl,
-        city_place_id: externalPOICityIdFromUrl!,
-      });
+      };
+
+      if (hasValidExternalPOICityId) {
+        setSelectedExternalPOI({
+          ...selectedPOIBase,
+          city_place_id: externalPOICityIdFromUrl!,
+        });
+      } else {
+        setSelectedExternalPOI({
+          ...selectedPOIBase,
+          city_source: poiCitySourceFromUrl as "geonames" | "google_places",
+          city_id: poiCityIdFromUrl!.trim(),
+        });
+      }
       setSearchTerm(detail.name.trim());
       setExperienceShared(false);
       setSharedExperience(null);
@@ -538,6 +576,10 @@ useEffect(() => {
   externalPOITypeFromUrl,
   externalPOICityIdFromUrl,
   hasValidExternalPOICityId,
+  poiCityPlaceIdFromUrl,
+  poiCitySourceFromUrl,
+  poiCityIdFromUrl,
+  hasValidExternalCityReference,
   isExperienceMode,
   shouldOpenShareForm,
   loading,
@@ -1171,6 +1213,14 @@ const handleMainGeographySearch = async () => {
   }
 };
 
+const resetGeographyCitySearch = () => {
+  geographyCitySearchRequestId.current += 1;
+  setGeographyCityResults([]);
+  setGeographyCitySearchError("");
+  setGeographyCitySearchLoading(false);
+  setGeographyCityHasSearched(false);
+};
+
 const openGuidedCreateFlow = () => {
   leaveExternalPOISelection();
   setSelectedManualPOI(null);
@@ -1180,8 +1230,7 @@ const openGuidedCreateFlow = () => {
   setCreateSelectedCity(null);
   setCreateCountrySearch("");
   setCreateCitySearch("");
-  setGeographyCityResults([]);
-  setGeographyCitySearchError("");
+  resetGeographyCitySearch();
   setCreateSpecificPlaceType("nature");
   setCreateSpecificPlaceName("");
   setCreateSpecificPlaceSearchResults([]);
@@ -1194,8 +1243,7 @@ const selectCreateFlowCountry = (countryPlace: any) => {
   setCreateSelectedCity(null);
   setCreateFlowError("");
   setCreateCitySearch("");
-  setGeographyCityResults([]);
-  setGeographyCitySearchError("");
+  resetGeographyCitySearch();
   setCreateSpecificPlaceType("nature");
   setCreateSpecificPlaceName("");
   setCreateSpecificPlaceSearchResults([]);
@@ -1209,6 +1257,8 @@ const selectCreateFlowCountry = (countryPlace: any) => {
 };
 
 const handleSearchCreateFlowCities = async () => {
+  resetGeographyCitySearch();
+
   if (!createSelectedCountry) {
     setCreateFlowError("Please choose a country first.");
     return;
@@ -1220,7 +1270,6 @@ const handleSearchCreateFlowCities = async () => {
   ).trim().toUpperCase();
 
   if (query.length < 2) {
-    setGeographyCityResults([]);
     setGeographyCitySearchError(
       "Type at least 2 characters to search."
     );
@@ -1228,17 +1277,16 @@ const handleSearchCreateFlowCities = async () => {
   }
 
   if (!countryCode) {
-    setGeographyCityResults([]);
     setGeographyCitySearchError(
       "Could not identify the country code for this place."
     );
     return;
   }
 
+  const requestId = geographyCitySearchRequestId.current;
+
   setGeographyCitySearchLoading(true);
-  setGeographyCitySearchError("");
   setCreateFlowError("");
-  setGeographyCityResults([]);
 
   try {
     const params = new URLSearchParams({
@@ -1252,6 +1300,10 @@ const handleSearchCreateFlowCities = async () => {
 
     const data = await res.json();
 
+    if (requestId !== geographyCitySearchRequestId.current) {
+      return;
+    }
+
     if (!res.ok) {
       setGeographyCitySearchError(
         data.detail || "Could not search for cities or localities."
@@ -1262,13 +1314,20 @@ const handleSearchCreateFlowCities = async () => {
     setGeographyCityResults(
       Array.isArray(data.results) ? data.results : []
     );
+    setGeographyCityHasSearched(true);
   } catch (error) {
+    if (requestId !== geographyCitySearchRequestId.current) {
+      return;
+    }
+
     console.error("Guided geographic city search failed:", error);
     setGeographyCitySearchError(
       "Could not search for cities or localities."
     );
   } finally {
-    setGeographyCitySearchLoading(false);
+    if (requestId === geographyCitySearchRequestId.current) {
+      setGeographyCitySearchLoading(false);
+    }
   }
 };
 
@@ -1580,6 +1639,7 @@ const createSpecificPlaceForFlow = () => {
   setExperienceFormError("");
   setCreateFlowError("");
   setCreateFlowOpen(false);
+  resetGeographyCitySearch();
   setShowShareForm(true);
 
   if (!isExperienceMode) {
@@ -1681,6 +1741,7 @@ const createSpecificPlaceForFlow = () => {
       setCreateSelectedCity(null);
       setCreateCountrySearch(selectedCountryPlace.name || "");
       setCreateCitySearch("");
+      resetGeographyCitySearch();
       setCreateSpecificPlaceType("nature");
       setCreateSpecificPlaceName("");
       setCreateSpecificPlaceSearchResults([]);
@@ -2030,10 +2091,21 @@ const continueWithoutPracticalRatings = () => {
         formData.append("external_source", "foursquare");
         formData.append("external_id", selectedExternalPOI.external_id);
         formData.append("external_poi_type", selectedExternalPOI.place_type);
-        formData.append(
-          "external_city_place_id",
-          String(selectedExternalPOI.city_place_id)
-        );
+        if (selectedExternalPOI.city_place_id !== undefined) {
+          formData.append(
+            "external_city_place_id",
+            String(selectedExternalPOI.city_place_id)
+          );
+        } else {
+          formData.append(
+            "external_city_source",
+            selectedExternalPOI.city_source
+          );
+          formData.append(
+            "external_city_id",
+            selectedExternalPOI.city_id
+          );
+        }
       } else if (selectedManualPOI) {
         formData.append("manual_poi_name", selectedManualPOI.name);
         formData.append("manual_poi_type", selectedManualPOI.place_type);
@@ -2099,7 +2171,6 @@ const continueWithoutPracticalRatings = () => {
         console.error("Experience error:", data);
 
         if (
-          selectedManualPOI &&
           res.status === 409 &&
           data.code === "poi_resolution_required"
         ) {
@@ -2107,6 +2178,18 @@ const continueWithoutPracticalRatings = () => {
             "This place may already exist or needs further geographic verification. " +
             "Your experience has not been published. Please review the place selection " +
             "before trying again."
+          );
+          return;
+        }
+
+        if (
+          res.status === 409 &&
+          data.code === "geographic_resolution_required"
+        ) {
+          setExperienceFormError(
+            "This geographic place needs confirmation before your experience " +
+            "can be published. Your experience has not been published. " +
+            "Please review the place selection before trying again."
           );
           return;
         }
@@ -2369,6 +2452,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               setCreateFlowOpen(false);
               setCreateFlowError("");
               setCreateSelectedCountry(null);
+              resetGeographyCitySearch();
 
               if (placeType === "country") {
               }
@@ -3168,36 +3252,22 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               marginBottom: "6px",
             }}
           >
-            Still can't find your place?
+            Not the place you were looking for?
           </div>
 
           <p
             style={{
               color: "#666",
-              margin: "0 0 12px 0",
+              margin: "0",
               lineHeight: 1.5,
               fontSize: "14px",
             }}
           >
-            Check the results above first. If none of them matches the place you
-            are looking for, Trust Travel can guide you through adding it correctly.
+            Check the results above. If you found the right country, select
+            it to explore cities and localities within it. Otherwise, try
+            another spelling, a local name or translation, or a more specific
+            search.
           </p>
-
-          {isUpdateMode ? (
-            <p style={helperNote}>
-              You can publish about a place already listed on Trust Travel
-              or select an available geographic search result. Adding a new
-              specific place while preparing an update is not supported yet.
-            </p>
-          ) : (
-            <button
-              type="button"
-              onClick={openGuidedCreateFlow}
-              style={secondaryButton}
-            >
-              Add a new place
-            </button>
-          )}
         </div>
       </section>
             ) : !selectedCountryPlace &&
@@ -3349,8 +3419,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                     onChange={(event) => {
                       setCreateCitySearch(event.target.value);
                       setCreateFlowError("");
-                      setGeographyCitySearchError("");
-                      setGeographyCityResults([]);
+                      resetGeographyCitySearch();
                     }}
                     placeholder="City, region, island or locality, e.g. Recife, Sicily, Nias"
                     style={{
@@ -3436,12 +3505,39 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   )}
 
                 {!geographyCitySearchLoading &&
+                  geographyCityHasSearched &&
+                  geographyCityResults.length > 0 &&
+                  !geographyCitySearchError && (
+                    <p style={guidedCreateText}>
+                      None of these places matches your location? Try another
+                      spelling, a local name or translation, or a nearby
+                      municipality or region. Check that the selected country
+                      is correct before trying again.
+                    </p>
+                  )}
+
+                {!geographyCitySearchLoading &&
                   createCitySearch.trim().length >= 2 &&
                   !geographyCitySearchError &&
                   geographyCityResults.length === 0 && (
-                    <p style={guidedCreateText}>
-                      Click Search to look for matching geographic places.
-                    </p>
+                    geographyCityHasSearched ? (
+                      <div style={guidedCreateText}>
+                        <strong>No matching geographic places were returned.</strong>
+                        <p>
+                          Try another spelling, a local name or translation.
+                          Check the selected country, or search for a nearby
+                          municipality or region.
+                        </p>
+                        <p>
+                          This does not necessarily mean the place does not exist.
+                          Try refining your search before creating a new place.
+                        </p>
+                      </div>
+                    ) : (
+                      <p style={guidedCreateText}>
+                        Click Search to look for matching geographic places.
+                      </p>
+                    )
                   )}
 
                 {createSelectedCountry && createSelectedCity && (
@@ -3803,6 +3899,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                   setCreateSelectedCity(null);
                   setCreateCountrySearch("");
                   setCreateCitySearch("");
+                  resetGeographyCitySearch();
                   setCreateSpecificPlaceType("nature");
                   setCreateSpecificPlaceName("");
                   setCreateSpecificPlaceSearchResults([]);

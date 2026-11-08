@@ -170,8 +170,7 @@ export default function PlacePage() {
   const [geographyCitySearchLoading, setGeographyCitySearchLoading] =
     useState(false);
   const [geographyCitySearchError, setGeographyCitySearchError] = useState("");
-  const [materializingGeographyCityId, setMaterializingGeographyCityId] =
-    useState<string | null>(null);
+  const geographyCitySearchRequestId = useRef(0);
 
   const [searchInsideCity, setSearchInsideCity] = useState("");
   const [specificPlaceHasSearched, setSpecificPlaceHasSearched] = useState(false);
@@ -1503,6 +1502,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
         const topCountryCityRegionPlaces = countryCityRegionPlaces.slice(0, 5);
 
     const handleSearchCountryCities = async () => {
+      const requestId = ++geographyCitySearchRequestId.current;
+
       if (!place || place.place_type !== "country") return;
 
       const query = searchInsideCountry.trim();
@@ -1515,6 +1516,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           "Type at least 2 characters to search."
         );
         setGeographyCityResults([]);
+        setGeographyCitySearchLoading(false);
         setHasSearchedInsideCountry(false);
         return;
       }
@@ -1524,6 +1526,7 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           "Could not identify the country code for this place."
         );
         setGeographyCityResults([]);
+        setGeographyCitySearchLoading(false);
         setHasSearchedInsideCountry(false);
         return;
       }
@@ -1546,6 +1549,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         const data = await res.json();
 
+        if (requestId !== geographyCitySearchRequestId.current) return;
+
         if (!res.ok) {
           setGeographyCitySearchError(
             data.detail || "Could not search for geographic places."
@@ -1557,74 +1562,47 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           Array.isArray(data.results) ? data.results : []
         );
       } catch (error) {
+        if (requestId !== geographyCitySearchRequestId.current) return;
         console.error("Country geographic city search failed:", error);
         setGeographyCitySearchError(
           "Could not search for geographic places."
         );
       } finally {
-        setGeographyCitySearchLoading(false);
+        if (requestId === geographyCitySearchRequestId.current) {
+          setGeographyCitySearchLoading(false);
+        }
       }
     };
 
-    const handleSelectGeographyCity = async (
+    const handleSelectGeographyCity = (
       cityResult: GeographyCityResult
     ) => {
       if (!place || place.place_type !== "country") return;
 
-      if (!isLoggedIn) {
-        router.push(`/login?next=/places/${place.id}`);
+      if (cityResult.existing_place_id) {
+        router.push(`/places/${cityResult.existing_place_id}`);
         return;
       }
 
-      const countryCode = (
-        place.country_code || ""
-      ).trim().toUpperCase();
-
-      if (!countryCode) {
+      if (
+        (cityResult.external_source !== "geonames" &&
+          cityResult.external_source !== "google_places") ||
+        !cityResult.external_id?.trim()
+      ) {
         setGeographyCitySearchError(
-          "Could not identify the country code for this place."
+          "Could not identify the geographic reference for this place."
         );
         return;
       }
 
-      setMaterializingGeographyCityId(cityResult.external_id);
       setGeographyCitySearchError("");
 
+      const params = new URLSearchParams({
+        source: cityResult.external_source,
+        id: cityResult.external_id,
+      });
 
-      try {
-        const res = await fetch(
-          `${API_URL}/api/geography/cities/materialize/`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              external_id: cityResult.external_id,
-              country_code: countryCode,
-            }),
-          }
-        );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setGeographyCitySearchError(
-            data.detail || "Could not add this geographic place."
-          );
-          return;
-        }
-
-        router.push(`/places/${data.id}`);
-      } catch (error) {
-        console.error("Geographic city materialization failed:", error);
-        setGeographyCitySearchError(
-          "Could not add this geographic place."
-        );
-      } finally {
-        setMaterializingGeographyCityId(null);
-      }
+      router.push(`/explore/geographic?${params.toString()}`);
     };
 
     const hasSpecificPlaceSearch =
@@ -3496,10 +3474,12 @@ const handleToggleEventsInfo = () => {
                   <input
                     value={searchInsideCountry}
                     onChange={(e) => {
+                      geographyCitySearchRequestId.current += 1;
                       setSearchInsideCountry(e.target.value);
                       setHasSearchedInsideCountry(false);
                       setCountryChildSearchError("");
                       setGeographyCitySearchError("");
+                      setGeographyCitySearchLoading(false);
                       setGeographyCityResults([]);
                     }}
                     placeholder={`Search cities or localities inside ${place.name}`}
@@ -3638,34 +3618,18 @@ const handleToggleEventsInfo = () => {
                       <button
                         type="button"
                         onClick={() =>
-                          void handleSelectGeographyCity(cityResult)
-                        }
-                        disabled={
-                          materializingGeographyCityId ===
-                          cityResult.external_id
+                          handleSelectGeographyCity(cityResult)
                         }
                         style={{
                           ...(cityResult.existing_place_id
                             ? primaryButton
                             : secondaryButton),
-                          opacity:
-                            materializingGeographyCityId ===
-                            cityResult.external_id
-                              ? 0.6
-                              : 1,
-                          cursor:
-                            materializingGeographyCityId ===
-                            cityResult.external_id
-                              ? "not-allowed"
-                              : "pointer",
+                          cursor: "pointer",
                         }}
                       >
-                        {materializingGeographyCityId ===
-                        cityResult.external_id
-                          ? "Opening..."
-                          : cityResult.existing_place_id
-                            ? "Open this place"
-                            : "Choose this place"}
+                        {cityResult.existing_place_id
+                          ? "Open this place"
+                          : "Explore this place"}
                       </button>
                     </div>
                   </div>
@@ -3683,7 +3647,12 @@ const handleToggleEventsInfo = () => {
                   marginBottom: "18px",
                 }}
               >
-                No matching geographic place was found for “{searchInsideCountry}”.
+                <strong>No matching geographic places were returned for “{searchInsideCountry}”.</strong>
+                <p style={{ margin: "8px 0 0", lineHeight: 1.5 }}>
+                  Try another spelling, a local name or translation, or search
+                  for a nearby municipality or region within {place.name}.
+                  This does not necessarily mean the place does not exist.
+                </p>
               </div>
 
             ) : searchInsideCountry.trim() ? (

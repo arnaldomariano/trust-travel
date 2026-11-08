@@ -352,6 +352,8 @@ function GeographicExplorationContent() {
                         source: "foursquare",
                         id: poi.external_id,
                         poi_type: poiType,
+                        city_source: detail.external_source,
+                        city_id: detail.external_id,
                       }).toString()}`}
                     >
                       Explore place

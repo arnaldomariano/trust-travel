@@ -216,10 +216,17 @@ The shared POI materialization service checks identity and geographic
 compatibility. Ambiguous candidates produce preserve results instead
 of automatic consolidation.
 
-Existing standalone materialization endpoints also remain in the
-backend. Therefore, late materialization describes the audited
-contribution flow, not an absolute prohibition on every other
-materialization operation.
+Standalone geographic materialization and manual POI creation
+endpoints remain registered for compatibility, but their POST
+handlers reject direct creation with HTTP 409 and code
+contribution_publication_required. Geographic Places may be
+materialized only during successful Experience or Update publication
+through the authorized contribution workflows.
+
+This restriction is verified in the Country, Place, City, POI,
+and manual POI creation endpoint implementations. It does not,
+by itself, establish that every other possible creation path
+has been exhaustively audited.
 
 Status: Verified in inspected implementation and automated tests
 for the documented experience publication paths.
@@ -238,23 +245,43 @@ Status: Foundational product requirement; enforcement under investigation.
 
 ### 6.2 Place Identity and Deletion
 
-The current Django model relationships include:
+The Django model relationship inventory identifies the following
+direct references to Place:
 
-- Place.destination: CASCADE.
-- Experience.place: CASCADE.
-- Update.place: CASCADE.
-- Update.experience: CASCADE.
-- PlaceExternalIdentity.place: CASCADE.
+| Referencing field | on_delete |
+| --- | --- |
+| Place.parent_place | SET_NULL |
+| PlaceExternalIdentity.place | CASCADE |
+| PlaceLocationSuggestion.place | CASCADE |
+| PlaceLocationSuggestion.suggested_parent_place | CASCADE |
+| BusinessPresence.place | CASCADE |
+| ProfessionalContribution.place | CASCADE |
+| OfficialSource.place | SET_NULL |
+| OfficialSourceEntry.place | SET_NULL |
+| Update.place | CASCADE |
+| Experience.place | CASCADE |
+| TripPlanDestination.place | CASCADE |
+| SavedPlace.place | CASCADE |
+| TripPlanResource.place | SET_NULL |
+| TripPlanWatchedPlace.place | CASCADE |
+| ContentReport.place | CASCADE |
 
-Consequently, deleting a Place through Django's deletion machinery
-can also delete associated experiences, updates, and external identities.
+Place.destination also references Destination with CASCADE.
+Update.experience uses CASCADE and creates an additional indirect
+deletion dependency through Experience.
 
-Deleting a Destination can initiate a cascade through its Places.
+Deleting a Place through Django's deletion machinery can therefore
+delete related contributions, identities, trip-plan associations,
+saved references, reports, and business records. SET_NULL can retain
+a dependent record while removing its geographic association.
 
-These relationships describe current deletion behavior, not the
-intended lifecycle policy for real-world places.
+Deleting a Destination can cascade through its Places and their
+dependent records. These are current model-level deletion behaviors,
+not an approved lifecycle or historical-preservation policy.
 
-Status: Verified in model definitions.
+Status: Direct relationships verified through Django model
+introspection; indirect dependencies and deletion effects require
+further auditing.
 
 ### 6.3 Place Lifecycle Versus Record Deletion
 
@@ -298,6 +325,42 @@ Status: Admin protection implemented and verified by automated
 tests; broader deletion-path audit remains open.
 
 
+### 6.5 Historical Preservation and Place Merge Preconditions
+
+Any future reconciliation or merge of two internal Places must be
+non-destructive and must preserve the integrity of all associated
+historical contributions and references.
+
+Before a merge can be authorized, the implementation must demonstrate:
+
+- Verified identity evidence; matching names or proximity alone
+  must never authorize consolidation.
+- Preservation of Experiences, Updates, authorship, publication dates,
+  photographs, evaluations, and their historical context.
+- Preservation or explicitly controlled reconciliation of external
+  identities, business presence, professional contributions, official
+  sources, reports, saved places, and trip-plan relationships.
+- No silent loss, duplication, or reassignment of contributions.
+- An auditable record of the original Places, identity evidence,
+  authorization, affected relationships, and resulting changes.
+- A tested recovery procedure for an incorrect consolidation,
+  including restoration of historical associations.
+- Explicit handling of conflicting or ambiguous relationships
+  before any destructive action is permitted.
+
+Closing, renaming, relocating, archiving, correcting, and merging
+Places are distinct operations and must not be implemented as
+interchangeable forms of deletion.
+
+The direct relationship inventory in Section 6.2 is a starting
+point, not proof that all indirect dependencies, media files,
+evaluations, and downstream effects have been audited.
+
+Status: Mandatory architectural preconditions agreed for future
+Place reconciliation; a safe merge workflow, audit trail, and
+recovery mechanism are not yet implemented or verified.
+
+
 ## 7. Concurrency and Transactions
 
 Experience publication involving a new or reused POI executes
@@ -314,12 +377,27 @@ The shared materialization services also include identity reuse
 and IntegrityError recovery paths. Their geographic compatibility
 guards are documented in the architecture decision log.
 
-These mechanisms do not establish complete protection against
-all concurrent geographic reference changes or all possible
-creation paths.
+The following POI regression tests were inspected:
 
-Status: Verified in inspected code and automated rollback tests;
-broader concurrency guarantees remain under investigation.
+- test_poi_materialization_preserves_concurrent_identity_conflict:
+  verifies that a second gate evaluation returning preserve prevents
+  reuse after an initial simulated create decision.
+- test_create_poi_recovers_existing_identity_after_integrity_error:
+  verifies recovery of an existing external identity without
+  creating a duplicate Place or identity record.
+- test_poi_materialization_preserves_integrity_error_identity_conflict:
+  verifies that a second gate evaluation rejects incompatible
+  identity context and leaves the existing Place name, parent,
+  Place count, and BusinessPresence count unchanged.
+
+These tests verify specific recovery and conflict-handling paths.
+They do not execute two independent database transactions
+concurrently. Real concurrent transaction testing and exhaustive
+coverage of alternate creation paths remain open investigations.
+
+Status: Inspected implementation and regression tests support
+the specified identity recovery, preservation, and rollback
+behaviors; broader concurrency guarantees are not yet verified.
 
 ## 8. API Contracts
 
@@ -347,16 +425,26 @@ materialize internal Places.
 
 ### 8.2 Explicit materialization and validation
 
-| Method | Endpoint | Purpose |
+| Method | Endpoint | Current behavior |
 | --- | --- | --- |
-| POST | /api/geography/places/preflight/ | Geographic reference preflight |
-| POST | /api/geography/places/materialize/ | Geographic Place materialization |
-| POST | /api/geography/cities/materialize/ | City materialization |
-| POST | /api/geography/pois/materialize/ | POI materialization |
-| POST | /api/geography/pois/create-manual/ | Manual POI creation |
+| POST | /api/geography/places/preflight/ | Validate geographic reference without materialization |
+| POST | /api/geography/countries/materialize/ | Reject standalone materialization |
+| POST | /api/geography/places/materialize/ | Reject standalone materialization |
+| POST | /api/geography/cities/materialize/ | Reject standalone materialization |
+| POST | /api/geography/pois/materialize/ | Reject standalone materialization |
+| POST | /api/geography/pois/create-manual/ | Reject standalone manual POI creation |
 
-These explicit endpoints remain registered. They must not be
-confused with read-only discovery or exploration.
+The five standalone creation/materialization POST handlers remain
+registered but return HTTP 409 with code
+contribution_publication_required for authenticated requests.
+They do not independently create geographic Places.
+
+Preflight is a separate validation operation and does not
+materialize a Place. Successful geographic materialization
+belongs to the authorized Experience or Update publication flow.
+
+Status: Verified in the inspected view implementations.
+Other creation paths require separate auditing.
 
 ### 8.3 Experience publication
 
@@ -398,6 +486,28 @@ This is not an exhaustive specification of every endpoint parameter
 or response schema.
 
 ## 9. Test Coverage
+
+### GEO-05F completion checkpoint
+
+The GEO-05F implementation was completed and committed on branch
+dev at b2c03c2 (Complete GEO-05F geographic discovery and
+publication safeguards).
+
+At that checkpoint:
+
+- The complete backend core suite passed 371 tests.
+- The frontend production build passed.
+- Geographic discovery, guided manual creation, and contribution
+  publication safeguards were included in the completed work.
+- Standalone geographic materialization endpoints were restricted
+  to HTTP 409 contribution_publication_required responses.
+
+These results are historical verification evidence, not a claim
+that the complete suite was rerun during the present documentation
+audit. Earlier checkpoints below are retained for traceability.
+
+Status: Implementation checkpoint recorded; broader lifecycle,
+deletion, real concurrency, and recovery audits remain open.
 
 ### GEO-05E.3 verification checkpoint
 
@@ -505,24 +615,48 @@ parent city, and country reference.
 Name-based candidates without confirmed identity are preserved for
 further resolution rather than automatically merged.
 
-Status: Verified in code; dedicated test coverage pending audit.
+Dedicated regression tests cover name-only preservation, confirmed
+identity reuse, creation without conflicting candidates, and
+preservation of incompatible external identity contexts.
+
+Status: Verified in code and covered by dedicated regression tests
+for the specified identity resolution scenarios.
 
 ### GEO-04/002 — External POI Materialization
 
-The external POI endpoint validates the requested place type and
-checks locality compatibility before invoking the shared POI
-materialization service.
+The shared external POI materialization service validates geographic
+compatibility and applies the POI identity reference gate.
 
-Status: Verified in code; complete validation coverage pending audit.
+Historically, standalone endpoints exposed materialization operations.
+Following GEO-05F, the standalone POI materialization POST endpoint
+remains registered but returns HTTP 409 with code
+contribution_publication_required.
+
+External POI materialization is performed within authorized
+contribution publication workflows, with regression tests covering
+selected identity, geographic conflict, and rollback scenarios.
+
+Status: Current endpoint restriction verified in code; shared
+materialization and selected publication behaviors covered by
+regression tests. Exhaustive validation remains under investigation.
 
 ### GEO-04/003 — Manual POI Materialization
 
-Manual POI creation uses the shared materialization service without
-requiring an external provider identity.
+Manual POI publication uses shared geographic materialization logic
+without requiring an external provider identity. Name-based candidate
+resolution remains applicable and must not silently merge Places.
 
-Name-based candidate resolution remains applicable.
+Following GEO-05F, the standalone manual POI creation POST endpoint
+remains registered but returns HTTP 409 with code
+contribution_publication_required.
 
-Status: Verified in code; dedicated test coverage pending audit.
+Manual POI creation is supported through authorized contribution
+publication, with dedicated tests covering selected preservation,
+validation, geographic conflict, and rollback scenarios.
+
+Status: Current endpoint restriction verified in code; selected
+manual POI publication behaviors covered by regression tests.
+Exhaustive validation remains under investigation.
 
 ### GEO-04/004 — POI Country Ancestry Consistency
 
@@ -656,12 +790,15 @@ Implementation:
 - Ambiguous resolution returns preserve rather than automatic reuse.
 - Publication uses transaction.atomic() for Place resolution and
   Experience/Update persistence.
-- Existing explicit materialization endpoints remain available.
+- Standalone materialization endpoints remain registered but
+  their POST handlers now reject direct creation with HTTP 409
+  contribution_publication_required (GEO-05F completion).
 
 Limitations:
 
-- The decision describes the audited contribution workflow, not
-  every possible backend materialization path.
+- The contribution workflow and standalone endpoint restrictions
+  are verified in the inspected implementation. Other internal
+  creation paths have not been exhaustively audited.
 - Complete concurrency and geographic consistency guarantees
   remain under investigation.
 - Historical Place lifecycle and deletion behavior require
@@ -713,9 +850,11 @@ Implementation:
 
 Limitations:
 
-- Existing explicit materialization endpoints remain registered.
-- This decision does not guarantee that every creation path
-  follows late materialization.
+- Explicit materialization endpoints remain registered but now
+  reject standalone creation with HTTP 409
+  contribution_publication_required.
+- The audited publication workflows follow late materialization;
+  exhaustive verification of other internal creation paths remains open.
 - Full concurrency safety, historical geographic preservation,
   and lifecycle protection remain separate investigations.
 
@@ -740,15 +879,20 @@ experience publication workflow.
 ## 11. Open Investigations
 
 - Extend geographic consistency auditing across Country, Destination, city, and POI records, beyond the GEO-04/004 and GEO-04/005 guards.
-- Audit the complete POI creation and concurrent recovery paths.
-- Extend the existing regression coverage for POI identity and
-  geographic context conflicts. GEO-05E.3 tests verify selected
-  ambiguity, identity reuse, validation, and rollback scenarios,
-  but exhaustive coverage of concurrent and alternate creation
-  paths remains open.
+- Complete the POI creation and concurrent recovery audit.
+  Existing regression tests verify selected identity recovery,
+  second-gate conflict preservation, and rollback behaviors.
+  They do not establish safety under two genuinely concurrent
+  independent database transactions.
+- Extend regression coverage for alternate creation paths,
+  concurrent transactions, and geographic context changes
+  that occur between validation and persistence.
 - Review the representation of closed, renamed, or relocated places.
 - Determine how historical experience locations should be preserved.
 - Audit remaining geographic creation paths for bypasses.
+- Inventory indirect Place dependencies, evaluations, experience
+  photographs, media storage, and downstream references before
+  authorizing any Place merge or destructive lifecycle operation.
 - Design non-destructive Place reconciliation and merge procedures
   that preserve independent contributions, authorship, historical
   references, and existing links. Record merge decisions and support

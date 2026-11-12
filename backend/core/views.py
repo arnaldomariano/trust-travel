@@ -4,7 +4,7 @@ from core.geography.providers.google_places import get_google_geographic_place_f
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Avg, Count, OuterRef, Q, Subquery
-from django.db import transaction
+from django.db import OperationalError, transaction
 from django.shortcuts import get_object_or_404
 
 
@@ -104,6 +104,7 @@ from .place_utils import (
 from .geography.registry import search_registry_places
 from .geography.discovery import (
     search_interpreted_global_discovery_places,
+    search_manual_geographic_discovery_diagnostic,
 )
 
 from .geography.providers.geonames import (
@@ -141,6 +142,7 @@ from .geography.services import (
     materialize_poi_place,
     preflight_external_geographic_reference,
     reconstruct_external_geographic_reference,
+    evaluate_manual_geographic_locality,
     resolve_reconstructed_geographic_reference_for_commit,
     merge_registry_and_provider_poi_results,
     poi_matches_city_context,
@@ -1693,57 +1695,17 @@ class GeographyCountryMaterializeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        country_code = (
-            request.data.get("country_code") or ""
-        ).strip().upper()
-
-        country = resolve_country_catalog_entry(
-            code=country_code,
-        )
-
-        if not country:
-            return Response(
-                {
-                    "detail": (
-                        "A valid two-letter country code is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            place, created = materialize_country_place(
-                country_entry=country,
-                user=request.user,
-            )
-        except (
-            CountryIdentityConflict,
-            GeographicContextConflict,
-        ) as error:
-            return Response(
-                {"detail": str(error)},
-                status=status.HTTP_409_CONFLICT,
-            )
-        except ValueError as error:
-            return Response(
-                {"detail": str(error)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        serializer = PlaceSerializer(
-            place,
-            context={"request": request},
-        )
-
         return Response(
-            serializer.data,
-            status=(
-                status.HTTP_201_CREATED
-                if created
-                else status.HTTP_200_OK
-            ),
+            {
+                "code": "contribution_publication_required",
+                "detail": (
+                    "A geographic place can only be materialized "
+                    "during successful publication of an Experience "
+                    "or Update."
+                ),
+            },
+            status=status.HTTP_409_CONFLICT,
         )
-
 
 class GeographyPOIExternalDetailView(APIView):
     authentication_classes = []
@@ -1861,6 +1823,47 @@ class GeographyPlaceExternalDetailView(APIView):
             )
 
         return Response(reference)
+
+
+class ManualGeographicDiscoveryDiagnosticView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        query = str(request.query_params.get("q") or "").strip()
+        country_code = str(
+            request.query_params.get("country_code") or ""
+        ).strip().upper()
+
+        if len(query) < 2:
+            return Response(
+                {"q": "Search query must contain at least 2 characters."},
+                status=400,
+            )
+
+        if (
+            len(country_code) != 2
+            or not country_code.isascii()
+            or not country_code.isalpha()
+        ):
+            return Response(
+                {"country_code": "A valid two-letter country code is required."},
+                status=400,
+            )
+
+        country = resolve_country_catalog_entry(code=country_code)
+        if country is None:
+            return Response(
+                {"country_code": "A valid country code is required."},
+                status=400,
+            )
+
+        diagnostic = search_manual_geographic_discovery_diagnostic(
+            query=query,
+            country_code=country["code"],
+        )
+
+        return Response(diagnostic)
 
 
 class GeographyPlaceSearchView(APIView):
@@ -2131,162 +2134,17 @@ class GeographyPlaceMaterializeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        external_source = str(
-            request.data.get("external_source") or ""
-        ).strip()
-
-        external_id = str(
-            request.data.get("external_id") or ""
-        ).strip()
-
-        if external_source not in {
-            "geonames",
-            "google_places",
-        }:
-            return Response(
-                {
-                    "detail": (
-                        "A supported geographic external source is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not external_id:
-            return Response(
-                {
-                    "detail": (
-                        "Geographic external ID is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            geographic_result = reconstruct_external_geographic_reference(
-                external_source,
-                external_id,
-            )
-
-        except (
-            GeoNamesConfigurationError,
-            GooglePlacesConfigurationError,
-        ):
-            return Response(
-                {
-                    "detail": (
-                        "Geographic search is not configured."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        except (
-            GeoNamesRequestError,
-            GooglePlacesRequestError,
-        ):
-            return Response(
-                {
-                    "detail": (
-                        "Geographic place lookup is temporarily unavailable."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        except ValueError as error:
-            return Response(
-                {"detail": str(error)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        country_code = str(
-            geographic_result.get("country_code") or ""
-        ).strip().upper()
-
-        country = resolve_country_catalog_entry(
-            code=country_code,
-        )
-
-        if not country:
-            return Response(
-                {
-                    "detail": (
-                        "Could not resolve the country for this geographic place."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            country_place, _ = materialize_country_place(
-                country_entry=country,
-                user=request.user,
-            )
-        except CountryIdentityConflict as error:
-            return Response(
-                {
-                    "code": "country_identity_conflict",
-                    "detail": str(error),
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-        except GeographicContextConflict as conflict:
-            return _build_geographic_resolution_required_response(
-                preserve_geographic_context_conflict(conflict)
-            )
-
-        resolved_country = country_place.country_ref
-
-        if not resolved_country:
-            return Response(
-                {
-                    "detail": (
-                        "Could not resolve the country structure for this geographic place."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        materialization_result = materialize_city_place(
-            city_result=geographic_result,
-            resolved_country=resolved_country,
-            country_code=country["code"],
-            country_place=country_place,
-            user=request.user,
-        )
-
-        if materialization_result["state"] == "preserve":
-            return _build_geographic_resolution_required_response(
-                materialization_result
-            )
-
-        if materialization_result["state"] not in {
-            "reuse",
-            "created",
-        }:
-            raise ValueError(
-                "Unsupported geographic materialization state: "
-                f"{materialization_result['state']}"
-            )
-
-        place = materialization_result["place"]
-        created = materialization_result["created"]
-
-        serializer = PlaceSerializer(
-            place,
-            context={"request": request},
-        )
-
         return Response(
-            serializer.data,
-            status=(
-                status.HTTP_201_CREATED
-                if created
-                else status.HTTP_200_OK
-            ),
+            {
+                "code": "contribution_publication_required",
+                "detail": (
+                    "A geographic place can only be materialized "
+                    "during successful publication of an Experience "
+                    "or Update."
+                ),
+            },
+            status=status.HTTP_409_CONFLICT,
         )
-
 
 class GeographyCitySearchView(APIView):
     authentication_classes = []
@@ -2364,136 +2222,17 @@ class GeographyCityMaterializeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        external_id = (
-                request.data.get("external_id") or ""
-        ).strip()
-
-        country_code = (
-                request.data.get("country_code") or ""
-        ).strip().upper()
-
-        if not external_id:
-            return Response(
-                {
-                    "detail": (
-                        "Geographic external ID is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        country = resolve_country_catalog_entry(
-            code=country_code,
-        )
-
-        if not country:
-            return Response(
-                {
-                    "detail": (
-                        "A valid two-letter country code is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            city_result = get_geographic_place(external_id)
-        except GeoNamesConfigurationError:
-            return Response(
-                {
-                    "detail": (
-                        "Geographic search is not configured."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except GeoNamesRequestError:
-            return Response(
-                {
-                    "detail": (
-                        "Geographic place lookup is temporarily unavailable."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except ValueError as error:
-            return Response(
-                {"detail": str(error)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if city_result["country_code"] != country["code"]:
-            return Response(
-                {
-                    "detail": (
-                        "The selected geographic place does not belong "
-                        "to the requested country."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        resolved_country = get_or_create_country(
-            value=country["canonical_name"],
-            code=country["code"],
-            aliases=country.get("aliases") or [],
-        )
-
-        country_place = Place.objects.filter(
-            place_type="country",
-            country_ref=resolved_country,
-        ).first()
-
-        if not country_place:
-            return Response(
-                {
-                    "detail": (
-                        "Country place was not found. Please select "
-                        "the country before selecting a city or region."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        materialization_result = materialize_city_place(
-            city_result=city_result,
-            resolved_country=resolved_country,
-            country_code=country["code"],
-            country_place=country_place,
-            user=request.user,
-        )
-
-        if materialization_result["state"] == "preserve":
-            return _build_geographic_resolution_required_response(
-                materialization_result
-            )
-
-        if materialization_result["state"] not in {
-            "reuse",
-            "created",
-        }:
-            raise ValueError(
-                "Unsupported geographic materialization state: "
-                f"{materialization_result['state']}"
-            )
-
-        place = materialization_result["place"]
-        created = materialization_result["created"]
-
-        serializer = PlaceSerializer(
-            place,
-            context={"request": request},
-        )
-
         return Response(
-            serializer.data,
-            status=(
-                status.HTTP_201_CREATED
-                if created
-                else status.HTTP_200_OK
-            ),
+            {
+                "code": "contribution_publication_required",
+                "detail": (
+                    "A geographic place can only be materialized "
+                    "during successful publication of an Experience "
+                    "or Update."
+                ),
+            },
+            status=status.HTTP_409_CONFLICT,
         )
-
 
 class GeographyPOISearchView(APIView):
     authentication_classes = []
@@ -2836,322 +2575,34 @@ class GeographyPOIMaterializeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        external_id = str(
-            request.data.get("external_id") or ""
-        ).strip()
-
-        place_type = str(
-            request.data.get("place_type") or ""
-        ).strip()
-
-        city_place_id = str(
-            request.data.get("city_place_id") or ""
-        ).strip()
-
-        if not external_id:
-            return Response(
-                {
-                    "detail": (
-                        "Foursquare external ID is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        valid_place_types = {
-            "hotel",
-            "restaurant",
-            "attraction",
-            "nature",
-            "other",
-        }
-
-        if place_type not in valid_place_types:
-            return Response(
-                {
-                    "detail": (
-                        "A valid specific place type is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not city_place_id.isdigit():
-            return Response(
-                {
-                    "detail": (
-                        "A valid city_place_id is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        city_place = (
-            Place.objects
-            .select_related(
-                "country_ref",
-                "destination",
-            )
-            .filter(
-                id=int(city_place_id),
-                place_type="city",
-            )
-            .first()
-        )
-
-        if not city_place:
-            return Response(
-                {
-                    "detail": (
-                        "The requested city or locality was not found."
-                    )
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        country_code = (
-            city_place.country_ref.code
-            if city_place.country_ref
-            else city_place.country_code
-        )
-
-        country_code = str(
-            country_code or ""
-        ).strip().upper()
-
-        try:
-            poi_result = get_poi(
-                external_id=external_id,
-            )
-
-            type_matches = poi_matches_place_type(
-                poi_result=poi_result,
-                place_type=place_type,
-            )
-        except FoursquareConfigurationError:
-            return Response(
-                {
-                    "detail": (
-                        "POI lookup is not configured."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except FoursquareRequestError:
-            return Response(
-                {
-                    "detail": (
-                        "POI lookup is temporarily unavailable."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except ValueError as error:
-            return Response(
-                {"detail": str(error)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not type_matches:
-            return Response(
-                {
-                    "detail": (
-                        "The selected POI does not match "
-                        "the requested place type."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not poi_matches_city_context(
-            poi_result=poi_result,
-            city_place=city_place,
-        ):
-            return Response(
-                {
-                    "detail": (
-                        "The selected POI does not match "
-                        "the requested city or locality."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        materialization_result = materialize_poi_place(
-            poi_result=poi_result,
-            city_place=city_place,
-            country_code=country_code,
-            place_type=place_type,
-            user=request.user,
-        )
-
-        if materialization_result["state"] == "preserve":
-            return Response(
-                {
-                    "code": "poi_resolution_required",
-                    "detail": (
-                        "This place needs confirmation "
-                        "before it can be added."
-                    ),
-                    "reason": materialization_result["reason"],
-                    "candidate_place_ids": (
-                        materialization_result["candidate_place_ids"]
-                    ),
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        serializer = PlaceSerializer(
-            materialization_result["place"],
-            context={"request": request},
-        )
-
         return Response(
-            serializer.data,
-            status=(
-                status.HTTP_201_CREATED
-                if materialization_result["created"]
-                else status.HTTP_200_OK
-            ),
+            {
+                "code": "contribution_publication_required",
+                "detail": (
+                    "A geographic place can only be materialized "
+                    "during successful publication of an Experience "
+                    "or Update."
+                ),
+            },
+            status=status.HTTP_409_CONFLICT,
         )
-
 
 class GeographyPOIManualCreateView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        name = str(
-            request.data.get("name") or ""
-        ).strip()
-
-        place_type = str(
-            request.data.get("place_type") or ""
-        ).strip()
-
-        city_place_id = str(
-            request.data.get("city_place_id") or ""
-        ).strip()
-
-        if not name:
-            return Response(
-                {
-                    "detail": (
-                        "A specific place name is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        valid_place_types = {
-            "hotel",
-            "restaurant",
-            "attraction",
-            "nature",
-            "other",
-        }
-
-        if place_type not in valid_place_types:
-            return Response(
-                {
-                    "detail": (
-                        "A valid specific place type is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not city_place_id.isdigit():
-            return Response(
-                {
-                    "detail": (
-                        "A valid city_place_id is required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        city_place = (
-            Place.objects
-            .select_related(
-                "country_ref",
-                "destination",
-            )
-            .filter(
-                id=int(city_place_id),
-                place_type="city",
-            )
-            .first()
-        )
-
-        if not city_place:
-            return Response(
-                {
-                    "detail": (
-                        "The requested city or locality was not found."
-                    )
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        country_code = (
-            city_place.country_ref.code
-            if city_place.country_ref
-            else city_place.country_code
-        )
-
-        country_code = str(
-            country_code or ""
-        ).strip().upper()
-
-        poi_result = {
-            "name": name,
-            "canonical_name": name,
-            "aliases": [],
-            "latitude": None,
-            "longitude": None,
-            "external_source": "",
-            "external_id": "",
-        }
-
-        materialization_result = materialize_poi_place(
-            poi_result=poi_result,
-            city_place=city_place,
-            country_code=country_code,
-            place_type=place_type,
-            user=request.user,
-        )
-
-        if materialization_result["state"] == "preserve":
-            return Response(
-                {
-                    "code": "poi_resolution_required",
-                    "detail": (
-                        "This place needs confirmation "
-                        "before it can be added."
-                    ),
-                    "reason": materialization_result["reason"],
-                    "candidate_place_ids": (
-                        materialization_result["candidate_place_ids"]
-                    ),
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        serializer = PlaceSerializer(
-            materialization_result["place"],
-            context={"request": request},
-        )
-
         return Response(
-            serializer.data,
-            status=(
-                status.HTTP_201_CREATED
-                if materialization_result["created"]
-                else status.HTTP_200_OK
-            ),
+            {
+                "code": "contribution_publication_required",
+                "detail": (
+                    "A geographic place can only be materialized "
+                    "during successful publication of an Experience "
+                    "or Update."
+                ),
+            },
+            status=status.HTTP_409_CONFLICT,
         )
-
 
 class PlaceListView(generics.ListAPIView):
     authentication_classes = [CookieJWTAuthentication]
@@ -3992,11 +3443,52 @@ class ExperienceListView(generics.ListCreateAPIView):
     def get_serializer_context(self):
         return {"request": self.request}
 
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except OperationalError as error:
+            is_manual_geographic = (
+                bool(str(request.data.get("manual_geographic_name") or "").strip())
+                and bool(
+                    str(
+                        request.data.get(
+                            "manual_geographic_country_code"
+                        ) or ""
+                    ).strip()
+                )
+            )
+            is_transient_sqlite_lock = (
+                "database is locked" in str(error).lower()
+                or "database table is locked" in str(error).lower()
+            )
+
+            if not is_manual_geographic or not is_transient_sqlite_lock:
+                raise
+
+            return Response(
+                {
+                    "code": "geographic_publication_temporarily_unavailable",
+                    "detail": (
+                        "The geographic publication is temporarily unavailable. "
+                        "Please try again later."
+                    ),
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
     def perform_create(self, serializer):
         if not self.request.user.is_authenticated:
             raise PermissionDenied("You must be logged in to share an experience.")
 
         place = serializer.validated_data.get("place")
+
+        manual_geographic_name = serializer.validated_data.get(
+            "manual_geographic_name"
+        )
+        manual_geographic_country_code = serializer.validated_data.get(
+            "manual_geographic_country_code"
+        )
+        has_manual_geographic = manual_geographic_name is not None
 
         manual_poi_name = serializer.validated_data.get(
             "manual_poi_name"
@@ -4152,9 +3644,23 @@ class ExperienceListView(generics.ListCreateAPIView):
                     )
                 })
 
+        if has_manual_geographic:
+            manual_resolution = evaluate_manual_geographic_locality(
+                name=manual_geographic_name,
+                country_code=manual_geographic_country_code,
+            )
+
+            if manual_resolution["state"] == "preserve":
+                raise GeographicResolutionRequired(manual_resolution)
+
         geographic_result = None
 
-        if place is None and not has_manual_poi and not has_external_poi:
+        if (
+            place is None
+            and not has_manual_poi
+            and not has_external_poi
+            and not has_manual_geographic
+        ):
             if not external_source or not external_id:
                 raise serializers.ValidationError({
                     "place": (
@@ -4184,6 +3690,38 @@ class ExperienceListView(generics.ListCreateAPIView):
                 )
 
         with transaction.atomic():
+            if has_manual_geographic:
+                manual_commit_resolution = (
+                    resolve_reconstructed_geographic_reference_for_commit(
+                        geographic_result=manual_resolution["geographic_result"],
+                        user=self.request.user,
+                    )
+                )
+
+                if manual_commit_resolution["state"] == "preserve":
+                    raise GeographicResolutionRequired(
+                        manual_commit_resolution
+                    )
+
+                if manual_commit_resolution["state"] != "created":
+                    raise ValueError(
+                        "Manual locality publication must create a new place."
+                    )
+
+                place = manual_commit_resolution["place"]
+
+                if place is None:
+                    raise ValueError(
+                        "Manual locality creation did not return a place."
+                    )
+
+                serializer.validated_data.pop(
+                    "manual_geographic_name", None
+                )
+                serializer.validated_data.pop(
+                    "manual_geographic_country_code", None
+                )
+
             if has_manual_poi:
                 city_place = (
                     Place.objects

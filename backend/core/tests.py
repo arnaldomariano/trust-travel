@@ -1,7 +1,7 @@
 from unittest.mock import call, patch
 
 from django.db import transaction
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
 from .models import Country
 from .place_utils import (
@@ -447,6 +447,102 @@ class CountryMaterializationTests(TestCase):
         self.assertFalse(Destination.objects.exists())
 
 
+
+class IndependentGeographicMaterializationProtectionTests(TestCase):
+    """Geographic materialization requires a published contribution."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        self.user = User.objects.create_user(
+            username="independent-materialization-protection-user",
+            password="test-password",
+        )
+        self.authorization = f"Bearer {AccessToken.for_user(self.user)}"
+
+    def test_independent_materialization_endpoints_do_not_create_places(self):
+        from unittest.mock import patch
+        from .models import Country, Destination, Place
+
+        endpoints = [
+            ("/api/geography/countries/materialize/", {"country_code": "AR"}),
+            (
+                "/api/geography/places/materialize/",
+                {"external_source": "geonames", "external_id": "123456"},
+            ),
+            (
+                "/api/geography/cities/materialize/",
+                {"external_id": "123456", "country_code": "AR"},
+            ),
+            (
+                "/api/geography/pois/materialize/",
+                {
+                    "external_id": "external-poi-test",
+                    "place_type": "restaurant",
+                    "city_place_id": 999999,
+                },
+            ),
+            (
+                "/api/geography/pois/create-manual/",
+                {
+                    "name": "Independent Test Restaurant",
+                    "place_type": "restaurant",
+                    "city_place_id": 999999,
+                },
+            ),
+        ]
+
+        protected_functions = [
+            "core.views.reconstruct_external_geographic_reference",
+            "core.views.get_geographic_place",
+            "core.views.get_poi",
+            "core.views.materialize_country_place",
+            "core.views.materialize_city_place",
+            "core.views.materialize_poi_place",
+        ]
+
+        for url, payload in endpoints:
+            with self.subTest(url=url):
+                before = (
+                    Country.objects.count(),
+                    Destination.objects.count(),
+                    Place.objects.count(),
+                )
+
+                patches = [patch(name) for name in protected_functions]
+                mocks = [item.start() for item in patches]
+
+                try:
+                    response = self.client.post(
+                        url,
+                        data=payload,
+                        content_type="application/json",
+                        HTTP_AUTHORIZATION=self.authorization,
+                    )
+                finally:
+                    for item in reversed(patches):
+                        item.stop()
+
+                self.assertEqual(response.status_code, 409, response.content)
+                self.assertEqual(
+                    response.json().get("code"),
+                    "contribution_publication_required",
+                )
+
+                for mocked_function in mocks:
+                    mocked_function.assert_not_called()
+
+                self.assertEqual(
+                    (
+                        Country.objects.count(),
+                        Destination.objects.count(),
+                        Place.objects.count(),
+                    ),
+                    before,
+                )
+
+
 class CountryMaterializationAPITests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User
@@ -475,88 +571,45 @@ class CountryMaterializationAPITests(TestCase):
             [401, 403],
         )
 
-    def test_country_materialization_endpoint_is_idempotent(self):
-        from .models import Destination, Place
+    def test_country_materialization_endpoint_requires_publication(self):
+        from .models import Country, Destination, Place
 
         authorization = f"Bearer {self.access_token}"
 
-        first_response = self.client.post(
-            self.url,
-            data={"country_code": "AR"},
-            content_type="application/json",
-            HTTP_AUTHORIZATION=authorization,
+        before = (
+            Country.objects.count(),
+            Destination.objects.count(),
+            Place.objects.count(),
         )
 
-        self.assertEqual(
-            first_response.status_code,
-            201,
-            first_response.content,
-        )
+        for attempt in range(2):
+            with self.subTest(attempt=attempt + 1):
+                response = self.client.post(
+                    self.url,
+                    data={"country_code": "AR"},
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=authorization,
+                )
 
-        first_data = first_response.json()
+                self.assertEqual(
+                    response.status_code,
+                    409,
+                    response.content,
+                )
+                self.assertEqual(
+                    response.json().get("code"),
+                    "contribution_publication_required",
+                )
+                self.assertEqual(
+                    (
+                        Country.objects.count(),
+                        Destination.objects.count(),
+                        Place.objects.count(),
+                    ),
+                    before,
+                )
 
-        self.assertEqual(first_data["name"], "Argentina")
-        self.assertEqual(
-            first_data["canonical_name"],
-            "Argentina",
-        )
-        self.assertEqual(first_data["country_code"], "AR")
-        self.assertEqual(first_data["place_type"], "country")
-
-        first_place_id = first_data["id"]
-
-        second_response = self.client.post(
-            self.url,
-            data={"country_code": "AR"},
-            content_type="application/json",
-            HTTP_AUTHORIZATION=authorization,
-        )
-
-        self.assertEqual(
-            second_response.status_code,
-            200,
-            second_response.content,
-        )
-
-        second_data = second_response.json()
-
-        self.assertEqual(
-            second_data["id"],
-            first_place_id,
-        )
-
-        country = Country.objects.get(code="AR")
-
-        self.assertEqual(
-            Country.objects.filter(code="AR").count(),
-            1,
-        )
-
-        self.assertEqual(
-            Destination.objects.filter(
-                name="Argentina",
-                country="Argentina",
-            ).count(),
-            1,
-        )
-
-        self.assertEqual(
-            Place.objects.filter(
-                place_type="country",
-                country_ref=country,
-            ).count(),
-            1,
-        )
-
-        place = Place.objects.get(pk=first_place_id)
-
-        self.assertEqual(
-            place.created_by_id,
-            self.user.id,
-        )
-
-
-    def test_country_materialization_returns_409_for_conflicting_place(self):
+    def test_independent_country_materialization_preserves_conflicting_place(self):
         from .geography.services import materialize_country_place
         from .models import Place
 
@@ -584,6 +637,11 @@ class CountryMaterializationAPITests(TestCase):
             response.content,
         )
 
+        self.assertEqual(
+            response.json().get("code"),
+            "contribution_publication_required",
+        )
+
         place.refresh_from_db()
         self.assertEqual(place.country_code, "FR")
 
@@ -596,7 +654,7 @@ class CountryMaterializationAPITests(TestCase):
         )
 
 
-    def test_country_materialization_returns_409_for_conflicting_country_identity(self):
+    def test_independent_country_materialization_preserves_conflicting_country_identity(self):
         from .models import Country, Destination, Place
 
         conflicting_country = Country.objects.create(
@@ -616,6 +674,11 @@ class CountryMaterializationAPITests(TestCase):
             response.status_code,
             409,
             response.content,
+        )
+
+        self.assertEqual(
+            response.json().get("code"),
+            "contribution_publication_required",
         )
 
         conflicting_country.refresh_from_db()
@@ -817,253 +880,58 @@ class GeographicPlaceMaterializationAPITests(TestCase):
             username="geographic-place-materialization-user",
             password="test-password",
         )
-        self.access_token = str(
-            AccessToken.for_user(self.user)
-        )
+        self.access_token = str(AccessToken.for_user(self.user))
         self.url = "/api/geography/places/materialize/"
 
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.reconstruct_external_geographic_reference")
-    def test_country_identity_conflict_returns_409_without_materializing_place(
-        self,
-        mock_reconstruct_external_geographic_reference,
-        mock_materialize_city_place,
-    ):
+    def post_materialization(self, **overrides):
+        payload = {
+            "external_source": "google_places",
+            "external_id": "external-test-place",
+            **overrides,
+        }
+        return self.client.post(
+            self.url,
+            data=payload,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+    def test_independent_creation_requires_publication(self):
         from .models import Country, Destination, Place
 
-        conflicting_country = Country.objects.create(
-            code="FR",
-            canonical_name="Argentina",
-            aliases=[],
+        before = (
+            Country.objects.count(),
+            Destination.objects.count(),
+            Place.objects.count(),
         )
 
-        mock_reconstruct_external_geographic_reference.return_value = {
-            "name": "Buenos Aires",
-            "canonical_name": "Buenos Aires",
-            "aliases": [],
-            "external_source": "google_places",
-            "external_id": "buenos-aires-google",
-            "country_code": "AR",
-            "geographic_type": "settlement",
-        }
-
-        response = self.client.post(
-            self.url,
-            data={
-                "external_source": "google_places",
-                "external_id": "buenos-aires-google",
-            },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        response = self.post_materialization(
+            external_id="new-geographic-place",
         )
 
-        self.assertEqual(
-            response.status_code,
-            409,
-            response.content,
-        )
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(
             response.json()["code"],
-            "country_identity_conflict",
-        )
-
-        mock_materialize_city_place.assert_not_called()
-
-        conflicting_country.refresh_from_db()
-        self.assertEqual(conflicting_country.code, "FR")
-        self.assertEqual(
-            conflicting_country.canonical_name,
-            "Argentina",
-        )
-
-        self.assertFalse(Country.objects.filter(code="AR").exists())
-        self.assertFalse(Destination.objects.exists())
-        self.assertFalse(Place.objects.exists())
-
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.reconstruct_external_geographic_reference")
-    def test_country_place_context_conflict_returns_resolution_required(
-        self,
-        mock_reconstruct_external_geographic_reference,
-        mock_materialize_city_place,
-    ):
-        from .geography.services import materialize_country_place
-        from .models import Place
-
-        country_entry = resolve_country_catalog_entry(code="AR")
-
-        country_place, created = materialize_country_place(
-            country_entry=country_entry,
-            user=self.user,
-        )
-        self.assertTrue(created)
-
-        country_place.country_code = "FR"
-        country_place.save(update_fields=["country_code"])
-
-        mock_reconstruct_external_geographic_reference.return_value = {
-            "name": "Buenos Aires",
-            "canonical_name": "Buenos Aires",
-            "aliases": [],
-            "external_source": "google_places",
-            "external_id": "buenos-aires-google",
-            "country_code": "AR",
-            "geographic_type": "settlement",
-        }
-
-        response = self.client.post(
-            self.url,
-            data={
-                "external_source": "google_places",
-                "external_id": "buenos-aires-google",
-            },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            409,
-            response.content,
-        )
-
-        data = response.json()
-
-        self.assertEqual(
-            data["code"],
-            "geographic_resolution_required",
+            "contribution_publication_required",
         )
         self.assertEqual(
-            len(data["references"]),
-            1,
-        )
-        self.assertEqual(
-            data["references"][0]["id"],
-            country_place.id,
-        )
-
-        self.assertNotIn("evaluations", data)
-        self.assertNotIn("context_conflict", str(data))
-
-        mock_materialize_city_place.assert_not_called()
-
-        country_place.refresh_from_db()
-        self.assertEqual(country_place.country_code, "FR")
-
-        self.assertEqual(
-            Place.objects.filter(
-                place_type="country",
-                country_ref=country_place.country_ref,
-            ).count(),
-            1,
+            (
+                Country.objects.count(),
+                Destination.objects.count(),
+                Place.objects.count(),
+            ),
+            before,
         )
 
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.reconstruct_external_geographic_reference")
-    def test_preserve_returns_resolution_required_without_internal_evidence(
-        self,
-        mock_reconstruct_external_geographic_reference,
-        mock_materialize_city_place,
-    ):
+    def test_independent_reuse_requires_publication(self):
         from .models import Destination, Place
 
-        country = get_or_create_country(value="United States")
-        destination = Destination.objects.create(
-            name="United States",
-            country="United States",
-        )
-        reference_place = Place.objects.create(
-            destination=destination,
-            country_ref=country,
-            name="Springfield",
-            canonical_name="Springfield",
-            country_code="US",
-            place_type="city",
-            geographic_type="settlement",
-        )
-
-        mock_reconstruct_external_geographic_reference.return_value = {
-            "name": "Springfield",
-            "canonical_name": "Springfield",
-            "aliases": [],
-            "external_source": "google_places",
-            "external_id": "springfield-massachusetts",
-            "country_code": "US",
-            "geographic_type": "settlement",
-        }
-        mock_materialize_city_place.return_value = {
-            "state": "preserve",
-            "place": None,
-            "created": False,
-            "evaluations": [
-                {
-                    "place": reference_place,
-                    "identity_relation": "unresolved",
-                    "reconciliation_action": "preserve",
-                }
-            ],
-        }
-
-        response = self.client.post(
-            self.url,
-            data={
-                "external_source": "google_places",
-                "external_id": "springfield-massachusetts",
-            },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            409,
-            response.content,
-        )
-
-        data = response.json()
-
-        self.assertEqual(
-            data["code"],
-            "geographic_resolution_required",
-        )
-        self.assertEqual(
-            data["detail"],
-            "This geographic place needs confirmation before it can be added.",
-        )
-        self.assertEqual(
-            data["references"],
-            [
-                {
-                    "id": reference_place.id,
-                    "name": "Springfield",
-                    "country_code": "US",
-                    "country_name": "United States",
-                    "geographic_type": "settlement",
-                }
-            ],
-        )
-        self.assertNotIn("evaluations", data)
-        self.assertNotIn("identity_relation", str(data))
-        self.assertNotIn("reconciliation_action", str(data))
-
-
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.reconstruct_external_geographic_reference")
-    def test_reuse_returns_existing_place_with_200(
-        self,
-        mock_reconstruct_external_geographic_reference,
-        mock_materialize_city_place,
-    ):
-        from .models import Destination, Place
-
-        country = get_or_create_country(value="Italy")
         destination = Destination.objects.create(
             name="Italy",
             country="Italy",
         )
         place = Place.objects.create(
             destination=destination,
-            country_ref=country,
             name="Lake Como",
             canonical_name="Lake Como",
             country_code="IT",
@@ -1071,139 +939,54 @@ class GeographicPlaceMaterializationAPITests(TestCase):
             geographic_type="lake",
         )
 
-        mock_reconstruct_external_geographic_reference.return_value = {
-            "name": "Lake Como",
-            "canonical_name": "Lake Como",
-            "aliases": [],
-            "external_source": "google_places",
-            "external_id": "lake-como-google",
-            "country_code": "IT",
-            "geographic_type": "lake",
-        }
-        mock_materialize_city_place.return_value = {
-            "state": "reuse",
-            "place": place,
-            "created": False,
-            "evaluations": [],
-        }
-
-        response = self.client.post(
-            self.url,
-            data={
-                "external_source": "google_places",
-                "external_id": "lake-como-google",
-            },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        response = self.post_materialization(
+            external_id="lake-como-google",
         )
 
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(
-            response.status_code,
-            200,
-            response.content,
+            response.json()["code"],
+            "contribution_publication_required",
         )
-        self.assertEqual(response.json()["id"], place.id)
-        self.assertEqual(response.json()["name"], "Lake Como")
+        self.assertEqual(Place.objects.count(), 1)
+        place.refresh_from_db()
+        self.assertEqual(place.name, "Lake Como")
+        self.assertEqual(place.country_code, "IT")
 
     @patch("core.views.materialize_city_place")
     @patch("core.views.reconstruct_external_geographic_reference")
-    def test_created_returns_new_place_with_201(
+    def test_independent_request_does_not_call_geographic_services(
         self,
-        mock_reconstruct_external_geographic_reference,
-        mock_materialize_city_place,
+        reconstruct_reference,
+        materialize_city,
     ):
-        from .models import Destination, Place
+        from .models import Country, Destination, Place
 
-        country = get_or_create_country(value="Italy")
-        destination = Destination.objects.create(
-            name="Italy",
-            country="Italy",
-        )
-        place = Place.objects.create(
-            destination=destination,
-            country_ref=country,
-            name="New Geographic Place",
-            canonical_name="New Geographic Place",
-            country_code="IT",
-            place_type="city",
-            geographic_type="settlement",
+        before = (
+            Country.objects.count(),
+            Destination.objects.count(),
+            Place.objects.count(),
         )
 
-        mock_reconstruct_external_geographic_reference.return_value = {
-            "name": "New Geographic Place",
-            "canonical_name": "New Geographic Place",
-            "aliases": [],
-            "external_source": "google_places",
-            "external_id": "new-geographic-place",
-            "country_code": "IT",
-            "geographic_type": "settlement",
-        }
-        mock_materialize_city_place.return_value = {
-            "state": "created",
-            "place": place,
-            "created": True,
-            "evaluations": [],
-        }
+        response = self.post_materialization()
 
-        response = self.client.post(
-            self.url,
-            data={
-                "external_source": "google_places",
-                "external_id": "new-geographic-place",
-            },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(
+            response.json()["code"],
+            "contribution_publication_required",
         )
+
+        reconstruct_reference.assert_not_called()
+        materialize_city.assert_not_called()
 
         self.assertEqual(
-            response.status_code,
-            201,
-            response.content,
+            (
+                Country.objects.count(),
+                Destination.objects.count(),
+                Place.objects.count(),
+            ),
+            before,
         )
-        self.assertEqual(response.json()["id"], place.id)
-        self.assertEqual(
-            response.json()["name"],
-            "New Geographic Place",
-        )
-
-
-
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.reconstruct_external_geographic_reference")
-    def test_unknown_materialization_state_fails_closed(
-        self,
-        mock_reconstruct_external_geographic_reference,
-        mock_materialize_city_place,
-    ):
-        mock_reconstruct_external_geographic_reference.return_value = {
-            "name": "Future Geographic Place",
-            "canonical_name": "Future Geographic Place",
-            "aliases": [],
-            "external_source": "google_places",
-            "external_id": "future-geographic-place",
-            "country_code": "IT",
-            "geographic_type": "settlement",
-        }
-        mock_materialize_city_place.return_value = {
-            "state": "escalate",
-            "place": None,
-            "created": False,
-            "evaluations": [],
-        }
-
-        with self.assertRaisesRegex(
-            ValueError,
-            "Unsupported geographic materialization state: escalate",
-        ):
-            self.client.post(
-                self.url,
-                data={
-                    "external_source": "google_places",
-                    "external_id": "future-geographic-place",
-                },
-                content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
-            )
 
 
 class GeographicCityMaterializationAPITests(TestCase):
@@ -1216,14 +999,10 @@ class GeographicCityMaterializationAPITests(TestCase):
             username="geographic-city-materialization-user",
             password="test-password",
         )
-        self.access_token = str(
-            AccessToken.for_user(self.user)
-        )
+        self.access_token = str(AccessToken.for_user(self.user))
         self.url = "/api/geography/cities/materialize/"
 
-        self.country = get_or_create_country(
-            value="United States"
-        )
+        self.country = get_or_create_country(value="United States")
         self.destination = Destination.objects.create(
             name="United States",
             country="United States",
@@ -1237,313 +1016,124 @@ class GeographicCityMaterializationAPITests(TestCase):
             place_type="country",
         )
 
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.get_geographic_place")
-    def test_preserve_returns_resolution_required_without_internal_evidence(
-        self,
-        mock_get_geographic_place,
-        mock_materialize_city_place,
-    ):
-        from .models import Place
-
-        reference_place = Place.objects.create(
-            destination=self.destination,
-            country_ref=self.country,
-            parent_place=self.country_place,
-            name="Springfield",
-            canonical_name="Springfield",
-            country_code="US",
-            place_type="city",
-            geographic_type="settlement",
-        )
-
-        mock_get_geographic_place.return_value = {
-            "name": "Springfield",
-            "canonical_name": "Springfield",
-            "aliases": [],
-            "external_source": "geonames",
+    def post_materialization(self, **overrides):
+        data = {
             "external_id": "springfield-massachusetts",
             "country_code": "US",
-            "geographic_type": "settlement",
         }
-        mock_materialize_city_place.return_value = {
-            "state": "preserve",
-            "place": None,
-            "created": False,
-            "evaluations": [
-                {
-                    "place": reference_place,
-                    "identity_relation": "unresolved",
-                    "reconciliation_action": "preserve",
-                }
-            ],
-        }
+        data.update(overrides)
 
-        response = self.client.post(
+        return self.client.post(
             self.url,
-            data={
-                "external_id": "springfield-massachusetts",
-                "country_code": "US",
-            },
+            data=data,
             content_type="application/json",
             HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
         )
 
-        self.assertEqual(
-            response.status_code,
-            409,
-            response.content,
+    def test_independent_creation_requires_publication(self):
+        from .models import Country, Destination, Place
+
+        before = (
+            Country.objects.count(),
+            Destination.objects.count(),
+            Place.objects.count(),
         )
 
-        data = response.json()
+        response = self.post_materialization()
 
-        self.assertEqual(
-            data["code"],
-            "geographic_resolution_required",
-        )
-        self.assertEqual(
-            data["references"],
-            [
-                {
-                    "id": reference_place.id,
-                    "name": "Springfield",
-                    "country_code": "US",
-                    "country_name": "United States",
-                    "geographic_type": "settlement",
-                }
-            ],
-        )
-        self.assertNotIn("evaluations", data)
-        self.assertNotIn("identity_relation", str(data))
-        self.assertNotIn("reconciliation_action", str(data))
-
-
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.get_geographic_place")
-    def test_reuse_returns_existing_place_with_200(
-        self,
-        mock_get_geographic_place,
-        mock_materialize_city_place,
-    ):
-        from .models import Place
-
-        place = Place.objects.create(
-            destination=self.destination,
-            country_ref=self.country,
-            parent_place=self.country_place,
-            name="Springfield",
-            canonical_name="Springfield",
-            country_code="US",
-            place_type="city",
-            geographic_type="settlement",
-        )
-
-        mock_get_geographic_place.return_value = {
-            "name": "Springfield",
-            "canonical_name": "Springfield",
-            "aliases": [],
-            "external_source": "geonames",
-            "external_id": "springfield-existing",
-            "country_code": "US",
-            "geographic_type": "settlement",
-        }
-        mock_materialize_city_place.return_value = {
-            "state": "reuse",
-            "place": place,
-            "created": False,
-            "evaluations": [],
-        }
-
-        response = self.client.post(
-            self.url,
-            data={
-                "external_id": "springfield-existing",
-                "country_code": "US",
-            },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            200,
-            response.content,
-        )
-        self.assertEqual(response.json()["id"], place.id)
-        self.assertEqual(response.json()["name"], "Springfield")
-
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.get_geographic_place")
-    def test_created_returns_new_place_with_201(
-        self,
-        mock_get_geographic_place,
-        mock_materialize_city_place,
-    ):
-        from .models import Place
-
-        place = Place.objects.create(
-            destination=self.destination,
-            country_ref=self.country,
-            parent_place=self.country_place,
-            name="New Geographic Place",
-            canonical_name="New Geographic Place",
-            country_code="US",
-            place_type="city",
-            geographic_type="settlement",
-        )
-
-        mock_get_geographic_place.return_value = {
-            "name": "New Geographic Place",
-            "canonical_name": "New Geographic Place",
-            "aliases": [],
-            "external_source": "geonames",
-            "external_id": "new-geographic-place",
-            "country_code": "US",
-            "geographic_type": "settlement",
-        }
-        mock_materialize_city_place.return_value = {
-            "state": "created",
-            "place": place,
-            "created": True,
-            "evaluations": [],
-        }
-
-        response = self.client.post(
-            self.url,
-            data={
-                "external_id": "new-geographic-place",
-                "country_code": "US",
-            },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-            response.content,
-        )
-        self.assertEqual(response.json()["id"], place.id)
-        self.assertEqual(
-            response.json()["name"],
-            "New Geographic Place",
-        )
-
-
-    @patch("core.views.materialize_city_place")
-    @patch("core.views.get_geographic_place")
-    def test_unknown_materialization_state_fails_closed(
-        self,
-        mock_get_geographic_place,
-        mock_materialize_city_place,
-    ):
-        mock_get_geographic_place.return_value = {
-            "name": "Future Geographic Place",
-            "canonical_name": "Future Geographic Place",
-            "aliases": [],
-            "external_source": "geonames",
-            "external_id": "future-geographic-place",
-            "country_code": "US",
-            "geographic_type": "settlement",
-        }
-        mock_materialize_city_place.return_value = {
-            "state": "escalate",
-            "place": None,
-            "created": False,
-            "evaluations": [],
-        }
-
-        with self.assertRaisesRegex(
-            ValueError,
-            "Unsupported geographic materialization state: escalate",
-        ):
-            self.client.post(
-                self.url,
-                data={
-                    "external_id": "future-geographic-place",
-                    "country_code": "US",
-                },
-                content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
-            )
-
-
-    @patch("core.views.get_geographic_place")
-    def test_reuse_preserves_city_with_conflicting_destination(
-        self,
-        mock_get_geographic_place,
-    ):
-        from .models import (
-            Destination,
-            Place,
-            PlaceExternalIdentity,
-        )
-
-        conflicting_destination = Destination.objects.create(
-            name="France",
-            country="France",
-        )
-
-        city = Place.objects.create(
-            destination=conflicting_destination,
-            country_ref=self.country,
-            parent_place=self.country_place,
-            name="Springfield",
-            canonical_name="Springfield",
-            country_code="US",
-            place_type="city",
-            geographic_type="settlement",
-        )
-
-        PlaceExternalIdentity.objects.create(
-            place=city,
-            external_source="geonames",
-            external_id="springfield-destination-conflict",
-            geographic_type="settlement",
-        )
-
-        mock_get_geographic_place.return_value = {
-            "name": "Springfield",
-            "canonical_name": "Springfield",
-            "aliases": [],
-            "external_source": "geonames",
-            "external_id": "springfield-destination-conflict",
-            "country_code": "US",
-            "geographic_type": "settlement",
-        }
-
-        response = self.client.post(
-            self.url,
-            data={
-                "external_id": "springfield-destination-conflict",
-                "country_code": "US",
-            },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            409,
-            response.content,
-        )
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(
             response.json()["code"],
-            "geographic_resolution_required",
+            "contribution_publication_required",
         )
+        self.assertEqual(
+            (
+                Country.objects.count(),
+                Destination.objects.count(),
+                Place.objects.count(),
+            ),
+            before,
+        )
+
+    def test_independent_reuse_requires_publication(self):
+        from .models import Place, PlaceExternalIdentity
+
+        city = Place.objects.create(
+            destination=self.destination,
+            country_ref=self.country,
+            parent_place=self.country_place,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+
+        identity = PlaceExternalIdentity.objects.create(
+            place=city,
+            external_source="geonames",
+            external_id="springfield-massachusetts",
+            geographic_type="settlement",
+        )
+
+        before_count = Place.objects.count()
+
+        response = self.post_materialization()
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(
+            response.json()["code"],
+            "contribution_publication_required",
+        )
+        self.assertEqual(Place.objects.count(), before_count)
 
         city.refresh_from_db()
+        identity.refresh_from_db()
+
+        self.assertEqual(city.destination_id, self.destination.id)
+        self.assertEqual(city.parent_place_id, self.country_place.id)
+        self.assertEqual(city.country_ref_id, self.country.id)
+        self.assertEqual(city.country_code, "US")
+        self.assertEqual(identity.place_id, city.id)
+        self.assertEqual(
+            identity.external_id,
+            "springfield-massachusetts",
+        )
+
+    @patch("core.views.materialize_city_place")
+    @patch("core.views.get_geographic_place")
+    def test_independent_request_does_not_call_geographic_services(
+        self,
+        mock_get_geographic_place,
+        mock_materialize_city_place,
+    ):
+        from .models import Country, Destination, Place
+
+        before = (
+            Country.objects.count(),
+            Destination.objects.count(),
+            Place.objects.count(),
+        )
+
+        response = self.post_materialization()
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(
+            response.json()["code"],
+            "contribution_publication_required",
+        )
+
+        mock_get_geographic_place.assert_not_called()
+        mock_materialize_city_place.assert_not_called()
 
         self.assertEqual(
-            city.destination_id,
-            conflicting_destination.id,
+            (
+                Country.objects.count(),
+                Destination.objects.count(),
+                Place.objects.count(),
+            ),
+            before,
         )
-        self.assertEqual(
-            city.parent_place_id,
-            self.country_place.id,
-        )
-        self.assertEqual(city.country_code, "US")
-        self.assertEqual(city.country_ref_id, self.country.id)
 
 
 class GeographicPlaceExternalDetailAPITests(TestCase):
@@ -5823,6 +5413,588 @@ class GeographicDiscoveryOrchestrationTests(TestCase):
                 search_global_discovery_places(
                     query="Chapada Diamantina",
                 )
+
+
+    def test_manual_discovery_diagnostic_preserves_provider_failure(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import (
+            search_manual_geographic_discovery_diagnostic,
+        )
+        from .geography.providers.geonames import GeoNamesRequestError
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                side_effect=GeoNamesRequestError(
+                    "GeoNames search failed."
+                ),
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[],
+            ),
+        ):
+            diagnostic = search_manual_geographic_discovery_diagnostic(
+                query="Unlisted Locality",
+                country_code="NL",
+            )
+
+        self.assertEqual(diagnostic["results"], [])
+        self.assertEqual(
+            diagnostic["providers"]["geonames"]["state"],
+            "error",
+        )
+        self.assertEqual(
+            diagnostic["providers"]["google_places"]["state"],
+            "empty",
+        )
+        self.assertFalse(diagnostic["complete"])
+        self.assertFalse(diagnostic["manual_creation_eligible"])
+
+
+    def test_manual_discovery_diagnostic_complete_empty_search(self):
+        from unittest.mock import patch
+        from .geography.discovery import (
+            search_manual_geographic_discovery_diagnostic,
+        )
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[],
+            ),
+        ):
+            diagnostic = search_manual_geographic_discovery_diagnostic(
+                query="Unlisted Locality",
+                country_code="NL",
+            )
+
+        self.assertEqual(diagnostic["results"], [])
+        self.assertTrue(diagnostic["complete"])
+        self.assertFalse(diagnostic["manual_creation_eligible"])
+        self.assertEqual(
+            diagnostic["providers"]["geonames"]["state"],
+            "empty",
+        )
+        self.assertEqual(
+            diagnostic["providers"]["google_places"]["state"],
+            "empty",
+        )
+
+    def test_manual_discovery_diagnostic_both_providers_fail(self):
+        from unittest.mock import patch
+        from .geography.discovery import (
+            search_manual_geographic_discovery_diagnostic,
+        )
+        from .geography.providers.geonames import GeoNamesRequestError
+        from .geography.providers.google_places import (
+            GooglePlacesRequestError,
+        )
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                side_effect=GeoNamesRequestError("Unavailable"),
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                side_effect=GooglePlacesRequestError("Unavailable"),
+            ),
+        ):
+            diagnostic = search_manual_geographic_discovery_diagnostic(
+                query="Unlisted Locality",
+                country_code="NL",
+            )
+
+        self.assertEqual(diagnostic["results"], [])
+        self.assertFalse(diagnostic["complete"])
+        self.assertFalse(diagnostic["manual_creation_eligible"])
+        self.assertEqual(
+            diagnostic["providers"]["geonames"]["state"],
+            "error",
+        )
+        self.assertEqual(
+            diagnostic["providers"]["google_places"]["state"],
+            "error",
+        )
+
+    def test_manual_discovery_diagnostic_preserves_other_country_evidence(self):
+        from unittest.mock import patch
+        from .geography.discovery import (
+            search_manual_geographic_discovery_diagnostic,
+        )
+
+        foreign_candidate = {
+            "name": "Example Locality",
+            "canonical_name": "Example Locality",
+            "aliases": [],
+            "country_code": "BE",
+            "external_source": "geonames",
+            "external_id": "example-123",
+        }
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                return_value=[foreign_candidate],
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[],
+            ),
+        ):
+            diagnostic = search_manual_geographic_discovery_diagnostic(
+                query="Example Locality",
+                country_code="NL",
+            )
+
+        self.assertEqual(diagnostic["results"], [])
+        self.assertTrue(diagnostic["complete"])
+        self.assertEqual(
+            diagnostic["providers"]["geonames"]["state"],
+            "success",
+        )
+        self.assertFalse(diagnostic["manual_creation_eligible"])
+        self.assertEqual(diagnostic["other_country_codes"], ["BE"])
+        self.assertTrue(diagnostic["has_country_mismatch"])
+
+
+    def test_manual_discovery_diagnostic_handles_provider_configuration_errors(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import (
+            search_manual_geographic_discovery_diagnostic,
+        )
+        from .geography.providers.geonames import GeoNamesConfigurationError
+        from .geography.providers.google_places import (
+            GooglePlacesConfigurationError,
+        )
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                side_effect=GeoNamesConfigurationError("Missing credential"),
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                side_effect=GooglePlacesConfigurationError("Missing credential"),
+            ),
+        ):
+            diagnostic = search_manual_geographic_discovery_diagnostic(
+                query="Unlisted Locality",
+                country_code="NL",
+            )
+
+        self.assertEqual(diagnostic["results"], [])
+        self.assertFalse(diagnostic["complete"])
+        self.assertFalse(diagnostic["manual_creation_eligible"])
+        self.assertEqual(
+            diagnostic["providers"]["geonames"]["state"],
+            "error",
+        )
+        self.assertEqual(
+            diagnostic["providers"]["google_places"]["state"],
+            "error",
+        )
+        self.assertNotIn("Missing credential", str(diagnostic))
+
+
+    def test_manual_discovery_diagnostic_preserves_registry_candidate(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import (
+            search_manual_geographic_discovery_diagnostic,
+        )
+
+        registry_candidate = {
+            "name": "Breda",
+            "canonical_name": "Breda",
+            "aliases": [],
+            "country_code": "NL",
+            "place_type": "city",
+            "existing_place_id": 123,
+        }
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[object()],
+            ),
+            patch(
+                "core.geography.discovery.normalize_registry_discovery_result",
+                return_value=registry_candidate,
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.annotate_known_external_identities",
+                side_effect=lambda results: results,
+            ),
+        ):
+            diagnostic = search_manual_geographic_discovery_diagnostic(
+                query="Breda",
+                country_code="NL",
+            )
+
+        self.assertEqual(len(diagnostic["results"]), 1)
+        self.assertEqual(
+            diagnostic["results"][0]["existing_place_id"],
+            123,
+        )
+        self.assertEqual(
+            diagnostic["results"][0]["country_code"],
+            "NL",
+        )
+        self.assertEqual(
+            diagnostic["providers"]["registry"]["state"],
+            "success",
+        )
+        self.assertTrue(diagnostic["complete"])
+        self.assertFalse(diagnostic["manual_creation_eligible"])
+
+
+    def test_manual_discovery_diagnostic_preserves_registry_country_mismatch(self):
+        from unittest.mock import patch
+
+        from .geography.discovery import (
+            search_manual_geographic_discovery_diagnostic,
+        )
+
+        registry_candidate = {
+            "name": "Example Locality",
+            "canonical_name": "Example Locality",
+            "aliases": [],
+            "country_code": "BE",
+            "place_type": "city",
+            "existing_place_id": 456,
+        }
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[object()],
+            ),
+            patch(
+                "core.geography.discovery.normalize_registry_discovery_result",
+                return_value=registry_candidate,
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[],
+            ),
+        ):
+            diagnostic = search_manual_geographic_discovery_diagnostic(
+                query="Example Locality",
+                country_code="NL",
+            )
+
+        self.assertEqual(diagnostic["results"], [])
+        self.assertEqual(diagnostic["other_country_codes"], ["BE"])
+        self.assertTrue(diagnostic["has_country_mismatch"])
+        self.assertEqual(
+            diagnostic["providers"]["registry"]["state"],
+            "success",
+        )
+        self.assertTrue(diagnostic["complete"])
+        self.assertFalse(diagnostic["manual_creation_eligible"])
+
+
+class ManualGeographicDiscoveryDiagnosticAPITests(TestCase):
+    @patch("core.views.search_manual_geographic_discovery_diagnostic")
+    def test_valid_diagnostic_is_read_only_and_preserves_evidence(
+        self,
+        mock_diagnostic,
+    ):
+        from .models import Experience, Place, PlaceExternalIdentity
+
+        mock_diagnostic.return_value = {
+            "results": [],
+            "providers": {
+                "registry": {"state": "empty"},
+                "geonames": {"state": "success"},
+                "google_places": {"state": "error"},
+            },
+            "complete": False,
+            "other_country_codes": ["PE"],
+            "has_country_mismatch": True,
+            "manual_creation_eligible": False,
+        }
+
+        before = (
+            Place.objects.count(),
+            Experience.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+        )
+
+        response = self.client.get(
+            "/api/geography/places/manual-diagnostic/",
+            {
+                "q": "Example Locality",
+                "country_code": "BO",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data, mock_diagnostic.return_value)
+        self.assertFalse(data["complete"])
+        self.assertTrue(data["has_country_mismatch"])
+        self.assertFalse(data["manual_creation_eligible"])
+
+        mock_diagnostic.assert_called_once_with(
+            query="Example Locality",
+            country_code="BO",
+        )
+
+        self.assertEqual(
+            (
+                Place.objects.count(),
+                Experience.objects.count(),
+                PlaceExternalIdentity.objects.count(),
+            ),
+            before,
+        )
+
+
+    @patch("core.views.search_manual_geographic_discovery_diagnostic")
+    def test_invalid_parameters_do_not_run_diagnostic(
+        self,
+        mock_diagnostic,
+    ):
+        invalid_requests = [
+            {"country_code": "NL"},
+            {"q": "A", "country_code": "NL"},
+            {"q": "Breda"},
+            {"q": "Breda", "country_code": "NLD"},
+            {"q": "Breda", "country_code": "ZZ"},
+        ]
+
+        for params in invalid_requests:
+            with self.subTest(params=params):
+                response = self.client.get(
+                    "/api/geography/places/manual-diagnostic/",
+                    params,
+                )
+
+                self.assertEqual(response.status_code, 400)
+                mock_diagnostic.assert_not_called()
+
+
+    @patch("core.geography.discovery.search_registry_places", return_value=[])
+    @patch(
+        "core.geography.discovery.search_geonames_discovery_places",
+        side_effect=__import__(
+            "core.geography.providers.geonames",
+            fromlist=["GeoNamesRequestError"],
+        ).GeoNamesRequestError("Provider unavailable"),
+    )
+    @patch(
+        "core.geography.discovery.search_google_discovery_places",
+        return_value=[],
+    )
+    def test_provider_failure_remains_incomplete_through_api(
+        self,
+        mock_google,
+        mock_geonames,
+        mock_registry,
+    ):
+        from .models import Experience, Place, PlaceExternalIdentity
+
+        before = (
+            Place.objects.count(),
+            Experience.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+        )
+
+        response = self.client.get(
+            "/api/geography/places/manual-diagnostic/",
+            {
+                "q": "Example Locality",
+                "country_code": "BO",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["results"], [])
+        self.assertEqual(
+            data["providers"]["geonames"]["state"],
+            "error",
+        )
+        self.assertEqual(
+            data["providers"]["google_places"]["state"],
+            "empty",
+        )
+        self.assertFalse(data["complete"])
+        self.assertFalse(data["manual_creation_eligible"])
+
+        mock_registry.assert_called_once()
+        mock_geonames.assert_called_once()
+        mock_google.assert_called_once()
+
+        self.assertEqual(
+            (
+                Place.objects.count(),
+                Experience.objects.count(),
+                PlaceExternalIdentity.objects.count(),
+            ),
+            before,
+        )
+
+
+    @patch("core.geography.discovery.search_registry_places", return_value=[])
+    @patch(
+        "core.geography.discovery.search_geonames_discovery_places",
+        return_value=[{
+            "name": "Example Locality",
+            "canonical_name": "Example Locality",
+            "aliases": [],
+            "country_code": "PE",
+            "external_source": "geonames",
+            "external_id": "example-peru-123",
+            "place_type": "city",
+        }],
+    )
+    @patch(
+        "core.geography.discovery.search_google_discovery_places",
+        return_value=[],
+    )
+    def test_other_country_evidence_is_preserved_through_api(
+        self, mock_google, mock_geonames, mock_registry,
+    ):
+        from .models import Experience, Place, PlaceExternalIdentity
+
+        before = (
+            Place.objects.count(),
+            Experience.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+        )
+
+        response = self.client.get(
+            "/api/geography/places/manual-diagnostic/",
+            {"q": "Example Locality", "country_code": "BO"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        self.assertEqual(data["results"], [])
+        self.assertEqual(data["other_country_codes"], ["PE"])
+        self.assertTrue(data["has_country_mismatch"])
+        self.assertTrue(data["complete"])
+        self.assertFalse(data["manual_creation_eligible"])
+        self.assertEqual(
+            data["providers"]["geonames"]["state"], "success"
+        )
+
+        mock_registry.assert_called_once()
+        mock_geonames.assert_called_once()
+        mock_google.assert_called_once()
+
+        self.assertEqual(
+            (
+                Place.objects.count(),
+                Experience.objects.count(),
+                PlaceExternalIdentity.objects.count(),
+            ),
+            before,
+        )
+
+
+    def test_complete_empty_and_both_provider_failures_remain_distinct_through_api(
+        self,
+    ):
+        from .geography.providers.geonames import GeoNamesRequestError
+        from .geography.providers.google_places import GooglePlacesRequestError
+
+        url = "/api/geography/places/manual-diagnostic/"
+        params = {"q": "Unlisted Locality", "country_code": "NL"}
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                return_value=[],
+            ),
+        ):
+            complete_response = self.client.get(url, params)
+
+        self.assertEqual(complete_response.status_code, 200)
+        complete = complete_response.json()
+        self.assertEqual(complete["results"], [])
+        self.assertTrue(complete["complete"])
+        self.assertEqual(complete["providers"]["geonames"]["state"], "empty")
+        self.assertEqual(complete["providers"]["google_places"]["state"], "empty")
+        self.assertFalse(complete["manual_creation_eligible"])
+
+        with (
+            patch(
+                "core.geography.discovery.search_registry_places",
+                return_value=[],
+            ),
+            patch(
+                "core.geography.discovery.search_geonames_discovery_places",
+                side_effect=GeoNamesRequestError("Unavailable"),
+            ),
+            patch(
+                "core.geography.discovery.search_google_discovery_places",
+                side_effect=GooglePlacesRequestError("Unavailable"),
+            ),
+        ):
+            failed_response = self.client.get(url, params)
+
+        self.assertEqual(failed_response.status_code, 200)
+        failed = failed_response.json()
+        self.assertEqual(failed["results"], [])
+        self.assertFalse(failed["complete"])
+        self.assertEqual(failed["providers"]["geonames"]["state"], "error")
+        self.assertEqual(failed["providers"]["google_places"]["state"], "error")
+        self.assertFalse(failed["manual_creation_eligible"])
+        self.assertNotEqual(complete["providers"], failed["providers"])
 
 
 class GooglePlacesDiscoveryTests(TestCase):
@@ -12047,86 +12219,45 @@ class POIPlaceReconciliationTests(TestCase):
         self.assertIsNone(existing_place)
 
 
-    @patch("core.geography.providers.foursquare.search_pois")
-    @patch("core.views.get_poi")
-    def test_ambiguous_poi_materialization_preserves_existing_place(
-        self,
-        mock_get_poi,
-        mock_search_pois,
-    ):
-        from django.contrib.auth.models import User
-        from rest_framework_simplejwt.tokens import AccessToken
-
+    def test_independent_external_poi_preserves_existing_place(self):
+        from decimal import Decimal
         from .models import Place, PlaceExternalIdentity
 
-        user = User.objects.create_user(
-            username="poi-materialization-user",
-            password="test-password",
-        )
-        access_token = str(AccessToken.for_user(user))
+        before_count = Place.objects.count()
+        original_latitude = self.existing_restaurant.latitude
+        original_longitude = self.existing_restaurant.longitude
 
-        provider_result = {
-            "name": "Bella Italia",
-            "canonical_name": "Bella Italia",
-            "aliases": [],
-            "external_source": "foursquare",
-            "external_id": "different-bella-italia",
-            "country_code": "IT",
-            "locality": "Rome",
-            "latitude": 41.9200,
-            "longitude": 12.5100,
-        }
-
-        mock_get_poi.return_value = provider_result
-        mock_search_pois.return_value = [provider_result]
-
-        original_place_count = Place.objects.count()
-
-        response = self.client.post(
+        response = self._post_independent_poi(
             "/api/geography/pois/materialize/",
-            data={
+            {
                 "external_id": "different-bella-italia",
                 "place_type": "restaurant",
                 "city_place_id": self.city_place.id,
             },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {access_token}",
         )
 
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(
             response.json()["code"],
-            "poi_resolution_required",
+            "contribution_publication_required",
         )
-        self.assertIn(
-            self.existing_restaurant.id,
-            response.json()["candidate_place_ids"],
-        )
-
-        self.assertEqual(
-            Place.objects.count(),
-            original_place_count,
-        )
+        self.assertEqual(Place.objects.count(), before_count)
 
         self.existing_restaurant.refresh_from_db()
-
         self.assertEqual(
-            str(self.existing_restaurant.latitude),
-            "41.902800",
+            Decimal(str(self.existing_restaurant.latitude)),
+            Decimal(str(original_latitude)),
         )
         self.assertEqual(
-            str(self.existing_restaurant.longitude),
-            "12.496400",
+            Decimal(str(self.existing_restaurant.longitude)),
+            Decimal(str(original_longitude)),
         )
-
         self.assertFalse(
             PlaceExternalIdentity.objects.filter(
                 external_source="foursquare",
                 external_id="different-bella-italia",
             ).exists()
         )
-
-
 
     def test_poi_gate_preserves_name_only_candidate(self):
         from .geography.services import evaluate_poi_reference_gate
@@ -12228,6 +12359,23 @@ class POIPlaceReconciliationTests(TestCase):
         )
 
 
+
+    def _post_independent_poi(self, url, data):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        user = User.objects.create_user(
+            username="independent-poi-protection-user",
+            password="test-password",
+        )
+        token = str(AccessToken.for_user(user))
+
+        return self.client.post(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
 
     @patch("core.geography.services.create_poi_place")
     @patch("core.geography.services.evaluate_poi_reference_gate")
@@ -12401,58 +12549,31 @@ class POIPlaceReconciliationTests(TestCase):
 
 
 
-    def test_manual_poi_creation_preserves_existing_name_candidate(self):
+    def test_independent_manual_poi_preserves_existing_name_candidate(self):
         from decimal import Decimal
-        from django.contrib.auth.models import User
-        from rest_framework_simplejwt.tokens import AccessToken
-
         from .models import Place
 
-        user = User.objects.create_user(
-            username="manual-poi-test-user",
-            password="test-password",
-        )
-        access_token = str(AccessToken.for_user(user))
-
-        initial_place_count = Place.objects.count()
+        before_count = Place.objects.count()
         original_latitude = self.existing_restaurant.latitude
         original_longitude = self.existing_restaurant.longitude
 
-        response = self.client.post(
+        response = self._post_independent_poi(
             "/api/geography/pois/create-manual/",
-            data={
+            {
                 "name": "Bella Italia",
                 "place_type": "restaurant",
                 "city_place_id": self.city_place.id,
             },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {access_token}",
         )
 
-        self.assertEqual(response.status_code, 409)
-
-        data = response.json()
-
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(
-            data["code"],
-            "poi_resolution_required",
+            response.json()["code"],
+            "contribution_publication_required",
         )
-        self.assertEqual(
-            data["reason"],
-            "unresolved_identity",
-        )
-        self.assertEqual(
-            data["candidate_place_ids"],
-            [self.existing_restaurant.id],
-        )
-
-        self.assertEqual(
-            Place.objects.count(),
-            initial_place_count,
-        )
+        self.assertEqual(Place.objects.count(), before_count)
 
         self.existing_restaurant.refresh_from_db()
-
         self.assertEqual(
             Decimal(str(self.existing_restaurant.latitude)),
             Decimal(str(original_latitude)),
@@ -12462,56 +12583,29 @@ class POIPlaceReconciliationTests(TestCase):
             Decimal(str(original_longitude)),
         )
 
-
-
-    def test_manual_poi_creation_without_candidates_creates_place(self):
-        from django.contrib.auth.models import User
-        from rest_framework_simplejwt.tokens import AccessToken
-
+    def test_independent_manual_poi_without_candidates_requires_publication(self):
         from .models import Place
 
-        user = User.objects.create_user(
-            username="manual-poi-create-user",
-            password="test-password",
-        )
-        access_token = str(AccessToken.for_user(user))
+        before_count = Place.objects.count()
 
-        initial_place_count = Place.objects.count()
-
-        response = self.client.post(
+        response = self._post_independent_poi(
             "/api/geography/pois/create-manual/",
-            data={
+            {
                 "name": "Trattoria Test Roma",
                 "place_type": "restaurant",
                 "city_place_id": self.city_place.id,
             },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {access_token}",
         )
 
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(
-            Place.objects.count(),
-            initial_place_count + 1,
+            response.json()["code"],
+            "contribution_publication_required",
         )
-
-        created_place = Place.objects.get(
-            name="Trattoria Test Roma",
+        self.assertEqual(Place.objects.count(), before_count)
+        self.assertFalse(
+            Place.objects.filter(name="Trattoria Test Roma").exists()
         )
-
-        self.assertEqual(
-            created_place.place_type,
-            "restaurant",
-        )
-        self.assertEqual(
-            created_place.parent_place_id,
-            self.city_place.id,
-        )
-        self.assertEqual(
-            created_place.country_ref_id,
-            self.country.id,
-        )
-
 
     def test_poi_materialization_preserves_conflicting_city_country(self):
         from .geography.services import materialize_poi_place
@@ -12554,133 +12648,59 @@ class POIPlaceReconciliationTests(TestCase):
         self.assertEqual(self.city_place.country_code, "FR")
 
 
-    def test_manual_poi_creation_preserves_conflicting_city_country(self):
-        from django.contrib.auth.models import User
-        from rest_framework_simplejwt.tokens import AccessToken
-
+    def test_independent_manual_poi_preserves_conflicting_city_country(self):
         from .models import Place
-
-        user = User.objects.create_user(
-            username="manual-poi-country-conflict-user",
-            password="test-password",
-        )
-        access_token = str(AccessToken.for_user(user))
 
         self.city_place.country_code = "FR"
         self.city_place.save(update_fields=["country_code"])
 
-        initial_place_count = Place.objects.count()
+        before_count = Place.objects.count()
 
-        response = self.client.post(
+        response = self._post_independent_poi(
             "/api/geography/pois/create-manual/",
-            data={
+            {
                 "name": "Trattoria Country Conflict",
                 "place_type": "restaurant",
                 "city_place_id": self.city_place.id,
             },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {access_token}",
         )
 
-        self.assertEqual(response.status_code, 409)
-
-        data = response.json()
-
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(
-            data["code"],
-            "poi_resolution_required",
+            response.json()["code"],
+            "contribution_publication_required",
         )
-        self.assertEqual(
-            data["reason"],
-            "country_ancestry_conflict",
-        )
-        self.assertEqual(
-            data["candidate_place_ids"],
-            [],
-        )
-        self.assertEqual(
-            Place.objects.count(),
-            initial_place_count,
-        )
+        self.assertEqual(Place.objects.count(), before_count)
 
         self.city_place.refresh_from_db()
         self.assertEqual(self.city_place.country_code, "FR")
 
-
-    @patch("core.geography.providers.foursquare.search_pois")
-    @patch("core.views.get_poi")
-    def test_external_poi_materialization_preserves_conflicting_city_country(
-        self,
-        mock_get_poi,
-        mock_search_pois,
-    ):
-        from django.contrib.auth.models import User
-        from rest_framework_simplejwt.tokens import AccessToken
-
+    def test_independent_external_poi_preserves_conflicting_city_country(self):
         from .models import Place
-
-        user = User.objects.create_user(
-            username="external-poi-country-conflict-user",
-            password="test-password",
-        )
-        access_token = str(AccessToken.for_user(user))
-
-        provider_result = {
-            "name": "Trattoria Country Conflict",
-            "canonical_name": "Trattoria Country Conflict",
-            "aliases": [],
-            "external_source": "foursquare",
-            "external_id": "trattoria-country-conflict",
-            "country_code": "IT",
-            "locality": "Rome",
-            "latitude": 41.9200,
-            "longitude": 12.5100,
-        }
-
-        mock_get_poi.return_value = provider_result
-        mock_search_pois.return_value = [provider_result]
 
         self.city_place.country_code = "FR"
         self.city_place.save(update_fields=["country_code"])
 
-        initial_place_count = Place.objects.count()
+        before_count = Place.objects.count()
 
-        response = self.client.post(
+        response = self._post_independent_poi(
             "/api/geography/pois/materialize/",
-            data={
+            {
                 "external_id": "trattoria-country-conflict",
                 "place_type": "restaurant",
                 "city_place_id": self.city_place.id,
             },
-            content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {access_token}",
         )
 
-        self.assertEqual(response.status_code, 409)
-
-        data = response.json()
-
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(
-            data["code"],
-            "poi_resolution_required",
+            response.json()["code"],
+            "contribution_publication_required",
         )
-        self.assertEqual(
-            data["reason"],
-            "country_ancestry_conflict",
-        )
-        self.assertEqual(
-            data["candidate_place_ids"],
-            [],
-        )
-        self.assertEqual(
-            Place.objects.count(),
-            initial_place_count,
-        )
+        self.assertEqual(Place.objects.count(), before_count)
 
         self.city_place.refresh_from_db()
         self.assertEqual(self.city_place.country_code, "FR")
-
-
 
 class GeographyPOISearchAPITests(TestCase):
     def setUp(self):
@@ -14772,6 +14792,833 @@ class ManualPOIExperienceCreationTests(TestCase):
 
 
 
+
+class ManualGeographicExperienceCreationTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+        from .models import Destination, Place
+
+        self.user = User.objects.create_user(
+            username="manual-geographic-experience-user",
+            password="test-password",
+        )
+        self.access_token = str(AccessToken.for_user(self.user))
+
+        self.destination = Destination.objects.create(
+            name="Netherlands",
+            country="Netherlands",
+        )
+        self.existing_city = Place.objects.create(
+            destination=self.destination,
+            name="Breda",
+            canonical_name="Breda",
+            country_code="NL",
+            place_type="city",
+            city="Breda",
+        )
+        self.url = "/api/experiences/"
+
+    def test_manual_locality_publication_creates_consistent_hierarchy(self):
+        from .models import (
+            Country,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        initial_experiences = Experience.objects.count()
+        initial_updates = Update.objects.count()
+        initial_identities = PlaceExternalIdentity.objects.count()
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_geographic_name": "Unlisted Locality",
+                "manual_geographic_country_code": "NL",
+                "title": "A newly documented locality",
+                "comment": "First contribution to this locality.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+        locality = Place.objects.get(
+            name="Unlisted Locality",
+            place_type="city",
+            country_code="NL",
+        )
+        self.assertEqual(locality.canonical_name, "Unlisted Locality")
+        self.assertEqual(locality.created_by_id, self.user.id)
+        self.assertIsNotNone(locality.country_ref_id)
+        self.assertEqual(locality.country_ref.code, "NL")
+        self.assertIsNotNone(locality.parent_place_id)
+        self.assertEqual(locality.parent_place.place_type, "country")
+        self.assertEqual(locality.parent_place.country_code, "NL")
+        self.assertEqual(
+            locality.destination_id,
+            locality.parent_place.destination_id,
+        )
+        self.assertEqual(
+            Country.objects.filter(code="NL").count(),
+            1,
+        )
+
+        experience = Experience.objects.get(
+            title="A newly documented locality",
+        )
+        self.assertEqual(experience.place_id, locality.id)
+        self.assertEqual(experience.user_id, self.user.id)
+        self.assertEqual(
+            Experience.objects.count(),
+            initial_experiences + 1,
+        )
+        self.assertEqual(
+            Update.objects.count(),
+            initial_updates + 1,
+        )
+        self.assertTrue(
+            Update.objects.filter(
+                experience=experience,
+                place=locality,
+                type="experience",
+            ).exists()
+        )
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            initial_identities,
+        )
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(place=locality).exists()
+        )
+
+    def test_manual_locality_preserves_existing_name_candidate(self):
+        from .models import Experience, Place, Update
+
+        initial_counts = (
+            Place.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_geographic_name": "Breda",
+                "manual_geographic_country_code": "NL",
+                "title": "A visit to Breda",
+                "comment": "Testing manual geographic identity resolution.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(
+            response.json()["code"],
+            "geographic_resolution_required",
+        )
+        self.assertIn(
+            self.existing_city.id,
+            [
+                reference["id"]
+                for reference in response.json()["references"]
+            ],
+        )
+
+        final_counts = (
+            Place.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+
+    def test_manual_locality_without_candidate_creates_place_on_publication(self):
+        from .models import Experience, Place, PlaceExternalIdentity, Update
+
+        initial_counts = (
+            Place.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_geographic_name": "Unlisted Locality",
+                "manual_geographic_country_code": "NL",
+                "title": "An unlisted locality",
+                "comment": "Manual locality publication.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+        locality = Place.objects.get(
+            name="Unlisted Locality",
+            place_type="city",
+            country_code="NL",
+        )
+        self.assertTrue(
+            Experience.objects.filter(
+                place=locality,
+                title="An unlisted locality",
+            ).exists()
+        )
+        self.assertTrue(
+            Update.objects.filter(
+                place=locality,
+                type="experience",
+            ).exists()
+        )
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                place=locality,
+            ).exists()
+        )
+
+        final_counts = (
+            Place.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+        )
+
+        self.assertEqual(final_counts[0], initial_counts[0] + 2)
+        self.assertEqual(final_counts[1], initial_counts[1] + 1)
+        self.assertEqual(final_counts[2], initial_counts[2] + 1)
+        self.assertEqual(final_counts[3], initial_counts[3])
+
+
+    def test_manual_locality_rejects_invalid_publication_inputs(self):
+        from .models import Experience, Place, Update
+
+        scenarios = (
+            (
+                "missing country",
+                {"manual_geographic_name": "Unlisted Locality"},
+                "manual_geographic",
+            ),
+            (
+                "missing name",
+                {"manual_geographic_country_code": "NL"},
+                "manual_geographic",
+            ),
+            (
+                "unknown country",
+                {
+                    "manual_geographic_name": "Unlisted Locality",
+                    "manual_geographic_country_code": "ZZ",
+                },
+                "manual_geographic_country_code",
+            ),
+            (
+                "invalid country code length",
+                {
+                    "manual_geographic_name": "Unlisted Locality",
+                    "manual_geographic_country_code": "NLD",
+                },
+                "manual_geographic_country_code",
+            ),
+            (
+                "existing place conflict",
+                {
+                    "manual_geographic_name": "Unlisted Locality",
+                    "manual_geographic_country_code": "NL",
+                    "place": self.existing_city.id,
+                },
+                "manual_geographic",
+            ),
+            (
+                "manual POI conflict",
+                {
+                    "manual_geographic_name": "Unlisted Locality",
+                    "manual_geographic_country_code": "NL",
+                    "manual_poi_name": "Example Hotel",
+                    "manual_poi_type": "hotel",
+                    "manual_city_place_id": self.existing_city.id,
+                },
+                "manual_geographic",
+            ),
+            (
+                "external identity conflict",
+                {
+                    "manual_geographic_name": "Unlisted Locality",
+                    "manual_geographic_country_code": "NL",
+                    "external_source": "geonames",
+                    "external_id": "123456",
+                },
+                "manual_geographic",
+            ),
+        )
+
+        for label, fields, expected_error in scenarios:
+            with self.subTest(label=label):
+                initial_counts = (
+                    Place.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+
+                response = self.client.post(
+                    self.url,
+                    data={
+                        "title": "Invalid manual locality request",
+                        "comment": "Testing manual geographic validation.",
+                        "rating": 4,
+                        **fields,
+                    },
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+                )
+
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertIn(expected_error, response.json())
+                self.assertEqual(
+                    (
+                        Place.objects.count(),
+                        Experience.objects.count(),
+                        Update.objects.count(),
+                    ),
+                    initial_counts,
+                )
+
+
+    @patch("core.views.Update.objects.create")
+    def test_manual_locality_rolls_back_when_feed_update_fails(
+        self,
+        create_update,
+    ):
+        from .models import (
+            Country,
+            Destination,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        models = (
+            Country,
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+            Experience,
+            Update,
+        )
+
+        initial_counts = {
+            model.__name__: model.objects.count()
+            for model in models
+        }
+
+        create_update.side_effect = RuntimeError(
+            "Simulated manual geographic feed failure."
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.client.post(
+                self.url,
+                data={
+                    "manual_geographic_name": "Rollback Locality",
+                    "manual_geographic_country_code": "NL",
+                    "title": "An experience that must roll back",
+                    "comment": "Testing atomic manual locality publication.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+        create_update.assert_called_once()
+
+        final_counts = {
+            model.__name__: model.objects.count()
+            for model in models
+        }
+
+        self.assertEqual(final_counts, initial_counts)
+        self.assertFalse(
+            Place.objects.filter(
+                name="Rollback Locality",
+                place_type="city",
+            ).exists()
+        )
+        self.assertFalse(
+            Experience.objects.filter(
+                title="An experience that must roll back",
+            ).exists()
+        )
+
+
+    @patch("core.models.Experience.objects.create")
+    def test_manual_locality_rolls_back_when_experience_creation_fails(
+        self,
+        create_experience,
+    ):
+        from .models import (
+            Country,
+            Destination,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        models = (
+            Country,
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+            Experience,
+            Update,
+        )
+
+        initial_counts = {
+            model.__name__: model.objects.count()
+            for model in models
+        }
+
+        create_experience.side_effect = RuntimeError(
+            "Simulated manual geographic experience failure."
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.client.post(
+                self.url,
+                data={
+                    "manual_geographic_name": "Experience Rollback Locality",
+                    "manual_geographic_country_code": "NL",
+                    "title": "Publication must fail",
+                    "comment": "Testing geographic transaction rollback.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+        create_experience.assert_called_once()
+
+        final_counts = {
+            model.__name__: model.objects.count()
+            for model in models
+        }
+
+        self.assertEqual(final_counts, initial_counts)
+        self.assertFalse(
+            Place.objects.filter(
+                name="Experience Rollback Locality",
+                place_type="city",
+            ).exists()
+        )
+        self.assertFalse(
+            Experience.objects.filter(
+                title="Publication must fail",
+            ).exists()
+        )
+
+
+    @patch(
+        "core.views.resolve_reconstructed_geographic_reference_for_commit"
+    )
+    def test_manual_locality_database_lock_returns_temporary_unavailability(
+        self,
+        resolve_for_commit,
+    ):
+        from django.db import OperationalError
+
+        from .models import (
+            Country,
+            Destination,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        models = (
+            Country,
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+            Experience,
+            Update,
+        )
+        initial_counts = {
+            model.__name__: model.objects.count()
+            for model in models
+        }
+
+        resolve_for_commit.side_effect = OperationalError(
+            "database is locked"
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_geographic_name": "Locked Locality",
+                "manual_geographic_country_code": "NL",
+                "title": "Publication temporarily unavailable",
+                "comment": "Testing database lock handling.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 503, response.content)
+        self.assertEqual(
+            response.json()["code"],
+            "geographic_publication_temporarily_unavailable",
+        )
+        resolve_for_commit.assert_called_once()
+
+        final_counts = {
+            model.__name__: model.objects.count()
+            for model in models
+        }
+        self.assertEqual(final_counts, initial_counts)
+
+    @patch(
+        "core.views.resolve_reconstructed_geographic_reference_for_commit"
+    )
+    def test_manual_locality_unexpected_database_error_is_not_masked(
+        self,
+        resolve_for_commit,
+    ):
+        from django.db import OperationalError
+
+        from .models import Experience, Place, Update
+
+        initial_counts = (
+            Place.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        resolve_for_commit.side_effect = OperationalError(
+            "no such table: core_place"
+        )
+
+        with self.assertRaisesRegex(
+            OperationalError,
+            "no such table: core_place",
+        ):
+            self.client.post(
+                self.url,
+                data={
+                    "manual_geographic_name": "Unexpected Error Locality",
+                    "manual_geographic_country_code": "NL",
+                    "title": "Publication must not proceed",
+                    "comment": "Testing unexpected database error handling.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+        resolve_for_commit.assert_called_once()
+
+        self.assertEqual(
+            (
+                Place.objects.count(),
+                Experience.objects.count(),
+                Update.objects.count(),
+            ),
+            initial_counts,
+        )
+
+    @patch("core.views.evaluate_manual_geographic_locality")
+    def test_manual_locality_preserves_candidate_created_after_preflight(
+        self,
+        mock_preflight,
+    ):
+        from .geography.services import evaluate_manual_geographic_locality
+        from .models import Experience, Place, Update
+
+        def preflight_then_create_candidate(*, name, country_code):
+            result = evaluate_manual_geographic_locality(
+                name=name,
+                country_code=country_code,
+            )
+
+            self.assertEqual(result["state"], "no_reference")
+
+            candidate = Place.objects.create(
+                destination=self.destination,
+                name=name,
+                canonical_name=name,
+                country_code=country_code,
+                place_type="city",
+                city=name,
+            )
+            mock_preflight.created_candidate = candidate
+            return result
+
+        mock_preflight.side_effect = preflight_then_create_candidate
+
+        initial_experiences = Experience.objects.count()
+        initial_updates = Update.objects.count()
+        initial_places = Place.objects.count()
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_geographic_name": "Late Candidate Locality",
+                "manual_geographic_country_code": "NL",
+                "title": "A locality requiring reconciliation",
+                "comment": "Testing a candidate appearing after preflight.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(
+            response.json()["code"],
+            "geographic_resolution_required",
+        )
+
+        candidate = mock_preflight.created_candidate
+        self.assertIn(
+            candidate.id,
+            [
+                reference["id"]
+                for reference in response.json()["references"]
+            ],
+        )
+
+        self.assertEqual(
+            Place.objects.filter(
+                name="Late Candidate Locality",
+                place_type="city",
+            ).count(),
+            1,
+        )
+        self.assertEqual(Place.objects.count(), initial_places + 1)
+        self.assertEqual(
+            Experience.objects.count(),
+            initial_experiences,
+        )
+        self.assertEqual(Update.objects.count(), initial_updates)
+
+
+
+class ManualGeographicConcurrencyTests(TransactionTestCase):
+    """Observe concurrent manual locality commits on independent connections."""
+
+    def test_two_transactions_attempt_same_manual_locality(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+
+        from django.db import close_old_connections, connections
+
+        from .geography.services import (
+            resolve_reconstructed_geographic_reference_for_commit,
+        )
+        from .models import Place
+
+        geographic_result = {
+            "name": "Concurrent Manual Locality",
+            "canonical_name": "Concurrent Manual Locality",
+            "aliases": [],
+            "country_code": "NL",
+            "external_source": "",
+            "external_id": "",
+        }
+
+        barrier = Barrier(2, timeout=10)
+
+        def publish():
+            close_old_connections()
+            stage = "before_transaction"
+            try:
+                with transaction.atomic():
+                    stage = "waiting_at_barrier"
+                    barrier.wait()
+                    stage = "resolving_geographic_reference"
+                    result = (
+                        resolve_reconstructed_geographic_reference_for_commit(
+                            geographic_result=geographic_result,
+                            user=None,
+                        )
+                    )
+                    stage = "transaction_commit"
+                    return result["state"]
+            except Exception as exc:
+                return (
+                    f"error:{type(exc).__name__}: "
+                    f"stage={stage}: {exc}"
+                )
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(publish) for _ in range(2)]
+            outcomes = [future.result(timeout=20) for future in futures]
+
+        matching_places = Place.objects.filter(
+            name="Concurrent Manual Locality",
+            place_type="city",
+            country_code="NL",
+        )
+
+        print(
+            "MANUAL CONCURRENCY OBSERVATION:",
+            sorted(outcomes),
+            "place_count:",
+            matching_places.count(),
+        )
+
+        self.assertEqual(len(outcomes), 2)
+
+        created_count = outcomes.count("created")
+        preserved_count = outcomes.count("preserve")
+
+        lock_errors = [
+            outcome
+            for outcome in outcomes
+            if outcome.startswith("error:OperationalError:")
+            and (
+                "database is locked" in outcome.lower()
+                or "database table is locked" in outcome.lower()
+            )
+        ]
+
+        self.assertEqual(
+            created_count + preserved_count + len(lock_errors),
+            2,
+            f"Unexpected concurrent publication outcomes: {outcomes}",
+        )
+
+        self.assertLessEqual(
+            created_count,
+            1,
+            f"Multiple concurrent creations succeeded: {outcomes}",
+        )
+
+        self.assertEqual(
+            matching_places.count(),
+            created_count,
+            (
+                "Persisted localities do not match successful commits: "
+                f"{outcomes}"
+            ),
+        )
+
+
+    def test_two_transactions_start_after_barrier(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+
+        from django.db import close_old_connections, connections
+
+        from .geography.services import (
+            resolve_reconstructed_geographic_reference_for_commit,
+        )
+        from .models import Place
+
+        geographic_result = {
+            "name": "Concurrent Manual Locality Before Transaction",
+            "canonical_name": "Concurrent Manual Locality Before Transaction",
+            "aliases": [],
+            "country_code": "NL",
+            "external_source": "",
+            "external_id": "",
+        }
+
+        barrier = Barrier(2, timeout=10)
+
+        def publish():
+            close_old_connections()
+            stage = "before_transaction"
+            try:
+                stage = "waiting_at_barrier"
+                barrier.wait()
+                with transaction.atomic():
+                    stage = "resolving_geographic_reference"
+                    result = (
+                        resolve_reconstructed_geographic_reference_for_commit(
+                            geographic_result=geographic_result,
+                            user=None,
+                        )
+                    )
+                    stage = "transaction_commit"
+                    return result["state"]
+            except Exception as exc:
+                return (
+                    f"error:{type(exc).__name__}: "
+                    f"stage={stage}: {exc}"
+                )
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(publish) for _ in range(2)]
+            outcomes = [future.result(timeout=20) for future in futures]
+
+        matching_places = Place.objects.filter(
+            name="Concurrent Manual Locality Before Transaction",
+            place_type="city",
+            country_code="NL",
+        )
+
+        print(
+            "MANUAL CONCURRENCY BEFORE TRANSACTION:",
+            sorted(outcomes),
+            "place_count:",
+            matching_places.count(),
+        )
+
+        self.assertEqual(len(outcomes), 2)
+
+        created_count = outcomes.count("created")
+        preserved_count = outcomes.count("preserve")
+
+        lock_errors = [
+            outcome
+            for outcome in outcomes
+            if outcome.startswith("error:OperationalError:")
+            and (
+                "database is locked" in outcome.lower()
+                or "database table is locked" in outcome.lower()
+            )
+        ]
+
+        self.assertEqual(
+            created_count + preserved_count + len(lock_errors),
+            2,
+            f"Unexpected concurrent publication outcomes: {outcomes}",
+        )
+
+        self.assertLessEqual(
+            created_count,
+            1,
+            f"Multiple concurrent creations succeeded: {outcomes}",
+        )
+
+        self.assertEqual(
+            matching_places.count(),
+            created_count,
+            (
+                "Persisted localities do not match successful commits: "
+                f"{outcomes}"
+            ),
+        )
+
+
+
 class ExternalPOIExperienceCreationTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User
@@ -16491,6 +17338,52 @@ class ExternalUpdateCreationTests(TestCase):
         self.assertEqual(Update.objects.count(), 1)
         self.assertEqual(Update.objects.get().place_id, self.place.id)
         reconstruct_reference.assert_not_called()
+
+    @patch(
+        "core.views.resolve_reconstructed_geographic_reference_for_commit"
+    )
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_external_update_fails_closed_for_unknown_commit_resolution_state(
+        self,
+        reconstruct_reference,
+        resolve_reference,
+    ):
+        from .models import Experience, Place, Update
+
+        reconstruct_reference.return_value = {
+            "external_source": "geonames",
+            "external_id": "unknown-update-resolution",
+            "name": "Unknown Update Resolution",
+            "country_code": "NL",
+            "geographic_type": "settlement",
+        }
+        resolve_reference.return_value = {
+            "state": "unexpected",
+            "place": None,
+            "created": False,
+            "evaluations": [],
+        }
+
+        original_place_count = Place.objects.count()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unsupported geographic commit resolution state: unexpected",
+        ):
+            self.post_update(
+                external_source="geonames",
+                external_id="unknown-update-resolution",
+            )
+
+        self.assertEqual(Update.objects.count(), 0)
+        self.assertEqual(Experience.objects.count(), 0)
+        self.assertEqual(Place.objects.count(), original_place_count)
+        self.assertFalse(
+            Place.objects.filter(name="Unknown Update Resolution").exists()
+        )
+
+        reconstruct_reference.assert_called_once()
+        resolve_reference.assert_called_once()
 
     @patch(
         "core.views.resolve_reconstructed_geographic_reference_for_commit"

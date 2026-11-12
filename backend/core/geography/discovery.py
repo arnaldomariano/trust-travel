@@ -15,11 +15,13 @@ from .resolution import (
 )
 
 from .providers.geonames import (
+    GeoNamesConfigurationError,
     GeoNamesRequestError,
     geographic_result_can_materialize as geonames_result_can_materialize,
     search_geonames_discovery_places,
 )
 from .providers.google_places import (
+    GooglePlacesConfigurationError,
     GooglePlacesRequestError,
     geographic_result_can_materialize as google_result_can_materialize,
     search_google_discovery_places,
@@ -435,6 +437,112 @@ def annotate_known_external_identities(results):
         )
 
     return results
+
+
+
+def search_manual_geographic_discovery_diagnostic(query, country_code):
+    """
+    Collect diagnostic evidence for manual geographic guidance.
+
+    This does not authorize creation or assert geographic identity.
+    The existing global discovery contract remains unchanged.
+    """
+    normalized_query = str(query or "").strip()
+    normalized_country_code = str(country_code or "").strip().upper()
+
+    if len(normalized_query) < 2:
+        raise ValueError("Search query must contain at least 2 characters.")
+
+    if (
+        len(normalized_country_code) != 2
+        or not normalized_country_code.isascii()
+        or not normalized_country_code.isalpha()
+    ):
+        raise ValueError("Country code must contain two ASCII letters.")
+
+    registry_places = search_registry_places(query=normalized_query)
+    all_registry_candidates = [
+        normalize_registry_discovery_result(place)
+        for place in registry_places
+    ]
+    registry_results = apply_discovery_country_refinement(
+        all_registry_candidates,
+        normalized_country_code,
+    )
+
+    providers = {
+        "registry": {
+            "state": "success" if all_registry_candidates else "empty",
+        },
+    }
+
+    external_results = {}
+    all_external_candidates = []
+
+    for provider_name, search_function, errors in (
+        (
+            "geonames",
+            search_geonames_discovery_places,
+            (GeoNamesConfigurationError, GeoNamesRequestError),
+        ),
+        (
+            "google_places",
+            search_google_discovery_places,
+            (GooglePlacesConfigurationError, GooglePlacesRequestError),
+        ),
+    ):
+        try:
+            found = search_function(query=normalized_query)
+        except errors:
+            providers[provider_name] = {"state": "error"}
+            external_results[provider_name] = []
+        else:
+            providers[provider_name] = {
+                "state": "success" if found else "empty",
+            }
+            all_external_candidates.extend(found)
+            external_results[provider_name] = (
+                apply_discovery_country_refinement(
+                    found,
+                    normalized_country_code,
+                )
+            )
+
+    results = [
+        *registry_results,
+        *external_results["geonames"],
+        *external_results["google_places"],
+    ]
+
+    # Preserve country-mismatch evidence without asserting place identity.
+    # Provider states remain independent from country refinement.
+    other_country_codes = sorted({
+        country
+        for result in [
+            *all_registry_candidates,
+            *all_external_candidates,
+        ]
+        if (
+            country := str(
+                result.get("country_code") or ""
+            ).strip().upper()
+        )
+        and country != normalized_country_code
+    })
+
+    complete = all(
+        provider["state"] != "error"
+        for provider in providers.values()
+    )
+
+    return {
+        "results": annotate_known_external_identities(results),
+        "providers": providers,
+        "complete": complete,
+        "other_country_codes": other_country_codes,
+        "has_country_mismatch": bool(other_country_codes),
+        "manual_creation_eligible": False,
+    }
 
 
 def search_global_discovery_places(query):

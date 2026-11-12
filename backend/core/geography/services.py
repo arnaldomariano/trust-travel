@@ -132,6 +132,54 @@ def reconstruct_external_geographic_reference(
     )
 
 
+
+def evaluate_manual_geographic_locality(name, country_code):
+    """Evaluate a manual locality without materializing geographic records."""
+    normalized_name = str(name or "").strip()
+    normalized_country_code = str(country_code or "").strip().upper()
+
+    if not normalized_name:
+        raise ValueError("A manual geographic locality name is required.")
+
+    if (
+        len(normalized_country_code) != 2
+        or not normalized_country_code.isalpha()
+        or not normalized_country_code.isascii()
+    ):
+        raise ValueError("A valid two-letter country code is required.")
+
+    country_entry = resolve_country_catalog_entry(
+        code=normalized_country_code,
+    )
+    if not country_entry:
+        raise ValueError("The manual locality country is not recognized.")
+
+    resolved_country = resolve_country(
+        value=country_entry["canonical_name"],
+        code=country_entry["code"],
+    )
+
+    geographic_result = {
+        "name": normalized_name,
+        "canonical_name": normalized_name,
+        "aliases": [],
+        "country_code": country_entry["code"],
+        "external_source": "",
+        "external_id": "",
+    }
+
+    resolution = evaluate_city_reference_gate(
+        city_result=geographic_result,
+        resolved_country=resolved_country,
+        country_code=country_entry["code"],
+    )
+
+    return {
+        **resolution,
+        "geographic_result": geographic_result,
+        "country_entry": country_entry,
+    }
+
 def preflight_external_geographic_reference(
     external_source,
     external_id,

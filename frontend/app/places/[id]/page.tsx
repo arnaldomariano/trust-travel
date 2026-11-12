@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
-import { getPoiMaterializationError } from "../../lib/poiResolution";
 import UpdateForm from "../../components/UpdateForm";
 
 const PlacesMap = dynamic(
@@ -176,6 +175,9 @@ export default function PlacePage() {
   const [specificPlaceHasSearched, setSpecificPlaceHasSearched] = useState(false);
   const [specificPlaceSearchLoading, setSpecificPlaceSearchLoading] = useState(false);
   const [specificPlaceSearchError, setSpecificPlaceSearchError] = useState("");
+  const specificPlaceSearchRequestId = useRef(0);
+  const [specificPlaceExternalSearchUnavailable, setSpecificPlaceExternalSearchUnavailable] =
+    useState(false);
   const [specificPlaceType, setSpecificPlaceType] = useState<
     "nature" | "restaurant" | "hotel" | "attraction" | "other"
   >("nature");
@@ -183,12 +185,11 @@ export default function PlacePage() {
   const [showSpecificPlaceTools, setShowSpecificPlaceTools] = useState(false);
 
   const [showCreateSpecificPlaceForm, setShowCreateSpecificPlaceForm] = useState(false);
+  const [specificPlaceResultsRejected, setSpecificPlaceResultsRejected] = useState(false);
   const [newSpecificPlaceName, setNewSpecificPlaceName] = useState("");
   const [newSpecificPlaceType, setNewSpecificPlaceType] = useState<
     "nature" | "restaurant" | "hotel" | "attraction" | "other"
   >("nature");
-  const [creatingSpecificPlace, setCreatingSpecificPlace] = useState(false);
-  const [createdSpecificPlace, setCreatedSpecificPlace] = useState<any>(null);
   const [createSpecificPlaceError, setCreateSpecificPlaceError] = useState("");
 
   const [ratingsSummary, setRatingsSummary] = useState<any>(null);
@@ -1673,11 +1674,16 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
       if (!place || place.place_type !== "city") return;
 
+      const requestId = ++specificPlaceSearchRequestId.current;
       const query = searchInsideCity.trim();
 
       setSpecificPlaceHasSearched(true);
       setExternalSpecificPlaceResults([]);
       setSpecificPlaceSearchError("");
+      setSpecificPlaceExternalSearchUnavailable(false);
+      setShowCreateSpecificPlaceForm(false);
+      setSpecificPlaceResultsRejected(false);
+      setCreateSpecificPlaceError("");
 
       if (query.length < 2) {
           setSpecificPlaceSearchError(
@@ -1702,6 +1708,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           }
         );
 
+        if (requestId !== specificPlaceSearchRequestId.current) return;
+
         if (!externalRes.ok) {
           let externalErrorDetail = "";
 
@@ -1713,6 +1721,8 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
           } catch {
             externalErrorDetail = "";
           }
+
+          if (requestId !== specificPlaceSearchRequestId.current) return;
 
           if (
             externalRes.status === 400 &&
@@ -1747,82 +1757,59 @@ fetch(`${API_URL}/api/places/${id}/updates/`, {
 
         const externalData = await externalRes.json();
 
+        if (requestId !== specificPlaceSearchRequestId.current) return;
+
         const externalResults = Array.isArray(externalData.results)
           ? externalData.results
           : [];
 
+        setSpecificPlaceExternalSearchUnavailable(
+          externalData.external_search?.status === "unavailable"
+        );
         setExternalSpecificPlaceResults(externalResults);
       } catch (error) {
+        if (requestId !== specificPlaceSearchRequestId.current) return;
         console.error("Specific place search error:", error);
         setSpecificPlaceSearchError("Could not search specific places right now.");
       } finally {
-        setSpecificPlaceSearchLoading(false);
+        if (requestId === specificPlaceSearchRequestId.current) {
+          setSpecificPlaceSearchLoading(false);
+        }
       }
     };
 
-    const handleCreateSpecificPlace = async (e: React.FormEvent) => {
+    const handleCreateSpecificPlace = (e: React.FormEvent) => {
       e.preventDefault();
 
       if (!place || place.place_type !== "city") return;
 
       const name = newSpecificPlaceName.trim();
+      const cityPlaceId = Number(place.id);
 
-      if (!name) {
-          setCreateSpecificPlaceError("Please enter the specific place name.");
-          setCreatedSpecificPlace(null);
-          return;
-      }
-
-      setCreatingSpecificPlace(true);
-      setCreatedSpecificPlace(null);
-      setCreateSpecificPlaceError("");
-
-      try {
-        const res = await fetch(
-          `${API_URL}/api/geography/pois/create-manual/`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              name,
-              place_type: newSpecificPlaceType,
-              city_place_id: place.id,
-            }),
-          }
+      if (!name || name.length > 200) {
+        setCreateSpecificPlaceError(
+          "Please enter a place name with no more than 200 characters."
         );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          console.error("Failed to create specific place:", data);
-          setCreateSpecificPlaceError(
-            getPoiMaterializationError(
-              res.status,
-              data,
-              "Could not create this specific place."
-            )
-          );
-          return;
-        }
-
-        const placeResult = {
-          ...data,
-          already_exists: res.status === 200,
-        };
-
-        setCreatedSpecificPlace(placeResult);
-        setNewSpecificPlaceName("");
-        setNewSpecificPlaceType(specificPlaceType);
-        setShowCreateSpecificPlaceForm(false);
-      } catch (error) {
-          console.error("Create specific place failed:", error);
-          setCreateSpecificPlaceError("Could not create this specific place.");
-      } finally {
-        setCreatingSpecificPlace(false);
+        return;
       }
+
+      if (!Number.isSafeInteger(cityPlaceId) || cityPlaceId <= 0) {
+        setCreateSpecificPlaceError(
+          "The selected city cannot be used for this experience."
+        );
+        return;
+      }
+
+      const params = new URLSearchParams({
+        mode: "experience",
+        share: "true",
+        manual_poi_name: name,
+        manual_poi_type: newSpecificPlaceType,
+        manual_city_place_id: String(cityPlaceId),
+      });
+
+      setCreateSpecificPlaceError("");
+      router.push(`/destinations?${params.toString()}`);
     };
 
 
@@ -3864,7 +3851,7 @@ const handleToggleEventsInfo = () => {
                   onClick={() => setShowSpecificPlaceTools(true)}
                   style={secondaryButton}
                 >
-                  Find or add specific places inside {place.name}
+                  Find a specific place inside {place.name}
                 </button>
               </>
             ) : (
@@ -3880,8 +3867,8 @@ const handleToggleEventsInfo = () => {
                 >
                   Use this section to move from the {geographicPlaceLabel.toLowerCase()} layer into specific places
                   inside {place.name}, such as beaches, hotels, restaurants, attractions or
-                  nature spots. Search first before creating a new place, so {geographicPlaceLabel.toLowerCase()}-level
-                  experiences stay separate from experiences about exact locations.
+                  nature spots. Search for the exact place first, so {geographicPlaceLabel.toLowerCase()}-level
+                  experiences stay separate from experiences about specific locations.
                 </p>
 
                 <div style={{ marginBottom: "16px" }}>
@@ -3924,11 +3911,17 @@ const handleToggleEventsInfo = () => {
                       | "attraction"
                       | "other";
 
+                    specificPlaceSearchRequestId.current += 1;
                     setSpecificPlaceType(nextPlaceType);
                     setNewSpecificPlaceType(nextPlaceType);
                     setExternalSpecificPlaceResults([]);
                     setSpecificPlaceHasSearched(false);
+                    setSpecificPlaceSearchLoading(false);
                     setSpecificPlaceSearchError("");
+                    setSpecificPlaceExternalSearchUnavailable(false);
+                    setShowCreateSpecificPlaceForm(false);
+                    setSpecificPlaceResultsRejected(false);
+                    setCreateSpecificPlaceError("");
                   }}
                   style={input}
                 >
@@ -3950,10 +3943,16 @@ const handleToggleEventsInfo = () => {
                 <input
                   value={searchInsideCity}
                   onChange={(e) => {
+                      specificPlaceSearchRequestId.current += 1;
                       setSearchInsideCity(e.target.value);
                       setExternalSpecificPlaceResults([]);
                       setSpecificPlaceHasSearched(false);
+                      setSpecificPlaceSearchLoading(false);
                       setSpecificPlaceSearchError("");
+                      setSpecificPlaceExternalSearchUnavailable(false);
+                      setShowCreateSpecificPlaceForm(false);
+                      setSpecificPlaceResultsRejected(false);
+                      setCreateSpecificPlaceError("");
                   }}
                   placeholder={`Example: beach, hotel, restaurant, viewpoint or attraction inside ${place.name}`}
                   style={{
@@ -3984,8 +3983,9 @@ const handleToggleEventsInfo = () => {
                   lineHeight: 1.5,
                 }}
               >
-                Search first to avoid creating duplicates or alternate spellings of the same
-                specific place. If it does not appear, you can create it in Step 2.
+                Search first to avoid duplicate places or alternate spellings.
+                If the correct place is not listed, Step 2 lets you describe it
+                provisionally when sharing an experience.
               </p>
 
               {specificPlaceSearchError && (
@@ -4135,7 +4135,7 @@ const handleToggleEventsInfo = () => {
                   color: "#555",
                 }}
               >
-                Step 2 — Create only if this specific place is not listed
+                Step 2 — Share an experience if the place is not listed
               </div>
 
               {!specificPlaceHasSearched ? (
@@ -4147,8 +4147,8 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.5,
                   }}
                 >
-                  Search above before creating a new restaurant, hotel, attraction,
-                  beach, nature spot or local place.
+                  Search above before entering a restaurant, hotel, attraction,
+                  beach, nature spot or other place manually.
                 </p>
               ) : specificPlaceSearchLoading ? (
                 <p
@@ -4170,9 +4170,9 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.5,
                   }}
                 >
-                  The search could not be completed right now. Try again before creating a new place.
+                  The search could not be completed. Please try again before entering a place manually.
                 </p>
-              ) : availableExternalSpecificPlaceResults.length > 0 ? (
+              ) : specificPlaceExternalSearchUnavailable ? (
                 <p
                   style={{
                     margin: 0,
@@ -4181,9 +4181,42 @@ const handleToggleEventsInfo = () => {
                     lineHeight: 1.5,
                   }}
                 >
-                  We found possible matches above. Use an existing place when it matches
-                  what you are looking for. Create a new one only if your place is truly different.
+                  Some Trust Travel places may be listed above, but external discovery
+                  could not be completed. Please try again before considering a
+                  manually entered place.
                 </p>
+              ) : availableExternalSpecificPlaceResults.length > 0 &&
+                !specificPlaceResultsRejected ? (
+                <>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#777",
+                      fontSize: "14px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    We found possible matches above. Review them before continuing.
+                    If none represents the place you visited, you can indicate that below.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpecificPlaceResultsRejected(true);
+                      setShowCreateSpecificPlaceForm(false);
+                      setCreateSpecificPlaceError("");
+                    }}
+                    style={{
+                      ...secondaryButton,
+                      fontSize: "13px",
+                      padding: "8px 12px",
+                      width: "fit-content",
+                    }}
+                  >
+                    None of these places matches
+                  </button>
+                </>
               ) : (
                 <>
                   <p
@@ -4194,9 +4227,33 @@ const handleToggleEventsInfo = () => {
                       lineHeight: 1.5,
                     }}
                   >
-                    No matching specific place was found inside {place.name} for “{searchInsideCity}”.
-                    You can create a new one if this is really a different place.
+                    {specificPlaceResultsRejected
+                      ? "You indicated that none of the suggested places matches."
+                      : `No matching specific place was found inside ${place.name} for “${searchInsideCity}”.`}
+                    {" "}Before continuing, check the spelling, alternate names,
+                    place type and selected city. You can refine your search above
+                    or describe a different place manually.
                   </p>
+
+                  {specificPlaceResultsRejected &&
+                    availableExternalSpecificPlaceResults.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSpecificPlaceResultsRejected(false);
+                          setShowCreateSpecificPlaceForm(false);
+                          setCreateSpecificPlaceError("");
+                        }}
+                        style={{
+                          ...secondaryButton,
+                          fontSize: "13px",
+                          padding: "8px 12px",
+                          width: "fit-content",
+                        }}
+                      >
+                        Review suggested places again
+                      </button>
+                    )}
 
                   <button
                     type="button"
@@ -4216,13 +4273,19 @@ const handleToggleEventsInfo = () => {
                   >
                     {showCreateSpecificPlaceForm
                       ? "Cancel"
-                      : `Create specific place inside ${place.name}`}
+                      : `Share experience at a new place in ${place.name}`}
                   </button>
                 </>
               )}
             </div>
 
-            {showCreateSpecificPlaceForm && (
+            {showCreateSpecificPlaceForm &&
+              hasSpecificPlaceSearch &&
+              !specificPlaceSearchLoading &&
+              !specificPlaceSearchError &&
+              !specificPlaceExternalSearchUnavailable &&
+              (availableExternalSpecificPlaceResults.length === 0 ||
+                specificPlaceResultsRejected) && (
               <form
                 onSubmit={handleCreateSpecificPlace}
                 style={{
@@ -4237,7 +4300,7 @@ const handleToggleEventsInfo = () => {
                 }}
               >
                 <div>
-                  <strong>Create a specific place inside {place.name}</strong>
+                  <strong>Share an experience at a specific place in {place.name}</strong>
 
                   <p
                     style={{
@@ -4248,7 +4311,7 @@ const handleToggleEventsInfo = () => {
                     }}
                   >
                     You are already inside the {geographicPlaceLabel.toLowerCase()} hub for {place.name}.
-                    Now add the exact place people would visit, review or save to a trip plan.
+                    Enter the exact place you experienced. The place will only be registered when your experience is successfully published.
                   </p>
                 </div>
 
@@ -4258,7 +4321,7 @@ const handleToggleEventsInfo = () => {
                   </div>
 
                   <div>
-                    <strong>New specific place:</strong>{" "}
+                    <strong>Place to describe:</strong>{" "}
                     {newSpecificPlaceName.trim() || "Type the exact place name below"}
                   </div>
 
@@ -4312,16 +4375,9 @@ const handleToggleEventsInfo = () => {
 
                 <button
                   type="submit"
-                  disabled={creatingSpecificPlace}
-                  style={{
-                    ...primaryButton,
-                    opacity: creatingSpecificPlace ? 0.5 : 1,
-                    cursor: creatingSpecificPlace ? "not-allowed" : "pointer",
-                  }}
+                  style={primaryButton}
                 >
-                  {creatingSpecificPlace
-                      ? "Creating..."
-                      : "Create this specific place"}
+                  Continue to share experience
                 </button>
               </form>
             )}
@@ -4339,78 +4395,6 @@ const handleToggleEventsInfo = () => {
 
             </div>
 
-            {createdSpecificPlace && (
-              <div
-                style={{
-                  padding: "14px",
-                  border: "1px solid #c7f0d8",
-                  borderRadius: "14px",
-                  backgroundColor: "#f2fbf5",
-                  marginBottom: "18px",
-                }}
-              >
-                <strong>
-                  {createdSpecificPlace.already_exists
-                    ? "This place already exists. We found the existing place."
-                    : `${createdSpecificPlace.name} was created.`}
-                </strong>
-
-                {createdSpecificPlace.already_exists && (
-                  <p
-                    style={{
-                      margin: "8px 0 0 0",
-                      color: "#666",
-                      fontSize: "14px",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    To avoid duplicates, Trust Travel will use the existing page for{" "}
-                    <strong>{createdSpecificPlace.name}</strong>.
-                  </p>
-                )}
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    flexWrap: "wrap",
-                    marginTop: "12px",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(`/places/${createdSpecificPlace.id}`)
-                    }
-                    style={primaryButton}
-                  >
-                    View page
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(
-                        `/destinations?place=${createdSpecificPlace.id}&share=true`
-                      )
-                    }
-                    style={secondaryButton}
-                  >
-                  {createdSpecificPlace.already_exists
-                      ? "Share experience"
-                      : "Share first experience"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCreatedSpecificPlace(null)}
-                    style={secondaryButton}
-                  >
-                    Stay here
-                  </button>
-                </div>
-              </div>
-            )}
             </>
          )}
           </section>

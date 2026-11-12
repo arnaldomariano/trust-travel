@@ -580,6 +580,20 @@ class ExperienceCreateSerializer(ExperienceSerializer):
         queryset=Place.objects.all(),
         required=False,
     )
+    manual_geographic_name = serializers.CharField(
+        required=False,
+        allow_blank=False,
+        trim_whitespace=True,
+        write_only=True,
+        max_length=255,
+    )
+    manual_geographic_country_code = serializers.RegexField(
+        regex=r"^[A-Za-z]{2}$",
+        required=False,
+        write_only=True,
+        max_length=2,
+    )
+
     manual_poi_name = serializers.CharField(
         required=False,
         allow_blank=False,
@@ -623,6 +637,8 @@ class ExperienceCreateSerializer(ExperienceSerializer):
 
     class Meta(ExperienceSerializer.Meta):
         fields = ExperienceSerializer.Meta.fields + [
+            "manual_geographic_name",
+            "manual_geographic_country_code",
             "manual_poi_name",
             "manual_poi_type",
             "manual_city_place_id",
@@ -634,6 +650,63 @@ class ExperienceCreateSerializer(ExperienceSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+
+        geographic_fields = (
+            "manual_geographic_name",
+            "manual_geographic_country_code",
+        )
+        provided_geographic_fields = [
+            field for field in geographic_fields if field in attrs
+        ]
+
+        if provided_geographic_fields:
+            if len(provided_geographic_fields) != len(geographic_fields):
+                raise serializers.ValidationError({
+                    "manual_geographic": (
+                        "Manual geographic name and country code "
+                        "must be provided together."
+                    )
+                })
+
+            country_code = attrs["manual_geographic_country_code"].upper()
+            if resolve_country_catalog_entry(code=country_code) is None:
+                raise serializers.ValidationError({
+                    "manual_geographic_country_code": (
+                        "The requested country is not recognized."
+                    )
+                })
+            attrs["manual_geographic_country_code"] = country_code
+
+            request = self.context.get("request")
+            if (
+                attrs.get("place") is not None
+                or any(
+                    field in attrs
+                    for field in (
+                        "manual_poi_name",
+                        "manual_poi_type",
+                        "manual_city_place_id",
+                        "external_poi_type",
+                        "external_city_place_id",
+                        "external_city_source",
+                        "external_city_id",
+                    )
+                )
+                or (
+                    request
+                    and (
+                        request.data.get("external_source")
+                        or request.data.get("external_id")
+                    )
+                )
+            ):
+                raise serializers.ValidationError({
+                    "manual_geographic": (
+                        "A manual locality cannot be combined "
+                        "with another publication target."
+                    )
+                })
+
 
         manual_fields = (
             "manual_poi_name",

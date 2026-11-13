@@ -1,5 +1,9 @@
 # Trust Travel — Current Place Flow
 
+## Related technical dependency register
+
+For implementation dependencies between Place discovery, exploration, and publication, consult `docs/code-decisions-and-dependencies.md` before refactoring the associated code paths.
+
 ## Current status
 
 The place search flow is now organized around a clearer hierarchy:

@@ -1,5 +1,9 @@
 # Trust Travel — Geographic Architecture
 
+## Related technical dependency register
+
+Before changing geographic discovery, identity resolution, materialization, or contribution publication, consult `docs/code-decisions-and-dependencies.md` for cross-component dependencies and regression risks.
+
 ## Document status
 
 Status: Work in progress

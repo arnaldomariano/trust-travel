@@ -23,6 +23,7 @@ from rest_framework import serializers
 from .models import (
     Destination,
     Place,
+    PlaceExternalIdentity,
     BusinessPresence,
     BusinessPresenceLink,
     BusinessPresenceManager,
@@ -1822,7 +1823,19 @@ class GeographyPlaceExternalDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        return Response(reference)
+        existing_place_id = (
+            PlaceExternalIdentity.objects.filter(
+                external_source=external_source,
+                external_id=external_id,
+            )
+            .values_list("place_id", flat=True)
+            .first()
+        )
+
+        return Response({
+            **reference,
+            "existing_place_id": existing_place_id,
+        })
 
 
 class ManualGeographicDiscoveryDiagnosticView(APIView):
@@ -3501,6 +3514,36 @@ class ExperienceListView(generics.ListCreateAPIView):
         )
 
         has_manual_poi = manual_poi_name is not None
+        manual_poi_city_reference = None
+
+        if has_manual_poi and manual_city_place_id is None:
+            try:
+                manual_poi_city_reference = (
+                    reconstruct_external_geographic_reference(
+                        external_source=serializer.validated_data[
+                            "external_city_source"
+                        ],
+                        external_id=serializer.validated_data[
+                            "external_city_id"
+                        ],
+                    )
+                )
+            except (
+                GeoNamesConfigurationError,
+                GooglePlacesConfigurationError,
+                GeoNamesRequestError,
+                GooglePlacesRequestError,
+            ) as error:
+                raise GeographicProviderUnavailable(
+                    "Geographic place lookup is temporarily unavailable."
+                ) from error
+            except (
+                GeoNamesReferenceNotFoundError,
+                GooglePlacesReferenceNotFoundError,
+            ) as error:
+                raise NotFound(
+                    "External city reference not found."
+                ) from error
 
         external_source = str(
             self.request.data.get("external_source") or ""
@@ -3723,15 +3766,45 @@ class ExperienceListView(generics.ListCreateAPIView):
                 )
 
             if has_manual_poi:
-                city_place = (
-                    Place.objects
-                    .select_related("country_ref", "destination")
-                    .filter(
-                        id=manual_city_place_id,
-                        place_type="city",
+                if manual_poi_city_reference is not None:
+                    try:
+                        city_resolution = (
+                            resolve_reconstructed_geographic_reference_for_commit(
+                                geographic_result=manual_poi_city_reference,
+                                user=self.request.user,
+                            )
+                        )
+                    except CountryIdentityConflict as error:
+                        raise CountryIdentityConflictResponse(error) from error
+
+                    if city_resolution["state"] == "preserve":
+                        raise GeographicResolutionRequired(city_resolution)
+
+                    if city_resolution["state"] not in {"reuse", "created"}:
+                        raise ValueError(
+                            "Unsupported manual POI city resolution state: "
+                            f"{city_resolution['state']}"
+                        )
+
+                    city_place = city_resolution.get("place")
+
+                    if (
+                        city_place is None
+                        or city_place.place_type != "city"
+                    ):
+                        raise ValueError(
+                            "Manual POI city resolution did not return a city."
+                        )
+                else:
+                    city_place = (
+                        Place.objects
+                        .select_related("country_ref", "destination")
+                        .filter(
+                            id=manual_city_place_id,
+                            place_type="city",
+                        )
+                        .first()
                     )
-                    .first()
-                )
 
                 if city_place is None:
                     raise serializers.ValidationError({
@@ -3786,6 +3859,8 @@ class ExperienceListView(generics.ListCreateAPIView):
                     "manual_poi_name",
                     "manual_poi_type",
                     "manual_city_place_id",
+                    "external_city_source",
+                    "external_city_id",
                 ):
                     serializer.validated_data.pop(field, None)
 

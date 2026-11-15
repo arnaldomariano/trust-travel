@@ -713,20 +713,39 @@ class ExperienceCreateSerializer(ExperienceSerializer):
             "manual_poi_type",
             "manual_city_place_id",
         )
-
         provided_fields = [
             field for field in manual_fields
             if field in attrs
         ]
 
-        if provided_fields and len(provided_fields) != len(manual_fields):
-            raise serializers.ValidationError({
-                "manual_poi": (
-                    "Manual POI fields must be provided together."
-                )
-            })
+        has_manual_poi = bool(provided_fields)
+        has_manual_city = "manual_city_place_id" in attrs
+        has_external_city_source = "external_city_source" in attrs
+        has_external_city_id = "external_city_id" in attrs
+        has_external_city = (
+            has_external_city_source or has_external_city_id
+        )
 
-        if provided_fields:
+        if has_manual_poi:
+            if (
+                "manual_poi_name" not in attrs
+                or "manual_poi_type" not in attrs
+                or has_manual_city == has_external_city
+                or (
+                    has_external_city
+                    and not (
+                        has_external_city_source
+                        and has_external_city_id
+                    )
+                )
+            ):
+                raise serializers.ValidationError({
+                    "manual_poi": (
+                        "Manual POI name, type and exactly one "
+                        "complete city reference are required."
+                    )
+                })
+
             if attrs.get("place") is not None:
                 raise serializers.ValidationError({
                     "place": (
@@ -736,7 +755,6 @@ class ExperienceCreateSerializer(ExperienceSerializer):
                 })
 
             request = self.context.get("request")
-
             if request and (
                 request.data.get("external_source")
                 or request.data.get("external_id")
@@ -744,7 +762,18 @@ class ExperienceCreateSerializer(ExperienceSerializer):
                 raise serializers.ValidationError({
                     "manual_poi": (
                         "A manual POI cannot be combined "
-                        "with an external geographic identity."
+                        "with an external POI identity."
+                    )
+                })
+
+            if (
+                "external_poi_type" in attrs
+                or "external_city_place_id" in attrs
+            ):
+                raise serializers.ValidationError({
+                    "manual_poi": (
+                        "Manual POI fields cannot be combined "
+                        "with external POI-specific fields."
                     )
                 })
 
@@ -767,7 +796,13 @@ class ExperienceCreateSerializer(ExperienceSerializer):
             request.data.get("external_id") or ""
         ).strip() if request else ""
 
-        if provided_external_poi_fields or external_source == "foursquare":
+        if (
+            not has_manual_poi
+            and (
+                provided_external_poi_fields
+                or external_source == "foursquare"
+            )
+        ):
             if external_source != "foursquare" or not external_id:
                 raise serializers.ValidationError({
                     "external_poi": (
@@ -775,7 +810,7 @@ class ExperienceCreateSerializer(ExperienceSerializer):
                     )
                 })
 
-            if attrs.get("place") is not None or provided_fields:
+            if attrs.get("place") is not None:
                 raise serializers.ValidationError({
                     "external_poi": (
                         "An external POI cannot be combined "
@@ -784,8 +819,6 @@ class ExperienceCreateSerializer(ExperienceSerializer):
                 })
 
             has_internal_city = "external_city_place_id" in attrs
-            has_external_city_source = "external_city_source" in attrs
-            has_external_city_id = "external_city_id" in attrs
 
             if "external_poi_type" not in attrs:
                 raise serializers.ValidationError({
@@ -795,14 +828,16 @@ class ExperienceCreateSerializer(ExperienceSerializer):
                 })
 
             if has_internal_city:
-                if has_external_city_source or has_external_city_id:
+                if has_external_city:
                     raise serializers.ValidationError({
                         "external_poi": (
                             "Provide either an existing city or "
                             "an external city reference, not both."
                         )
                     })
-            elif not (has_external_city_source and has_external_city_id):
+            elif not (
+                has_external_city_source and has_external_city_id
+            ):
                 raise serializers.ValidationError({
                     "external_poi": (
                         "Provide an existing city or a complete "

@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
 import UpdateForm from "../../components/UpdateForm";
+import PublicationAuthGate from "../../components/PublicationAuthGate";
 
 const PlacesMap = dynamic(
   () => import("../../components/PlacesMap"),
@@ -3030,7 +3031,9 @@ const handleToggleEventsInfo = () => {
               </div>
 
               <div style={overviewStatValue}>
-                {ratingsSummary?.overall?.total_reviews ?? experiences.length}
+                {place?.place_type === "city"
+                  ? experiences.length
+                  : ratingsSummary?.overall?.total_reviews ?? experiences.length}
               </div>
 
               {place?.place_type === "city" && (
@@ -4401,6 +4404,10 @@ const handleToggleEventsInfo = () => {
         )}
 
         {showUpdateForm && (
+          <PublicationAuthGate
+            returnTo={`/places/${id}?share=update`}
+            onContinueExploring={() => setShowUpdateForm(false)}
+          >
           <section
             id="place-update-form-section"
             style={{
@@ -4443,6 +4450,7 @@ const handleToggleEventsInfo = () => {
               />
             )}
           </section>
+          </PublicationAuthGate>
         )}
 
         <section

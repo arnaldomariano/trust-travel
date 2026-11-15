@@ -35,6 +35,82 @@ open investigations, and future requirements.
 | ID | Decision | Status |
 | --- | --- | --- |
 | DEP-GEO-001 | Separate geographic discovery from Place persistence | Implemented in documented flows; broader audit pending |
+| DEP-AUTH-001 | Require authentication for contribution publication | Implemented in inspected frontend flows; partial browser verification |
+
+---
+
+## DEP-AUTH-001 — Require authentication for contribution publication
+
+### Decision
+
+Public geographic discovery, exploration, and Place viewing remain accessible
+without authentication.
+
+Publishing an Experience or an Update requires an authenticated session.
+The frontend uses a reusable publication gate to prevent anonymous visitors
+from accessing the protected publication forms.
+
+Authentication must not silently discard the selected publication target.
+
+### Verified implementation connections
+
+- `frontend/app/components/PublicationAuthGate.tsx` reads authentication
+  state from `AuthProvider` and displays either the publication form or
+  the sign-in/create-account invitation.
+- `frontend/app/destinations/page.tsx` protects Experience publication
+  and the inspected external-geographic Update publication flow.
+- `frontend/app/places/[id]/page.tsx` protects the existing-Place
+  Update form.
+- `frontend/app/login/page.tsx` validates the internal `next` path,
+  refreshes the authenticated user, and redirects to the requested path.
+- `frontend/app/register/page.tsx` preserves a safe `next` path when
+  directing a newly registered user to login.
+
+### Invariants and dependencies
+
+1. Public exploration must not depend on an authenticated session.
+2. Publication forms must not become available while authentication
+   status is still loading.
+3. Return paths must remain internal to the application.
+4. Experience return navigation must preserve supported existing Place,
+   external geographic, external POI, and manual POI selection context.
+5. Authentication does not authorize geographic materialization by itself;
+   Place persistence remains governed by DEP-GEO-001.
+6. Frontend gating is a user-interface control, not a substitute for
+   backend authentication and publication authorization.
+
+### Verification and limitations
+
+- Browser checks confirmed the anonymous publication gate for an
+  existing Place and an external geographic reference.
+- Browser checks confirmed return to an external geographic Experience
+  publication context after login.
+- TypeScript validation (`npx tsc --noEmit`) passed on 2026-11-15.
+- The complete registration-to-login-to-publication return journey
+  has not yet been browser-tested.
+- All manual POI and alternate navigation return paths have not been
+  exhaustively browser-tested.
+- Backend authorization coverage was not re-audited as part of this
+  frontend authentication review.
+- Visual differentiation of authentication actions and mobile UX
+  remain deferred to a broader interface review.
+
+### Before modifying
+
+Inspect `AuthProvider`, the gate, login/register redirects, all
+publication entry points, and backend authorization together.
+Recheck public exploration, anonymous access, return navigation,
+and geographic non-materialization behavior.
+
+### Related documents
+
+- `docs/current-place-flow.md`
+- `docs/geographic-architecture.md`
+
+### Maintenance history
+
+- 2026-11-15: Documented frontend publication authentication and
+  verified return-navigation behavior, with outstanding test scope.
 
 ---
 

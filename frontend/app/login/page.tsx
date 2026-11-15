@@ -1,14 +1,28 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../providers/AuthProvider";
 import { API_URL } from "../lib/api";
 
+function getSafeReturnPath(next: string | null): string {
+  if (
+    !next ||
+    !next.startsWith("/") ||
+    next.startsWith("//") ||
+    /[\\\x00-\x1f\x7f]/.test(next)
+  ) {
+    return "/";
+  }
+
+  return next;
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next");
+  const next = getSafeReturnPath(searchParams.get("next"));
+  const loginInProgress = useRef(false);
 
   // 🔐 Auth context
   const { refreshUser, isLoggedIn, loading: authLoading } = useAuth();
@@ -23,16 +37,17 @@ function LoginPageContent() {
   // 🔁 Redirect if already logged in
   // =========================
   useEffect(() => {
-    if (!authLoading && isLoggedIn) {
-      router.push("/");
+    if (!authLoading && isLoggedIn && !loginInProgress.current) {
+      router.replace(next);
     }
-  }, [authLoading, isLoggedIn]);
+  }, [authLoading, isLoggedIn, next, router]);
 
   // =========================
   // 🔐 Handle login
   // =========================
     const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
+      loginInProgress.current = true;
       setLoading(true);
       setError("");
 
@@ -60,7 +75,7 @@ function LoginPageContent() {
         const ok = await refreshUser();
 
         if (ok) {
-          router.push(next || "/");
+          router.replace(next);
           router.refresh();
         } else {
           setError("Erro ao carregar usuário");
@@ -69,6 +84,7 @@ function LoginPageContent() {
       } catch (err) {
         setError("Usuário ou senha inválidos");
       } finally {
+        loginInProgress.current = false;
         setLoading(false);
       }
     };

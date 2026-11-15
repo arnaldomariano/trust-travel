@@ -171,6 +171,39 @@ Current model deletion cascades and historical-location representation
 require further architectural work, as documented in
 docs/geographic-architecture.md.
 
+## Publication authentication and return navigation
+
+Status: Implemented in inspected frontend flows; partial browser verification.
+
+Visitors can search, discover, and explore Trust Travel Places without
+signing in. Authentication is required when they decide to publish an
+Experience or an Update (event, alert, or useful information).
+
+The reusable `PublicationAuthGate` checks `AuthProvider` before showing
+the protected publication form. Anonymous visitors receive sign-in,
+create-account, and continue-exploring options.
+
+The login flow accepts a validated internal `next` path. Registration
+preserves that path through the subsequent login step.
+
+For Experiences, the return path can reconstruct the selected existing
+Place, external geographic reference, external Foursquare POI with city
+context, or manual POI with city context. External geographic Updates
+preserve the provider reference; existing-Place Updates return to the
+Place Hub with the Update form requested.
+
+Browser checks confirmed the anonymous gate for an existing Place and
+an external geographic reference, and confirmed the external geographic
+Experience return after login. TypeScript validation passed on
+2026-11-15.
+
+The full registration return journey, alternate/manual selection paths,
+and backend authorization coverage remain outside this verification
+checkpoint. Authentication alone never materializes a Place; successful
+publication and the geographic integrity rules still govern persistence.
+
+A comprehensive visual UX and mobile review is planned separately.
+
 ## Further work
 
 Status: Planned or under investigation.

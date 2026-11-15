@@ -1138,6 +1138,121 @@ class GeographicCityMaterializationAPITests(TestCase):
 
 class GeographicPlaceExternalDetailAPITests(TestCase):
     @patch("core.views.get_geographic_place_for_exploration")
+    def test_external_detail_does_not_match_by_name_only(
+        self,
+        mock_reconstruct,
+    ):
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        destination = Destination.objects.create(
+            name="United States",
+            country="United States",
+        )
+        city = Place.objects.create(
+            destination=destination,
+            name="Springfield",
+            canonical_name="Springfield",
+            country_code="US",
+            place_type="city",
+            geographic_type="settlement",
+        )
+        PlaceExternalIdentity.objects.create(
+            place=city,
+            external_source="geonames",
+            external_id="springfield-illinois",
+            geographic_type="settlement",
+        )
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": "springfield-massachusetts",
+            "name": "Springfield",
+            "canonical_name": "Springfield",
+            "geographic_type": "settlement",
+            "country_code": "US",
+        }
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "geonames",
+                "external_id": "springfield-massachusetts",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["existing_place_id"])
+        mock_reconstruct.assert_called_once_with(
+            "springfield-massachusetts",
+        )
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+    @patch("core.views.get_geographic_place_for_exploration")
+    def test_external_detail_returns_existing_place_by_exact_identity(
+        self,
+        mock_reconstruct,
+    ):
+        from .models import Destination, Place, PlaceExternalIdentity
+
+        destination = Destination.objects.create(
+            name="Brazil",
+            country="Brazil",
+        )
+
+        city = Place.objects.create(
+            destination=destination,
+            name="Example City",
+            canonical_name="Example City",
+            country_code="BR",
+            place_type="city",
+            geographic_type="settlement",
+        )
+        PlaceExternalIdentity.objects.create(
+            place=city,
+            external_source="geonames",
+            external_id="12345",
+            geographic_type="settlement",
+        )
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": "12345",
+            "name": "Example City",
+            "canonical_name": "Example City",
+            "geographic_type": "settlement",
+            "country_code": "BR",
+        }
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/places/external-detail/",
+            {
+                "external_source": "geonames",
+                "external_id": "12345",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json().get("existing_place_id"),
+            city.id,
+        )
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+    @patch("core.views.get_geographic_place_for_exploration")
     def test_public_geonames_detail_does_not_materialize_place(
         self,
         mock_reconstruct,
@@ -1166,7 +1281,10 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), reference)
+        self.assertEqual(
+            response.json(),
+            {**reference, "existing_place_id": None},
+        )
 
         mock_reconstruct.assert_called_once_with(
             "12345",
@@ -1210,7 +1328,10 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), reference)
+        self.assertEqual(
+            response.json(),
+            {**reference, "existing_place_id": None},
+        )
 
         mock_reconstruct.assert_called_once_with(
             "google-example-123",
@@ -1266,7 +1387,10 @@ class GeographicPlaceExternalDetailAPITests(TestCase):
                     )
 
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.json(), reference)
+                self.assertEqual(
+            response.json(),
+            {**reference, "existing_place_id": None},
+        )
 
                 mock_provider.assert_called_once_with(external_id)
 
@@ -14355,6 +14479,323 @@ class ManualPOIExperienceCreationTests(TestCase):
         )
         self.url = "/api/experiences/"
 
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_manual_poi_experience_materializes_external_city_at_publication(
+        self,
+        mock_reconstruct,
+    ):
+        from .models import Experience, Place, PlaceExternalIdentity, Update
+
+        city_external_id = "manual-poi-external-city-test"
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": city_external_id,
+            "name": "GEO Manual Test City",
+            "canonical_name": "GEO Manual Test City",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=city_external_id,
+            ).exists()
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "GEO Manual Test Café",
+                "manual_poi_type": "restaurant",
+                "external_city_source": "geonames",
+                "external_city_id": city_external_id,
+                "title": "Visiting a manually identified café",
+                "comment": "An experience in an externally referenced city.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+        city_identity = PlaceExternalIdentity.objects.get(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
+        city = city_identity.place
+        self.assertEqual(city.place_type, "city")
+        self.assertEqual(city.country_code, "NL")
+
+        poi = Place.objects.get(
+            name="GEO Manual Test Café",
+            place_type="restaurant",
+        )
+        self.assertEqual(poi.parent_place_id, city.id)
+        self.assertEqual(poi.destination_id, city.destination_id)
+
+        experience = Experience.objects.get()
+        self.assertEqual(experience.place_id, poi.id)
+        self.assertEqual(Update.objects.get(experience=experience).place_id, poi.id)
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
+
+    @patch("core.views.resolve_reconstructed_geographic_reference_for_commit")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.views.materialize_poi_place")
+    def test_manual_poi_external_city_preserve_prevents_publication(
+        self,
+        mock_materialize_poi,
+        mock_reconstruct,
+        mock_resolve_city,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        city_external_id = "manual-poi-preserve-city"
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": city_external_id,
+            "name": "Manual Preserve City",
+            "canonical_name": "Manual Preserve City",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+        mock_resolve_city.return_value = {
+            "state": "preserve",
+            "place": None,
+            "created": False,
+            "evaluations": [],
+        }
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "Manual Preserve Café",
+                "manual_poi_type": "restaurant",
+                "external_city_source": "geonames",
+                "external_city_id": city_external_id,
+                "title": "A protected geographic identity",
+                "comment": "This publication must not proceed.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(
+            response.json()["code"],
+            "geographic_resolution_required",
+        )
+        mock_materialize_poi.assert_not_called()
+        mock_resolve_city.assert_called_once()
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+    @patch("core.views.resolve_reconstructed_geographic_reference_for_commit")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_manual_poi_external_city_preserves_existing_poi_candidate(
+        self,
+        mock_reconstruct,
+        mock_resolve_city,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        existing_poi = Place.objects.create(
+            destination=self.destination,
+            parent_place=self.city,
+            name="Café Existente",
+            canonical_name="Café Existente",
+            country_code="NL",
+            place_type="restaurant",
+        )
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": "existing-city-reference",
+            "name": "Breda",
+            "canonical_name": "Breda",
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+        mock_resolve_city.return_value = {
+            "state": "reuse",
+            "place": self.city,
+            "created": False,
+            "evaluations": [],
+        }
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "manual_poi_name": "Café Existente",
+                "manual_poi_type": "restaurant",
+                "external_city_source": "geonames",
+                "external_city_id": "existing-city-reference",
+                "title": "Visiting an existing café",
+                "comment": "The existing candidate must be preserved.",
+                "rating": 4,
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        data = response.json()
+        self.assertEqual(data["code"], "poi_resolution_required")
+        self.assertEqual(data["reason"], "unresolved_identity")
+        self.assertEqual(data["candidate_place_ids"], [existing_poi.id])
+
+        self.assertEqual(
+            (
+                Place.objects.count(),
+                PlaceExternalIdentity.objects.count(),
+                BusinessPresence.objects.count(),
+                Experience.objects.count(),
+                Update.objects.count(),
+            ),
+            initial_counts,
+        )
+
+        mock_resolve_city.assert_called_once()
+        existing_poi.refresh_from_db()
+        self.assertEqual(existing_poi.parent_place_id, self.city.id)
+
+    @patch("core.views.Update.objects.create")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_manual_poi_external_city_rolls_back_on_feed_failure(
+        self,
+        mock_reconstruct,
+        mock_create_update,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        city_external_id = "manual-poi-rollback-city"
+        city_name = "Manual Rollback City"
+        poi_name = "Manual Rollback Café"
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": city_external_id,
+            "name": city_name,
+            "canonical_name": city_name,
+            "aliases": [],
+            "country_code": "NL",
+            "geographic_type": "settlement",
+            "latitude": 51.5880,
+            "longitude": 4.7760,
+        }
+
+        initial_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+
+        mock_create_update.side_effect = RuntimeError(
+            "Simulated manual POI external city feed failure."
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.client.post(
+                self.url,
+                data={
+                    "manual_poi_name": poi_name,
+                    "manual_poi_type": "restaurant",
+                    "external_city_source": "geonames",
+                    "external_city_id": city_external_id,
+                    "title": "Rollback publication",
+                    "comment": "Testing atomic city and POI publication.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+            )
+
+        mock_create_update.assert_called_once()
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id=city_external_id,
+        )
+
+        final_counts = (
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+            BusinessPresence.objects.count(),
+            Experience.objects.count(),
+            Update.objects.count(),
+        )
+        self.assertEqual(final_counts, initial_counts)
+
+        self.assertFalse(
+            Place.objects.filter(name=city_name).exists()
+        )
+        self.assertFalse(
+            Place.objects.filter(name=poi_name).exists()
+        )
+        self.assertFalse(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id=city_external_id,
+            ).exists()
+        )
+
     def test_manual_poi_experience_materializes_at_publication(self):
         from .models import (
             Experience,
@@ -14582,6 +15023,143 @@ class ManualPOIExperienceCreationTests(TestCase):
 
         self.assertEqual(final_counts, initial_counts)
 
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_manual_poi_rejects_invalid_external_city_combinations(
+        self,
+        mock_reconstruct,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        invalid_city_references = [
+            {
+                "external_city_source": "geonames",
+            },
+            {
+                "external_city_id": "123456",
+            },
+            {
+                "manual_city_place_id": self.city.id,
+                "external_city_source": "geonames",
+                "external_city_id": "123456",
+            },
+        ]
+
+        for city_reference in invalid_city_references:
+            with self.subTest(city_reference=city_reference):
+                initial_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+
+                response = self.client.post(
+                    self.url,
+                    data={
+                        "manual_poi_name": "Café Referência Inválida",
+                        "manual_poi_type": "restaurant",
+                        **city_reference,
+                        "title": "Invalid city reference",
+                        "comment": "Testing incompatible city references.",
+                        "rating": 4,
+                    },
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    400,
+                    response.content,
+                )
+                self.assertIn("manual_poi", response.json())
+
+                final_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+                self.assertEqual(final_counts, initial_counts)
+
+        mock_reconstruct.assert_not_called()
+
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_manual_poi_external_city_rejects_foursquare_fields(
+        self,
+        mock_reconstruct,
+    ):
+        from .models import (
+            BusinessPresence,
+            Experience,
+            Place,
+            PlaceExternalIdentity,
+            Update,
+        )
+
+        incompatible_fields = [
+            {"external_poi_type": "restaurant"},
+            {"external_city_place_id": self.city.id},
+            {
+                "external_source": "foursquare",
+                "external_id": "foursquare-manual-conflict",
+            },
+        ]
+
+        for extra_fields in incompatible_fields:
+            with self.subTest(extra_fields=extra_fields):
+                initial_counts = (
+                    Place.objects.count(),
+                    PlaceExternalIdentity.objects.count(),
+                    BusinessPresence.objects.count(),
+                    Experience.objects.count(),
+                    Update.objects.count(),
+                )
+
+                response = self.client.post(
+                    self.url,
+                    data={
+                        "manual_poi_name": "Café Misturado",
+                        "manual_poi_type": "restaurant",
+                        "external_city_source": "geonames",
+                        "external_city_id": "123456",
+                        **extra_fields,
+                        "title": "Incompatible publication",
+                        "comment": "Testing incompatible POI fields.",
+                        "rating": 4,
+                    },
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Bearer {self.access_token}",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    400,
+                    response.content,
+                )
+                self.assertIn("manual_poi", response.json())
+
+                self.assertEqual(
+                    (
+                        Place.objects.count(),
+                        PlaceExternalIdentity.objects.count(),
+                        BusinessPresence.objects.count(),
+                        Experience.objects.count(),
+                        Update.objects.count(),
+                    ),
+                    initial_counts,
+                )
+
+        mock_reconstruct.assert_not_called()
 
     def test_manual_poi_experience_rejects_unknown_city(self):
         from .models import (

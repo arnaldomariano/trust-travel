@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { API_URL } from "../lib/api";
 
@@ -22,8 +22,20 @@ const countryCodeToFlag = (code: string) => {
   );
 };
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedNext = searchParams.get("next");
+  const safeNext =
+    requestedNext &&
+    requestedNext.startsWith("/") &&
+    !requestedNext.startsWith("//") &&
+    !/[\\\x00-\x1f\x7f]/.test(requestedNext)
+      ? requestedNext
+      : null;
+  const loginHref = safeNext
+    ? `/login?next=${encodeURIComponent(safeNext)}`
+    : "/login";
 
 const [username, setUsername] = useState("");
 const [email, setEmail] = useState("");
@@ -164,7 +176,7 @@ const selectedCountry = countryCatalog.find(
 
             <button
               type="button"
-              onClick={() => router.push("/login")}
+              onClick={() => router.push(loginHref)}
               style={button}
             >
               Continue to login
@@ -288,12 +300,20 @@ const selectedCountry = countryCatalog.find(
 
         <div style={loginText}>
           Already have an account?{" "}
-          <a href="/login" style={loginLink}>
+          <a href={loginHref} style={loginLink}>
             Sign in
           </a>
         </div>
       </form>
     </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<main>Loading...</main>}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }
 

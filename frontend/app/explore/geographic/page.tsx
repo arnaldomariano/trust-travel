@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
 
@@ -23,6 +23,7 @@ type ExternalGeographicDetail = {
   external_source: "geonames" | "google_places";
   external_id: string;
   formatted_address?: string;
+  existing_place_id: number | null;
 };
 
 type POIType = "hotel" | "restaurant" | "attraction" | "nature" | "other";
@@ -57,6 +58,7 @@ const geographicTypeLabels: Record<string, string> = {
 };
 
 function GeographicExplorationContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const source = searchParams.get("source");
   const id = searchParams.get("id");
@@ -126,6 +128,19 @@ function GeographicExplorationContent() {
         }
 
         if (active) {
+          if (
+            typeof data.existing_place_id === "number" &&
+            Number.isSafeInteger(data.existing_place_id) &&
+            data.existing_place_id > 0
+          ) {
+            router.replace(`/places/${data.existing_place_id}`);
+            return;
+          }
+
+          if (data.existing_place_id !== null) {
+            throw new Error("unavailable");
+          }
+
           setDetail(data);
         }
       } catch (err) {
@@ -149,7 +164,7 @@ function GeographicExplorationContent() {
       active = false;
       poiRequestId.current += 1;
     };
-  }, [source, id]);
+  }, [source, id, router]);
 
   return (
     <main style={{ maxWidth: 800, margin: "0 auto", padding: "32px 20px" }}>
@@ -179,6 +194,48 @@ function GeographicExplorationContent() {
             {(detail.geographic_type ? geographicTypeLabels[detail.geographic_type] : null) ||
               "Geographic place"}
           </p>
+
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "20px 0" }}>
+            <Link
+              href={`/destinations?${new URLSearchParams({
+                mode: "experience",
+                share: "true",
+                geo_source: detail.external_source,
+                geo_id: detail.external_id,
+              }).toString()}`}
+              style={{
+                display: "inline-block",
+                padding: "12px 16px",
+                borderRadius: 10,
+                backgroundColor: "#111",
+                color: "#fff",
+                textDecoration: "none",
+                fontWeight: 600,
+              }}
+            >
+              Share an experience
+            </Link>
+
+            <Link
+              href={`/destinations?${new URLSearchParams({
+                mode: "update",
+                share: "true",
+                geo_source: detail.external_source,
+                geo_id: detail.external_id,
+              }).toString()}`}
+              style={{
+                display: "inline-block",
+                padding: "12px 16px",
+                borderRadius: 10,
+                border: "1px solid #aaa",
+                color: "#111",
+                textDecoration: "none",
+                fontWeight: 600,
+              }}
+            >
+              Share an alert, event or information
+            </Link>
+          </div>
 
           {detail.country_code && (
             <p><strong>Country:</strong> {detail.country_code}</p>
@@ -331,7 +388,54 @@ function GeographicExplorationContent() {
 
                 {poiSearched && !poiLoading && !poiError &&
                   poiResults.length === 0 && (
-                    <p>No places found for this search.</p>
+                    <div
+                      style={{
+                        border: "1px solid #d7dce3",
+                        borderRadius: 10,
+                        padding: 16,
+                        display: "grid",
+                        gap: 12,
+                      }}
+                    >
+                      <p style={{ margin: 0 }}>
+                        No places found for this search.
+                      </p>
+
+                      <p style={{ margin: 0 }}>
+                        Try checking the spelling, using another name,
+                        selecting a different place type, or searching
+                        for a nearby area.
+                      </p>
+
+                      {poiQuery.trim().length >= 2 &&
+                        poiQuery.trim().length <= 200 &&
+                        (detail.external_source === "geonames" ||
+                          detail.external_source === "google_places") &&
+                        Boolean(detail.external_id.trim()) && (
+                          <>
+                            <p style={{ margin: 0 }}>
+                              Still cannot find this place? You can
+                              share your experience by entering its
+                              name manually. Trust Travel will check
+                              the geographic reference and possible
+                              duplicates when you publish.
+                            </p>
+
+                            <Link
+                              href={`/destinations?${new URLSearchParams({
+                                mode: "experience",
+                                share: "true",
+                                manual_poi_name: poiQuery.trim(),
+                                manual_poi_type: poiType,
+                                city_source: detail.external_source,
+                                city_id: detail.external_id,
+                              }).toString()}`}
+                            >
+                              Share an experience about this place
+                            </Link>
+                          </>
+                        )}
+                    </div>
                   )}
 
                 {poiResults.map((poi) => (

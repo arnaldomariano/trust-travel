@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import UpdateForm from "../components/UpdateForm";
+import PublicationAuthGate from "../components/PublicationAuthGate";
 import { API_URL } from "../lib/api";
 
 type CountryCatalogItem = {
@@ -43,6 +44,19 @@ type GeographyPlaceResult = {
   can_explore: boolean;
 };
 
+// A selected geographic reference is not necessarily a search result.
+// Search permissions remain part of GeographyPlaceResult only.
+type SelectedGeographicPlace = Pick<
+  GeographyPlaceResult,
+  | "canonical_name"
+  | "country_code"
+  | "geographic_type"
+  | "admin_name"
+  | "external_source"
+  | "external_id"
+  | "existing_place_id"
+>;
+
 type ExternalGeographicDetail = {
   name: string;
   canonical_name: string;
@@ -64,6 +78,7 @@ type ExternalGeographicDetail = {
   }[];
   external_source: "geonames" | "google_places";
   external_id: string;
+  existing_place_id: number | null;
   spatial_extent?: {
     kind: "bounding_box";
     north: string | number;
@@ -79,6 +94,20 @@ type ExternalGeographicDetail = {
     short_name: string;
   }[];
 };
+
+function selectGeographicPlaceFromDetail(
+  detail: ExternalGeographicDetail
+): SelectedGeographicPlace {
+  return {
+    canonical_name: detail.canonical_name,
+    country_code: detail.country_code,
+    geographic_type: detail.geographic_type,
+    admin_name: detail.admin_name,
+    external_source: detail.external_source,
+    external_id: detail.external_id,
+    existing_place_id: detail.existing_place_id,
+  };
+}
 
 function getGeographicAdminLabel(result: GeographyPlaceResult): string {
   const entries = [...(result.admin_context || [])]
@@ -128,6 +157,9 @@ function DestinationsPageContent() {
   const placeFromUrl = searchParams.get("place");
   const shouldOpenShareForm = searchParams.get("share") === "true";
 
+  const geoSourceFromUrl = searchParams.get("geo_source");
+  const geoIdFromUrl = searchParams.get("geo_id");
+
   const poiSourceFromUrl = searchParams.get("poi_source");
   const poiIdFromUrl = searchParams.get("poi_id");
   const poiTypeFromUrl = searchParams.get("poi_type");
@@ -166,6 +198,14 @@ function DestinationsPageContent() {
     manualPOITypeFromUrl !== null ||
     manualCityPlaceIdFromUrl !== null;
 
+  const hasValidManualExternalCityReference =
+    (poiCitySourceFromUrl === "geonames" ||
+      poiCitySourceFromUrl === "google_places") &&
+    Boolean(poiCityIdFromUrl?.trim());
+
+  const hasManualCityReference =
+    hasValidManualCityPlaceId !== hasValidManualExternalCityReference;
+
   const hasValidExternalCityReference =
     (poiCitySourceFromUrl === "geonames" ||
       poiCitySourceFromUrl === "google_places") &&
@@ -193,6 +233,24 @@ function DestinationsPageContent() {
     externalPOICityIdFromUrl !== null &&
     Number.isSafeInteger(externalPOICityIdFromUrl);
 
+  const hasGeographicUrlParameters =
+    geoSourceFromUrl !== null || geoIdFromUrl !== null;
+
+  const hasValidGeographicUrlReference =
+    (geoSourceFromUrl === "geonames" ||
+      geoSourceFromUrl === "google_places") &&
+    Boolean(geoIdFromUrl?.trim());
+
+  const hasConflictingGeographicUrlReferences =
+    placeFromUrl !== null ||
+    hasManualPOIUrlParameters ||
+    poiSourceFromUrl !== null ||
+    poiIdFromUrl !== null ||
+    poiTypeFromUrl !== null ||
+    poiCityPlaceIdFromUrl !== null ||
+    poiCitySourceFromUrl !== null ||
+    poiCityIdFromUrl !== null;
+
   const mode = searchParams.get("mode");
   const isExperienceMode = mode === "experience";
   const isUpdateMode = mode === "update";
@@ -211,7 +269,7 @@ function DestinationsPageContent() {
   const [
     selectedMainGeographyResult,
     setSelectedMainGeographyResult,
-  ] = useState<GeographyPlaceResult | null>(null);
+  ] = useState<SelectedGeographicPlace | null>(null);
   const [
     externalGeographicDetail,
     setExternalGeographicDetail,
@@ -225,6 +283,11 @@ function DestinationsPageContent() {
     setExternalGeographicDetailError,
   ] = useState<"not_found" | "unavailable" | null>(null);
   const externalGeographicDetailRequestId = useRef(0);
+
+  const [geographicUrlSelectionLoading, setGeographicUrlSelectionLoading] =
+    useState(false);
+  const [geographicUrlSelectionError, setGeographicUrlSelectionError] =
+    useState<"invalid" | "conflict" | "not_found" | "unavailable" | null>(null);
 
   const [mainGeographySearchLoading, setMainGeographySearchLoading] =
     useState(false);
@@ -248,11 +311,32 @@ function DestinationsPageContent() {
 
   const [selectedCountryPlace, setSelectedCountryPlace] = useState<any>(null);
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
-  const [selectedManualPOI, setSelectedManualPOI] = useState<{
-    name: string;
-    place_type: "attraction" | "hotel" | "restaurant" | "nature" | "other";
-    city_place_id: number;
-  } | null>(null);
+  const [selectedManualPOI, setSelectedManualPOI] = useState<(
+    {
+      name: string;
+      place_type: "attraction" | "hotel" | "restaurant" | "nature" | "other";
+    } & (
+      {
+        city_place_id: number;
+        city_source?: never;
+        city_id?: never;
+      } | {
+        city_place_id?: never;
+        city_source: "geonames" | "google_places";
+        city_id: string;
+      }
+    )
+  ) | null>(null);
+
+  // Geographic details used only to identify a manual POI's external city.
+  // The external identity remains authoritative for publication.
+  const [manualPOIExternalCityDetail, setManualPOIExternalCityDetail] =
+    useState<ExternalGeographicDetail | null>(null);
+  const [manualPOIExternalCityLoading, setManualPOIExternalCityLoading] =
+    useState(false);
+  const [manualPOIExternalCityError, setManualPOIExternalCityError] =
+    useState<"not_found" | "unavailable" | null>(null);
+
   const [selectedExternalPOI, setSelectedExternalPOI] = useState<(
     {
       name: string;
@@ -369,10 +453,37 @@ function DestinationsPageContent() {
   const [submittingExperience, setSubmittingExperience] = useState(false);
   const [externalPOISelectionError, setExternalPOISelectionError] = useState("");
   const externalPOISelectionRequestId = useRef(0);
+  const geographicUrlSelectionRequestId = useRef(0);
+  const dismissedGeographicUrl = useRef<string | null>(null);
   const dismissedExternalPOIUrl = useRef<string | null>(null);
   const dismissedManualPOIUrl = useRef<string | null>(null);
   const initializedManualPOIUrl = useRef<string | null>(null);
   const currentExternalPOIUrl = searchParams.toString();
+
+  const leaveGeographicUrlSelection = () => {
+    geographicUrlSelectionRequestId.current += 1;
+
+    if (!hasGeographicUrlParameters) {
+      return;
+    }
+
+    dismissedGeographicUrl.current = currentExternalPOIUrl;
+
+    // POI cancellation owns navigation when both URL references are present.
+    if (poiSourceFromUrl || hasManualPOIUrlParameters) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("geo_source");
+    params.delete("geo_id");
+
+    router.replace(
+      params.toString()
+        ? `/destinations?${params.toString()}`
+        : "/destinations"
+    );
+  };
 
   const leaveExternalPOISelection = () => {
     externalPOISelectionRequestId.current += 1;
@@ -464,6 +575,7 @@ useEffect(() => {
   if (
     !placeFromUrl ||
     places.length === 0 ||
+    hasGeographicUrlParameters ||
     hasManualPOIUrlParameters ||
     poiSourceFromUrl !== null ||
     poiIdFromUrl !== null ||
@@ -505,6 +617,7 @@ useEffect(() => {
   placeFromUrl,
   shouldOpenShareForm,
   places,
+  hasGeographicUrlParameters,
   hasManualPOIUrlParameters,
   poiSourceFromUrl,
   poiIdFromUrl,
@@ -512,6 +625,150 @@ useEffect(() => {
   poiCityPlaceIdFromUrl,
   poiCitySourceFromUrl,
   poiCityIdFromUrl,
+]);
+
+// =========================
+// Select geographic reference from URL without materialization
+// =========================
+useEffect(() => {
+  if (!hasGeographicUrlParameters) {
+    dismissedGeographicUrl.current = null;
+    setGeographicUrlSelectionLoading(false);
+    setGeographicUrlSelectionError(null);
+    return;
+  }
+
+  if (dismissedGeographicUrl.current === currentExternalPOIUrl) {
+    setGeographicUrlSelectionLoading(false);
+    return;
+  }
+
+  let active = true;
+  const requestId = ++geographicUrlSelectionRequestId.current;
+
+  setSelectedMainGeographyResult(null);
+  setSelectedPlace(null);
+  setSelectedCountryPlace(null);
+  setSelectedExternalPOI(null);
+  setSelectedManualPOI(null);
+  setShowShareForm(false);
+  setGeographicUrlSelectionError(null);
+  setGeographicUrlSelectionLoading(false);
+
+  if (hasConflictingGeographicUrlReferences) {
+    setGeographicUrlSelectionError("conflict");
+    return;
+  }
+
+  if (
+    !hasValidGeographicUrlReference ||
+    (!isExperienceMode && !isUpdateMode)
+  ) {
+    setGeographicUrlSelectionError("invalid");
+    return;
+  }
+
+  const source = geoSourceFromUrl as "geonames" | "google_places";
+  const id = geoIdFromUrl!.trim();
+
+  const loadGeographicSelection = async () => {
+    setGeographicUrlSelectionLoading(true);
+
+    try {
+      const params = new URLSearchParams({
+        external_source: source,
+        external_id: id,
+      });
+
+      const response = await fetch(
+        `${API_URL}/api/geography/places/external-detail/?${params.toString()}`
+      );
+
+      if (!active || requestId !== geographicUrlSelectionRequestId.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        setGeographicUrlSelectionError(
+          response.status === 404 ? "not_found" : "unavailable"
+        );
+        return;
+      }
+
+      const detail: ExternalGeographicDetail = await response.json();
+
+      if (!active || requestId !== geographicUrlSelectionRequestId.current) {
+        return;
+      }
+
+      if (
+        !detail ||
+        detail.external_source !== source ||
+        detail.external_id !== id ||
+        typeof detail.canonical_name !== "string" ||
+        !detail.canonical_name.trim() ||
+        typeof detail.country_code !== "string" ||
+        !detail.country_code.trim() ||
+        typeof detail.geographic_type !== "string" ||
+        !detail.geographic_type.trim() ||
+        typeof detail.admin_name !== "string" ||
+        !Array.isArray(detail.admin_context) ||
+        (detail.existing_place_id !== null &&
+          (!Number.isSafeInteger(detail.existing_place_id) ||
+            detail.existing_place_id <= 0))
+      ) {
+        setGeographicUrlSelectionError("unavailable");
+        return;
+      }
+
+      if (detail.existing_place_id !== null) {
+        const internalPlaceId = detail.existing_place_id;
+
+        router.replace(
+          isExperienceMode
+            ? `/places/${internalPlaceId}/experiences`
+            : `/places/${internalPlaceId}?share=update`
+        );
+        return;
+      }
+
+      setSelectedMainGeographyResult(
+        selectGeographicPlaceFromDetail(detail)
+      );
+      setSearchTerm(detail.canonical_name.trim());
+      setExperienceShared(false);
+      setSharedExperience(null);
+      setEditingExperience(false);
+      setExperienceFormError("");
+      setShowShareForm(true);
+    } catch (error) {
+      if (!active || requestId !== geographicUrlSelectionRequestId.current) {
+        return;
+      }
+      console.error("Geographic URL selection failed:", error);
+      setGeographicUrlSelectionError("unavailable");
+    } finally {
+      if (active && requestId === geographicUrlSelectionRequestId.current) {
+        setGeographicUrlSelectionLoading(false);
+      }
+    }
+  };
+
+  void loadGeographicSelection();
+
+  return () => {
+    active = false;
+  };
+}, [
+  hasGeographicUrlParameters,
+  currentExternalPOIUrl,
+  hasConflictingGeographicUrlReferences,
+  hasValidGeographicUrlReference,
+  geoSourceFromUrl,
+  geoIdFromUrl,
+  isExperienceMode,
+  isUpdateMode,
+  router,
 ]);
 
 // =========================
@@ -528,7 +785,11 @@ useEffect(() => {
 
   if (loading) return;
 
-  if (hasManualPOIUrlParameters) {
+  if (
+    hasManualPOIUrlParameters ||
+    hasGeographicUrlParameters ||
+    placeFromUrl !== null
+  ) {
     externalPOISelectionRequestId.current += 1;
     setSelectedExternalPOI(null);
     setSelectedManualPOI(null);
@@ -660,6 +921,8 @@ useEffect(() => {
   currentExternalPOIUrl,
   poiSourceFromUrl,
   hasManualPOIUrlParameters,
+  hasGeographicUrlParameters,
+  placeFromUrl,
   poiIdFromUrl,
   externalPOITypeFromUrl,
   externalPOICityIdFromUrl,
@@ -691,13 +954,16 @@ useEffect(() => {
 
     // A manual selection must not coexist with another place reference.
     if (
+      hasGeographicUrlParameters ||
       placeFromUrl !== null ||
       poiSourceFromUrl !== null ||
       poiIdFromUrl !== null ||
       poiTypeFromUrl !== null ||
       poiCityPlaceIdFromUrl !== null ||
-      poiCitySourceFromUrl !== null ||
-      poiCityIdFromUrl !== null
+      (manualCityPlaceIdFromUrl !== null &&
+        (poiCitySourceFromUrl !== null || poiCityIdFromUrl !== null)) ||
+      ((poiCitySourceFromUrl !== null || poiCityIdFromUrl !== null) &&
+        !hasValidManualExternalCityReference)
     ) {
       setSelectedManualPOI(null);
       setSelectedExternalPOI(null);
@@ -723,7 +989,7 @@ useEffect(() => {
       !name ||
       name.length > 200 ||
       !manualPOIType ||
-      !hasValidManualCityPlaceId
+      !hasManualCityReference
     ) {
       setExternalPOISelectionError(
         "This manually entered place cannot be selected for sharing right now."
@@ -731,26 +997,38 @@ useEffect(() => {
       return;
     }
 
-    const cityPlace = places.find(
-      (candidate) =>
-        Number(candidate.id) === manualCityPlaceId &&
-        candidate.place_type === "city"
-    );
-
-    if (!cityPlace) {
-      setExternalPOISelectionError(
-        "The selected city is not registered in Trust Travel."
+    if (hasValidManualCityPlaceId) {
+      const cityPlace = places.find(
+        (candidate) =>
+          Number(candidate.id) === manualCityPlaceId &&
+          candidate.place_type === "city"
       );
-      return;
+
+      if (!cityPlace) {
+        setExternalPOISelectionError(
+          "The selected city is not registered in Trust Travel."
+        );
+        return;
+      }
     }
 
     initializedManualPOIUrl.current = currentExternalPOIUrl;
     setExternalPOISelectionError("");
-    setSelectedManualPOI({
-      name,
-      place_type: manualPOIType,
-      city_place_id: manualCityPlaceId!,
-    });
+
+    if (hasValidManualCityPlaceId) {
+      setSelectedManualPOI({
+        name,
+        place_type: manualPOIType,
+        city_place_id: manualCityPlaceId!,
+      });
+    } else {
+      setSelectedManualPOI({
+        name,
+        place_type: manualPOIType,
+        city_source: poiCitySourceFromUrl as "geonames" | "google_places",
+        city_id: poiCityIdFromUrl!.trim(),
+      });
+    }
     setSearchTerm(name);
     setExperienceShared(false);
     setSharedExperience(null);
@@ -762,6 +1040,7 @@ useEffect(() => {
     isExperienceMode,
     currentExternalPOIUrl,
     loading,
+    hasGeographicUrlParameters,
     placeFromUrl,
     poiSourceFromUrl,
     poiIdFromUrl,
@@ -773,10 +1052,86 @@ useEffect(() => {
     manualPOIType,
     manualCityPlaceId,
     hasValidManualCityPlaceId,
+    hasValidManualExternalCityReference,
+    hasManualCityReference,
     placesLoadedSuccessfully,
     places,
     shouldOpenShareForm,
   ]);
+
+  // Identify the external city of a manually entered POI.
+  // This lookup is read-only and never materializes a Place.
+  useEffect(() => {
+    let active = true;
+
+    setManualPOIExternalCityDetail(null);
+    setManualPOIExternalCityError(null);
+    setManualPOIExternalCityLoading(false);
+
+    const citySource = selectedManualPOI?.city_source;
+    const cityId = selectedManualPOI?.city_id;
+
+    if (!citySource || !cityId) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadCity = async () => {
+      setManualPOIExternalCityLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          external_source: citySource,
+          external_id: cityId,
+        });
+
+        const response = await fetch(
+          `${API_URL}/api/geography/places/external-detail/?${params.toString()}`
+        );
+
+        if (!active) return;
+
+        if (!response.ok) {
+          setManualPOIExternalCityError(
+            response.status === 404 ? "not_found" : "unavailable"
+          );
+          return;
+        }
+
+        const data: ExternalGeographicDetail = await response.json();
+
+        if (!active) return;
+
+        if (
+          data.external_source !== citySource ||
+          data.external_id !== cityId ||
+          data.geographic_type !== "settlement" ||
+          !data.canonical_name?.trim() ||
+          !data.country_code?.trim()
+        ) {
+          setManualPOIExternalCityError("unavailable");
+          return;
+        }
+
+        setManualPOIExternalCityDetail(data);
+      } catch {
+        if (active) {
+          setManualPOIExternalCityError("unavailable");
+        }
+      } finally {
+        if (active) {
+          setManualPOIExternalCityLoading(false);
+        }
+      }
+    };
+
+    void loadCity();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedManualPOI?.city_source, selectedManualPOI?.city_id]);
 
   // =========================
   // Search and filtering
@@ -1263,6 +1618,46 @@ const selectedExperienceTarget =
     ? selectedExternalPOI || selectedManualPOI || selectedMainGeographyResult
     : null);
 
+const experienceReturnPath = (() => {
+  const params = new URLSearchParams({
+    mode: "experience",
+    share: "true",
+  });
+
+  if (selectedPlace?.id) {
+    params.set("place", String(selectedPlace.id));
+  } else if (selectedExternalPOI) {
+    params.set("poi_source", "foursquare");
+    params.set("poi_id", selectedExternalPOI.external_id);
+    params.set("poi_type", selectedExternalPOI.place_type);
+
+    if (selectedExternalPOI.city_place_id !== undefined) {
+      params.set("city_place_id", String(selectedExternalPOI.city_place_id));
+    } else {
+      params.set("city_source", selectedExternalPOI.city_source);
+      params.set("city_id", selectedExternalPOI.city_id);
+    }
+  } else if (selectedManualPOI) {
+    params.set("manual_poi_name", selectedManualPOI.name);
+    params.set("manual_poi_type", selectedManualPOI.place_type);
+
+    if (selectedManualPOI.city_place_id !== undefined) {
+      params.set("manual_city_place_id", String(selectedManualPOI.city_place_id));
+    } else {
+      params.set("city_source", selectedManualPOI.city_source);
+      params.set("city_id", selectedManualPOI.city_id);
+    }
+  } else if (
+    selectedMainGeographyResult?.external_source &&
+    selectedMainGeographyResult.external_id
+  ) {
+    params.set("geo_source", selectedMainGeographyResult.external_source);
+    params.set("geo_id", selectedMainGeographyResult.external_id);
+  }
+
+  return `/destinations?${params.toString()}`;
+})();
+
 const selectedExperienceTargetName =
   selectedPlace?.name ||
   (isExperienceMode
@@ -1445,6 +1840,7 @@ const resetGeographyCitySearch = () => {
 };
 
 const openGuidedCreateFlow = () => {
+  leaveGeographicUrlSelection();
   leaveExternalPOISelection();
   setSelectedManualPOI(null);
   setCreateFlowOpen(true);
@@ -1901,24 +2297,49 @@ const createSpecificPlaceForFlow = () => {
 
   const cityPlaceId = Number(createSelectedCity.id);
 
-  if (
-    !Number.isSafeInteger(cityPlaceId) ||
-    cityPlaceId <= 0 ||
-    createSelectedCity.place_type !== "city"
-  ) {
+  const hasInternalCity =
+    createSelectedCity.place_type === "city" &&
+    Number.isSafeInteger(cityPlaceId) &&
+    cityPlaceId > 0;
+
+  const externalCitySource = String(
+    createSelectedCity.external_source || ""
+  ).trim();
+
+  const externalCityId = String(
+    createSelectedCity.external_id || ""
+  ).trim();
+
+  const hasExternalCity =
+    !createSelectedCity.id &&
+    (externalCitySource === "geonames" ||
+      externalCitySource === "google_places") &&
+    Boolean(externalCityId);
+
+  if (hasInternalCity === hasExternalCity) {
     setCreateFlowError(
-      "Manual place sharing currently requires a geographic place already registered as a city on Trust Travel. External geographic references are not supported for manual place sharing yet."
+      "Please select a valid city before sharing this place."
     );
     return;
   }
 
   setSelectedExternalPOI(null);
   setExternalPOISelectionError("");
-  setSelectedManualPOI({
-    name: specificPlaceName,
-    place_type: createSpecificPlaceType,
-    city_place_id: cityPlaceId,
-  });
+
+  if (hasInternalCity) {
+    setSelectedManualPOI({
+      name: specificPlaceName,
+      place_type: createSpecificPlaceType,
+      city_place_id: cityPlaceId,
+    });
+  } else {
+    setSelectedManualPOI({
+      name: specificPlaceName,
+      place_type: createSpecificPlaceType,
+      city_source: externalCitySource as "geonames" | "google_places",
+      city_id: externalCityId,
+    });
+  }
   setSelectedPlace(null);
   setSelectedMainGeographyResult(null);
   setSelectedCountryPlace(null);
@@ -1946,6 +2367,7 @@ const createSpecificPlaceForFlow = () => {
     // Select country as search context
     // =========================
     const handleSelectCountry = (place: any) => {
+      leaveGeographicUrlSelection();
       leaveExternalPOISelection();
       setSelectedManualPOI(null);
       // In normal exploration mode, opening a country should go directly
@@ -2135,6 +2557,7 @@ const createSpecificPlaceForFlow = () => {
       return;
     }
 
+    leaveGeographicUrlSelection();
     leaveExternalPOISelection();
     setSelectedManualPOI(null);
 
@@ -2168,7 +2591,9 @@ const createSpecificPlaceForFlow = () => {
     if (isExperienceMode) {
       setSelectedMainGeographyResult(result);
       setSelectedPlace(null);
-      setShowShareForm(true);
+      // Let the traveler choose between sharing about this geographic
+      // place and searching for a more specific place inside it.
+      setShowShareForm(false);
       setExperienceShared(false);
       setSharedExperience(null);
       setEditingExperience(false);
@@ -2205,6 +2630,7 @@ const createSpecificPlaceForFlow = () => {
   // =========================
   const handleChangePlace = () => {
     invalidatePendingExperienceSubmission();
+    leaveGeographicUrlSelection();
     leaveExternalPOISelection();
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
@@ -2238,6 +2664,7 @@ const createSpecificPlaceForFlow = () => {
   // =========================
   const resetShareFlow = () => {
     invalidatePendingExperienceSubmission();
+    leaveGeographicUrlSelection();
     leaveExternalPOISelection();
     setSelectedCountryPlace(null);
     setSelectedPlace(null);
@@ -2344,6 +2771,26 @@ const continueWithoutPracticalRatings = () => {
       return;
     }
 
+    if (selectedManualPOI?.city_source) {
+      const confirmedCity = manualPOIExternalCityDetail;
+
+      if (
+        manualPOIExternalCityLoading ||
+        !confirmedCity ||
+        manualPOIExternalCityError ||
+        confirmedCity.external_source !== selectedManualPOI.city_source ||
+        confirmedCity.external_id !== selectedManualPOI.city_id ||
+        confirmedCity.geographic_type !== "settlement"
+      ) {
+        setExperienceFormError(
+          manualPOIExternalCityError === "not_found"
+            ? "The selected city reference could not be found. Please choose the place again."
+            : "The selected city has not been confirmed. Please wait for geographic verification or choose the place again."
+        );
+        return;
+      }
+    }
+
     if (!title.trim()) {
       setExperienceFormError("Please add a short title.");
       return;
@@ -2401,10 +2848,22 @@ const continueWithoutPracticalRatings = () => {
       } else if (selectedManualPOI) {
         formData.append("manual_poi_name", selectedManualPOI.name);
         formData.append("manual_poi_type", selectedManualPOI.place_type);
-        formData.append(
-          "manual_city_place_id",
-          String(selectedManualPOI.city_place_id)
-        );
+
+        if (selectedManualPOI.city_place_id !== undefined) {
+          formData.append(
+            "manual_city_place_id",
+            String(selectedManualPOI.city_place_id)
+          );
+        } else {
+          formData.append(
+            "external_city_source",
+            selectedManualPOI.city_source
+          );
+          formData.append(
+            "external_city_id",
+            selectedManualPOI.city_id
+          );
+        }
       } else if (
         selectedMainGeographyResult?.external_source &&
         selectedMainGeographyResult.external_id
@@ -2720,7 +3179,33 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           <p style={{ color: "#666", margin: "8px 0 12px" }}>
             {getPlaceTypeLabel(selectedManualPOI.place_type)}
             {selectedManualPOICity ? ` · ${selectedManualPOICity.name}` : ""}
+            {selectedManualPOI.city_source &&
+              manualPOIExternalCityDetail &&
+              ` · ${manualPOIExternalCityDetail.canonical_name}, ${manualPOIExternalCityDetail.country_code}`}
           </p>
+
+          {selectedManualPOI.city_source &&
+            manualPOIExternalCityLoading && (
+              <p role="status" style={{ color: "#666" }}>
+                Confirming geographic city details...
+              </p>
+            )}
+
+          {selectedManualPOI.city_source &&
+            manualPOIExternalCityError === "not_found" && (
+              <p role="alert" style={{ color: "#8b2424" }}>
+                This geographic city reference could not be found.
+                Please choose the place again.
+              </p>
+            )}
+
+          {selectedManualPOI.city_source &&
+            manualPOIExternalCityError === "unavailable" && (
+              <p role="alert" style={{ color: "#8b2424" }}>
+                Geographic city details are temporarily unavailable.
+                Please try again later or choose another place.
+              </p>
+            )}
 
           <p style={{ color: "#666", lineHeight: 1.5 }}>
             This place will only be registered when your experience is
@@ -2738,30 +3223,105 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
       ) : (
         <>
       <h1>
-          {isExperienceMode
+          {hasGeographicUrlParameters &&
+          selectedMainGeographyResult &&
+          showShareForm &&
+          (isExperienceMode || isUpdateMode)
+            ? isExperienceMode
+              ? "Share your experience"
+              : "Share an update"
+            : isExperienceMode
             ? "Find a place to share your experience"
             : isUpdateMode
             ? "Find a place to share event, alert or info"
             : "Find a destination or place"}
         </h1>
 
-        <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
-          Search for the exact place first. If it does not exist yet, Trust Travel will
-          guide you through the correct hierarchy: country → geographic place → specific
-          place. This helps avoid duplicates and keeps broader geographic experiences separate
-          from reviews about restaurants, hotels, attractions and nature spots.
-        </p>
+        {!(hasGeographicUrlParameters &&
+          selectedMainGeographyResult &&
+          showShareForm &&
+          (isExperienceMode || isUpdateMode)) && (
+          <p style={{ color: "#666", lineHeight: 1.5, marginBottom: "24px" }}>
+            Search for the exact place first. If it does not exist yet, Trust Travel will
+            guide you through the correct hierarchy: country → geographic place → specific
+            place. This helps avoid duplicates and keeps broader geographic experiences separate
+            from reviews about restaurants, hotels, attractions and nature spots.
+          </p>
+        )}
 
-        <div style={{ marginBottom: "22px" }}>
+        {hasGeographicUrlParameters &&
+          selectedMainGeographyResult &&
+          showShareForm &&
+          (isExperienceMode || isUpdateMode) && (
+            <section
+              aria-label="Selected geographic place"
+              style={{
+                padding: "16px",
+                marginBottom: "20px",
+                border: "1px solid #ddd",
+                borderRadius: "12px",
+                backgroundColor: "#f8f9fa",
+              }}
+            >
+              <div style={{ fontSize: "13px", color: "#666" }}>
+                Selected geographic place
+              </div>
 
-        </div>
+              <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "6px" }}>
+                {selectedMainGeographyResult.canonical_name}
+              </div>
 
+              <div style={{ fontSize: "14px", color: "#666", marginTop: "4px" }}>
+                {[
+                  selectedMainGeographyResult.admin_name,
+                  selectedMainGeographyResult.country_code,
+                ].filter(Boolean).join(" · ")}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleChangePlace}
+                style={{ ...secondaryButton, marginTop: "12px" }}
+              >
+                Change place
+              </button>
+            </section>
+          )}
+
+        {hasGeographicUrlParameters &&
+          geographicUrlSelectionLoading && (
+            <p role="status" style={helperNote}>
+              Loading the selected geographic reference...
+            </p>
+          )}
+
+        {hasGeographicUrlParameters &&
+          geographicUrlSelectionError && (
+            <div role="alert" style={helperNote}>
+              {geographicUrlSelectionError === "invalid"
+                ? "Invalid geographic reference. Please choose a place again."
+                : geographicUrlSelectionError === "conflict"
+                ? "Conflicting place references. Please choose one place again."
+                : geographicUrlSelectionError === "not_found"
+                ? "This geographic reference could not be found. Please choose another place."
+                : "Geographic information is temporarily unavailable. Please try again later."}
+            </div>
+          )}
+
+        {!(hasGeographicUrlParameters &&
+          selectedMainGeographyResult &&
+          showShareForm &&
+          (isExperienceMode || isUpdateMode)) && (
+          <>
         <input
           value={searchTerm}
           onChange={(e) => {
               const value = e.target.value;
 
+              leaveGeographicUrlSelection();
               leaveExternalPOISelection();
+              setGeographicUrlSelectionLoading(false);
+              setGeographicUrlSelectionError(null);
 
               setSearchTerm(value);
               setMainGeographyCompletedQuery("");
@@ -2769,7 +3329,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               setShowShareForm(false);
               setMainGeographyResults([]);
               setMainGeographySearchError("");
-              if (isUpdateMode) {
+              if (isExperienceMode || isUpdateMode) {
                 clearExternalGeographicDetail();
                 setSelectedMainGeographyResult(null);
                 setShowShareForm(false);
@@ -2853,6 +3413,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
         )}
       </div>
 
+          </>
+        )}
         </>
       )}
 
@@ -3089,6 +3651,70 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             )}
           </div>
         )}
+
+        {selectedMainGeographyResult &&
+          isExperienceMode &&
+          !showShareForm && (
+            <section
+              style={{
+                marginTop: "22px",
+                padding: "22px",
+                border: "1px solid #eee",
+                borderRadius: "16px",
+                background: "white",
+                maxWidth: "620px",
+              }}
+            >
+              <h2 style={{ marginTop: 0 }}>
+                {selectedMainGeographyResult.canonical_name}
+              </h2>
+
+              <p style={{ color: "#666", lineHeight: 1.5 }}>
+                {getGeographicTypeLabel(selectedMainGeographyResult.geographic_type)}
+                {selectedMainGeographyResult.country_code
+                  ? ` · ${selectedMainGeographyResult.country_code}`
+                  : ""}
+              </p>
+
+              <p style={{ color: "#555", lineHeight: 1.5 }}>
+                Would you like to share an experience about this geographic
+                place, or find a more specific place inside it?
+              </p>
+
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowShareForm(true)}
+                  style={primaryButton}
+                >
+                  Share your experience here
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const source = selectedMainGeographyResult.external_source;
+                    const id = selectedMainGeographyResult.external_id;
+                    if (!source || !id) return;
+
+                    const params = new URLSearchParams({ source, id });
+                    router.push(`/explore/geographic?${params.toString()}`);
+                  }}
+                  style={secondaryButton}
+                >
+                  Find a specific place
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleChangePlace}
+                  style={secondaryButton}
+                >
+                  Change selection
+                </button>
+              </div>
+            </section>
+          )}
 
         {selectedMainGeographyResult &&
           !isExperienceMode &&
@@ -4652,6 +5278,10 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
     )}
 
         {selectedExperienceTarget && showShareForm && (
+          <PublicationAuthGate
+            returnTo={experienceReturnPath}
+            onContinueExploring={() => setShowShareForm(false)}
+          >
           <section
             id="share-experience-form"
             style={{
@@ -5163,6 +5793,7 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               </form>
             )}
           </section>
+          </PublicationAuthGate>
         )}
 
         {isUpdateMode &&
@@ -5171,6 +5802,20 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
           !selectedCountryPlace &&
           selectedMainGeographyResult?.external_source &&
           selectedMainGeographyResult?.external_id && (
+            <PublicationAuthGate
+              returnTo={
+                selectedMainGeographyResult?.external_source &&
+                selectedMainGeographyResult.external_id
+                  ? `/destinations?${new URLSearchParams({
+                      mode: "update",
+                      share: "true",
+                      geo_source: selectedMainGeographyResult.external_source,
+                      geo_id: selectedMainGeographyResult.external_id,
+                    }).toString()}`
+                  : "/destinations"
+              }
+              onContinueExploring={() => setShowShareForm(false)}
+            >
             <section
               id="share-update-form"
               style={{
@@ -5191,14 +5836,18 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                 externalId={selectedMainGeographyResult.external_id}
                 placeName={selectedMainGeographyResult.canonical_name}
                 onSuccess={(update) => {
+                  const updateId = update.id;
                   const placeId = update.place_id;
 
-                  if (typeof placeId === "number" && placeId > 0) {
+                  if (typeof updateId === "number" && updateId > 0) {
+                    router.push(`/updates/${updateId}`);
+                  } else if (typeof placeId === "number" && placeId > 0) {
                     router.push(`/places/${placeId}`);
                   }
                 }}
               />
             </section>
+            </PublicationAuthGate>
           )}
     </main>
   );

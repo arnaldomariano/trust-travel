@@ -79,8 +79,30 @@ export default function UpdateForm(props: UpdateFormProps) {
       const data = await res.json();
 
       if (!res.ok) {
+        if (
+          res.status === 409 &&
+          data?.code === "geographic_resolution_required"
+        ) {
+          setUpdateFormError(
+            "This geographic place needs confirmation before your update " +
+            "can be published. Your update has not been published. " +
+            "Please review the place selection before trying again."
+          );
+          return;
+        }
+
+        if (res.status === 503) {
+          setUpdateFormError(
+            "The geographic service is temporarily unavailable. " +
+            "Your update has not been published. Please try again later."
+          );
+          return;
+        }
+
         setUpdateFormError(
-          data.detail || "Could not share this event or info."
+          typeof data?.detail === "string"
+            ? data.detail
+            : "Could not share this event or info."
         );
         return;
       }

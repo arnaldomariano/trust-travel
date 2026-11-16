@@ -2222,6 +2222,10 @@ class GeographyCitySearchView(APIView):
             country_code=country["code"],
         )
 
+        from .geography.discovery import filter_city_search_presentation
+
+        results = filter_city_search_presentation(results)
+
         return Response(
             {
                 "count": len(results),
@@ -2340,11 +2344,23 @@ class GeographyPOISearchView(APIView):
             if (
                 geographic_result.get("external_source") != external_source
                 or str(geographic_result.get("external_id") or "") != external_id
-                or geographic_result.get("geographic_type") != "settlement"
             ):
                 return Response(
-                    {"detail": "A supported locality reference is required."},
+                    {"detail": "Invalid external geographic reference."},
                     status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if geographic_result.get("geographic_type") != "settlement":
+                return Response(
+                    {
+                        "code": "unsupported_poi_search_context",
+                        "detail": (
+                            "This geographic reference is not supported "
+                            "for nearby place searches. Select a more "
+                            "specific city or locality."
+                        ),
+                    },
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
 
             country_code = str(

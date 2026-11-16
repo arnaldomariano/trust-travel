@@ -13328,7 +13328,6 @@ class GeographyPOISearchAPITests(TestCase):
         scenarios = [
             ("different provider", {"external_source": "google_places"}),
             ("different identity", {"external_id": "another-city"}),
-            ("non-locality", {"geographic_type": "region"}),
             ("unknown country", {"country_code": "ZZ"}),
             ("missing latitude", {"latitude": None}),
             ("invalid longitude", {"longitude": 181}),
@@ -13378,6 +13377,71 @@ class GeographyPOISearchAPITests(TestCase):
                     original_counts,
                 )
 
+
+    @patch("core.views.search_pois")
+    @patch("core.views.reconstruct_external_geographic_reference")
+    def test_search_distinguishes_unsupported_geographic_context(
+        self,
+        mock_reconstruct,
+        mock_search_pois,
+    ):
+        from .models import (
+            Country,
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+        )
+
+        mock_reconstruct.return_value = {
+            "external_source": "geonames",
+            "external_id": "geo05f-region",
+            "name": "GEO05F Region",
+            "canonical_name": "GEO05F Region",
+            "country_code": "NL",
+            "geographic_type": "region",
+            "latitude": 51.5900,
+            "longitude": 4.7800,
+        }
+
+        original_counts = (
+            Country.objects.count(),
+            Destination.objects.count(),
+            Place.objects.count(),
+            PlaceExternalIdentity.objects.count(),
+        )
+
+        response = self.client.get(
+            "/api/geography/pois/search/",
+            {
+                "q": "Hotel",
+                "place_type": "hotel",
+                "external_source": "geonames",
+                "external_id": "geo05f-region",
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json().get("code"),
+            "unsupported_poi_search_context",
+        )
+        self.assertIn("detail", response.json())
+
+        mock_reconstruct.assert_called_once_with(
+            external_source="geonames",
+            external_id="geo05f-region",
+        )
+        mock_search_pois.assert_not_called()
+
+        self.assertEqual(
+            (
+                Country.objects.count(),
+                Destination.objects.count(),
+                Place.objects.count(),
+                PlaceExternalIdentity.objects.count(),
+            ),
+            original_counts,
+        )
 
     @patch("core.views.search_pois")
     @patch("core.views.reconstruct_external_geographic_reference")
@@ -18396,6 +18460,492 @@ class GeographyCitySearchAPITests(TestCase):
         mock_search_geographic_places.assert_called_once_with(
             query="Springfield",
             country_code="IT",
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+class GeographyCityPresentationFilterTests(TestCase):
+    @patch("core.views.reconstruct_external_geographic_reference")
+    @patch("core.views.search_geographic_places")
+    def test_campinas_search_publish_and_reuse_place(
+        self,
+        mock_search,
+        mock_reconstruct,
+    ):
+        from django.contrib.auth.models import User
+        from rest_framework_simplejwt.tokens import AccessToken
+        from .models import Experience, Place, PlaceExternalIdentity
+
+        admin_context = [
+            {"level": 1, "name": "São Paulo", "external_id": "3448433"},
+            {"level": 2, "name": "Campinas", "external_id": "6324332"},
+        ]
+        municipality = {
+            "name": "Campinas",
+            "canonical_name": "Campinas",
+            "aliases": [],
+            "country_code": "BR",
+            "feature_code": "ADM2",
+            "geographic_type": "administrative_area",
+            "admin_context": admin_context,
+            "external_source": "geonames",
+            "external_id": "6324332",
+        }
+        settlement = {
+            **municipality,
+            "feature_code": "PPL",
+            "geographic_type": "settlement",
+            "external_id": "3467865",
+        }
+
+        mock_search.return_value = [municipality, settlement]
+        mock_reconstruct.return_value = settlement
+
+        user = User.objects.create_user(
+            username="campinas-integration-user",
+            password="test-password",
+        )
+        token = str(AccessToken.for_user(user))
+        authorization = f"Bearer {token}"
+
+        places_before = Place.objects.count()
+
+        first_search = self.client.get(
+            "/api/geography/cities/search/",
+            {"q": "Campinas", "country_code": "BR"},
+        )
+        self.assertEqual(first_search.status_code, 200)
+        self.assertEqual(first_search.json()["count"], 1)
+        selected = first_search.json()["results"][0]
+        self.assertEqual(selected["external_id"], "3467865")
+        self.assertIsNone(selected["existing_place_id"])
+        self.assertEqual(Place.objects.count(), places_before)
+
+        for number in (1, 2):
+            response = self.client.post(
+                "/api/experiences/",
+                data={
+                    "external_source": "geonames",
+                    "external_id": selected["external_id"],
+                    "title": f"Campinas experience {number}",
+                    "comment": "Geographic integration test.",
+                    "rating": 4,
+                },
+                content_type="application/json",
+                HTTP_AUTHORIZATION=authorization,
+            )
+            self.assertEqual(response.status_code, 201, response.content)
+
+            identity = PlaceExternalIdentity.objects.get(
+                external_source="geonames",
+                external_id="3467865",
+            )
+            if number == 1:
+                created_place_id = identity.place_id
+                self.assertEqual(Place.objects.count(), places_before + 2)
+
+                second_search = self.client.get(
+                    "/api/geography/cities/search/",
+                    {"q": "Campinas", "country_code": "BR"},
+                )
+                self.assertEqual(second_search.status_code, 200)
+                self.assertEqual(second_search.json()["count"], 1)
+                self.assertEqual(
+                    second_search.json()["results"][0]["existing_place_id"],
+                    created_place_id,
+                )
+            else:
+                self.assertEqual(identity.place_id, created_place_id)
+                self.assertEqual(Place.objects.count(), places_before + 2)
+
+        self.assertEqual(
+            Experience.objects.filter(place_id=created_place_id).count(),
+            2,
+        )
+        self.assertEqual(
+            PlaceExternalIdentity.objects.filter(
+                external_source="geonames",
+                external_id="3467865",
+            ).count(),
+            1,
+        )
+
+    @patch("core.views.search_geographic_places")
+    def test_campinas_prefers_settlement_over_matching_municipality(
+        self,
+        mock_search_geographic_places,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        municipality_context = [
+            {
+                "level": 1,
+                "name": "São Paulo",
+                "external_id": "3448433",
+            },
+            {
+                "level": 2,
+                "name": "Campinas",
+                "external_id": "6324332",
+            },
+        ]
+
+        mock_search_geographic_places.return_value = [
+            {
+                "name": "Campinas",
+                "canonical_name": "Campinas",
+                "aliases": [],
+                "country_code": "BR",
+                "geographic_type": "administrative_area",
+                "feature_code": "ADM2",
+                "admin_context": municipality_context,
+                "external_source": "geonames",
+                "external_id": "6324332",
+            },
+            {
+                "name": "Campinas",
+                "canonical_name": "Campinas",
+                "aliases": [],
+                "country_code": "BR",
+                "geographic_type": "settlement",
+                "feature_code": "PPL",
+                "admin_context": municipality_context,
+                "external_source": "geonames",
+                "external_id": "3467865",
+            },
+        ]
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/cities/search/",
+            {
+                "q": "Campinas",
+                "country_code": "BR",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(
+            data["results"][0]["external_id"],
+            "3467865",
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+    @patch("core.views.search_geographic_places")
+    def test_distinct_islands_remain_visible_with_archipelago(
+        self,
+        mock_search_geographic_places,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        admin_context = [
+            {
+                "level": 1,
+                "name": "Pernambuco",
+                "external_id": "3392268",
+            },
+            {
+                "level": 2,
+                "name": "Fernando de Noronha",
+                "external_id": "3399637",
+            },
+        ]
+
+        references = [
+            ("archipelago", "Arquipélago de Fernando de Noronha", "ISLS"),
+            ("island-a", "Ilha do Meio", "ISL"),
+            ("island-b", "Ilha Rata", "ISL"),
+        ]
+
+        mock_search_geographic_places.return_value = [
+            {
+                "name": name,
+                "canonical_name": name,
+                "aliases": [],
+                "country_code": "BR",
+                "feature_code": feature_code,
+                "geographic_type": (
+                    "archipelago" if feature_code == "ISLS" else "island"
+                ),
+                "admin_context": admin_context,
+                "external_source": "geonames",
+                "external_id": external_id,
+            }
+            for external_id, name, feature_code in references
+        ]
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/cities/search/",
+            {
+                "q": "Fernando de Noronha",
+                "country_code": "BR",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        results = response.json()["results"]
+        self.assertEqual(len(results), 3)
+        self.assertEqual(
+            {result["external_id"] for result in results},
+            {"archipelago", "island-a", "island-b"},
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+    @patch("core.views.search_geographic_places")
+    def test_fernando_de_noronha_prefers_archipelago(
+        self,
+        mock_search_geographic_places,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        admin_context = [
+            {
+                "level": 1,
+                "name": "Pernambuco",
+                "external_id": "3392268",
+            },
+            {
+                "level": 2,
+                "name": "Fernando de Noronha",
+                "external_id": "3399637",
+            },
+        ]
+
+        references = [
+            ("3399637", "Fernando de Noronha", "ADM2", "administrative_area"),
+            ("6317136", "Fernando de Noronha (Distrito Estadual)", "PPL", "settlement"),
+            ("3399638", "Ilha de Fernando de Noronha", "ISL", "island"),
+            ("3399639", "Arquipélago de Fernando de Noronha", "ISLS", "archipelago"),
+        ]
+
+        mock_search_geographic_places.return_value = [
+            {
+                "name": name,
+                "canonical_name": name,
+                "aliases": [],
+                "country_code": "BR",
+                "feature_code": feature_code,
+                "geographic_type": geographic_type,
+                "admin_context": admin_context,
+                "external_source": "geonames",
+                "external_id": external_id,
+            }
+            for external_id, name, feature_code, geographic_type
+            in references
+        ]
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/cities/search/",
+            {
+                "q": "Fernando de Noronha",
+                "country_code": "BR",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(
+            data["results"][0]["external_id"],
+            "3399639",
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+    @patch("core.views.search_geographic_places")
+    def test_same_name_in_different_municipalities_remains_visible(
+        self,
+        mock_search_geographic_places,
+    ):
+        from .models import Place, PlaceExternalIdentity
+
+        references = [
+            ("3445578", "PPL", "settlement", "6322645"),
+            ("6322645", "ADM2", "administrative_area", "6322645"),
+            ("12466952", "PPL", "settlement", "6322386"),
+        ]
+
+        mock_search_geographic_places.return_value = [
+            {
+                "name": "Valinhos",
+                "canonical_name": "Valinhos",
+                "aliases": [],
+                "country_code": "BR",
+                "feature_code": feature_code,
+                "geographic_type": geographic_type,
+                "admin_context": [
+                    {
+                        "level": 1,
+                        "name": "São Paulo",
+                        "external_id": "3448433",
+                    },
+                    {
+                        "level": 2,
+                        "name": (
+                            "Valinhos"
+                            if municipality_id == "6322645"
+                            else "Mogi das Cruzes"
+                        ),
+                        "external_id": municipality_id,
+                    },
+                ],
+                "external_source": "geonames",
+                "external_id": external_id,
+            }
+            for external_id, feature_code, geographic_type, municipality_id
+            in references
+        ]
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/cities/search/",
+            {
+                "q": "Valinhos",
+                "country_code": "BR",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+
+        self.assertEqual(data["count"], 2)
+        self.assertEqual(
+            {result["external_id"] for result in data["results"]},
+            {"3445578", "12466952"},
+        )
+
+        self.assertEqual(Place.objects.count(), places_before)
+        self.assertEqual(
+            PlaceExternalIdentity.objects.count(),
+            identities_before,
+        )
+
+
+    @patch("core.views.search_geographic_places")
+    def test_existing_administrative_place_remains_visible(
+        self,
+        mock_search_geographic_places,
+    ):
+        from .models import (
+            Destination,
+            Place,
+            PlaceExternalIdentity,
+        )
+
+        country = get_or_create_country(value="Brazil")
+        destination = Destination.objects.create(
+            name="Brazil",
+            country="Brazil",
+        )
+
+        existing_city = Place.objects.create(
+            destination=destination,
+            country_ref=country,
+            name="Campinas",
+            canonical_name="Campinas",
+            aliases=[],
+            country_code="BR",
+            place_type="city",
+            geographic_type="administrative_area",
+        )
+
+        PlaceExternalIdentity.objects.create(
+            place=existing_city,
+            external_source="geonames",
+            external_id="6324332",
+            geographic_type="administrative_area",
+        )
+
+        admin_context = [
+            {
+                "level": 1,
+                "name": "São Paulo",
+                "external_id": "3448433",
+            },
+            {
+                "level": 2,
+                "name": "Campinas",
+                "external_id": "6324332",
+            },
+        ]
+
+        mock_search_geographic_places.return_value = [
+            {
+                "name": "Campinas",
+                "canonical_name": "Campinas",
+                "aliases": [],
+                "country_code": "BR",
+                "feature_code": feature_code,
+                "geographic_type": geographic_type,
+                "admin_context": admin_context,
+                "external_source": "geonames",
+                "external_id": external_id,
+            }
+            for external_id, feature_code, geographic_type in [
+                ("6324332", "ADM2", "administrative_area"),
+                ("3467865", "PPL", "settlement"),
+            ]
+        ]
+
+        places_before = Place.objects.count()
+        identities_before = PlaceExternalIdentity.objects.count()
+
+        response = self.client.get(
+            "/api/geography/cities/search/",
+            {
+                "q": "Campinas",
+                "country_code": "BR",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        results = response.json()["results"]
+
+        self.assertTrue(
+            any(
+                result["external_id"] == "6324332"
+                and result["existing_place_id"] == existing_city.id
+                for result in results
+            )
         )
 
         self.assertEqual(Place.objects.count(), places_before)

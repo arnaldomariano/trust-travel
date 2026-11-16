@@ -27,10 +27,40 @@ type GeographyCityResult = {
   feature_code: string;
   population: number;
   admin_name: string;
+  admin_context?: {
+    level: number;
+    name: string;
+    code: string;
+    external_id: string;
+    iso_code: string;
+  }[];
   external_source: string;
   external_id: string;
   existing_place_id: number | null;
 };
+
+function getGeographicAdminLabel(result: GeographyCityResult): string {
+  const entries = [...(result.admin_context || [])]
+    .filter((entry) => entry.name?.trim())
+    .sort((a, b) => a.level - b.level);
+
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of entries) {
+    const name = entry.name.trim();
+    const key = name.toLocaleLowerCase();
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      names.push(name);
+    }
+  }
+
+  return names.length > 0
+    ? names.join(" · ")
+    : result.admin_name?.trim() || "";
+}
 
 function getGeographicTypeLabel(geographicType: string) {
   const labels: Record<string, string> = {
@@ -3569,8 +3599,8 @@ const handleToggleEventsInfo = () => {
                       {getGeographicTypeLabel(
                         cityResult.geographic_type
                       )}
-                      {cityResult.admin_name
-                        ? ` · ${cityResult.admin_name}`
+                      {getGeographicAdminLabel(cityResult)
+                        ? ` · ${getGeographicAdminLabel(cityResult)}`
                         : ""}
                     </div>
 

@@ -87,7 +87,17 @@ Examples:
 - Cities saved as destinations
 - Opinion-based names used as places
 
-These old records are considered test/fake data and may be deleted or cleaned before beta testing.
+Most legacy records are believed to be experimental development data,
+many created before external geographic providers were integrated.
+
+A broad cleanup, potentially including a complete reset of development
+data, is planned before Beta. Its exact scope will be decided after
+inventorying the database, identifying useful records and dependencies,
+and preparing a verified backup and recovery procedure.
+
+The cleanup requires explicit approval before execution. Development
+data cleanup must not weaken the permanent preservation and integrity
+rules intended for legitimate traveler contributions.
 
 ## External discovery and exploration
 
@@ -111,6 +121,77 @@ The external POI exploration page is:
 
 It displays available provider information and distinguishes that
 information from traveler experiences published on Trust Travel.
+
+## Geographic search diagnostics and recovery
+
+Status: Implemented in inspected frontend and backend paths;
+broader end-to-end UX verification remains open.
+
+The main Destinations search distinguishes:
+
+- A completed search with no matching internal Places, country
+  catalog entries, or external geographic results.
+- Incomplete internal Place or country catalog loading.
+- External geographic search errors or invalid response structures.
+
+A genuine no-match presentation suggests alternative spelling,
+local names, translations, and refinement by country or region.
+
+Incomplete search sources produce a separate warning rather than
+being treated as evidence that a locality does not exist.
+
+The main external geographic search uses a request identifier to
+prevent outdated responses from replacing newer search results.
+
+In the guided specific-place search:
+
+- HTTP 422 with code `unsupported_poi_search_context` indicates
+  that a valid geographic reference is unsuitable as the context
+  for nearby POI discovery.
+- A geographic reference without usable coordinates receives a
+  separate explanation.
+- A failed POI request is not marked as a successfully completed
+  search with zero results.
+- The traveler can return to the geographic selection step using
+  the 'Choose another geographic place' action.
+
+These behaviors do not invalidate the geographic reference for
+other supported exploration or contribution workflows.
+
+Remaining work includes broader browser verification of recovery
+paths, provider failures, no-match refinement, and eventual manual
+locality creation.
+
+## Geographic search presentation and locality confirmation
+
+Status: Administrative context implemented and visually verified;
+map-assisted confirmation planned.
+
+Geographic search results may include homonymous localities and
+different provider references for related geographic entities.
+
+The guided city search in `frontend/app/destinations/page.tsx` and
+the country Place search in `frontend/app/places/[id]/page.tsx`
+display available administrative context to help travelers identify
+the intended locality.
+
+The backend city-search presentation filter reduces supported
+equivalent references while preserving existing Trust Travel Places,
+distinct geographic identities, and uncertain matches.
+
+The filter changes presentation only. It does not merge references,
+create Places, or establish identity from name similarity.
+
+The 2026-11-16 verification included Campinas, Fernando de Noronha,
+and Valinhos searches, browser inspection, 386 passing backend core
+tests, and a successful frontend production build.
+
+A future 'View on map' action may help travelers confirm a geographic
+reference using provider coordinates before selecting it.
+
+Map inspection must remain read-only and must not materialize a Place.
+A representative locality coordinate must not be confused with an
+exact POI position, territorial boundary, or photo GPS location.
 
 ## Publishing an experience
 
@@ -208,6 +289,16 @@ A comprehensive visual UX and mobile review is planned separately.
 
 Status: Planned or under investigation.
 
+- Continue the end-to-end search -> no results -> geographic diagnosis
+  and refinement -> eventual locality creation workflow.
+- Distinguish genuine no-match responses from provider errors or
+  incomplete results; guide spelling, translation, country, and
+  regional refinement without forcing additional hierarchy levels.
+- Plan map-assisted confirmation of ambiguous geographic references
+  without premature Place materialization.
+- Inventory experimental development records and prepare an approved,
+  backed-up cleanup plan, potentially covering the entire development
+  dataset.
 - Audit remaining creation and materialization paths.
 - Continue geographic consistency and concurrency investigations.
 - Review the handling of closed, relocated, or renamed places.

@@ -491,6 +491,74 @@ or response schema.
 
 ## 9. Test Coverage
 
+### Geographic search presentation checkpoint — 2026-11-16
+
+Status: Implemented and verified in the documented scenarios.
+
+The city-search presentation filter is implemented in
+`backend/core/geography/discovery.py` and applied by
+`GeographyCitySearchView` after existing Place identity annotation.
+
+The filter reduces redundant geographic alternatives when supported
+provider evidence identifies equivalent references in the same
+administrative context.
+
+Its documented behavior includes:
+
+- Prefer a matching settlement over a municipality-level administrative
+  reference when the geographic context supports equivalence.
+- Prefer a matching archipelago reference over equivalent unmaterialized
+  geographic alternatives.
+- Preserve references already associated with existing Trust Travel
+  Places.
+- Preserve distinct homonymous localities and references whose
+  equivalence is not established.
+- Do not change external identity, resolve ambiguous Places, or
+  materialize records during search.
+
+The frontend now presents available administrative context in the
+guided city search and country-level geographic search, helping
+travelers distinguish same-name localities.
+
+Verification:
+
+- The complete backend core suite passed 386 tests.
+- Six GeographyCityPresentationFilterTests passed.
+- The frontend production build passed.
+- Live GeoNames searches were checked for Campinas, Fernando de
+  Noronha, and Valinhos.
+- Browser inspection confirmed administrative context presentation
+  in the guided Destinations flow and the country Place search.
+
+The integrated Campinas regression test covers search before
+publication, successful Experience publication, and reuse of the
+confirmed geographic identity in a subsequent publication.
+
+Limitations:
+
+- The live provider responses and visual checks are scenario-specific,
+  not exhaustive provider or browser coverage.
+- Existing Places remain visible even when multiple references describe
+  related geographic entities.
+- The main Destinations search uses a different discovery path and may
+  present additional administrative references.
+- Broader concurrency and lifecycle guarantees remain separate work.
+
+Planned map-assisted confirmation:
+
+A future map interface may let travelers inspect the coordinates of
+a selected geographic reference to confirm its location before
+contributing. Viewing or comparing external references on a map must
+not create internal Places.
+
+Provider reference coordinates, geographic extent, exact POI location,
+and photo-capture coordinates must remain conceptually distinct.
+A locality's representative point must not be presented as an exact
+address or territorial boundary.
+
+Map confirmation is planned, not implemented by this checkpoint.
+
+
 ### GEO-05F completion checkpoint
 
 The GEO-05F implementation was completed and committed on branch
@@ -881,6 +949,17 @@ Status: Implemented and verified for the audited GEO-05F
 experience publication workflow.
 
 ## 11. Open Investigations
+
+- Continue the end-to-end no-results geographic search workflow:
+  distinguish genuine no-match results from incomplete provider
+  responses, guide spelling/translation/country/region refinement,
+  and review eventual manual locality creation without premature
+  materialization.
+- Evaluate map-assisted confirmation of geographic search results
+  without treating map viewing as publication or Place creation.
+- Review whether additional geographic reference labels are needed
+  for ambiguous search results, without introducing mandatory
+  administrative levels or merging distinct identities.
 
 - Extend geographic consistency auditing across Country, Destination, city, and POI records, beyond the GEO-04/004 and GEO-04/005 guards.
 - Complete the POI creation and concurrent recovery audit.

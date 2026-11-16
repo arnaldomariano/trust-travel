@@ -258,6 +258,7 @@ function DestinationsPageContent() {
   const [places, setPlaces] = useState<any[]>([]);
   const [placesLoadedSuccessfully, setPlacesLoadedSuccessfully] = useState(false);
   const [countryCatalog, setCountryCatalog] = useState<CountryCatalogItem[]>([]);
+  const [countryCatalogLoadedSuccessfully, setCountryCatalogLoadedSuccessfully] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -293,6 +294,7 @@ function DestinationsPageContent() {
     useState(false);
   const [mainGeographySearchError, setMainGeographySearchError] = useState("");
   const [mainGeographyCompletedQuery, setMainGeographyCompletedQuery] = useState("");
+  const mainGeographySearchRequestId = useRef(0);
   const [
     mainGeographyMeaningfulAmbiguity,
     setMainGeographyMeaningfulAmbiguity,
@@ -532,31 +534,47 @@ function DestinationsPageContent() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [placesRes, countriesRes] = await Promise.all([
+        const [placesResult, countriesResult] = await Promise.allSettled([
           fetch(`${API_URL}/api/places/`),
           fetch(`${API_URL}/api/countries/`),
         ]);
 
-        if (!placesRes.ok) {
-          console.error("Failed to load places");
-          return;
+        try {
+          if (placesResult.status === "rejected") {
+            console.error("Failed to fetch places:", placesResult.reason);
+          } else if (!placesResult.value.ok) {
+            console.error("Failed to load places");
+          } else {
+            const placesData = await placesResult.value.json();
+
+            if (Array.isArray(placesData)) {
+              setPlaces(placesData);
+              setPlacesLoadedSuccessfully(true);
+            } else {
+              console.error("Unexpected places response format");
+            }
+          }
+        } catch (error) {
+          console.error("Failed to process places response:", error);
         }
 
-        const placesData = await placesRes.json();
+        try {
+          if (countriesResult.status === "rejected") {
+            console.error("Failed to fetch country catalog:", countriesResult.reason);
+          } else if (!countriesResult.value.ok) {
+            console.error("Failed to load country catalog");
+          } else {
+            const countriesData = await countriesResult.value.json();
 
-        if (!Array.isArray(placesData)) {
-          console.error("Unexpected places response format");
-          return;
-        }
-
-        setPlaces(placesData);
-        setPlacesLoadedSuccessfully(true);
-
-        if (countriesRes.ok) {
-          const countriesData = await countriesRes.json();
-          setCountryCatalog(countriesData.results || []);
-        } else {
-          console.error("Failed to load country catalog");
+            if (Array.isArray(countriesData.results)) {
+              setCountryCatalog(countriesData.results);
+              setCountryCatalogLoadedSuccessfully(true);
+            } else {
+              console.error("Unexpected country catalog response format");
+            }
+          }
+        } catch (error) {
+          console.error("Failed to process country catalog response:", error);
         }
       } catch (error) {
         console.error("Search page load error:", error);
@@ -1755,8 +1773,23 @@ const canContinueAfterMainSearch =
   !selectedExternalPOI &&
   !selectedManualPOI;
 
+const mainSearchHasIncompleteSources =
+  canContinueAfterMainSearch &&
+  !loading &&
+  (!placesLoadedSuccessfully || !countryCatalogLoadedSuccessfully);
+
+const mainSearchHasNoMatches =
+  canContinueAfterMainSearch &&
+  !loading &&
+  placesLoadedSuccessfully &&
+  countryCatalogLoadedSuccessfully &&
+  filteredPlaces.length === 0 &&
+  mainSearchCountryCatalogMatches.length === 0 &&
+  mainGeographyResults.length === 0;
+
 
 const handleMainGeographySearch = async () => {
+  const requestId = ++mainGeographySearchRequestId.current;
   setMainGeographyCompletedQuery("");
   setSelectedManualPOI(null);
   const query = searchTerm.trim();
@@ -1790,6 +1823,10 @@ const handleMainGeographySearch = async () => {
 
     const data = await res.json();
 
+    if (requestId !== mainGeographySearchRequestId.current) {
+      return;
+    }
+
     if (!res.ok) {
       setMainGeographyResults([]);
       setMainGeographyMeaningfulAmbiguity(false);
@@ -1800,9 +1837,18 @@ const handleMainGeographySearch = async () => {
       return;
     }
 
-    setMainGeographyResults(
-      Array.isArray(data.results) ? data.results : []
-    );
+    if (!Array.isArray(data.results)) {
+      setMainGeographyResults([]);
+      setMainGeographyMeaningfulAmbiguity(false);
+      setMainGeographyCountryRefinementOptions([]);
+      setMainGeographyCountryRefinement(null);
+      setMainGeographySearchError(
+        "Could not verify geographic search results."
+      );
+      return;
+    }
+
+    setMainGeographyResults(data.results);
     setMainGeographyCompletedQuery(query);
     setMainGeographyMeaningfulAmbiguity(
       data.meaningful_ambiguity === true
@@ -1813,6 +1859,10 @@ const handleMainGeographySearch = async () => {
         : []
     );
   } catch (error) {
+    if (requestId !== mainGeographySearchRequestId.current) {
+      return;
+    }
+
     console.error("Main geographic search failed:", error);
     setMainGeographyResults([]);
     setMainGeographyMeaningfulAmbiguity(false);
@@ -1822,7 +1872,9 @@ const handleMainGeographySearch = async () => {
       "Could not search geographic places."
     );
   } finally {
-    setMainGeographySearchLoading(false);
+    if (requestId === mainGeographySearchRequestId.current) {
+      setMainGeographySearchLoading(false);
+    }
   }
 };
 
@@ -2112,7 +2164,7 @@ const handleSearchCreateFlowSpecificPlaces = async () => {
   }
 
   setCreateSpecificPlaceSearchLoading(true);
-  setCreateSpecificPlaceHasSearched(true);
+  setCreateSpecificPlaceHasSearched(false);
   setCreateSpecificPlaceSearchResults([]);
   setCreateFlowError("");
 
@@ -2163,6 +2215,16 @@ const handleSearchCreateFlowSpecificPlaces = async () => {
       const errorDetail = String(data.detail || "");
 
       if (
+        res.status === 422 &&
+        data.code === "unsupported_poi_search_context"
+      ) {
+        setCreateFlowError(
+          "This geographic reference is not supported for nearby place searches. Please select a more specific city or locality."
+        );
+        return;
+      }
+
+      if (
         res.status === 400 &&
         errorDetail ===
           "This geographic place does not have geographic coordinates."
@@ -2183,6 +2245,7 @@ const handleSearchCreateFlowSpecificPlaces = async () => {
     setCreateSpecificPlaceSearchResults(
       Array.isArray(data.results) ? data.results : []
     );
+    setCreateSpecificPlaceHasSearched(true);
   } catch (error) {
     console.error(
       "Guided specific place search failed:",
@@ -3323,6 +3386,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
               setGeographicUrlSelectionLoading(false);
               setGeographicUrlSelectionError(null);
 
+              mainGeographySearchRequestId.current += 1;
+              setMainGeographySearchLoading(false);
               setSearchTerm(value);
               setMainGeographyCompletedQuery("");
               setSelectedManualPOI(null);
@@ -4228,6 +4293,27 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
 
     {canContinueAfterMainSearch && (
       <section style={helperCard}>
+        {mainSearchHasNoMatches && !createFlowOpen && (
+          <div style={{ marginBottom: "16px" }}>
+            <strong>No matching places were found.</strong>
+            <p style={helperNote}>
+              Try another spelling, a local name or translation, or a more
+              specific geographic name. You can also search by country and
+              region to help identify the correct place.
+            </p>
+          </div>
+        )}
+
+        {mainSearchHasIncompleteSources && !createFlowOpen && (
+          <div style={{ marginBottom: "16px" }}>
+            <strong>Some search sources are temporarily unavailable.</strong>
+            <p style={helperNote}>
+              Results may be incomplete. Try the search again before
+              concluding that a place is missing.
+            </p>
+          </div>
+        )}
+
         {createFlowOpen && (
           <>
             <strong>Find the place by country and city</strong>
@@ -4284,7 +4370,9 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
             onClick={openGuidedCreateFlow}
             style={primaryButton}
           >
-            None of these places matches
+            {mainSearchHasNoMatches
+              ? "Search by country and region"
+              : "None of these places matches"}
           </button>
         ) : (
           <div style={guidedCreateBox}>
@@ -4440,8 +4528,8 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                               {getGeographicTypeLabel(
                                   cityResult.geographic_type
                                 )}
-                              {cityResult.admin_name
-                                ? ` · ${cityResult.admin_name}`
+                              {getGeographicAdminLabel(cityResult)
+                                ? ` · ${getGeographicAdminLabel(cityResult)}`
                                 : ""}
                               {cityResult.population > 0
                                 ? ` · Population ${cityResult.population.toLocaleString()}`
@@ -4699,6 +4787,33 @@ const handleUpdateExperience = async (e: React.FormEvent) => {
                         </p>
                       </div>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreateSelectedCity(null);
+                        setSelectedManualPOI(null);
+                        setCreateSpecificPlaceSearchResults([]);
+                        setCreateSpecificPlaceHasSearched(false);
+                        setCreateFlowError("");
+                        resetGeographyCitySearch();
+
+                        setTimeout(() => {
+                          document
+                            .getElementById("guided-create-city-step")
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            });
+                        }, 0);
+                      }}
+                      style={{
+                        ...secondaryButton,
+                        marginBottom: "18px",
+                      }}
+                    >
+                      ← Choose another geographic place
+                    </button>
 
                     <div style={guidedCreateStepLabel}>Step 3</div>
 

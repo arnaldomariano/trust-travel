@@ -35,7 +35,149 @@ open investigations, and future requirements.
 | ID | Decision | Status |
 | --- | --- | --- |
 | DEP-GEO-001 | Separate geographic discovery from Place persistence | Implemented in documented flows; broader audit pending |
+| DEP-GEO-002 | Keep geographic result presentation separate from identity resolution | Implemented and regression-tested; map confirmation planned |
+| DEP-GEO-003 | Distinguish geographic search failures, unsupported contexts, and genuine no-match results | Implemented in inspected search flows; broader UX verification pending |
 | DEP-AUTH-001 | Require authentication for contribution publication | Implemented in inspected frontend flows; partial browser verification |
+
+
+---
+
+## DEP-GEO-002 — Keep geographic result presentation separate from identity resolution
+
+### Decision
+
+Geographic search may reduce redundant provider references in the
+results presented to travelers, but presentation filtering must not
+modify geographic identity or persistence decisions.
+
+Name similarity alone does not establish that two references represent
+the same geographic entity.
+
+### Verified implementation connections
+
+- `backend/core/geography/discovery.py`:
+  `filter_city_search_presentation` evaluates supported equivalence
+  between city-search results.
+- `backend/core/views.py`:
+  `GeographyCitySearchView` applies the presentation filter after
+  annotating results with existing Trust Travel Place identities.
+- `frontend/app/destinations/page.tsx`:
+  guided city search presents available administrative context.
+- `frontend/app/places/[id]/page.tsx`:
+  country-level geographic search presents administrative context.
+
+### Invariants and dependencies
+
+1. Presentation filtering must not create, delete, merge, or modify
+   internal Places or external identities.
+2. References associated with existing Trust Travel Places must remain
+   available in search results.
+3. Distinct homonymous localities must remain distinguishable.
+4. Uncertain geographic equivalence must not justify hiding results.
+5. Geographic identity resolution and publication safeguards remain
+   governed by DEP-GEO-001.
+6. Administrative labels must use available provider context rather
+   than inventing geographic relationships.
+7. Geographic map inspection, when implemented, must remain read-only
+   and must not authorize Place materialization.
+
+### Verification and limitations
+
+- Six `GeographyCityPresentationFilterTests` passed.
+- The complete backend core suite passed 386 tests.
+- The frontend production build passed.
+- Live GeoNames searches were inspected for Campinas, Fernando de
+  Noronha, and Valinhos.
+- Browser inspection verified administrative labels in the guided
+  city search and country-level geographic search.
+- The main Destinations search uses a different discovery path;
+  its presentation behavior must be evaluated independently.
+- Provider behavior outside the verified scenarios remains subject
+  to further testing.
+- Map-assisted geographic confirmation is planned, not implemented.
+
+### Before modifying
+
+Inspect the presentation filter, its caller, existing Place identity
+annotation, provider administrative context, and frontend result
+rendering together.
+
+Run the presentation-filter regression tests and relevant geographic
+publication tests. Verify that filtering does not affect identity
+reuse, conflict preservation, or late materialization.
+
+### Related documents
+
+- `docs/geographic-architecture.md`
+- `docs/current-place-flow.md`
+
+### Maintenance history
+
+- 2026-11-16: Documented city-search presentation filtering,
+  administrative context labels, verification, and planned
+  map-assisted confirmation.
+
+---
+
+## DEP-GEO-003 — Geographic search diagnostics and recovery
+
+**Status:** Implemented in inspected search paths; broader
+end-to-end UX verification remains open.
+
+### Decision
+
+Geographic search interfaces must distinguish a genuine absence
+of matching results from incomplete data sources, provider errors,
+invalid responses, and valid geographic references that cannot
+serve as nearby POI search contexts.
+
+### Implemented behavior
+
+- The main Destinations search distinguishes completed no-match
+  searches from incomplete internal Place or country catalog loading.
+- External geographic search failures are presented separately
+  from successful searches without matches.
+- A request identifier prevents outdated external search responses
+  from replacing newer results.
+- The guided POI search recognizes HTTP 422 with code
+  `unsupported_poi_search_context` and requests a more specific
+  city or locality.
+- Missing geographic coordinates receive separate guidance.
+- Failed POI searches are not marked as completed zero-result searches.
+- The guided flow provides an action to choose another geographic place.
+
+### Invariants
+
+1. Search failures must not be interpreted as proof that a
+   geographic reference does not exist.
+2. A valid geographic reference unsuitable for nearby POI
+   discovery must not be treated as globally invalid.
+3. Search, refinement, and geographic selection must not
+   materialize a Place.
+4. Geographic identity and contribution-publication safeguards
+   remain governed by DEP-GEO-001.
+5. Error recovery must preserve the distinction between
+   geographic discovery and contribution persistence.
+
+### Verification and remaining work
+
+Backend regression coverage includes
+`test_search_distinguishes_unsupported_geographic_context`.
+The previously completed backend suite passed 386 tests,
+and the frontend production build passed.
+
+Broader browser verification remains open for provider failures,
+no-match refinement, recovery navigation, and potential manual
+locality creation.
+
+### Related documentation
+
+- `docs/current-place-flow.md`
+- `docs/geographic-architecture.md`
+- `DEP-GEO-001`
+- `DEP-GEO-002`
+
+**Last reviewed:** 2026-11-16.
 
 ---
 

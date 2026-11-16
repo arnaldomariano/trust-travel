@@ -732,3 +732,91 @@ def search_interpreted_global_discovery_places(
     )
 
     return interpretation
+
+
+
+def filter_city_search_presentation(results):
+    """
+    Select preferred geographic references for city-search presentation.
+
+    Preserve external identities, existing Places, and uncertain matches.
+    """
+    from ..place_utils import normalize_place_text
+
+    def municipality_id(result):
+        for entry in result.get("admin_context") or []:
+            if str(entry.get("level")) == "2":
+                return str(entry.get("external_id") or "").strip()
+        return ""
+
+    def normalize_destination_label(value):
+        name = normalize_place_text(value or "")
+        prefixes = (
+            "arquipelago de ",
+            "arquipelago do ",
+            "arquipelago da ",
+            "ilha de ",
+            "ilha do ",
+            "ilha da ",
+        )
+        for prefix in prefixes:
+            if name.startswith(prefix):
+                return name[len(prefix):]
+        return name
+
+    def same_destination(first, second):
+        first_municipality = municipality_id(first)
+        second_municipality = municipality_id(second)
+
+        if (
+            not first_municipality
+            or first_municipality != second_municipality
+            or first.get("country_code") != second.get("country_code")
+        ):
+            return False
+
+        first_name = normalize_destination_label(first.get("name"))
+        second_name = normalize_destination_label(second.get("name"))
+
+        if first_name == second_name:
+            return True
+
+        return (
+            first_name.startswith(second_name + " (")
+            or second_name.startswith(first_name + " (")
+        )
+
+    archipelagos = [
+        result
+        for result in results
+        if result.get("feature_code") == "ISLS"
+    ]
+
+    settlements = [
+        result
+        for result in results
+        if result.get("feature_code") == "PPL"
+    ]
+
+    visible_results = []
+
+    for result in results:
+        if result.get("existing_place_id") is not None:
+            visible_results.append(result)
+            continue
+
+        if result.get("feature_code") != "ISLS" and any(
+            same_destination(result, archipelago)
+            for archipelago in archipelagos
+        ):
+            continue
+
+        if result.get("feature_code") == "ADM2" and any(
+            same_destination(result, settlement)
+            for settlement in settlements
+        ):
+            continue
+
+        visible_results.append(result)
+
+    return visible_results
